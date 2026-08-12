@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iD30 Attribution Toggle Test</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --border: #d8dee8;
+        --text: #18212f;
+        --muted: #667085;
+        --good: #067647;
+        --bad: #b42318;
+        --warn: #b54708;
+        --brand: #465fff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        line-height: 1.5;
+      }
+
+      main {
+        margin: 0 auto;
+        max-width: 1040px;
+        padding: 32px 20px 56px;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      p {
+        margin: 8px 0 0;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button,
+      .button {
+        align-items: center;
+        background: var(--brand);
+        border: 0;
+        border-radius: 8px;
+        color: #fff;
+        cursor: pointer;
+        display: inline-flex;
+        font-weight: 700;
+        gap: 8px;
+        justify-content: center;
+        min-height: 42px;
+        padding: 10px 14px;
+        text-decoration: none;
+      }
+
+      button.secondary,
+      .button.secondary {
+        background: #fff;
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+
+      code {
+        background: #eef2ff;
+        border-radius: 6px;
+        color: #2437bb;
+        padding: 2px 6px;
+      }
+
+      pre {
+        background: #101828;
+        border-radius: 8px;
+        color: #ecfdf3;
+        margin: 12px 0 0;
+        overflow: auto;
+        padding: 14px;
+        white-space: pre-wrap;
+      }
+
+      .hero {
+        align-items: flex-start;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+
+      .hero p {
+        color: var(--muted);
+        max-width: 760px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .panel.full {
+        grid-column: 1 / -1;
+      }
+
+      .status-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .status {
+        align-items: flex-start;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        display: grid;
+        gap: 6px;
+        grid-template-columns: 112px minmax(0, 1fr);
+        padding: 12px;
+      }
+
+      .status strong {
+        color: var(--text);
+      }
+
+      .pill {
+        border-radius: 999px;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 800;
+        justify-content: center;
+        line-height: 1;
+        padding: 8px 10px;
+        text-transform: uppercase;
+      }
+
+      .pill.good {
+        background: #dcfae6;
+        color: var(--good);
+      }
+
+      .pill.bad {
+        background: #fee4e2;
+        color: var(--bad);
+      }
+
+      .pill.warn {
+        background: #fef0c7;
+        color: var(--warn);
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .phone-box {
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        margin-top: 14px;
+        padding: 14px;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      label {
+        color: var(--muted);
+        display: grid;
+        font-size: 13px;
+        font-weight: 700;
+        gap: 5px;
+      }
+
+      input,
+      textarea {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+        width: 100%;
+      }
+
+      textarea {
+        min-height: 84px;
+        resize: vertical;
+      }
+
+      @media (max-width: 760px) {
+        .hero,
+        .grid {
+          display: block;
+        }
+
+        .panel {
+          margin-top: 16px;
+        }
+
+        .status {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+    <script src="/attribution.js" data-id30-attribution defer></script>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>iD30 Attribution Toggle Test</h1>
+          <p>
+            This page loads the attribution script from the current app origin and
+            checks whether the feature toggles are being honoured.
+          </p>
+          <div class="actions">
+            <button type="button" id="refresh-checks">Refresh checks</button>
+            <button type="button" class="secondary" id="grant-consent">Grant consent</button>
+            <button type="button" class="secondary" id="revoke-consent">Revoke consent</button>
+            <a class="button secondary" href="?utm_source=toggle-test&utm_medium=qa&utm_campaign=attribution-toggle-test">
+              Reload with UTM params
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Live Config</h2>
+          <p class="muted">Fetched directly from <code>/api/attribution/config</code>.</p>
+          <div id="config-status" class="status-list"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Phone Replacement</h2>
+          <p class="muted">
+            Toggle dynamic phone tracking, tel-link replacement and visible-number replacement in CRM settings.
+          </p>
+          <div class="phone-box">
+            <p>
+              Marked visible number:
+              <strong data-crm-phone id="marked-phone">01234 567890</strong>
+            </p>
+            <p>
+              Telephone link:
+              <a href="tel:01234567890" id="tel-link">01234 567890</a>
+            </p>
+            <p id="plain-phone-row">Plain text number: 01234 567890</p>
+          </div>
+          <div id="phone-status" class="status-list"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Form Injection</h2>
+          <p class="muted">
+            Toggle hidden field injection to confirm <code>crm_attribution</code> is added or removed.
+          </p>
+          <form id="safe-form" data-crm-no-track="true">
+            <label>
+              Name
+              <input name="name" value="Attribution Toggle Test" />
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" value="toggle-test@example.com" />
+            </label>
+            <label>
+              Message
+              <textarea name="message">Safe fixture form. data-crm-no-track prevents automatic lead creation.</textarea>
+            </label>
+          </form>
+          <div id="form-status" class="status-list"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Captured Attribution</h2>
+          <p class="muted">This should populate when attribution capture is enabled.</p>
+          <pre id="attribution-output">Waiting for script...</pre>
+        </article>
+
+        <article class="panel">
+          <h2>Consent + Debug</h2>
+          <p class="muted">
+            Tests the runtime consent API and debug event endpoint used by Debug Logs.
+          </p>
+          <div id="consent-status" class="status-list"></div>
+          <div id="debug-status" class="status-list"></div>
+        </article>
+
+        <article class="panel full">
+          <h2>Manual Test Steps</h2>
+          <div class="status-list">
+            <div class="status">
+              <span class="pill warn">Step 1</span>
+              <div>
+                <strong>All features on</strong>
+                <p class="muted">
+                  Config should show enabled flags. Phone numbers should change if the CRM has an active tracking number or fallback number.
+                  The safe form should contain a hidden <code>crm_attribution</code> input.
+                </p>
+              </div>
+            </div>
+            <div class="status">
+              <span class="pill warn">Step 2</span>
+              <div>
+                <strong>Disable phone replacement</strong>
+                <p class="muted">
+                  Refresh this page. The phone endpoint should not assign a number and the visible numbers should remain <code>01234 567890</code>.
+                </p>
+              </div>
+            </div>
+            <div class="status">
+              <span class="pill warn">Step 3</span>
+              <div>
+                <strong>Disable hidden field injection</strong>
+                <p class="muted">
+                  Refresh this page. The form should no longer contain a hidden <code>crm_attribution</code> input.
+                </p>
+              </div>
+            </div>
+            <div class="status">
+              <span class="pill warn">Step 4</span>
+              <div>
+                <strong>Disable attribution script</strong>
+                <p class="muted">
+                  Refresh this page. Config should show the script disabled, and no capture, form injection or phone replacement should run.
+                </p>
+              </div>
+            </div>
+            <div class="status">
+              <span class="pill warn">Step 5</span>
+              <div>
+                <strong>Require consent</strong>
+                <p class="muted">
+                  Enable consent gating, refresh this page, then use Grant consent. Capture, form injection and phone replacement should begin after consent is granted.
+                </p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const originalPhone = "01234 567890";
+
+      function pill(label, state) {
+        const className = state === "good" ? "good" : state === "bad" ? "bad" : "warn";
+        return `<span class="pill ${className}">${label}</span>`;
+      }
+
+      function statusRow(label, body, state) {
+        return `<div class="status">${pill(state === "good" ? "Pass" : state === "bad" ? "Fail" : "Info", state)}<div><strong>${label}</strong><p class="muted">${body}</p></div></div>`;
+      }
+
+      function boolRow(label, value) {
+        return statusRow(label, String(value), value ? "good" : "bad");
+      }
+
+      function normalisePhone(value) {
+        return String(value || "").replace(/[^\d+]/g, "");
+      }
+
+      function dialablePhone(value) {
+        return normalisePhone(value).replace(/(?!^)\+/g, "");
+      }
+
+      function formatPhoneForDisplay(value) {
+        const normalised = normalisePhone(value);
+
+        if (!normalised) {
+          return value;
+        }
+
+        const digits = normalised.replace(/\D/g, "");
+
+        if (normalised.startsWith("+44")) {
+          const national = `0${digits.slice(2)}`;
+
+          if (/^07\d{9}$/.test(national)) {
+            return national.replace(/^(\d{5})(\d{6})$/, "$1 $2");
+          }
+
+          if (/^0(20|23|24|28|29)\d{8}$/.test(national)) {
+            return national.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1 $2 $3");
+          }
+
+          if (/^0\d{10}$/.test(national)) {
+            return national.replace(/^(\d{4})(\d{3})(\d{4})$/, "$1 $2 $3");
+          }
+
+          if (/^0\d{9}$/.test(national)) {
+            return national.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3");
+          }
+        }
+
+        if (normalised.startsWith("+1") && digits.length === 11) {
+          return normalised.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "+1 $1 $2 $3");
+        }
+
+        if (normalised.startsWith("+") && digits.length > 4) {
+          return `+${digits.replace(/^(\d{1,3})(\d{3})(\d{3})(\d+)$/, "$1 $2 $3 $4")}`;
+        }
+
+        return value;
+      }
+
+      async function fetchJson(url, options) {
+        const response = await fetch(url, options);
+        const text = await response.text();
+        try {
+          return { ok: response.ok, status: response.status, data: JSON.parse(text) };
+        } catch {
+          return { ok: response.ok, status: response.status, data: text };
+        }
+      }
+
+      async function runChecks() {
+        const configTarget = document.getElementById("config-status");
+        const phoneTarget = document.getElementById("phone-status");
+        const formTarget = document.getElementById("form-status");
+        const consentTarget = document.getElementById("consent-status");
+        const debugTarget = document.getElementById("debug-status");
+        const attributionTarget = document.getElementById("attribution-output");
+
+        configTarget.innerHTML = statusRow("Config", "Loading...", "warn");
+        phoneTarget.innerHTML = statusRow("Phone endpoint", "Waiting for assignment check...", "warn");
+        formTarget.innerHTML = statusRow("Form", "Waiting for script injection...", "warn");
+        consentTarget.innerHTML = statusRow("Consent", "Waiting for runtime API...", "warn");
+        debugTarget.innerHTML = statusRow("Debug event", "Waiting for endpoint check...", "warn");
+
+        await new Promise((resolve) => setTimeout(resolve, 900));
+
+        const apiBase = window.location.origin;
+        const config = await fetchJson(`${apiBase}/api/attribution/config`);
+        if (!config.ok) {
+          configTarget.innerHTML = statusRow("Config request", `HTTP ${config.status}`, "bad");
+          return;
+        }
+
+        const data = config.data;
+        configTarget.innerHTML = [
+          boolRow("Attribution script enabled", data.enabled),
+          statusRow(
+            "Domain access",
+            data.domain
+              ? `${data.domain.hostname || "Unknown origin"}: ${data.domain.reason || "no reason"}`
+              : "No domain decision returned by the config endpoint.",
+            data.domain?.enabled === false ? "bad" : data.domain ? "info" : "warn",
+          ),
+          statusRow(
+            "Registered domain",
+            data.domain
+              ? data.domain.registered
+                ? "This hostname is in the attribution domain registry."
+                : "This hostname is not registered."
+              : "Domain decision unavailable; the config endpoint may be an older deployment.",
+            data.domain ? (data.domain.registered ? "info" : "warn") : "warn",
+          ),
+          boolRow("Form auto-track enabled", data.forms?.autoTrack),
+          boolRow("Hidden field injection enabled", data.forms?.injectHiddenField),
+          boolRow("Dynamic phone tracking enabled", data.phone?.autoDetect),
+          boolRow("Replace tel links enabled", data.phone?.replaceTelLinks),
+          boolRow("Replace visible numbers enabled", data.phone?.replaceVisibleNumbers),
+          statusRow(
+            "Consent required",
+            data.consent?.required ? "Runtime waits for grantConsent()." : "Runtime can capture immediately.",
+            data.consent?.required ? "warn" : "good",
+          ),
+        ].join("");
+
+        const hasConsentApi = Boolean(
+          window.id30Attribution?.hasConsent &&
+            window.id30Attribution?.grantConsent &&
+            window.id30Attribution?.revokeConsent,
+        );
+        const hasConsent = window.id30Attribution?.hasConsent?.();
+        consentTarget.innerHTML = [
+          statusRow(
+            "Runtime consent API",
+            hasConsentApi ? "grantConsent, revokeConsent and hasConsent are available." : "Consent API is missing.",
+            hasConsentApi ? "good" : "bad",
+          ),
+          statusRow(
+            "Current consent state",
+            String(hasConsent),
+            data.consent?.required ? (hasConsent ? "good" : "warn") : "info",
+          ),
+        ].join("");
+
+        const debug = await fetchJson(`${apiBase}/api/attribution/debug`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventType: "qa.toggle-test",
+            message: "Toggle test page debug check.",
+            hostname: window.location.hostname,
+            origin: window.location.origin,
+            path: window.location.pathname,
+            attribution: window.id30Attribution?.get?.() || {},
+            metadata: {
+              configEnabled: data.enabled,
+              consentRequired: Boolean(data.consent?.required),
+            },
+          }),
+        });
+        debugTarget.innerHTML = statusRow(
+          "Debug endpoint",
+          debug.ok ? `Accepted event ${debug.data?.eventId || ""}` : `HTTP ${debug.status}`,
+          debug.ok ? "good" : "bad",
+        );
+
+        const hiddenField = document.querySelector('input[name="crm_attribution"]');
+        formTarget.innerHTML = [
+          statusRow(
+            "Hidden crm_attribution field",
+            hiddenField ? "Present on the safe form." : "Not present on the safe form.",
+            data.enabled && data.forms?.injectHiddenField ? (hiddenField ? "good" : "bad") : hiddenField ? "bad" : "good",
+          ),
+          statusRow(
+            "Automatic lead creation",
+            "The fixture form has data-crm-no-track=true, so submitting it should not create a CRM lead.",
+            "info",
+          ),
+        ].join("");
+
+        const phone =
+          data.enabled && data.phone?.autoDetect
+            ? await fetchJson(`${apiBase}/api/attribution/phone-number`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  attribution: window.id30Attribution?.get?.() || {
+                    visitorId: "toggle-test-visitor",
+                    sessionId: "toggle-test-session",
+                    currentPage: window.location.href,
+                    landingPage: window.location.href,
+                  },
+                }),
+              })
+            : { ok: true, status: 200, data: { phoneNumber: null, skipped: true } };
+
+        const markedText = document.getElementById("marked-phone").textContent.trim();
+        const telText = document.getElementById("tel-link").textContent.trim();
+        const plainText = document.getElementById("plain-phone-row").textContent;
+        const assigned = phone.data?.phoneNumber || null;
+        const assignedDisplay = assigned ? formatPhoneForDisplay(assigned) : null;
+        const assignedHref = assigned ? `tel:${dialablePhone(assigned)}` : null;
+        const telHref = document.getElementById("tel-link").getAttribute("href");
+        const shouldReplace = Boolean(data.enabled && data.phone?.autoDetect && assigned);
+
+        phoneTarget.innerHTML = [
+          statusRow(
+            "Phone endpoint",
+            phone.data?.skipped
+              ? "Skipped because attribution script or dynamic phone tracking is disabled."
+              : assigned
+                ? `Assigned ${assignedDisplay} (${assigned}).`
+                : "No tracking/fallback number was returned.",
+            assigned ? "good" : data.phone?.autoDetect ? "warn" : "good",
+          ),
+          statusRow(
+            "Marked visible number",
+            `Current value: ${markedText}`,
+            shouldReplace ? (markedText === assignedDisplay ? "good" : "bad") : markedText === originalPhone ? "good" : "warn",
+          ),
+          statusRow(
+            "Tel link text",
+            `Current value: ${telText}`,
+            shouldReplace && data.phone?.replaceTelLinks
+              ? telText === assignedDisplay
+                ? "good"
+                : "bad"
+              : telText === originalPhone
+                ? "good"
+                : "warn",
+          ),
+          statusRow(
+            "Tel link href",
+            `Current href: ${telHref}`,
+            shouldReplace && data.phone?.replaceTelLinks
+              ? telHref === assignedHref
+                ? "good"
+                : "bad"
+              : telHref === "tel:01234567890"
+                ? "good"
+                : "warn",
+          ),
+          statusRow(
+            "Plain text replacement",
+            plainText.includes(assignedDisplay || "__none__") ? `Plain text contains ${assignedDisplay}.` : `Current text: ${plainText}`,
+            shouldReplace && data.phone?.replaceVisibleNumbers
+              ? plainText.includes(assignedDisplay)
+                ? "good"
+                : "bad"
+              : plainText.includes(originalPhone)
+                ? "good"
+                : "warn",
+          ),
+        ].join("");
+
+        attributionTarget.textContent = JSON.stringify(window.id30Attribution?.get?.() || null, null, 2);
+      }
+
+      document.getElementById("refresh-checks").addEventListener("click", runChecks);
+      document.getElementById("grant-consent").addEventListener("click", () => {
+        window.id30Attribution?.grantConsent?.();
+        runChecks();
+      });
+      document.getElementById("revoke-consent").addEventListener("click", () => {
+        window.id30Attribution?.revokeConsent?.();
+        runChecks();
+      });
+      window.addEventListener("load", runChecks);
+    </script>
+  </body>
+</html>

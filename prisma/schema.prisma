@@ -1,0 +1,2053 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum ContactSegmentAudience {
+  PEOPLE
+  COMPANIES
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  NOT_CONNECTED
+  ERROR
+}
+
+enum IntegrationHealthSnapshotStatus {
+  READY
+  WARNING
+  ERROR
+  UNKNOWN
+}
+
+enum MarketingIntegrationSyncStatus {
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum MarketingConversionUploadStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum BackgroundJobRunStatus {
+  RUNNING
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum SalesStage {
+  LEAD
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum SalesLifecycleEventType {
+  CREATED
+  STAGE_CHANGED
+  CONTACTED
+  LOST_REASON_UPDATED
+}
+
+enum StageMovementPolicy {
+  MANUAL
+  AI_SUGGESTED
+  RULE_AUTOMATED
+  AI_AUTOMATED
+}
+
+enum StageGateMode {
+  NONE
+  WARN
+  BLOCK
+}
+
+enum SalesAutomationTriggerType {
+  STAGE_ENTERED
+  EMAIL_RECEIVED
+  EMAIL_SENT
+  SMS_RECEIVED
+  SMS_SENT
+  CALL_COMPLETED
+  CALL_MISSED
+  SITE_VISIT
+}
+
+enum SalesAutomationActionType {
+  CREATE_TASK
+  SEND_EMAIL
+  SEND_SMS
+  NOTIFY_OWNER
+  UPDATE_SCORE
+  SUGGEST_STAGE_MOVE
+}
+
+enum SalesAutomationRunStatus {
+  COMPLETED
+  SKIPPED
+  FAILED
+}
+
+enum CommunicationChannel {
+  PHONE
+  EMAIL
+  SMS
+  WHATSAPP
+  NOTE
+  SYSTEM
+}
+
+enum CommunicationDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum EmailMessageStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum VoiceRoutingMode {
+  BROWSER
+  MOBILE
+  LANDLINE
+  SIP
+  FLEX
+}
+
+enum AgentAvailability {
+  AVAILABLE
+  BUSY
+  AWAY
+  OFFLINE
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum CallStatus {
+  QUEUED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  BUSY
+  NO_ANSWER
+  CANCELED
+}
+
+enum CallQueueStatus {
+  WAITING
+  CONNECTING
+  ANSWERED
+  MISSED
+  ABANDONED
+  COMPLETED
+}
+
+enum RecordingConsentStatus {
+  NOT_REQUIRED
+  PENDING
+  CONSENTED
+  DECLINED
+}
+
+enum BusinessPhoneNumberStatus {
+  ACTIVE
+  RELEASED
+}
+
+enum FileAssetVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum CustomerUploadRequestStatus {
+  OPEN
+  COMPLETED
+  REVOKED
+}
+
+enum CustomerDocumentShareStatus {
+  OPEN
+  REVOKED
+}
+
+enum CustomerDocumentPortalStatus {
+  OPEN
+  REVOKED
+}
+
+enum SignatureRequestStatus {
+  DRAFT
+  SENT
+  DELIVERED
+  COMPLETED
+  DECLINED
+  VOIDED
+  EXPIRED
+  ERROR
+}
+
+enum SignatureRecipientStatus {
+  CREATED
+  SENT
+  DELIVERED
+  COMPLETED
+  DECLINED
+  AUTHENTICATION_FAILED
+  AUTO_RESPONDED
+}
+
+enum AttributionRecordSource {
+  FORM
+  PHONE
+  MANUAL
+}
+
+enum AttributionTouchpointRole {
+  FIRST
+  ASSISTED
+  LAST
+  FIRST_LAST
+}
+
+enum OfflineCampaignChannel {
+  RADIO
+  PRINT
+  EVENT
+  DIRECT_MAIL
+  QR
+  OUTDOOR
+  TV
+  PARTNERSHIP
+  REFERRAL
+  OTHER
+}
+
+enum OfflineCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProductRecordType {
+  SERVICE
+  PHYSICAL
+  DIGITAL
+  SUBSCRIPTION
+  BUNDLE
+}
+
+enum ProductCategoryCollectionMode {
+  MANUAL
+  AUTOMATED
+}
+
+enum ProductCategoryRuleMatch {
+  ANY
+  ALL
+}
+
+enum OpportunityProductStatus {
+  SUSPECTED
+  CONFIRMED
+  QUOTED
+  DECLINED
+}
+
+enum DiscoveryTemplateScope {
+  LEAD
+  PRODUCT
+  CATEGORY
+}
+
+enum DiscoveryQuestionScope {
+  OPPORTUNITY
+  PRODUCT
+  CATEGORY
+  LINE_ITEM
+}
+
+enum DiscoveryAnswerType {
+  TEXT
+  LONG_TEXT
+  URL
+  BOOLEAN
+  SINGLE_SELECT
+  MULTI_SELECT
+  PRODUCT_SELECT
+  PRODUCT_MULTI_SELECT
+  CATEGORY_SELECT
+  CATEGORY_MULTI_SELECT
+  NUMBER
+  DATE
+  DATETIME
+  CURRENCY
+  CURRENCY_RANGE
+  DOMAIN
+  SLIDER
+}
+
+enum DiscoveryAnswerMode {
+  SINGLE
+  MULTIPLE_MAX
+  MULTIPLE_UNLIMITED
+}
+
+enum DiscoveryAnswerSource {
+  MANUAL
+  AI
+  FORM
+  IMPORT
+}
+
+enum SidekickWritePlanStatus {
+  DRAFT
+  APPROVED
+  APPLIED
+  REJECTED
+  FAILED
+}
+
+model User {
+  id                         String                       @id @default(cuid())
+  name                       String
+  firstName                  String?
+  lastName                   String?
+  avatarUrl                  String?
+  landline                   String?
+  mobile                     String?
+  voiceRoutingMode           VoiceRoutingMode             @default(BROWSER)
+  voiceExtension             String?
+  sipAddress                 String?
+  voiceAvailability          AgentAvailability            @default(OFFLINE)
+  voiceLastSeenAt            DateTime?
+  desktopSoftphoneLastSeenAt DateTime?
+  desktopSoftphoneCommand    Json?
+  twoFactorEnabled           Boolean                      @default(false)
+  twoFactorSecret            String?
+  twoFactorEnabledAt         DateTime?
+  twoFactorLastVerifiedAt    DateTime?
+  email                      String                       @unique
+  passwordHash               String
+  role                       UserRole                     @default(USER)
+  roleTemplate               String?
+  status                     UserStatus                   @default(ACTIVE)
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
+  sessions                   Session[]
+  notes                      Note[]
+  assignedTasks              Task[]                       @relation("TaskAssignee")
+  createdTasks               Task[]                       @relation("TaskCreator")
+  ownedOpportunities         SalesOpportunity[]           @relation("OpportunityOwner")
+  salesCommunications        SalesCommunication[]
+  callLogs                   CallLog[]
+  queuedCalls                CallQueueEntry[]             @relation("QueuedCallAssignee")
+  uploadedFiles              FileAsset[]                  @relation("FileUploader")
+  passwordResetTokens        PasswordResetToken[]
+  salesLifecycleEvents       SalesLifecycleEvent[]        @relation("SalesLifecycleEventUser")
+  discoveryAnswers           OpportunityDiscoveryAnswer[] @relation("DiscoveryAnswerUser")
+  createdOfflineCampaigns    OfflineCampaign[]            @relation("OfflineCampaignCreator")
+  reportDefinitions          ReportDefinition[]
+  reportRuns                 ReportRun[]
+  auditLogs                  AuditLog[]
+  createdSidekickWritePlans  SidekickWritePlan[]          @relation("SidekickWritePlanCreator")
+  approvedSidekickWritePlans SidekickWritePlan[]          @relation("SidekickWritePlanApprover")
+  createdCompanies           Company[]                    @relation("CompanyCreator")
+  createdContacts            Contact[]                    @relation("ContactCreator")
+  createdContactSegments     ContactSegment[]             @relation("ContactSegmentCreator")
+  createdUploadRequests      CustomerUploadRequest[]      @relation("CustomerUploadRequestCreator")
+  createdDocumentShares      CustomerDocumentShare[]      @relation("CustomerDocumentShareCreator")
+  createdDocumentPortals     CustomerDocumentPortal[]     @relation("CustomerDocumentPortalCreator")
+  createdSignatureRequests   SignatureRequest[]           @relation("SignatureRequestCreator")
+  notificationStates         NotificationState[]
+  backgroundJobRuns          BackgroundJobRun[]
+
+  @@index([roleTemplate])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  ipAddress  String?
+
+  @@index([expiresAt])
+  @@index([userId, expiresAt])
+  @@index([userId, lastSeenAt, createdAt])
+}
+
+model AuthRateLimitBucket {
+  id              String    @id @default(cuid())
+  key             String    @unique
+  attempts        Int       @default(0)
+  blockedUntil    DateTime?
+  windowStartedAt DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([blockedUntil])
+  @@index([updatedAt])
+}
+
+model NotificationState {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationId String
+  fingerprint    String
+  seenAt         DateTime?
+  dismissedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, notificationId])
+  @@index([userId, seenAt])
+  @@index([userId, dismissedAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+model Company {
+  id              String             @id @default(cuid())
+  name            String
+  domain          String?
+  status          String             @default("Prospect")
+  owner           String?
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  county          String?
+  postcode        String?
+  country         String?
+  createdByUserId String?
+  createdByUser   User?              @relation("CompanyCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  contacts        Contact[]
+  notes           Note[]
+  tasks           Task[]
+  opportunities   SalesOpportunity[]
+
+  @@index([updatedAt])
+  @@index([name])
+  @@index([createdByUserId, updatedAt])
+}
+
+model Contact {
+  id                    String                 @id @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?
+  phoneNormalized       String?
+  additionalEmails      ContactEmailAddress[]
+  additionalPhones      ContactPhoneNumber[]
+  leadSource            String?
+  role                  String?
+  addressLine1          String?
+  addressLine2          String?
+  city                  String?
+  county                String?
+  postcode              String?
+  country               String?
+  companyId             String?
+  companyName           String?
+  company               Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  notes                 Note[]
+  tasks                 Task[]
+  opportunities         SalesOpportunity[]
+  salesCommunications   SalesCommunication[]
+  emailMessages         EmailMessage[]
+  callLogs              CallLog[]
+  queueEntries          CallQueueEntry[]
+  tagAssignments        ContactTagAssignment[]
+  attribution           Json?
+  aiGuidance            Json?
+  aiGuidanceFingerprint String?
+  aiGuidanceGeneratedAt DateTime?
+  createdByUserId       String?
+  createdByUser         User?                  @relation("ContactCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([updatedAt])
+  @@index([createdAt])
+  @@index([lastName, firstName])
+  @@index([leadSource, createdAt])
+  @@index([phoneNormalized])
+  @@index([companyId, updatedAt])
+  @@index([createdByUserId, updatedAt])
+}
+
+model ContactEmailAddress {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label     String?
+  email     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contactId, email])
+  @@index([contactId])
+  @@index([email])
+}
+
+model ContactPhoneNumber {
+  id              String   @id @default(cuid())
+  contactId       String
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label           String?
+  phone           String
+  phoneNormalized String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([contactId, phone])
+  @@index([contactId])
+  @@index([phoneNormalized])
+}
+
+model ContactTag {
+  id          String                 @id @default(cuid())
+  name        String
+  slug        String                 @unique
+  assignments ContactTagAssignment[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+}
+
+model ContactTagAssignment {
+  contactId String
+  tagId     String
+  contact   Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       ContactTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+model ContactSegment {
+  id              String                 @id @default(cuid())
+  name            String
+  description     String?
+  audience        ContactSegmentAudience @default(PEOPLE)
+  prompt          String?
+  criteria        Json
+  aiSummary       String?
+  matchCount      Int                    @default(0)
+  lastEvaluatedAt DateTime?
+  createdByUserId String?
+  createdByUser   User?                  @relation("ContactSegmentCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([audience, updatedAt])
+  @@index([createdByUserId, updatedAt])
+}
+
+model SalesOpportunity {
+  id                    String                       @id @default(cuid())
+  title                 String
+  stage                 SalesStage                   @default(LEAD)
+  salesPipelineStageId  String?
+  salesPipelineStage    SalesPipelineStage?          @relation(fields: [salesPipelineStageId], references: [id], onDelete: SetNull)
+  valueCents            Int                          @default(0)
+  currency              String                       @default("GBP")
+  probability           Int                          @default(10)
+  source                String?
+  nextStep              String?
+  expectedCloseDate     DateTime?
+  ownerId               String?
+  owner                 User?                        @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  companyId             String?
+  company               Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId             String?
+  contact               Contact?                     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  communications        SalesCommunication[]
+  emailMessages         EmailMessage[]
+  lifecycleEvents       SalesLifecycleEvent[]
+  products              OpportunityProduct[]
+  discoveryAnswers      OpportunityDiscoveryAnswer[]
+  scoreEvents           LeadScoreEvent[]
+  automationRuns        SalesAutomationRun[]
+  callLogs              CallLog[]
+  queueEntries          CallQueueEntry[]
+  attribution           Json?
+  leadScope             Json?
+  score                 Int                          @default(0)
+  scoreUpdatedAt        DateTime?
+  aiGuidance            Json?
+  aiGuidanceFingerprint String?
+  aiGuidanceGeneratedAt DateTime?
+  firstContactedAt      DateTime?
+  stageChangedAt        DateTime                     @default(now())
+  closedAt              DateTime?
+  lostReason            String?
+  lostReasonNotes       String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  @@index([stage])
+  @@index([salesPipelineStageId])
+  @@index([expectedCloseDate])
+  @@index([stageChangedAt])
+  @@index([closedAt])
+  @@index([firstContactedAt])
+  @@index([lostReason])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([score])
+  @@index([stage, updatedAt])
+  @@index([source, createdAt])
+  @@index([ownerId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([contactId, createdAt])
+}
+
+model ProductCategory {
+  id             String                        @id @default(cuid())
+  name           String
+  slug           String                        @unique
+  parentId       String?
+  parent         ProductCategory?              @relation("ProductCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       ProductCategory[]             @relation("ProductCategoryTree")
+  description    String?
+  collectionMode ProductCategoryCollectionMode @default(MANUAL)
+  ruleMatch      ProductCategoryRuleMatch      @default(ANY)
+  ruleTags       String[]                      @default([])
+  ruleConditions Json?
+  isActive       Boolean                       @default(true)
+  sortOrder      Int                           @default(0)
+  metadata       Json?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  products           Product[]
+  manualProducts     ProductCategoryProduct[]
+  discoveryTemplates ProductCategoryDiscoveryTemplate[]
+  discoveryAnswers   OpportunityDiscoveryAnswer[]
+
+  @@index([isActive, sortOrder])
+  @@index([parentId])
+  @@index([collectionMode])
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  type             ProductRecordType @default(SERVICE)
+  categoryId       String?
+  category         ProductCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  imageFileAssetId String?
+  imageFileAsset   FileAsset?        @relation("ProductImageAsset", fields: [imageFileAssetId], references: [id], onDelete: SetNull)
+  sku              String?
+  description      String?
+  tags             String[]          @default([])
+  isActive         Boolean           @default(true)
+  sortOrder        Int               @default(0)
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  categoryAssignments ProductCategoryProduct[]
+  discoveryTemplates  ProductDiscoveryTemplate[]
+  opportunityProducts OpportunityProduct[]
+  discoveryAnswers    OpportunityDiscoveryAnswer[]
+
+  @@index([isActive, sortOrder])
+  @@index([categoryId])
+  @@index([imageFileAssetId])
+  @@index([type])
+  @@index([sku])
+}
+
+model ProductCategoryProduct {
+  id         String          @id @default(cuid())
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sortOrder  Int             @default(0)
+  createdAt  DateTime        @default(now())
+
+  @@unique([categoryId, productId])
+  @@index([productId])
+  @@index([categoryId, sortOrder])
+}
+
+model DiscoveryTemplate {
+  id                   String                 @id @default(cuid())
+  name                 String
+  slug                 String                 @unique
+  scope                DiscoveryTemplateScope @default(LEAD)
+  version              Int                    @default(1)
+  description          String?
+  salesPipelineStageId String?
+  salesPipelineStage   SalesPipelineStage?    @relation(fields: [salesPipelineStageId], references: [id], onDelete: SetNull)
+  isActive             Boolean                @default(true)
+  metadata             Json?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  questions  DiscoveryTemplateQuestion[]
+  products   ProductDiscoveryTemplate[]
+  categories ProductCategoryDiscoveryTemplate[]
+
+  @@index([scope, isActive])
+  @@index([salesPipelineStageId])
+}
+
+model DiscoveryQuestion {
+  id               String                 @id @default(cuid())
+  slug             String                 @unique
+  label            String
+  helpText         String?
+  scope            DiscoveryQuestionScope @default(OPPORTUNITY)
+  answerType       DiscoveryAnswerType    @default(TEXT)
+  answerMode       DiscoveryAnswerMode    @default(SINGLE)
+  version          Int                    @default(1)
+  supersededById   String?
+  supersededBy     DiscoveryQuestion?     @relation("DiscoveryQuestionVersions", fields: [supersededById], references: [id], onDelete: SetNull)
+  previousVersions DiscoveryQuestion[]    @relation("DiscoveryQuestionVersions")
+  maxAnswers       Int?
+  options          Json?
+  defaultRequired  Boolean                @default(false)
+  dedupeKey        String?
+  isActive         Boolean                @default(true)
+  archivedAt       DateTime?
+  sortOrder        Int                    @default(0)
+  metadata         Json?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  templates DiscoveryTemplateQuestion[]
+  answers   OpportunityDiscoveryAnswer[]
+
+  @@index([scope, isActive])
+  @@index([dedupeKey])
+  @@index([supersededById])
+  @@index([archivedAt])
+  @@index([sortOrder])
+}
+
+model DiscoveryTemplateQuestion {
+  id               String            @id @default(cuid())
+  templateId       String
+  template         DiscoveryTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  questionId       String
+  question         DiscoveryQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  sortOrder        Int               @default(0)
+  required         Boolean           @default(false)
+  requirementLevel String            @default("standard")
+  visibilityRules  Json?
+  requirementRules Json?
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([templateId, questionId])
+  @@index([questionId])
+  @@index([templateId, sortOrder])
+}
+
+model ProductDiscoveryTemplate {
+  id         String            @id @default(cuid())
+  productId  String
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  templateId String
+  template   DiscoveryTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdAt  DateTime          @default(now())
+
+  @@unique([productId, templateId])
+  @@index([templateId])
+}
+
+model ProductCategoryDiscoveryTemplate {
+  id         String            @id @default(cuid())
+  categoryId String
+  category   ProductCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  templateId String
+  template   DiscoveryTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdAt  DateTime          @default(now())
+
+  @@unique([categoryId, templateId])
+  @@index([templateId])
+}
+
+model OpportunityProduct {
+  id                  String                   @id @default(cuid())
+  opportunityId       String
+  opportunity         SalesOpportunity         @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product                  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  status              OpportunityProductStatus @default(SUSPECTED)
+  quantity            Int                      @default(1)
+  estimatedValueCents Int?
+  source              String?
+  confidence          Int?
+  notes               String?
+  metadata            Json?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@unique([opportunityId, productId])
+  @@index([productId, status])
+  @@index([opportunityId, status])
+}
+
+model OpportunityDiscoveryAnswer {
+  id                         String                @id @default(cuid())
+  opportunityId              String
+  opportunity                SalesOpportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  questionId                 String
+  question                   DiscoveryQuestion     @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  productId                  String?
+  product                    Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  categoryId                 String?
+  category                   ProductCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  value                      Json?
+  questionLabelSnapshot      String?
+  questionHelpTextSnapshot   String?
+  questionAnswerTypeSnapshot String?
+  questionAnswerModeSnapshot String?
+  questionVersionSnapshot    Int?
+  questionOptionsSnapshot    Json?
+  source                     DiscoveryAnswerSource @default(MANUAL)
+  confidence                 Int?
+  answeredAt                 DateTime?
+  confirmedAt                DateTime?
+  answeredByUserId           String?
+  answeredByUser             User?                 @relation("DiscoveryAnswerUser", fields: [answeredByUserId], references: [id], onDelete: SetNull)
+  metadata                   Json?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  @@index([opportunityId, questionId])
+  @@index([productId, questionId])
+  @@index([categoryId, questionId])
+  @@index([answeredByUserId, answeredAt])
+}
+
+model SidekickWritePlan {
+  id               String                  @id @default(cuid())
+  type             String                  @default("DISCOVERY_PACK")
+  prompt           String
+  summary          String
+  status           SidekickWritePlanStatus @default(DRAFT)
+  plan             Json
+  createdByUserId  String?
+  createdByUser    User?                   @relation("SidekickWritePlanCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedByUserId String?
+  approvedByUser   User?                   @relation("SidekickWritePlanApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  approvedAt       DateTime?
+  appliedAt        DateTime?
+  rejectedAt       DateTime?
+  failureMessage   String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([type, status, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([approvedByUserId, approvedAt])
+}
+
+model SalesLifecycleEvent {
+  id                  String                  @id @default(cuid())
+  opportunityId       String
+  opportunity         SalesOpportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  eventType           SalesLifecycleEventType @default(STAGE_CHANGED)
+  fromStage           SalesStage?
+  toStage             SalesStage?
+  fromPipelineStageId String?
+  fromPipelineStage   SalesPipelineStage?     @relation("SalesLifecycleEventFromPipelineStage", fields: [fromPipelineStageId], references: [id], onDelete: SetNull)
+  toPipelineStageId   String?
+  toPipelineStage     SalesPipelineStage?     @relation("SalesLifecycleEventToPipelineStage", fields: [toPipelineStageId], references: [id], onDelete: SetNull)
+  lostReason          String?
+  note                String?
+  occurredAt          DateTime                @default(now())
+  userId              String?
+  user                User?                   @relation("SalesLifecycleEventUser", fields: [userId], references: [id], onDelete: SetNull)
+  metadata            Json?
+  createdAt           DateTime                @default(now())
+
+  @@index([opportunityId, occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([toStage, occurredAt])
+  @@index([toPipelineStageId, occurredAt])
+  @@index([fromPipelineStageId])
+  @@index([userId, occurredAt])
+  @@index([lostReason])
+}
+
+model SalesPipelineStage {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  bucket             SalesStage
+  sortOrder          Int
+  defaultProbability Int
+  goal               String?
+  aiContext          String?
+  slaDays            Int?
+  movementPolicy     StageMovementPolicy @default(MANUAL)
+  gateMode           StageGateMode       @default(WARN)
+  isActive           Boolean             @default(true)
+  isClosed           Boolean             @default(false)
+  isWon              Boolean             @default(false)
+  isLost             Boolean             @default(false)
+  color              String?
+  description        String?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  opportunities       SalesOpportunity[]
+  discoveryTemplates  DiscoveryTemplate[]
+  automationRules     SalesAutomationRule[]
+  lifecycleEventsFrom SalesLifecycleEvent[] @relation("SalesLifecycleEventFromPipelineStage")
+  lifecycleEventsTo   SalesLifecycleEvent[] @relation("SalesLifecycleEventToPipelineStage")
+
+  @@index([bucket, sortOrder])
+  @@index([isActive, sortOrder])
+}
+
+model LeadScoreEvent {
+  id            String           @id @default(cuid())
+  opportunityId String
+  opportunity   SalesOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  delta         Int
+  scoreAfter    Int
+  reason        String
+  source        String
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+
+  @@index([opportunityId, createdAt])
+  @@index([source, createdAt])
+}
+
+model SalesAutomationRule {
+  id                   String                     @id @default(cuid())
+  name                 String
+  description          String?
+  trigger              SalesAutomationTriggerType
+  action               SalesAutomationActionType
+  salesPipelineStageId String?
+  salesPipelineStage   SalesPipelineStage?        @relation(fields: [salesPipelineStageId], references: [id], onDelete: SetNull)
+  isActive             Boolean                    @default(true)
+  config               Json?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  runs SalesAutomationRun[]
+
+  @@index([trigger, isActive])
+  @@index([salesPipelineStageId, trigger])
+}
+
+model SalesAutomationRun {
+  id                   String                     @id @default(cuid())
+  ruleId               String?
+  rule                 SalesAutomationRule?       @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  opportunityId        String?
+  opportunity          SalesOpportunity?          @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  trigger              SalesAutomationTriggerType
+  action               SalesAutomationActionType
+  status               SalesAutomationRunStatus
+  salesPipelineStageId String?
+  message              String?
+  metadata             Json?
+  createdAt            DateTime                   @default(now())
+
+  @@index([opportunityId, createdAt])
+  @@index([ruleId, createdAt])
+  @@index([trigger, status, createdAt])
+}
+
+model SalesCommunication {
+  id            String                 @id @default(cuid())
+  opportunityId String
+  opportunity   SalesOpportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  channel       CommunicationChannel
+  direction     CommunicationDirection
+  subject       String?
+  summary       String
+  body          String?
+  fromAddress   String?
+  toAddress     String?
+  externalId    String?
+  metadata      Json?
+  emailMessage  EmailMessage?
+  occurredAt    DateTime               @default(now())
+  contactId     String?
+  contact       Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  userId        String?
+  user          User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([opportunityId, occurredAt])
+  @@index([channel])
+  @@index([contactId])
+  @@index([userId])
+  @@index([externalId])
+  @@index([occurredAt])
+  @@index([channel, occurredAt])
+}
+
+model EmailMessage {
+  id                   String                 @id @default(cuid())
+  provider             String                 @default("mailersend")
+  providerMessageId    String?                @unique
+  inboundRouteId       String?
+  status               EmailMessageStatus     @default(UNREAD)
+  direction            CommunicationDirection @default(INBOUND)
+  fromName             String?
+  fromAddress          String?
+  toAddress            String?
+  ccAddresses          Json?
+  subject              String?
+  summary              String
+  textBody             String?
+  htmlBody             String?
+  rawMessage           String?
+  attachments          Json?
+  headers              Json?
+  metadata             Json?
+  receivedAt           DateTime               @default(now())
+  readAt               DateTime?
+  contactId            String?
+  contact              Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId        String?
+  opportunity          SalesOpportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  salesCommunicationId String?                @unique
+  salesCommunication   SalesCommunication?    @relation(fields: [salesCommunicationId], references: [id], onDelete: SetNull)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([status, receivedAt])
+  @@index([fromAddress])
+  @@index([contactId, receivedAt])
+  @@index([opportunityId, receivedAt])
+  @@index([inboundRouteId])
+}
+
+model ReportDefinition {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  visibility  String      @default("PRIVATE")
+  source      String      @default("CUSTOM")
+  config      Json
+  ownerId     String?
+  owner       User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  runs        ReportRun[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([ownerId, updatedAt])
+  @@index([visibility, updatedAt])
+  @@index([source, updatedAt])
+}
+
+model ReportRun {
+  id                 String            @id @default(cuid())
+  reportDefinitionId String?
+  reportDefinition   ReportDefinition? @relation(fields: [reportDefinitionId], references: [id], onDelete: SetNull)
+  userId             String?
+  user               User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  prompt             String?
+  config             Json
+  summary            String?
+  rowCount           Int               @default(0)
+  durationMs         Int               @default(0)
+  status             String            @default("COMPLETED")
+  error              String?
+  createdAt          DateTime          @default(now())
+
+  @@index([reportDefinitionId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model CallLog {
+  id               String                 @id @default(cuid())
+  direction        CallDirection
+  status           CallStatus             @default(QUEUED)
+  fromNumber       String?
+  toNumber         String?
+  fromIdentity     String?
+  toIdentity       String?
+  callSid          String?                @unique
+  parentCallSid    String?
+  conferenceSid    String?
+  conferenceName   String?
+  recordingSid     String?
+  recordingUrl     String?
+  recordingConsent RecordingConsentStatus @default(PENDING)
+  transcriptSid    String?
+  transcriptStatus String?
+  aiAnalysisStatus String?
+  durationSeconds  Int?
+  provider         String                 @default("twilio")
+  metadata         Json?
+  attribution      Json?
+  startedAt        DateTime               @default(now())
+  answeredAt       DateTime?
+  endedAt          DateTime?
+  userId           String?
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  contactId        String?
+  contact          Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId    String?
+  opportunity      SalesOpportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  queueEntries     CallQueueEntry[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([userId, startedAt])
+  @@index([contactId, startedAt])
+  @@index([opportunityId, startedAt])
+  @@index([parentCallSid])
+  @@index([conferenceName])
+  @@index([status])
+  @@index([recordingSid])
+  @@index([transcriptSid])
+  @@index([transcriptStatus, startedAt, id])
+  @@index([aiAnalysisStatus, startedAt, id])
+  @@index([startedAt])
+  @@index([startedAt, id])
+  @@index([status, startedAt])
+  @@index([status, startedAt, id])
+}
+
+model CallQueueEntry {
+  id             String            @id @default(cuid())
+  status         CallQueueStatus   @default(WAITING)
+  callSid        String            @unique
+  conferenceName String
+  fromNumber     String?
+  toNumber       String?
+  assignedUserId String?
+  assignedUser   User?             @relation("QueuedCallAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  callLogId      String?
+  callLog        CallLog?          @relation(fields: [callLogId], references: [id], onDelete: SetNull)
+  contactId      String?
+  contact        Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId  String?
+  opportunity    SalesOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  queuedAt       DateTime          @default(now())
+  answeredAt     DateTime?
+  missedAt       DateTime?
+  completedAt    DateTime?
+  metadata       Json?
+  attribution    Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([status, queuedAt])
+  @@index([assignedUserId, queuedAt])
+  @@index([contactId, queuedAt])
+  @@index([opportunityId, queuedAt])
+}
+
+model CrmSettings {
+  id                                      String   @id @default("default")
+  companiesEnabled                        Boolean  @default(true)
+  attributionTrackingEnabled              Boolean  @default(true)
+  attributionFormTrackingEnabled          Boolean  @default(true)
+  attributionInjectHiddenFieldEnabled     Boolean  @default(true)
+  attributionPhoneTrackingEnabled         Boolean  @default(true)
+  attributionReplaceTelLinksEnabled       Boolean  @default(true)
+  attributionReplaceVisibleNumbersEnabled Boolean  @default(true)
+  attributionSessionTimeoutMinutes        Int      @default(30)
+  attributionTimelineLimit                Int      @default(100)
+  attributionCaptureReferrerEnabled       Boolean  @default(true)
+  attributionRequireConsent               Boolean  @default(false)
+  attributionConsentRequirements          Json?
+  attributionRetentionDays                Int      @default(365)
+  browserExtension                        Json?
+  aiContext                               Json?
+  companyProfile                          Json?
+  workspaceDefaults                       Json?
+  moduleToggles                           Json?
+  salesDefaults                           Json?
+  taskDefaults                            Json?
+  notificationDefaults                    Json?
+  displayDefaults                         Json?
+  interfaceDefaults                       Json?
+  documentLibrary                         Json?
+  salesKanban                             Json?
+  createdAt                               DateTime @default(now())
+  updatedAt                               DateTime @updatedAt
+}
+
+model AttributionSnapshot {
+  id                     String   @id @default(cuid())
+  visitorId              String
+  sessionId              String
+  firstTouch             Json?
+  lastTouch              Json?
+  timeline               Json?
+  landingPage            String?
+  currentPage            String?
+  referrer               String?
+  attributionSource      String?
+  attributionMedium      String?
+  attributionCampaign    String?
+  attributionAdProvider  String?
+  attributionClickId     String?
+  attributionClickIdType String?
+  userAgent              String?
+  ipAddress              String?
+  location               Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  assignments         AttributionNumberAssignment[]
+  records             AttributionRecord[]
+  touchpoints         AttributionTouchpoint[]
+  debugEvents         AttributionDebugEvent[]
+  confidenceSnapshots AttributionConfidenceSnapshot[]
+
+  @@unique([visitorId, sessionId])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([updatedAt])
+  @@index([attributionSource])
+  @@index([attributionMedium])
+  @@index([attributionAdProvider])
+  @@index([attributionCampaign])
+}
+
+model AttributionConfidenceSnapshot {
+  id                    String              @id @default(cuid())
+  attributionSnapshotId String
+  attributionSnapshot   AttributionSnapshot @relation(fields: [attributionSnapshotId], references: [id], onDelete: Cascade)
+  level                 String
+  score                 Int
+  maxScore              Int
+  percentage            Int
+  clientSummary         String?
+  factors               Json?
+  presentFactors        Json?
+  missingFactors        Json?
+  internalReasons       Json?
+  metadata              Json?
+  createdByUserId       String?
+  createdAt             DateTime            @default(now())
+
+  @@index([attributionSnapshotId, createdAt])
+  @@index([level, createdAt])
+}
+
+model AttributionPhoneNumber {
+  id                String           @id @default(cuid())
+  phoneNumber       String           @unique
+  label             String?
+  destinationNumber String?
+  offlineCampaignId String?
+  offlineCampaign   OfflineCampaign? @relation(fields: [offlineCampaignId], references: [id], onDelete: SetNull)
+  isActive          Boolean          @default(true)
+  priority          Int              @default(0)
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  assignments AttributionNumberAssignment[]
+  records     AttributionRecord[]
+
+  @@index([isActive, priority])
+  @@index([offlineCampaignId])
+}
+
+model BusinessPhoneNumber {
+  id                   String                    @id @default(cuid())
+  phoneNumber          String                    @unique
+  label                String?
+  twilioPhoneNumberSid String?                   @unique
+  country              String?
+  numberType           String?
+  capabilities         Json?
+  status               BusinessPhoneNumberStatus @default(ACTIVE)
+  metadata             Json?
+  releasedAt           DateTime?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model AttributionNumberAssignment {
+  id                    String                 @id @default(cuid())
+  phoneNumberId         String
+  phoneNumber           AttributionPhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+  attributionSnapshotId String?
+  attributionSnapshot   AttributionSnapshot?   @relation(fields: [attributionSnapshotId], references: [id], onDelete: SetNull)
+  visitorId             String
+  sessionId             String
+  assignedAt            DateTime               @default(now())
+  expiresAt             DateTime
+  lastSeenAt            DateTime               @default(now())
+  metadata              Json?
+
+  @@index([visitorId, sessionId, expiresAt])
+  @@index([phoneNumberId, expiresAt])
+}
+
+model AttributionRecord {
+  id                    String                  @id @default(cuid())
+  source                AttributionRecordSource
+  attributionSnapshotId String?
+  attributionSnapshot   AttributionSnapshot?    @relation(fields: [attributionSnapshotId], references: [id], onDelete: SetNull)
+  trackingPhoneNumberId String?
+  trackingNumber        AttributionPhoneNumber? @relation(fields: [trackingPhoneNumberId], references: [id], onDelete: SetNull)
+  offlineCampaignId     String?
+  offlineCampaign       OfflineCampaign?        @relation(fields: [offlineCampaignId], references: [id], onDelete: SetNull)
+  visitorId             String?
+  sessionId             String?
+  contactId             String?
+  opportunityId         String?
+  callLogId             String?
+  callQueueEntryId      String?
+  firstTouch            Json?
+  lastTouch             Json?
+  timeline              Json?
+  landingPage           String?
+  currentPage           String?
+  referrer              String?
+  trackingPhoneNumber   String?
+  metadata              Json?
+  createdAt             DateTime                @default(now())
+  touchpoints           AttributionTouchpoint[]
+
+  @@index([source, createdAt])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([contactId])
+  @@index([opportunityId])
+  @@index([callLogId])
+  @@index([callQueueEntryId])
+  @@index([trackingPhoneNumber])
+  @@index([offlineCampaignId])
+}
+
+model AttributionTouchpoint {
+  id                    String                    @id @default(cuid())
+  attributionSnapshotId String?
+  attributionSnapshot   AttributionSnapshot?      @relation(fields: [attributionSnapshotId], references: [id], onDelete: Cascade)
+  attributionRecordId   String?
+  attributionRecord     AttributionRecord?        @relation(fields: [attributionRecordId], references: [id], onDelete: Cascade)
+  offlineCampaignId     String?
+  offlineCampaign       OfflineCampaign?          @relation(fields: [offlineCampaignId], references: [id], onDelete: SetNull)
+  visitorId             String?
+  sessionId             String?
+  role                  AttributionTouchpointRole
+  position              Int                       @default(0)
+  source                String?
+  medium                String?
+  campaign              String?
+  content               String?
+  term                  String?
+  url                   String?
+  landingPage           String?
+  referrer              String?
+  capturedAt            DateTime?
+  metadata              Json?
+  createdAt             DateTime                  @default(now())
+
+  @@index([attributionSnapshotId, position])
+  @@index([attributionRecordId, position])
+  @@index([offlineCampaignId, capturedAt])
+  @@index([visitorId, sessionId, position])
+  @@index([role, capturedAt])
+  @@index([source, campaign])
+  @@index([medium])
+  @@index([capturedAt])
+}
+
+model OfflineCampaign {
+  id              String                 @id @default(cuid())
+  name            String
+  code            String                 @unique
+  channel         OfflineCampaignChannel
+  status          OfflineCampaignStatus  @default(DRAFT)
+  source          String
+  medium          String                 @default("offline")
+  campaign        String
+  content         String?
+  term            String?
+  destinationUrl  String?
+  startDate       DateTime?
+  endDate         DateTime?
+  budgetCents     Int?
+  actualCostCents Int?
+  currency        String                 @default("GBP")
+  notes           String?
+  metadata        Json?
+  createdByUserId String?
+  createdBy       User?                  @relation("OfflineCampaignCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  trackingNumbers    AttributionPhoneNumber[]
+  attributionRecords AttributionRecord[]
+  touchpoints        AttributionTouchpoint[]
+
+  @@index([channel, status])
+  @@index([source, campaign])
+  @@index([startDate, endDate])
+  @@index([createdByUserId])
+}
+
+model AttributionDebugEvent {
+  id                    String               @id @default(cuid())
+  eventType             String
+  level                 String               @default("info")
+  message               String?
+  hostname              String?
+  origin                String?
+  path                  String?
+  visitorId             String?
+  sessionId             String?
+  attributionSnapshotId String?
+  attributionSnapshot   AttributionSnapshot? @relation(fields: [attributionSnapshotId], references: [id], onDelete: SetNull)
+  metadata              Json?
+  userAgent             String?
+  ipAddress             String?
+  createdAt             DateTime             @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([level, createdAt])
+  @@index([hostname, createdAt])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([attributionSnapshotId])
+}
+
+model AttributionDomain {
+  id                              String    @id @default(cuid())
+  domain                          String    @unique
+  label                           String?
+  environment                     String    @default("production")
+  isActive                        Boolean   @default(true)
+  notes                           String?
+  trackingEnabled                 Boolean?
+  consentRequired                 Boolean?
+  formTrackingEnabled             Boolean?
+  phoneTrackingEnabled            Boolean?
+  visibleNumberReplacementEnabled Boolean?
+  lastConfigRequestAt             DateTime?
+  lastScriptSeenAt                DateTime?
+  lastInstallCheckAt              DateTime?
+  lastInstallStatus               String?
+  lastInstallUrl                  String?
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  installChecks AttributionInstallCheck[]
+
+  @@index([isActive, environment])
+  @@index([domain])
+  @@index([lastConfigRequestAt])
+  @@index([lastScriptSeenAt])
+}
+
+model AttributionInstallCheck {
+  id                  String             @id @default(cuid())
+  attributionDomainId String?
+  attributionDomain   AttributionDomain? @relation(fields: [attributionDomainId], references: [id], onDelete: SetNull)
+  domain              String?
+  checkedUrl          String
+  status              String
+  httpStatus          Int?
+  ok                  Boolean            @default(false)
+  scriptReachable     Boolean            @default(false)
+  scriptInstalled     Boolean            @default(false)
+  correctApiBase      Boolean            @default(false)
+  browserCheck        Json?
+  issues              Json?
+  checkedByUserId     String?
+  createdAt           DateTime           @default(now())
+
+  @@index([attributionDomainId, createdAt])
+  @@index([domain, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model AttributionRule {
+  id             String   @id @default(cuid())
+  name           String
+  ruleType       String   @default("source-override")
+  matchField     String
+  matchOperator  String   @default("contains")
+  matchValue     String
+  outputSource   String?
+  outputChannel  String?
+  outputCampaign String?
+  priority       Int      @default(0)
+  isActive       Boolean  @default(true)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, priority])
+  @@index([ruleType])
+  @@index([matchField])
+}
+
+model AttributionDniRule {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  matchField     String
+  matchOperator  String   @default("contains")
+  matchValue     String?
+  poolLabel      String?
+  fallbackNumber String?
+  priority       Int      @default(0)
+  isActive       Boolean  @default(true)
+  isDefault      Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, priority])
+  @@index([isDefault])
+  @@index([matchField])
+  @@index([poolLabel])
+}
+
+model FileAsset {
+  id                           String                      @id @default(cuid())
+  storageProvider              String                      @default("cloudflare-r2")
+  bucket                       String
+  key                          String                      @unique
+  originalName                 String
+  mimeType                     String
+  sizeBytes                    Int
+  checksum                     String?
+  entityType                   String?
+  entityId                     String?
+  documentFolder               String?
+  documentUploadType           String?
+  notes                        String?
+  tags                         String[]                    @default([])
+  visibility                   FileAssetVisibility         @default(PRIVATE)
+  uploadedById                 String?
+  uploadedBy                   User?                       @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  productImages                Product[]                   @relation("ProductImageAsset")
+  customerDocumentShareFiles   CustomerDocumentShareFile[]
+  signatureSourceRequests      SignatureRequest[]          @relation("SignatureRequestSourceFile")
+  signatureSignedRequests      SignatureRequest[]          @relation("SignatureRequestSignedFile")
+  signatureCertificateRequests SignatureRequest[]          @relation("SignatureRequestCertificateFile")
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([entityType, entityId, documentFolder])
+  @@index([documentUploadType, createdAt])
+  @@index([originalName, createdAt])
+  @@index([mimeType, createdAt])
+  @@index([sizeBytes, createdAt])
+  @@index([uploadedById, createdAt])
+  @@index([tags], type: Gin)
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([visibility, createdAt])
+}
+
+model CustomerUploadRequest {
+  id              String                      @id @default(cuid())
+  tokenHash       String                      @unique
+  entityType      String
+  entityId        String
+  recipientName   String?
+  recipientEmail  String?
+  message         String?
+  status          CustomerUploadRequestStatus @default(OPEN)
+  expiresAt       DateTime
+  completedAt     DateTime?
+  revokedAt       DateTime?
+  createdByUserId String?
+  createdByUser   User?                       @relation("CustomerUploadRequestCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  items           CustomerUploadRequestItem[]
+  documentPortal  CustomerDocumentPortal?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  @@index([entityType, entityId, createdAt])
+  @@index([status, expiresAt])
+  @@index([expiresAt])
+  @@index([createdByUserId, createdAt])
+}
+
+model CustomerUploadRequestItem {
+  id          String                      @id @default(cuid())
+  requestId   String
+  request     CustomerUploadRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  uploadType  String
+  label       String
+  description String?
+  required    Boolean                     @default(true)
+  fulfilledAt DateTime?
+  files       CustomerUploadRequestFile[]
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  @@unique([requestId, uploadType])
+  @@index([requestId, fulfilledAt])
+  @@index([uploadType])
+}
+
+model CustomerUploadRequestFile {
+  id          String                    @id @default(cuid())
+  itemId      String
+  item        CustomerUploadRequestItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  fileAssetId String
+  createdAt   DateTime                  @default(now())
+
+  @@index([itemId, createdAt])
+  @@index([fileAssetId])
+}
+
+model CustomerDocumentShare {
+  id              String                      @id @default(cuid())
+  tokenHash       String                      @unique
+  entityType      String
+  entityId        String
+  recipientName   String?
+  recipientEmail  String?
+  subject         String
+  message         String?
+  status          CustomerDocumentShareStatus @default(OPEN)
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdByUserId String?
+  createdByUser   User?                       @relation("CustomerDocumentShareCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  files           CustomerDocumentShareFile[]
+  documentPortal  CustomerDocumentPortal?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  @@index([entityType, entityId, createdAt])
+  @@index([status, expiresAt])
+  @@index([expiresAt])
+  @@index([createdByUserId, createdAt])
+}
+
+model CustomerDocumentShareFile {
+  id                String                @id @default(cuid())
+  shareId           String
+  share             CustomerDocumentShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  fileAssetId       String
+  fileAsset         FileAsset             @relation(fields: [fileAssetId], references: [id], onDelete: Cascade)
+  displayName       String?
+  downloadCount     Int                   @default(0)
+  firstDownloadedAt DateTime?
+  lastDownloadedAt  DateTime?
+  createdAt         DateTime              @default(now())
+
+  @@unique([shareId, fileAssetId])
+  @@index([shareId, createdAt])
+  @@index([fileAssetId])
+  @@index([downloadCount])
+}
+
+model CustomerDocumentPortal {
+  id              String                       @id @default(cuid())
+  tokenHash       String                       @unique
+  entityType      String
+  entityId        String
+  recipientName   String?
+  recipientEmail  String?
+  subject         String
+  message         String?
+  status          CustomerDocumentPortalStatus @default(OPEN)
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  uploadRequestId String?                      @unique
+  uploadRequest   CustomerUploadRequest?       @relation(fields: [uploadRequestId], references: [id], onDelete: SetNull)
+  documentShareId String?                      @unique
+  documentShare   CustomerDocumentShare?       @relation(fields: [documentShareId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  createdByUser   User?                        @relation("CustomerDocumentPortalCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  @@index([entityType, entityId, createdAt])
+  @@index([status, expiresAt])
+  @@index([expiresAt])
+  @@index([createdByUserId, createdAt])
+}
+
+model SignatureRequest {
+  id                     String                 @id @default(cuid())
+  provider               String                 @default("docusign")
+  providerEnvelopeId     String?                @unique
+  providerStatus         String?
+  entityType             String
+  entityId               String
+  sourceFileAssetId      String
+  sourceFileAsset        FileAsset              @relation("SignatureRequestSourceFile", fields: [sourceFileAssetId], references: [id], onDelete: Restrict)
+  signedFileAssetId      String?
+  signedFileAsset        FileAsset?             @relation("SignatureRequestSignedFile", fields: [signedFileAssetId], references: [id], onDelete: SetNull)
+  certificateFileAssetId String?
+  certificateFileAsset   FileAsset?             @relation("SignatureRequestCertificateFile", fields: [certificateFileAssetId], references: [id], onDelete: SetNull)
+  subject                String
+  message                String?
+  status                 SignatureRequestStatus @default(DRAFT)
+  sentAt                 DateTime?
+  deliveredAt            DateTime?
+  completedAt            DateTime?
+  declinedAt             DateTime?
+  voidedAt               DateTime?
+  lastEventAt            DateTime?
+  errorMessage           String?
+  createdByUserId        String?
+  createdByUser          User?                  @relation("SignatureRequestCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  recipients             SignatureRecipient[]
+  events                 SignatureEvent[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([entityType, entityId, createdAt])
+  @@index([status, createdAt])
+  @@index([sourceFileAssetId, createdAt])
+  @@index([signedFileAssetId])
+  @@index([certificateFileAssetId])
+  @@index([createdByUserId, createdAt])
+}
+
+model SignatureRecipient {
+  id                  String                   @id @default(cuid())
+  requestId           String
+  request             SignatureRequest         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  name                String
+  email               String
+  roleName            String                   @default("Customer")
+  routingOrder        Int                      @default(1)
+  providerRecipientId String?
+  status              SignatureRecipientStatus @default(CREATED)
+  deliveredAt         DateTime?
+  signedAt            DateTime?
+  declinedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([requestId, routingOrder])
+  @@index([email, createdAt])
+  @@index([status, createdAt])
+}
+
+model SignatureEvent {
+  id             String           @id @default(cuid())
+  requestId      String
+  request        SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider       String           @default("docusign")
+  eventType      String
+  providerStatus String?
+  occurredAt     DateTime?
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+
+  @@index([requestId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  body      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([contactId, createdAt])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  dueDate     DateTime?
+  assigneeId  String?
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creatorId   String
+  creator     User       @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  companyId   String?
+  company     Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId   String?
+  contact     Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([updatedAt])
+  @@index([createdAt])
+  @@index([status, updatedAt])
+  @@index([status, dueDate, updatedAt])
+  @@index([assigneeId, updatedAt])
+  @@index([companyId, updatedAt])
+  @@index([contactId, updatedAt])
+}
+
+model IntegrationConnection {
+  id                String                        @id @default(cuid())
+  provider          String                        @unique
+  name              String
+  description       String
+  status            IntegrationStatus             @default(NOT_CONNECTED)
+  config            Json?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  healthSnapshots   IntegrationHealthSnapshot[]
+  marketingSyncLogs MarketingIntegrationSyncLog[]
+}
+
+model IntegrationHealthSnapshot {
+  id            String                          @id @default(cuid())
+  integrationId String?
+  integration   IntegrationConnection?          @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  provider      String
+  capability    String
+  status        IntegrationHealthSnapshotStatus @default(UNKNOWN)
+  source        String                          @default("manual")
+  message       String?
+  metadata      Json?
+  checkedAt     DateTime                        @default(now())
+  createdAt     DateTime                        @default(now())
+
+  @@index([provider, checkedAt])
+  @@index([integrationId, checkedAt])
+  @@index([status, checkedAt])
+  @@index([capability, checkedAt])
+}
+
+model BackgroundJobRun {
+  id             String                 @id @default(cuid())
+  jobType        String
+  jobName        String
+  status         BackgroundJobRunStatus @default(RUNNING)
+  trigger        String                 @default("manual")
+  dryRun         Boolean                @default(false)
+  actorId        String?
+  actor          User?                  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  recordsRead    Int                    @default(0)
+  recordsWritten Int                    @default(0)
+  message        String?
+  errorMessage   String?
+  summary        Json?
+  metadata       Json?
+  startedAt      DateTime               @default(now())
+  finishedAt     DateTime?
+  durationMs     Int?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([status, startedAt])
+  @@index([jobType, startedAt])
+  @@index([jobName, startedAt])
+  @@index([actorId, startedAt])
+  @@index([createdAt])
+}
+
+model MarketingIntegrationSyncLog {
+  id             String                         @id @default(cuid())
+  integrationId  String
+  integration    IntegrationConnection          @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  provider       String
+  status         MarketingIntegrationSyncStatus
+  syncType       String
+  recordsRead    Int                            @default(0)
+  recordsWritten Int                            @default(0)
+  message        String?
+  metadata       Json?
+  startedAt      DateTime                       @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime                       @default(now())
+
+  @@index([provider, startedAt])
+  @@index([integrationId, startedAt])
+  @@index([createdAt])
+}
+
+model MarketingConversionUpload {
+  id             String                          @id @default(cuid())
+  provider       String
+  conversionType String
+  entityType     String
+  entityId       String
+  status         MarketingConversionUploadStatus @default(PENDING)
+  valueCents     Int?
+  currency       String                          @default("GBP")
+  occurredAt     DateTime
+  clickId        String?
+  clickIdSource  String?
+  conversionName String?
+  payload        Json?
+  response       Json?
+  message        String?
+  attemptCount   Int                             @default(0)
+  lastAttemptAt  DateTime?
+  uploadedAt     DateTime?
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+
+  @@unique([provider, conversionType, entityType, entityId])
+  @@index([provider, status, occurredAt])
+  @@index([status, updatedAt])
+  @@index([entityType, entityId])
+  @@index([occurredAt])
+}
+
+model MarketingCampaignSpend {
+  id           String   @id @default(cuid())
+  provider     String
+  accountId    String
+  campaignId   String
+  campaignName String?
+  date         DateTime
+  currency     String   @default("GBP")
+  costMicros   BigInt   @default(0)
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  conversions  Float    @default(0)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([provider, accountId, campaignId, date])
+  @@index([provider, date])
+  @@index([campaignId, date])
+}
+
+model MarketingDailyRollup {
+  id                 String   @id @default(cuid())
+  date               DateTime
+  source             String   @default("ALL")
+  provider           String   @default("ALL")
+  currency           String   @default("GBP")
+  sessions           Int      @default(0)
+  attributionRecords Int      @default(0)
+  formLeads          Int      @default(0)
+  phoneLeads         Int      @default(0)
+  otherLeads         Int      @default(0)
+  clicks             Int      @default(0)
+  impressions        Int      @default(0)
+  conversions        Float    @default(0)
+  costMicros         BigInt   @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([date, source, provider])
+  @@index([date])
+  @@index([source, date])
+  @@index([provider, date])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
+model McpRequestNonce {
+  id          String   @id @default(cuid())
+  requestId   String
+  crmClientId String
+  workspaceId String
+  subject     String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, requestId])
+  @@index([crmClientId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([expiresAt])
+}
+
+model RealtimeVersion {
+  id        String   @id @default(cuid())
+  topic     String   @unique
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([updatedAt])
+}

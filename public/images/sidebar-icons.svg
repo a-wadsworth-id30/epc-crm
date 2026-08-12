@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="boxes" viewBox="0 0 24 24">
+    <path d="m12 3.5 5 2.7-5 2.7-5-2.7 5-2.7Z"/>
+    <path d="M7 6.2v5.2l5 2.8 5-2.8V6.2"/>
+    <path d="m6.5 13.2 4.5 2.5-4.5 2.5L2 15.7l4.5-2.5Z"/>
+    <path d="m17.5 13.2 4.5 2.5-4.5 2.5-4.5-2.5 4.5-2.5Z"/>
+    <path d="M6.5 18.2v2.3"/>
+    <path d="M17.5 18.2v2.3"/>
+  </symbol>
+  <symbol id="chart-column" viewBox="0 0 24 24">
+    <path d="M4 20h16"/>
+    <path d="M7 16v-5"/>
+    <path d="M12 16V7"/>
+    <path d="M17 16v-8"/>
+  </symbol>
+  <symbol id="circle-dollar-sign" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.5"/>
+    <path d="M12 7.5v9"/>
+    <path d="M14.5 9.5c-.6-.7-1.4-1-2.5-1-1.4 0-2.4.7-2.4 1.8 0 2.7 4.9 1.4 4.9 4 0 1.1-1 1.9-2.6 1.9-1.2 0-2.1-.4-2.8-1.2"/>
+  </symbol>
+  <symbol id="clipboard-list" viewBox="0 0 24 24">
+    <rect x="5" y="4.5" width="14" height="16" rx="2"/>
+    <path d="M9 4.5a3 3 0 0 1 6 0"/>
+    <path d="M9 10h6"/>
+    <path d="M9 14h6"/>
+    <path d="M9 18h4"/>
+  </symbol>
+  <symbol id="folder-archive" viewBox="0 0 24 24">
+    <path d="M3.5 6.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6.5Z"/>
+    <path d="M8.5 12h7"/>
+    <path d="M9.5 15h5"/>
+  </symbol>
+  <symbol id="headphones" viewBox="0 0 24 24">
+    <path d="M4.5 13.5v-1.2a7.5 7.5 0 0 1 15 0v1.2"/>
+    <rect x="3.5" y="13" width="4" height="6" rx="1.4"/>
+    <rect x="16.5" y="13" width="4" height="6" rx="1.4"/>
+    <path d="M17.5 19c-.7 1-2.1 1.5-4.1 1.5H12"/>
+  </symbol>
+  <symbol id="inbox" viewBox="0 0 24 24">
+    <path d="M4 13.5 6.4 5h11.2l2.4 8.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19v-5.5Z"/>
+    <path d="M4 13.5h4.5l1.2 2h4.6l1.2-2H20"/>
+  </symbol>
+  <symbol id="layout-dashboard" viewBox="0 0 24 24">
+    <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/>
+    <rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/>
+    <rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/>
+    <rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>
+  </symbol>
+  <symbol id="list-todo" viewBox="0 0 24 24">
+    <path d="m4 7 1.5 1.5L8 6"/>
+    <path d="M11 7h9"/>
+    <path d="m4 14 1.5 1.5L8 13"/>
+    <path d="M11 14h9"/>
+    <path d="M11 20h6"/>
+  </symbol>
+  <symbol id="megaphone" viewBox="0 0 24 24">
+    <path d="M4 13h3l10-5.5v9L7 11H4v2Z"/>
+    <path d="M7 13.5 8.5 20h3L10 14.8"/>
+    <path d="M19 10.5c1 .8 1.5 1.8 1.5 3s-.5 2.2-1.5 3"/>
+  </symbol>
+  <symbol id="minus" viewBox="0 0 24 24">
+    <path d="M5 12h14"/>
+  </symbol>
+  <symbol id="plus" viewBox="0 0 24 24">
+    <path d="M12 5v14"/>
+    <path d="M5 12h14"/>
+  </symbol>
+  <symbol id="settings" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M12 3.8v2"/>
+    <path d="M12 18.2v2"/>
+    <path d="m5.8 5.8 1.4 1.4"/>
+    <path d="m16.8 16.8 1.4 1.4"/>
+    <path d="M3.8 12h2"/>
+    <path d="M18.2 12h2"/>
+    <path d="m5.8 18.2 1.4-1.4"/>
+    <path d="m16.8 7.2 1.4-1.4"/>
+  </symbol>
+  <symbol id="square-check-big" viewBox="0 0 24 24">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="3"/>
+    <path d="m8 12 2.6 2.6L16.5 9"/>
+  </symbol>
+  <symbol id="users-round" viewBox="0 0 24 24">
+    <circle cx="9" cy="8.5" r="3"/>
+    <path d="M3.8 19c.5-2.8 2.5-4.5 5.2-4.5s4.7 1.7 5.2 4.5"/>
+    <path d="M15.2 5.9a2.7 2.7 0 0 1 0 5.2"/>
+    <path d="M16.5 14.8c2.2.5 3.6 1.9 3.9 4.2"/>
+  </symbol>
+</svg>

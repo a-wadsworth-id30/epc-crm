@@ -1,0 +1,1 @@
+ALTER TYPE "DiscoveryAnswerType" ADD VALUE IF NOT EXISTS 'DATETIME';

@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "iD30 CRM Softphone",
+  "description": "Opens the iD30 CRM softphone in a browser-level window with Chrome alerts.",
+  "version": "0.1.2",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "iD30 CRM Softphone",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://crm.id30.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["https://crm.id30.com/*"],
+  "permissions": ["notifications", "storage", "tabs"]
+}
