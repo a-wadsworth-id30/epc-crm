@@ -1,21 +1,21 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: id30-crm-live-postgres
+    container_name: epc-crm-live-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: id30_crm_live
+      POSTGRES_DB: epc_crm_live
       POSTGRES_USER: crm
       POSTGRES_PASSWORD: crm_password
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
-      - id30_crm_live_postgres:/var/lib/postgresql/data
+      - epc_crm_live_postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crm -d id30_crm_live"]
+      test: ["CMD-SHELL", "pg_isready -U crm -d epc_crm_live"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
-  id30_crm_live_postgres:
+  epc_crm_live_postgres:
