@@ -10,6 +10,8 @@ import { getCrmSettings } from "@/lib/settings";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
+export const dynamic = "force-dynamic";
+
 export default async function AuthLayout({
   children,
 }: {
