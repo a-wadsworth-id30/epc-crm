@@ -3,6 +3,7 @@ import "server-only";
 import type { CrmSettings } from "@prisma/client";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { isPrismaDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 export const crmSettingsCacheTag = "crm-settings";
 
@@ -49,7 +50,7 @@ async function loadCrmSettings() {
       create: { id: "default", companiesEnabled: true },
     });
   } catch (error) {
-    if (isSettingsDatabaseUnavailable(error)) {
+    if (isPrismaDatabaseUnavailableError(error)) {
       console.warn(
         "CRM settings database is unavailable; using default settings until DATABASE_URL is configured.",
       );
@@ -115,24 +116,5 @@ function isMissingAttributionSettingsColumn(error: unknown) {
       candidate.meta.column === "CrmSettings.interfaceDefaults" ||
       candidate.meta.column === "CrmSettings.documentLibrary" ||
       candidate.meta.column === "CrmSettings.salesKanban")
-  );
-}
-
-function isSettingsDatabaseUnavailable(error: unknown) {
-  const candidate = error as {
-    code?: string;
-    errorCode?: string;
-    message?: string;
-  };
-  const message = candidate.message ?? "";
-
-  return (
-    candidate.code === "P1001" ||
-    candidate.errorCode === "P1001" ||
-    candidate.errorCode === "P1012" ||
-    candidate.errorCode === "P1013" ||
-    message.includes("Environment variable not found: DATABASE_URL") ||
-    message.includes("the URL must start with the protocol") ||
-    (message.includes("DATABASE_URL") && message.includes("Invalid value"))
   );
 }

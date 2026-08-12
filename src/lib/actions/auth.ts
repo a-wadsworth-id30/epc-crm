@@ -55,6 +55,7 @@ import { sendMailerSendEmail } from "@/lib/integrations/mailersend";
 import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
 import { mediaAssetUrl, uploadMediaFile } from "@/lib/storage/media";
+import { isPrismaDatabaseUnavailableError } from "@/lib/prisma-errors";
 import {
   bulkUserImportMaxFileBytes,
   bulkUserImportMaxRows,
@@ -510,16 +511,31 @@ async function completeTwoFactorLoginAction(
     };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: challenge.userId },
-    select: {
-      email: true,
-      id: true,
-      status: true,
-      twoFactorEnabled: true,
-      twoFactorSecret: true,
-    },
-  });
+  let user;
+
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: challenge.userId },
+      select: {
+        email: true,
+        id: true,
+        status: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+      },
+    });
+  } catch (error) {
+    if (!isPrismaDatabaseUnavailableError(error)) {
+      throw error;
+    }
+
+    console.error("Two-factor login failed before user validation", error);
+    return {
+      ok: false,
+      message:
+        "The CRM database is unavailable. Add DATABASE_URL in Netlify before signing in.",
+    };
+  }
 
   if (
     !user ||

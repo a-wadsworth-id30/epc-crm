@@ -108,3 +108,27 @@ export function isPrismaMissingSchemaError(
     isPrismaMissingColumnError(error, target)
   );
 }
+
+export function isPrismaDatabaseUnavailableError(error: unknown) {
+  const candidate = error as {
+    code?: string;
+    errorCode?: string;
+    message?: string;
+  };
+  const message = candidate.message ?? "";
+
+  return (
+    candidate.code === "P1001" ||
+    candidate.code === "P1002" ||
+    candidate.errorCode === "P1001" ||
+    candidate.errorCode === "P1002" ||
+    candidate.errorCode === "P1012" ||
+    candidate.errorCode === "P1013" ||
+    message.includes("Environment variable not found: DATABASE_URL") ||
+    message.includes("You must provide a nonempty URL") ||
+    message.includes("resolved to an empty string") ||
+    message.includes("the URL must start with the protocol") ||
+    message.includes("Can't reach database server") ||
+    (message.includes("DATABASE_URL") && message.includes("Invalid value"))
+  );
+}

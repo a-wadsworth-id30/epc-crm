@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { isPrismaDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 type RateLimitState = {
   attempts: number;
@@ -69,38 +70,62 @@ function freshState(now: number): RateLimitState {
 }
 
 async function activeState(key: string, policy: AuthRateLimitPolicy, now: number) {
-  const current = await prisma.authRateLimitBucket.findUnique({
-    where: { key },
-    select: {
-      attempts: true,
-      blockedUntil: true,
-      windowStartedAt: true,
-    },
-  });
+  let current: RateLimitState | null = null;
+
+  try {
+    current = await prisma.authRateLimitBucket.findUnique({
+      where: { key },
+      select: {
+        attempts: true,
+        blockedUntil: true,
+        windowStartedAt: true,
+      },
+    });
+  } catch (error) {
+    if (isPrismaDatabaseUnavailableError(error)) {
+      console.warn(
+        "Auth rate limit database is unavailable; allowing request without persisted rate-limit state.",
+      );
+      return freshState(now);
+    }
+
+    throw error;
+  }
 
   if (current && !isExpiredState(current, policy, now)) {
     return current;
   }
 
-  return prisma.authRateLimitBucket.upsert({
-    where: { key },
-    create: {
-      key,
-      attempts: 0,
-      blockedUntil: null,
-      windowStartedAt: dateFromMs(now),
-    },
-    update: {
-      attempts: 0,
-      blockedUntil: null,
-      windowStartedAt: dateFromMs(now),
-    },
-    select: {
-      attempts: true,
-      blockedUntil: true,
-      windowStartedAt: true,
-    },
-  });
+  try {
+    return await prisma.authRateLimitBucket.upsert({
+      where: { key },
+      create: {
+        key,
+        attempts: 0,
+        blockedUntil: null,
+        windowStartedAt: dateFromMs(now),
+      },
+      update: {
+        attempts: 0,
+        blockedUntil: null,
+        windowStartedAt: dateFromMs(now),
+      },
+      select: {
+        attempts: true,
+        blockedUntil: true,
+        windowStartedAt: true,
+      },
+    });
+  } catch (error) {
+    if (isPrismaDatabaseUnavailableError(error)) {
+      console.warn(
+        "Auth rate limit database is unavailable; allowing request without persisted rate-limit state.",
+      );
+      return freshState(now);
+    }
+
+    throw error;
+  }
 }
 
 export function authRateLimitKey(scope: string, identifier: string) {
@@ -148,43 +173,56 @@ export async function recordAuthRateLimitAttempt(rules: AuthRateLimitRule[]) {
   let retryAfterMs = 0;
 
   for (const rule of rules) {
-    const state = await prisma.$transaction(async (tx) => {
-      const current = await tx.authRateLimitBucket.findUnique({
-        where: { key: rule.key },
-        select: {
-          attempts: true,
-          blockedUntil: true,
-          windowStartedAt: true,
-        },
-      });
-      const baseState =
-        current && !isExpiredState(current, rule.policy, now)
-          ? current
-          : freshState(now);
-      const attempts = baseState.attempts + 1;
-      const blockedUntil =
-        attempts >= rule.policy.maxAttempts
-          ? dateFromMs(now + rule.policy.blockMs)
-          : baseState.blockedUntil;
+    let state: { blockedUntil: Date | null };
 
-      return tx.authRateLimitBucket.upsert({
-        where: { key: rule.key },
-        create: {
-          key: rule.key,
-          attempts,
-          blockedUntil,
-          windowStartedAt: baseState.windowStartedAt,
-        },
-        update: {
-          attempts,
-          blockedUntil,
-          windowStartedAt: baseState.windowStartedAt,
-        },
-        select: {
-          blockedUntil: true,
-        },
+    try {
+      state = await prisma.$transaction(async (tx) => {
+        const current = await tx.authRateLimitBucket.findUnique({
+          where: { key: rule.key },
+          select: {
+            attempts: true,
+            blockedUntil: true,
+            windowStartedAt: true,
+          },
+        });
+        const baseState =
+          current && !isExpiredState(current, rule.policy, now)
+            ? current
+            : freshState(now);
+        const attempts = baseState.attempts + 1;
+        const blockedUntil =
+          attempts >= rule.policy.maxAttempts
+            ? dateFromMs(now + rule.policy.blockMs)
+            : baseState.blockedUntil;
+
+        return tx.authRateLimitBucket.upsert({
+          where: { key: rule.key },
+          create: {
+            key: rule.key,
+            attempts,
+            blockedUntil,
+            windowStartedAt: baseState.windowStartedAt,
+          },
+          update: {
+            attempts,
+            blockedUntil,
+            windowStartedAt: baseState.windowStartedAt,
+          },
+          select: {
+            blockedUntil: true,
+          },
+        });
       });
-    });
+    } catch (error) {
+      if (isPrismaDatabaseUnavailableError(error)) {
+        console.warn(
+          "Auth rate limit database is unavailable; skipping persisted rate-limit attempt.",
+        );
+        continue;
+      }
+
+      throw error;
+    }
 
     if (state.blockedUntil && state.blockedUntil.getTime() > now) {
       retryAfterMs = Math.max(
@@ -205,9 +243,20 @@ export async function recordAuthRateLimitAttempt(rules: AuthRateLimitRule[]) {
 }
 
 export async function resetAuthRateLimits(rules: AuthRateLimitRule[]) {
-  await prisma.authRateLimitBucket.deleteMany({
-    where: { key: { in: rules.map((rule) => rule.key) } },
-  });
+  try {
+    await prisma.authRateLimitBucket.deleteMany({
+      where: { key: { in: rules.map((rule) => rule.key) } },
+    });
+  } catch (error) {
+    if (isPrismaDatabaseUnavailableError(error)) {
+      console.warn(
+        "Auth rate limit database is unavailable; skipping persisted rate-limit reset.",
+      );
+      return;
+    }
+
+    throw error;
+  }
 }
 
 export function formatRetryAfter(seconds: number) {
