@@ -670,7 +670,7 @@ export async function loginAction(
     return {
       ok: false,
       message:
-        "The CRM database is unavailable. Check that Postgres is running and the database has been migrated.",
+        "The CRM database is unavailable. Add DATABASE_URL in Netlify before signing in.",
     };
   }
 
