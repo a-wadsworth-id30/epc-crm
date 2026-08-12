@@ -27,6 +27,13 @@ function loadDotEnv(path = ".env") {
 
 loadDotEnv();
 
+if (process.env.SKIP_DATABASE_MIGRATIONS === "true") {
+  console.warn(
+    "SKIP_DATABASE_MIGRATIONS=true; skipping Prisma migration status/deploy. Only use this before the production database is provisioned.",
+  );
+  process.exit(0);
+}
+
 const databaseUrl = process.env.MIGRATE_DATABASE_URL || process.env.DATABASE_URL;
 const maxAttempts = Number(process.env.PRISMA_MIGRATE_DEPLOY_ATTEMPTS ?? "6");
 const retryDelayMs = Number(process.env.PRISMA_MIGRATE_DEPLOY_RETRY_MS ?? "15000");

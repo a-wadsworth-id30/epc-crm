@@ -57,6 +57,12 @@ When the status check confirms the database is already up to date, the build
 skips `prisma migrate deploy` to avoid taking Prisma's advisory migration lock
 on code-only deploys.
 
+Before the production database has been provisioned, set
+`SKIP_DATABASE_MIGRATIONS=true` in Netlify to let CI validate and publish the
+application bundle without running Prisma migration checks. Remove that flag as
+soon as `DATABASE_URL` and `MIGRATE_DATABASE_URL` are configured; the deployed
+CRM is not operational without a database.
+
 ## Required Environment
 
 Use `.env.production.example` as the Netlify template.
