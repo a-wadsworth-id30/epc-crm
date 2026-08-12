@@ -1,9 +1,45 @@
 import "server-only";
 
+import type { CrmSettings } from "@prisma/client";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 export const crmSettingsCacheTag = "crm-settings";
+
+function defaultCrmSettings(): CrmSettings {
+  const now = new Date();
+
+  return {
+    id: "default",
+    companiesEnabled: true,
+    attributionTrackingEnabled: true,
+    attributionFormTrackingEnabled: true,
+    attributionInjectHiddenFieldEnabled: true,
+    attributionPhoneTrackingEnabled: true,
+    attributionReplaceTelLinksEnabled: true,
+    attributionReplaceVisibleNumbersEnabled: true,
+    attributionSessionTimeoutMinutes: 30,
+    attributionTimelineLimit: 100,
+    attributionCaptureReferrerEnabled: true,
+    attributionRequireConsent: false,
+    attributionConsentRequirements: null,
+    attributionRetentionDays: 365,
+    browserExtension: null,
+    aiContext: null,
+    companyProfile: null,
+    workspaceDefaults: null,
+    moduleToggles: null,
+    salesDefaults: null,
+    taskDefaults: null,
+    notificationDefaults: null,
+    displayDefaults: null,
+    interfaceDefaults: null,
+    documentLibrary: null,
+    salesKanban: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 async function loadCrmSettings() {
   try {
@@ -13,6 +49,13 @@ async function loadCrmSettings() {
       create: { id: "default", companiesEnabled: true },
     });
   } catch (error) {
+    if (isSettingsDatabaseUnavailable(error)) {
+      console.warn(
+        "CRM settings database is unavailable; using default settings until DATABASE_URL is configured.",
+      );
+      return defaultCrmSettings();
+    }
+
     if (!isMissingAttributionSettingsColumn(error)) {
       throw error;
     }
@@ -33,31 +76,8 @@ async function loadCrmSettings() {
     };
 
     return {
+      ...defaultCrmSettings(),
       ...settings,
-      attributionTrackingEnabled: true,
-      attributionFormTrackingEnabled: true,
-      attributionInjectHiddenFieldEnabled: true,
-      attributionPhoneTrackingEnabled: true,
-      attributionReplaceTelLinksEnabled: true,
-      attributionReplaceVisibleNumbersEnabled: true,
-      attributionSessionTimeoutMinutes: 30,
-      attributionTimelineLimit: 100,
-      attributionCaptureReferrerEnabled: true,
-      attributionRequireConsent: false,
-      attributionConsentRequirements: null,
-      attributionRetentionDays: 365,
-      browserExtension: null,
-      aiContext: null,
-      companyProfile: null,
-      workspaceDefaults: null,
-      moduleToggles: null,
-      salesDefaults: null,
-      taskDefaults: null,
-      notificationDefaults: null,
-      displayDefaults: null,
-      interfaceDefaults: null,
-      documentLibrary: null,
-      salesKanban: null,
     };
   }
 }
@@ -95,5 +115,24 @@ function isMissingAttributionSettingsColumn(error: unknown) {
       candidate.meta.column === "CrmSettings.interfaceDefaults" ||
       candidate.meta.column === "CrmSettings.documentLibrary" ||
       candidate.meta.column === "CrmSettings.salesKanban")
+  );
+}
+
+function isSettingsDatabaseUnavailable(error: unknown) {
+  const candidate = error as {
+    code?: string;
+    errorCode?: string;
+    message?: string;
+  };
+  const message = candidate.message ?? "";
+
+  return (
+    candidate.code === "P1001" ||
+    candidate.errorCode === "P1001" ||
+    candidate.errorCode === "P1012" ||
+    candidate.errorCode === "P1013" ||
+    message.includes("Environment variable not found: DATABASE_URL") ||
+    message.includes("the URL must start with the protocol") ||
+    (message.includes("DATABASE_URL") && message.includes("Invalid value"))
   );
 }
