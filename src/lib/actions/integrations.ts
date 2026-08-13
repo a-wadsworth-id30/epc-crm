@@ -41,8 +41,8 @@ import {
 } from "@/lib/integrations/health-snapshots";
 import {
   hasStoredMailerSendCredentials,
-  mailerSendConfigSchema,
   mailerSendProvider,
+  mailerSendSettingsFormSchema,
   mailerSendStoredConfigSchema,
   refreshMailerSendDomainValidationConfig,
   type MailerSendStoredConfig,
@@ -1372,7 +1372,7 @@ export async function updateMailerSendIntegrationAction(
 ): Promise<IntegrationActionState> {
   await requireAdmin();
 
-  const parsed = mailerSendConfigSchema.safeParse({
+  const parsed = mailerSendSettingsFormSchema.safeParse({
     domainName: formData.get("domainName"),
     domainId: formData.get("domainId"),
     fromName: formData.get("fromName"),
@@ -1383,17 +1383,6 @@ export async function updateMailerSendIntegrationAction(
     inboundRouteName: formData.get("inboundRouteName"),
     inboundCatchRecipient: formData.get("inboundCatchRecipient"),
     webhookBaseUrl: formData.get("webhookBaseUrl"),
-    spfHost: formData.get("spfHost"),
-    spfValue: formData.get("spfValue"),
-    dkimHost: formData.get("dkimHost"),
-    dkimValue: formData.get("dkimValue"),
-    returnPathHost: formData.get("returnPathHost"),
-    returnPathValue: formData.get("returnPathValue"),
-    trackingHost: formData.get("trackingHost"),
-    trackingValue: formData.get("trackingValue"),
-    inboundMxHost: formData.get("inboundMxHost"),
-    inboundMxValue: formData.get("inboundMxValue"),
-    inboundMxPriority: formData.get("inboundMxPriority"),
   });
 
   if (!parsed.success) {

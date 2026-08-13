@@ -23,21 +23,29 @@ type MailerSendVerification = {
   rp_cname: boolean;
 };
 
+function nullishToEmptyString(value: unknown) {
+  return value === null || value === undefined ? "" : value;
+}
+
+const requiredTrimmedString = (message: string) =>
+  z.preprocess(nullishToEmptyString, z.string().trim().min(1, message));
+
 const optionalTrimmedString = z
-  .string()
-  .trim()
-  .optional()
+  .preprocess(nullishToEmptyString, z.string().trim().optional())
   .transform((value) => value || "");
 
 const optionalEmail = z
-  .string()
-  .trim()
-  .optional()
+  .preprocess(nullishToEmptyString, z.string().trim().optional())
   .transform((value) => value || "")
   .pipe(z.string().email().or(z.literal("")));
 
+const optionalUrl = z.preprocess(
+  nullishToEmptyString,
+  z.string().trim().url().optional().or(z.literal("")),
+);
+
 export const mailerSendConfigSchema = z.object({
-  domainName: z.string().trim().min(1, "Domain name is required."),
+  domainName: requiredTrimmedString("Domain name is required."),
   domainId: optionalTrimmedString,
   fromName: optionalTrimmedString,
   fromEmail: optionalEmail,
@@ -46,7 +54,7 @@ export const mailerSendConfigSchema = z.object({
   inboundRouteId: optionalTrimmedString,
   inboundRouteName: optionalTrimmedString,
   inboundCatchRecipient: optionalTrimmedString,
-  webhookBaseUrl: z.string().trim().url().optional().or(z.literal("")),
+  webhookBaseUrl: optionalUrl,
   spfHost: optionalTrimmedString,
   spfValue: optionalTrimmedString,
   dkimHost: optionalTrimmedString,
@@ -65,6 +73,19 @@ export const mailerSendConfigSchema = z.object({
   inboundVerified: z.boolean().optional(),
   domainStatus: optionalTrimmedString,
   lastCheckedAt: optionalTrimmedString,
+});
+
+export const mailerSendSettingsFormSchema = mailerSendConfigSchema.pick({
+  domainName: true,
+  domainId: true,
+  fromName: true,
+  fromEmail: true,
+  replyToEmail: true,
+  inboundDomain: true,
+  inboundRouteId: true,
+  inboundRouteName: true,
+  inboundCatchRecipient: true,
+  webhookBaseUrl: true,
 });
 
 const mailerSendStoredCredentialsSchema = z.object({
