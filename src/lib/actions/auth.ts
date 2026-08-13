@@ -75,6 +75,7 @@ type ActionState = {
   ok: boolean;
   message: string;
   avatarUrl?: string | null;
+  redirectTo?: string;
   twoFactorEnabled?: boolean;
   twoFactorRequired?: boolean;
   twoFactorSetupSecret?: string;
@@ -616,7 +617,11 @@ async function completeTwoFactorLoginAction(
   ]);
 
   const fallbackPath = await fallbackLandingPath();
-  redirect(safeLoginRedirect(parsed.data.next, fallbackPath));
+  return {
+    ok: true,
+    message: "Signed in. Redirecting...",
+    redirectTo: safeLoginRedirect(parsed.data.next, fallbackPath),
+  };
 }
 
 export async function loginAction(
@@ -785,7 +790,11 @@ export async function loginAction(
 
   const fallbackPath = await fallbackLandingPath();
 
-  redirect(safeLoginRedirect(parsed.data.next, fallbackPath));
+  return {
+    ok: true,
+    message: "Signed in. Redirecting...",
+    redirectTo: safeLoginRedirect(parsed.data.next, fallbackPath),
+  };
 }
 
 export async function requestPasswordResetAction(

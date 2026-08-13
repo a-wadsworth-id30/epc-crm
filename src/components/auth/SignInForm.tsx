@@ -6,9 +6,11 @@ import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage"
 import { loginAction } from "@/lib/actions/auth";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 
 export default function SignInForm({ nextPath = "/" }: { nextPath?: string }) {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [state, formAction, isPending] = useActionState(loginAction, {
     ok: false,
@@ -17,6 +19,12 @@ export default function SignInForm({ nextPath = "/" }: { nextPath?: string }) {
   const signInHref = nextPath
     ? `/signin?next=${encodeURIComponent(nextPath)}`
     : "/signin";
+
+  useEffect(() => {
+    if (state.ok && state.redirectTo) {
+      router.replace(state.redirectTo);
+    }
+  }, [router, state.ok, state.redirectTo]);
 
   if (state.twoFactorRequired && state.twoFactorToken) {
     return (
