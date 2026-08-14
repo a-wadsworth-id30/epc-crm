@@ -174,6 +174,28 @@ export type SendMailerSendEmailInput = {
   tags?: string[];
 };
 
+export function mailerSendEmailFailureReason(
+  error: unknown,
+  fallback = "Email could not be sent.",
+) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message.includes("not connected")) return "MailerSend is not connected.";
+  if (message.includes("sender email")) {
+    return "MailerSend sender email is not configured.";
+  }
+
+  const apiError = mailerSendApiErrorMessage(message);
+  if (apiError) return apiError;
+
+  const statusMatch = message.match(/MailerSend send failed with status (\d+)/i);
+  if (statusMatch?.[1]) {
+    return `MailerSend send failed with status ${statusMatch[1]}.`;
+  }
+
+  return fallback;
+}
+
 export async function sendMailerSendEmail(input: SendMailerSendEmailInput) {
   const config = await getMailerSendStoredConfig();
   const apiToken = await getMailerSendApiToken();
@@ -230,6 +252,44 @@ export async function sendMailerSendEmail(input: SendMailerSendEmailInput) {
     replyToEmail: input.replyToEmail || config.replyToEmail || config.fromEmail,
     statusCode: response.status,
   };
+}
+
+function mailerSendApiErrorMessage(message: string) {
+  const statusMatch = message.match(/MailerSend send failed with status (\d+)/i);
+  const jsonStart = message.indexOf("{");
+
+  if (!statusMatch?.[1] || jsonStart === -1) return null;
+
+  try {
+    const body = JSON.parse(message.slice(jsonStart)) as {
+      errors?: Record<string, unknown>;
+      message?: unknown;
+    };
+    const providerMessage =
+      typeof body.message === "string" ? body.message.trim() : "";
+    const detailMessage = firstMailerSendError(body.errors);
+    const reason = providerMessage || detailMessage;
+
+    return reason
+      ? `MailerSend send failed with status ${statusMatch[1]}: ${reason}`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function firstMailerSendError(errors: Record<string, unknown> | undefined) {
+  if (!errors) return "";
+
+  for (const value of Object.values(errors)) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Array.isArray(value)) {
+      const first = value.find((item) => typeof item === "string" && item.trim());
+      if (typeof first === "string") return first.trim();
+    }
+  }
+
+  return "";
 }
 
 export async function refreshMailerSendDomainValidationConfig() {

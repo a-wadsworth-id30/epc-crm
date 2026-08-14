@@ -107,4 +107,17 @@ describe("MailerSend config schema", () => {
     assert.equal(parsed.data.returnPathValue, "");
     assert.equal(parsed.data.lastCheckedAt, "");
   });
+
+  it("surfaces MailerSend API delivery reasons", () => {
+    const reason = mailerSend.mailerSendEmailFailureReason(
+      new Error(
+        'MailerSend send failed with status 422: {"message":"You have reached trial account unique recipients limit. #MS42225","errors":{"to":["You have reached trial account unique recipients limit. #MS42225"]}}',
+      ),
+    );
+
+    assert.equal(
+      reason,
+      "MailerSend send failed with status 422: You have reached trial account unique recipients limit. #MS42225",
+    );
+  });
 });

@@ -51,7 +51,10 @@ import {
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { parseCompanyProfile } from "@/lib/company-profile";
 import { trustedAppBaseUrl } from "@/lib/http/origin";
-import { sendMailerSendEmail } from "@/lib/integrations/mailersend";
+import {
+  mailerSendEmailFailureReason,
+  sendMailerSendEmail,
+} from "@/lib/integrations/mailersend";
 import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
 import { mediaAssetUrl, uploadMediaFile } from "@/lib/storage/media";
@@ -2233,8 +2236,10 @@ export async function sendUserSetupLinkAction(
 
     return {
       ok: false,
-      message:
-        "Setup link was created, but the email could not be sent. Check MailerSend settings.",
+      message: `Setup link was created, but ${mailerSendEmailFailureReason(
+        error,
+        "the email could not be sent. Check MailerSend settings.",
+      )}`,
     };
   }
 
