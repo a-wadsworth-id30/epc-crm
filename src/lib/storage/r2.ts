@@ -51,6 +51,75 @@ export function hasStoredR2Credentials(config: unknown) {
   return Boolean(parsed.success && parsed.data.credentials);
 }
 
+function r2ClientForConfig(config: R2StoredConfig) {
+  if (!config.credentials) {
+    throw new Error("Cloudflare R2 credentials are not configured.");
+  }
+
+  return {
+    bucketName: config.bucketName,
+    client: new S3Client({
+      region: "auto",
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: decryptSecret(config.credentials.accessKeyId),
+        secretAccessKey: decryptSecret(config.credentials.secretAccessKey),
+      },
+    }),
+  };
+}
+
+export function r2ConnectionErrorMessage(error: unknown) {
+  const status =
+    typeof error === "object" &&
+    error !== null &&
+    "$metadata" in error &&
+    typeof error.$metadata === "object" &&
+    error.$metadata !== null &&
+    "httpStatusCode" in error.$metadata
+      ? Number(error.$metadata.httpStatusCode)
+      : null;
+  const code =
+    typeof error === "object" && error !== null && "name" in error
+      ? String(error.name)
+      : "";
+
+  if (code === "SignatureDoesNotMatch") {
+    return "Cloudflare R2 rejected the access key/secret signature. Re-enter the full R2 secret access key and save again.";
+  }
+
+  if (status === 403) {
+    return "Cloudflare R2 rejected these credentials. Check the API token has read/write access to the selected bucket.";
+  }
+
+  if (status === 404 || code === "NoSuchBucket") {
+    return "Cloudflare R2 could not find the configured bucket. Check the bucket name and account ID.";
+  }
+
+  return "Cloudflare R2 credentials could not be verified. Check the account ID, bucket, access key ID and secret access key.";
+}
+
+export async function verifyR2Connection(config: R2StoredConfig) {
+  const { bucketName, client } = r2ClientForConfig(config);
+  const key = `${config.uploadPrefix || "crm-assets"}/diagnostics/r2-connection-${crypto.randomUUID()}.txt`;
+
+  await client.send(
+    new PutObjectCommand({
+      Body: Buffer.from("ok"),
+      Bucket: bucketName,
+      ContentType: "text/plain",
+      Key: key,
+    }),
+  );
+
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    }),
+  );
+}
+
 export async function getR2Config() {
   const integration = await prisma.integrationConnection.findUnique({
     where: { provider: cloudflareR2Provider },
@@ -80,21 +149,7 @@ export async function getR2Client() {
     throw new Error("Cloudflare R2 is not configured.");
   }
 
-  if (!config.credentials) {
-    throw new Error("Cloudflare R2 credentials are not configured.");
-  }
-
-  return {
-    bucketName: config.bucketName,
-    client: new S3Client({
-      region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: decryptSecret(config.credentials.accessKeyId),
-        secretAccessKey: decryptSecret(config.credentials.secretAccessKey),
-      },
-    }),
-  };
+  return r2ClientForConfig(config);
 }
 
 export async function createR2UploadUrl({

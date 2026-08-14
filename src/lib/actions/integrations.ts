@@ -54,6 +54,8 @@ import {
   hasStoredR2Credentials,
   r2StoredConfigSchema,
   r2ConfigSchema,
+  r2ConnectionErrorMessage,
+  verifyR2Connection,
 } from "@/lib/storage/r2";
 import { revalidateStorageSupportData } from "@/lib/storage/support-data";
 
@@ -1318,6 +1320,19 @@ export async function updateCloudflareR2IntegrationAction(
     ...(credentials ? { credentials } : {}),
   };
   const isConnected = hasStoredR2Credentials(config);
+
+  if (isConnected) {
+    try {
+      await verifyR2Connection(r2StoredConfigSchema.parse(config));
+    } catch (error) {
+      return {
+        ok: false,
+        message: r2ConnectionErrorMessage(error),
+        savedAt: null,
+        connected: false,
+      };
+    }
+  }
 
   const savedConnection = await prisma.integrationConnection.upsert({
     where: { provider: cloudflareR2Provider },
