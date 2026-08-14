@@ -2068,7 +2068,7 @@ export async function createUserAction(
 
   const passwordErrors = validatePasswordPolicy(parsed.data.password);
   if (passwordErrors.length) {
-    return { ok: false, message: passwordErrors[0] };
+    return { ok: false, message: passwordErrors.join(" ") };
   }
 
   try {
