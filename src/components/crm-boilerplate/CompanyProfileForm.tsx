@@ -107,7 +107,7 @@ function LogoUploadField({
         id={id}
         name={name}
         type="file"
-        accept="image/*"
+        accept="image/svg+xml,.svg,image/*"
         disabled={disabled}
         onChange={onChange}
         className={fileInputClassName}

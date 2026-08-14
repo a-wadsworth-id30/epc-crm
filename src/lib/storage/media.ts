@@ -33,6 +33,7 @@ export function mediaFileExtension(fileName: string, contentType: string) {
   if (contentType === "image/gif") return "gif";
   if (contentType === "image/avif") return "avif";
   if (contentType === "image/heic") return "heic";
+  if (contentType === "image/svg+xml") return "svg";
   if (contentType === "application/pdf") return "pdf";
 
   return "bin";
@@ -127,6 +128,32 @@ export function isSvgMediaUpload({
   );
 }
 
+function svgTextHead(body: Buffer) {
+  return body.subarray(0, 4096).toString("utf8");
+}
+
+function looksLikeSvgMedia(body: Buffer) {
+  return /<\s*svg[\s>]/i.test(svgTextHead(body));
+}
+
+function assertSafeSvgMedia(body: Buffer) {
+  const svg = body.toString("utf8");
+
+  if (!looksLikeSvgMedia(body)) {
+    throw new Error("The uploaded file content does not match its file type.");
+  }
+
+  if (
+    /<\s*(script|foreignobject|iframe|object|embed|audio|video|image)\b/i.test(svg) ||
+    /\son[a-z]+\s*=/i.test(svg) ||
+    /\b(?:href|xlink:href)\s*=\s*["'](?!#)[^"']+["']/i.test(svg) ||
+    /\b(?:src|data)\s*=\s*["'][^"']+["']/i.test(svg) ||
+    /(?:javascript:|data:|@import|url\s*\(\s*["']?(?!#))/i.test(svg)
+  ) {
+    throw new Error("Upload an SVG without scripts or external references.");
+  }
+}
+
 function mimeTypesCompatible(declaredMimeType: string, detectedMimeType: string) {
   if (!declaredMimeType || declaredMimeType === "application/octet-stream") {
     return true;
@@ -180,12 +207,14 @@ export function mediaObjectKey({
 }
 
 export function validateMediaObjectHead({
+  allowSvg = false,
   allowedMimeTypes,
   body,
   fileName,
   mimeType,
   requireImage = false,
 }: {
+  allowSvg?: boolean;
   allowedMimeTypes: string;
   body: Buffer;
   fileName: string;
@@ -194,10 +223,17 @@ export function validateMediaObjectHead({
 }) {
   const declaredMimeType = normaliseMediaMimeType(mimeType);
   const detectedMimeType = sniffMediaMimeType(body);
-  const effectiveMimeType = detectedMimeType ?? declaredMimeType;
+  const svgUpload = isSvgMediaUpload({ body, fileName, mimeType });
+  const effectiveMimeType = svgUpload
+    ? "image/svg+xml"
+    : detectedMimeType ?? declaredMimeType;
 
-  if (isSvgMediaUpload({ body, fileName, mimeType })) {
+  if (svgUpload && !allowSvg) {
     throw new Error("SVG uploads are not supported. Upload a raster image file.");
+  }
+
+  if (svgUpload) {
+    assertSafeSvgMedia(body);
   }
 
   if (
@@ -212,7 +248,8 @@ export function validateMediaObjectHead({
     (requireImage ||
       declaredMimeType.startsWith("image/") ||
       declaredMimeType === "application/pdf") &&
-    !detectedMimeType
+    !detectedMimeType &&
+    !svgUpload
   ) {
     throw new Error("The uploaded file type could not be verified.");
   }
@@ -290,6 +327,7 @@ export async function createStoredMediaFileAsset({
 }
 
 export async function uploadMediaFile({
+  allowSvg = false,
   file,
   folder,
   documentFolder,
@@ -315,6 +353,7 @@ export async function uploadMediaFile({
   visibility?: FileAssetVisibility;
   maxUploadMb?: number;
   requireImage?: boolean;
+  allowSvg?: boolean;
 }) {
   if (!file || file.size === 0) {
     throw new Error("Choose a file to upload.");
@@ -338,6 +377,7 @@ export async function uploadMediaFile({
   const arrayBuffer = await file.arrayBuffer();
   const body = Buffer.from(arrayBuffer);
   const { effectiveMimeType } = validateMediaObjectHead({
+    allowSvg,
     allowedMimeTypes: config.allowedMimeTypes,
     body,
     fileName: file.name,

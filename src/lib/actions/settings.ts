@@ -206,6 +206,7 @@ async function uploadCompanyLogoFile({
   uploadedById: string;
 }) {
   return uploadMediaFile({
+    allowSvg: true,
     file,
     folder,
     entityType: "CrmSettings",
