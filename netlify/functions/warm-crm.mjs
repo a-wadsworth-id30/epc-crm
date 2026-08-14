@@ -1,9 +1,8 @@
 export const config = {
-  schedule: "*/5 * * * *",
+  schedule: "*/4 * * * *",
 };
 
-// Keep the scheduled warmup DB-free so it does not hold Neon compute active.
-const defaultWarmupPaths = ["/signin"];
+const defaultWarmupPaths = ["/api/health", "/signin"];
 
 export default async function handler() {
   const baseUrl = (

@@ -232,9 +232,10 @@ routes for server errors, sign-in redirects and shared admin error boundaries.
 ## Cold Starts
 
 The repository includes `netlify/functions/warm-crm.mjs`, a scheduled Netlify
-function that fetches DB-free public routes every five minutes. It currently
-defaults to `/signin` only so the warmup does not keep Neon compute active.
-This reduces serverless cold-start cost without defeating Neon autosuspend.
+function that fetches `/api/health` and `/signin` every four minutes. This
+keeps the main SSR/API path warm and deliberately pings the database before
+Neon autosuspend can add user-facing first-hit latency. Override
+`CRM_WARMUP_PATHS` if the warmup target list needs changing.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.

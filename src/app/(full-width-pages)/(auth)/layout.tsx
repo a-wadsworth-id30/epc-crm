@@ -3,22 +3,67 @@ import ThemeTogglerTwo from "@/components/common/ThemeTogglerTwo";
 import AppLogo from "@/components/crm-boilerplate/AppLogo";
 import { ThemeProvider } from "@/context/ThemeContext";
 import {
+  defaultCompanyProfile,
   getCompanyBrandStyle,
-  parseCompanyProfile,
+  normalizeCompanyBrandColor,
+  type CompanyProfile,
 } from "@/lib/company-profile";
-import { getCrmSettings } from "@/lib/settings";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
 
-export default async function AuthLayout({
+function envValue(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+
+  return null;
+}
+
+function staticAuthCompanyProfile(): CompanyProfile {
+  return {
+    ...defaultCompanyProfile,
+    organizationName:
+      envValue("AUTH_ORGANIZATION_NAME", "NEXT_PUBLIC_APP_NAME") ??
+      defaultCompanyProfile.organizationName,
+    logoUrl: envValue("AUTH_LOGO_URL", "NEXT_PUBLIC_AUTH_LOGO_URL"),
+    lightLogoUrl: envValue(
+      "AUTH_LIGHT_LOGO_URL",
+      "NEXT_PUBLIC_AUTH_LIGHT_LOGO_URL",
+    ),
+    darkLogoUrl: envValue(
+      "AUTH_DARK_LOGO_URL",
+      "NEXT_PUBLIC_AUTH_DARK_LOGO_URL",
+    ),
+    brandPrimaryColor: normalizeCompanyBrandColor(
+      envValue("AUTH_BRAND_PRIMARY_COLOR", "NEXT_PUBLIC_AUTH_BRAND_PRIMARY_COLOR"),
+    ),
+    lightBrandPrimaryColor: normalizeCompanyBrandColor(
+      envValue(
+        "AUTH_LIGHT_BRAND_PRIMARY_COLOR",
+        "NEXT_PUBLIC_AUTH_LIGHT_BRAND_PRIMARY_COLOR",
+      ),
+    ),
+    darkBrandPrimaryColor: normalizeCompanyBrandColor(
+      envValue(
+        "AUTH_DARK_BRAND_PRIMARY_COLOR",
+        "NEXT_PUBLIC_AUTH_DARK_BRAND_PRIMARY_COLOR",
+      ),
+    ),
+    brandAccentColor: normalizeCompanyBrandColor(
+      envValue("AUTH_BRAND_ACCENT_COLOR", "NEXT_PUBLIC_AUTH_BRAND_ACCENT_COLOR"),
+    ),
+  };
+}
+
+export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const settings = await getCrmSettings();
-  const companyProfile = parseCompanyProfile(settings.companyProfile);
+  const companyProfile = staticAuthCompanyProfile();
   const companyBrandStyle = getCompanyBrandStyle(companyProfile) as
     | CSSProperties
     | undefined;

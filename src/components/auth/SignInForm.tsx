@@ -6,10 +6,37 @@ import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage"
 import { loginAction } from "@/lib/actions/auth";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
-export default function SignInForm({ nextPath = "/" }: { nextPath?: string }) {
+function safeNextPath(next: string | null | undefined) {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "";
+  }
+
+  if (next.startsWith("/api/") || next.startsWith("/auth/")) {
+    return "";
+  }
+
+  return next;
+}
+
+export default function SignInForm({ nextPath }: { nextPath?: string }) {
+  if (nextPath !== undefined) {
+    return <SignInFormContent nextPath={nextPath || "/"} />;
+  }
+
+  return <SignInFormFromSearchParams />;
+}
+
+function SignInFormFromSearchParams() {
+  const searchParams = useSearchParams();
+  return (
+    <SignInFormContent nextPath={safeNextPath(searchParams.get("next")) || "/"} />
+  );
+}
+
+function SignInFormContent({ nextPath }: { nextPath: string }) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [state, formAction, isPending] = useActionState(loginAction, {
