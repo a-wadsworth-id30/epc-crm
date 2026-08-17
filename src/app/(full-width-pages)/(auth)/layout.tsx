@@ -11,8 +11,6 @@ import {
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
-export const dynamic = "force-static";
-
 function envValue(...names: string[]) {
   for (const name of names) {
     const value = process.env[name]?.trim();

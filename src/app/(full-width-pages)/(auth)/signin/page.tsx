@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: "Sign in to iD30 CRM.",
 };
 
+export const dynamic = "force-static";
+
 export default function SignIn() {
   return (
     <Suspense fallback={<SignInForm nextPath="/" />}>
