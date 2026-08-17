@@ -51,7 +51,7 @@ export function getTwilioVoiceRuntime(
   }
 
   if (!config.apiKeySid || !config.credentials.apiKeySecret) {
-    throw new Error("Add a Twilio API Key SID and API Key Secret.");
+    throw new Error("Add the Twilio API key SID and Client Secret.");
   }
 
   if (!config.twimlAppSid) {

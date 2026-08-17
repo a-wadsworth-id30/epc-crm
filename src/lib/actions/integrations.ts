@@ -1071,7 +1071,7 @@ async function validateTwilioVoiceAccess({
     return {
       ok: false,
       failedCredential: "apiKey" as const,
-      message: `Twilio API Key SID/Secret could not authenticate against the TwiML App. Create a fresh Standard or Main API key in the same Twilio account, then paste its SID and Secret together. ${twilioApiErrorMessage(error)}`,
+      message: `Twilio API key SID/Client Secret could not authenticate against the TwiML App. Create a fresh Standard or Main API key in the same Twilio account, then paste its SID and Client Secret together. ${twilioApiErrorMessage(error)}`,
     };
   }
 
@@ -1728,7 +1728,7 @@ export async function updateTwilioIntegrationAction(
       return {
         ok: false,
         message:
-          "Enter the Twilio API Key SID before saving the API Key Secret.",
+          "Enter the Twilio API key SID before saving the Client Secret.",
         savedAt: null,
         connected: false,
       };

@@ -33,6 +33,9 @@ type TwilioFieldHelp = {
   href?: string;
 };
 
+const twilioApiKeySidLabel = "SID";
+const twilioApiKeySecretLabel = "Client Secret";
+
 const twilioHelp: Record<string, TwilioFieldHelp> = {
   accountSid: {
     title: "Where to find the account SID",
@@ -55,7 +58,7 @@ const twilioHelp: Record<string, TwilioFieldHelp> = {
     href: "https://www.twilio.com/docs/iam/api/account",
   },
   apiKeySid: {
-    title: "Where to find the API key SID",
+    title: "Where to find the SID",
     steps: [
       "In Twilio Console, open Account > API keys & tokens.",
       "Create an API key for this CRM.",
@@ -65,11 +68,11 @@ const twilioHelp: Record<string, TwilioFieldHelp> = {
     href: "https://www.twilio.com/docs/iam/api-keys",
   },
   apiKeySecret: {
-    title: "Where to find the API key secret",
+    title: "Where to find the Client Secret",
     steps: [
       "Create the API key in Account > API keys & tokens.",
-      "Copy the Secret from the final key screen.",
-      "Paste it here immediately; Twilio will not show the secret again.",
+      "Copy the Client Secret from the final key screen.",
+      "Paste it here immediately; Twilio will not show the Client Secret again.",
     ],
     note: "This is not the master Auth Token. Leave this blank and save to let the CRM create or keep its encrypted API key.",
     href: "https://www.twilio.com/docs/iam/api-keys",
@@ -690,7 +693,7 @@ export default function TwilioSettingsForm({
           </div>
           <div>
             <FieldLabel htmlFor="twilio-api-key-sid" help={twilioHelp.apiKeySid}>
-              API Key SID
+              {twilioApiKeySidLabel}
             </FieldLabel>
             <Input
               id="twilio-api-key-sid"
@@ -705,7 +708,7 @@ export default function TwilioSettingsForm({
               htmlFor="twilio-api-key-secret"
               help={twilioHelp.apiKeySecret}
             >
-              API Key Secret
+              {twilioApiKeySecretLabel}
             </FieldLabel>
             <Input
               id="twilio-api-key-secret"
@@ -938,7 +941,7 @@ export default function TwilioSettingsForm({
           </div>
           <div>
             <FieldLabel htmlFor="twilio-api-key-sid" help={twilioHelp.apiKeySid}>
-              API Key SID
+              {twilioApiKeySidLabel}
             </FieldLabel>
             <Input
               id="twilio-api-key-sid"
@@ -953,7 +956,7 @@ export default function TwilioSettingsForm({
               htmlFor="twilio-api-key-secret"
               help={twilioHelp.apiKeySecret}
             >
-              API Key Secret
+              {twilioApiKeySecretLabel}
             </FieldLabel>
             <Input
               id="twilio-api-key-secret"
@@ -1286,7 +1289,7 @@ export default function TwilioSettingsForm({
         </div>
         <div>
           <FieldLabel htmlFor="twilio-api-key-sid" help={twilioHelp.apiKeySid}>
-            API Key SID
+            {twilioApiKeySidLabel}
           </FieldLabel>
           <Input
             id="twilio-api-key-sid"
@@ -1301,7 +1304,7 @@ export default function TwilioSettingsForm({
             htmlFor="twilio-api-key-secret"
             help={twilioHelp.apiKeySecret}
           >
-            API Key Secret
+            {twilioApiKeySecretLabel}
           </FieldLabel>
           <Input
             id="twilio-api-key-secret"

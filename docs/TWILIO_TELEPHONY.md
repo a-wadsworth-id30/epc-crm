@@ -12,8 +12,8 @@ Managed fields include:
 
 - Account SID
 - Auth Token, encrypted
-- API Key SID
-- API Key Secret, encrypted
+- API key SID
+- Client Secret, encrypted
 - TwiML App SID
 - Messaging Service SID
 - SMS from number

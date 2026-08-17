@@ -98,7 +98,7 @@ Open **Settings > Integrations** to manage connected services. Cloudflare R2 is 
 
 Each card has a status badge and a configure button. R2 and Twilio connection details are entered in their integration cards and encrypted before being saved.
 
-Twilio browser calling requires Account SID, API Key SID, API Key Secret, TwiML App SID, voice caller ID and webhook base URL. Contact phone numbers open the CRM softphone rather than the operating system dialler.
+Twilio browser calling requires Account SID, API key SID, Client Secret, TwiML App SID, voice caller ID and webhook base URL. Contact phone numbers open the CRM softphone rather than the operating system dialler.
 
 ## Managing Users As An Admin
 

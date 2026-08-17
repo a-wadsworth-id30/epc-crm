@@ -468,7 +468,7 @@ function softphoneErrorMessage(error: unknown) {
     const detail = candidate.message ?? candidate.description;
 
     if (candidate.code === 20101 || String(candidate.code) === "20101") {
-      return "Twilio rejected the voice token. Check the API Key SID and API Key Secret belong to the same account as the Account SID.";
+      return "Twilio rejected the voice token. Check the Twilio API key SID and Client Secret belong to the same account as the Account SID.";
     }
 
     if (detail) {

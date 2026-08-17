@@ -252,8 +252,8 @@ This document tracks the iD30 CRM live-test implementation copied from the iD30 
 
 - Twilio is the default communications integration for telephony, SMS and WhatsApp.
 - Twilio credentials are managed in Settings > Integrations > Twilio.
-- Twilio Auth Token and optional API Key Secret are encrypted before being stored in `IntegrationConnection.config`.
-- Twilio settings include Account SID, API Key SID, TwiML App SID, Messaging Service SID, SMS sender, WhatsApp sender, voice caller ID, webhook base URL and enabled capabilities.
+- Twilio Auth Token and optional Client Secret are encrypted before being stored in `IntegrationConnection.config`.
+- Twilio settings include Account SID, API key SID, TwiML App SID, Messaging Service SID, SMS sender, WhatsApp sender, voice caller ID, webhook base URL and enabled capabilities.
 - Twilio settings include an admin-only CRM-managed voice setup action that creates or updates the Twilio TwiML App and Voice Intelligence service with the CRM voice/transcript webhook URLs.
 - Browser click-to-call uses the Twilio Voice JavaScript SDK through the global CRM softphone dock.
 - Browser outbound calls are conference-backed so transfers can be supported. Direct TwiML `<Dial><Number>` should not be used for calls that may need transfer.
