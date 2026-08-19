@@ -338,6 +338,13 @@ Sales is intentionally generic enough for bespoke builds:
 - Communication channels are `PHONE`, `EMAIL`, `SMS`, `WHATSAPP`, `NOTE` and `SYSTEM`.
 - Communication direction is `INBOUND`, `OUTBOUND` or `INTERNAL`.
 - Communication records can link to the sale, contact and user, and can store connector references through `externalId`.
+- Manual sale notes can include `@` mentions for active CRM users. Mention
+  picker suggestions should insert server-resolvable handles. Mention alerts
+  must be represented as assigned `Task` records with
+  `metadata.source = "sale-note-mention"` linked back to the opportunity and
+  `SalesCommunication`; do not add a parallel notification table for this flow.
+  Resolved mention tasks should also trigger a best-effort MailerSend email to
+  the mentioned CRM user so they can review the note even when not logged in.
 - Connector workflows should write inbound/outbound events to `SalesCommunication` so the sale remains the single wrapper for all related customer communication.
 - Website form lead capture must preserve safe submitted field data in `SalesCommunication.metadata.formFields` and the conversation body instead of only storing the mapped message field.
 - Form-field normalization must keep tests for mixed form styles, safe field capture,

@@ -1709,6 +1709,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     opportunityDocumentPortals,
     opportunitySignatureRequests,
     linkedNotes,
+    mentionMembers,
     r2Integration,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
@@ -1837,6 +1838,20 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       take: 6,
       include: {
         user: { select: { name: true, email: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: {
+        id: { not: user.id },
+        status: "ACTIVE",
+      },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      select: {
+        email: true,
+        firstName: true,
+        id: true,
+        lastName: true,
+        name: true,
       },
     }),
     prisma.integrationConnection.findUnique({
@@ -2106,12 +2121,33 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       document.uploadedBy?.name || document.uploadedBy?.email || "CRM user",
     url: mediaAssetUrl(document.id),
   }));
-  const notes = linkedNotes.map((note) => ({
-    body: note.body,
-    createdAt: formatDate(note.createdAt, displayFormatting),
-    id: note.id,
-    userName: note.user.name || note.user.email,
-  }));
+  const notes = [
+    ...sale.communications
+      .filter((communication) => communication.channel === "NOTE")
+      .map((communication) => ({
+        body: communication.body || communication.summary,
+        createdAtDate: communication.occurredAt,
+        id: communication.id,
+        userName: communication.user?.name || "CRM user",
+      })),
+    ...linkedNotes.map((note) => ({
+      body: note.body,
+      createdAtDate: note.createdAt,
+      id: note.id,
+      userName: note.user.name || note.user.email,
+    })),
+  ]
+    .sort(
+      (left, right) =>
+        right.createdAtDate.getTime() - left.createdAtDate.getTime(),
+    )
+    .slice(0, 6)
+    .map((note) => ({
+      body: note.body,
+      createdAt: formatDate(note.createdAtDate, displayFormatting),
+      id: note.id,
+      userName: note.userName,
+    }));
   const opportunityProductIds = new Set(
     opportunityProducts.map((product) => product.id),
   );
@@ -2388,6 +2424,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         recipientName={customerName || contactPhone || "customer"}
         recipientPhone={contactPhone}
         notes={notes}
+        mentionMembers={mentionMembers}
         documentsPanel={
           <div className="p-4 sm:p-5">
             <RecordDocumentLibrary

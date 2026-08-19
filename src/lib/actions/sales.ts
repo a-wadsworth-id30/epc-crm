@@ -13,7 +13,9 @@ import {
   salesOpportunityWhereWithAccess,
 } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { getCrmSettings } from "@/lib/settings";
 import {
   inferLeadScopeFromText,
@@ -28,6 +30,12 @@ import {
   parseSalesDefaults,
   resolveSalesDefaultOwnerId,
 } from "@/lib/sales/defaults";
+import {
+  extractSaleNoteMentionTokens,
+  resolveSaleNoteMentions,
+  type SaleNoteMentionUser,
+} from "@/lib/sales/note-mentions";
+import { sendSaleNoteMentionEmail } from "@/lib/sales/note-mention-email";
 import { validateSaleOwnerAssignment } from "@/lib/sales/owner-assignment";
 import {
   isSalesStage,
@@ -56,6 +64,11 @@ export type LeadScopeActionState = {
 };
 
 export type DiscoveryAnswersActionState = {
+  ok: boolean;
+  message: string;
+};
+
+export type SalesNoteActionState = {
   ok: boolean;
   message: string;
 };
@@ -98,6 +111,87 @@ const saleSchema = z.object({
     .optional()
     .transform((value) => (value ? value : null)),
 });
+
+const salesNoteSchema = z.object({
+  saleId: z.string().trim().min(1, "Sale is required."),
+  body: z
+    .string()
+    .trim()
+    .min(1, "Write a note before saving.")
+    .max(4000, "Keep notes under 4,000 characters."),
+});
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+
+  return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function saleNoteMentionTaskTitle(saleTitle: string) {
+  return truncateText(`Review note on ${saleTitle}`, 180);
+}
+
+function saleNoteMentionTaskDescription({
+  body,
+  mentionedBy,
+}: {
+  body: string;
+  mentionedBy: string;
+}) {
+  return truncateText(
+    `You were mentioned by ${mentionedBy} in a sales note.\n\n${body}`,
+    2000,
+  );
+}
+
+function formatMentionTokens(tokens: string[]) {
+  const formatted = tokens.slice(0, 3).map((token) => `@${token}`);
+
+  if (tokens.length > formatted.length) {
+    formatted.push(`${tokens.length - formatted.length} more`);
+  }
+
+  return formatted.join(", ");
+}
+
+async function sendSaleNoteMentionEmailAlerts({
+  body,
+  mentionedByName,
+  mentions,
+  saleId,
+  saleTitle,
+}: {
+  body: string;
+  mentionedByName: string;
+  mentions: Array<{ tokens: string[]; user: SaleNoteMentionUser }>;
+  saleId: string;
+  saleTitle: string;
+}) {
+  let sent = 0;
+  let failed = 0;
+
+  for (const mention of mentions) {
+    try {
+      await sendSaleNoteMentionEmail({
+        mentionedByName,
+        noteBody: body,
+        recipient: mention.user,
+        saleId,
+        saleTitle,
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("Sale note mention email failed", {
+        error,
+        saleId,
+        userId: mention.user.id,
+      });
+    }
+  }
+
+  return { failed, sent };
+}
 
 const inlineSaleContactSchema = z.object({
   contactMode: z.enum(["existing", "new"]).default("existing"),
@@ -1212,6 +1306,182 @@ export async function recordSaleAiFeedbackAction(
       parsed.data.outcome === "accepted"
         ? "AI feedback recorded."
         : "AI dismissal recorded.",
+  };
+}
+
+export async function createSaleNoteAction(
+  _: SalesNoteActionState,
+  formData: FormData,
+): Promise<SalesNoteActionState> {
+  const user = await requireUser();
+  const parsed = salesNoteSchema.safeParse({
+    saleId: formData.get("saleId"),
+    body: formData.get("body"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Note was not saved.",
+    };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityIdAccessWhere(parsed.data.saleId, user),
+    select: { companyId: true, contactId: true, id: true, title: true },
+  });
+
+  if (!sale) {
+    return { ok: false, message: "Sale not found or unavailable." };
+  }
+
+  const mentionTokens = extractSaleNoteMentionTokens(parsed.data.body);
+  const mentionUsers: SaleNoteMentionUser[] = mentionTokens.length
+    ? await prisma.user.findMany({
+        where: { status: "ACTIVE" },
+        select: {
+          email: true,
+          firstName: true,
+          id: true,
+          lastName: true,
+          name: true,
+        },
+      })
+    : [];
+  const mentionResolution = resolveSaleNoteMentions(
+    parsed.data.body,
+    mentionUsers,
+  );
+  const mentionTasksByUserId = new Map<
+    string,
+    { tokens: string[]; user: SaleNoteMentionUser }
+  >();
+
+  for (const mention of mentionResolution.resolved) {
+    const existing = mentionTasksByUserId.get(mention.user.id);
+
+    if (existing) {
+      existing.tokens.push(mention.token);
+    } else {
+      mentionTasksByUserId.set(mention.user.id, {
+        tokens: [mention.token],
+        user: mention.user,
+      });
+    }
+  }
+
+  const mentionUserIds = Array.from(mentionTasksByUserId.keys());
+  const unmatchedMentionTokens = [
+    ...mentionResolution.unresolved,
+    ...mentionResolution.ambiguous,
+  ];
+  const mentionMetadata = mentionResolution.tokens.length
+    ? {
+        ambiguous: mentionResolution.ambiguous,
+        resolvedUserIds: mentionUserIds,
+        tokens: mentionResolution.tokens,
+        unresolved: mentionResolution.unresolved,
+      }
+    : null;
+
+  const mentionTaskInputs = Array.from(mentionTasksByUserId.values());
+  const createdMentionTaskCount = await prisma.$transaction(async (tx) => {
+    const note = await tx.salesCommunication.create({
+      data: {
+        body: parsed.data.body,
+        channel: "NOTE",
+        contactId: sale.contactId,
+        direction: "INTERNAL",
+        metadata: {
+          source: "manual-sale-note",
+          ...(mentionMetadata ? { mentions: mentionMetadata } : {}),
+        } satisfies Prisma.InputJsonObject,
+        opportunityId: sale.id,
+        subject: "Sales note",
+        summary: parsed.data.body,
+        userId: user.id,
+      },
+      select: { id: true },
+    });
+
+    if (!mentionTasksByUserId.size) {
+      return 0;
+    }
+
+    await tx.task.createMany({
+      data: mentionTaskInputs.map((mention) => ({
+        assigneeId: mention.user.id,
+        companyId: sale.companyId,
+        contactId: sale.contactId,
+        creatorId: user.id,
+        description: saleNoteMentionTaskDescription({
+          body: parsed.data.body,
+          mentionedBy: user.name || user.email,
+        }),
+        metadata: {
+          mentionedByUserId: user.id,
+          mentionTokens: mention.tokens,
+          opportunityId: sale.id,
+          opportunityTitle: sale.title,
+          salesCommunicationId: note.id,
+          source: "sale-note-mention",
+        } satisfies Prisma.InputJsonObject,
+        title: saleNoteMentionTaskTitle(sale.title),
+      })),
+    });
+
+    return mentionTasksByUserId.size;
+  });
+  const mentionEmailResult = createdMentionTaskCount
+    ? await sendSaleNoteMentionEmailAlerts({
+        body: parsed.data.body,
+        mentionedByName: user.name || user.email,
+        mentions: mentionTaskInputs,
+        saleId: sale.id,
+        saleTitle: sale.title,
+      })
+    : { failed: 0, sent: 0 };
+
+  await bumpRealtimeTopics([
+    realtimeTopics.saleConversation(sale.id),
+    sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+    createdMentionTaskCount ? realtimeTopics.tasks : null,
+  ]);
+  if (createdMentionTaskCount) {
+    revalidateHeaderNotifications();
+  }
+
+  revalidatePath(`/sales/${sale.id}`);
+  revalidatePath("/notes");
+  if (createdMentionTaskCount) {
+    revalidatePath("/tasks");
+  }
+
+  return {
+    ok: true,
+    message: [
+      `Note added to ${sale.title}.`,
+      createdMentionTaskCount
+        ? `${createdMentionTaskCount} review task${
+            createdMentionTaskCount === 1 ? "" : "s"
+          } created.`
+        : null,
+      mentionEmailResult.sent
+        ? `${mentionEmailResult.sent} email alert${
+            mentionEmailResult.sent === 1 ? "" : "s"
+          } sent.`
+        : null,
+      mentionEmailResult.failed
+        ? `${mentionEmailResult.failed} email alert${
+            mentionEmailResult.failed === 1 ? "" : "s"
+          } could not be sent.`
+        : null,
+      unmatchedMentionTokens.length
+        ? `Could not match ${formatMentionTokens(unmatchedMentionTokens)}.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
   };
 }
 

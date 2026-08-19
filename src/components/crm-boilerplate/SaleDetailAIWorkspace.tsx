@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   CalendarDays,
@@ -40,11 +40,19 @@ import {
   PaperPlaneIcon,
 } from "@/icons";
 import {
+  createSaleNoteAction,
+  type SalesNoteActionState,
+} from "@/lib/actions/sales";
+import {
   uploadSaleDocumentAction,
   type SaleDocumentActionState,
 } from "@/lib/actions/sales-documents";
 import { documentUploadTypeDefinitions } from "@/lib/document-library";
 import { realtimeTopics } from "@/lib/realtime/topic-names";
+import {
+  saleNoteMentionHandleCandidates,
+  type SaleNoteMentionUser,
+} from "@/lib/sales/note-mentions";
 import { triggerSoftphoneDial } from "@/lib/telephony/softphone-dial";
 
 type ChannelKey = "email" | "sms" | "phone";
@@ -127,6 +135,7 @@ type SaleDetailAIWorkspaceProps = {
   recipientPhone: string | null;
   documentsPanel: React.ReactNode;
   discoveryPanel: React.ReactNode;
+  mentionMembers: SaleNoteMentionUser[];
   scopePanel: React.ReactNode;
 };
 
@@ -478,17 +487,296 @@ function SidebarSection({
   );
 }
 
-function NotesPanel({ notes }: { notes: SaleNote[] }) {
+const initialSalesNoteState: SalesNoteActionState = {
+  ok: false,
+  message: "",
+};
+
+type ActiveMention = {
+  end: number;
+  query: string;
+  start: number;
+};
+
+type MentionOption = SaleNoteMentionUser & {
+  handle: string;
+  searchText: string;
+};
+
+function mentionDisplayName(member: SaleNoteMentionUser) {
+  return member.name || member.email;
+}
+
+function mentionInitials(member: SaleNoteMentionUser) {
+  const nameParts = mentionDisplayName(member)
+    .split(/\s+/)
+    .filter(Boolean);
+  const initials =
+    nameParts.length > 1
+      ? `${nameParts[0].charAt(0)}${nameParts.at(-1)?.charAt(0) ?? ""}`
+      : mentionDisplayName(member).slice(0, 2);
+
+  return initials.toUpperCase();
+}
+
+function mentionHandle(member: SaleNoteMentionUser) {
+  return (
+    saleNoteMentionHandleCandidates(member)[0] ??
+    member.email.split("@")[0] ??
+    member.id
+  );
+}
+
+function mentionSearchText(member: SaleNoteMentionUser, handle: string) {
+  return [
+    mentionDisplayName(member),
+    member.email,
+    member.firstName,
+    member.lastName,
+    handle,
+    ...saleNoteMentionHandleCandidates(member),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function activeMentionAtCaret(
+  value: string,
+  caretIndex: number,
+): ActiveMention | null {
+  const beforeCaret = value.slice(0, caretIndex);
+  const start = beforeCaret.lastIndexOf("@");
+
+  if (start < 0) return null;
+
+  const previousCharacter = start > 0 ? beforeCaret[start - 1] : "";
+  if (previousCharacter && /[A-Za-z0-9_@.-]/.test(previousCharacter)) {
+    return null;
+  }
+
+  const query = beforeCaret.slice(start + 1);
+  if (!/^[A-Za-z0-9._-]{0,64}$/.test(query)) {
+    return null;
+  }
+
+  return { end: caretIndex, query: query.toLowerCase(), start };
+}
+
+function NotesPanel({
+  mentionMembers,
+  notes,
+  saleId,
+}: {
+  mentionMembers: SaleNoteMentionUser[];
+  notes: SaleNote[];
+  saleId: string;
+}) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [state, formAction, isPending] = useActionState<
+    SalesNoteActionState,
+    FormData
+  >(createSaleNoteAction, initialSalesNoteState);
+  const [noteBody, setNoteBody] = useState("");
+  const [caretIndex, setCaretIndex] = useState(0);
+  const [isTextareaFocused, setIsTextareaFocused] = useState(false);
+  const [highlightedMentionIndex, setHighlightedMentionIndex] = useState(0);
   const [note] = notes;
+  const mentionOptions = useMemo<MentionOption[]>(
+    () =>
+      mentionMembers.map((member) => {
+        const handle = mentionHandle(member);
+
+        return {
+          ...member,
+          handle,
+          searchText: mentionSearchText(member, handle),
+        };
+      }),
+    [mentionMembers],
+  );
+  const activeMention = useMemo(
+    () =>
+      isTextareaFocused
+        ? activeMentionAtCaret(noteBody, caretIndex)
+        : null,
+    [caretIndex, isTextareaFocused, noteBody],
+  );
+  const filteredMentionOptions = useMemo(() => {
+    if (!activeMention) return [];
+
+    const query = activeMention.query;
+
+    return mentionOptions
+      .filter(
+        (option) => !query || option.searchText.includes(query.toLowerCase()),
+      )
+      .slice(0, 6);
+  }, [activeMention, mentionOptions]);
+  const showMentionDropdown =
+    Boolean(activeMention) && !isPending && mentionOptions.length > 0;
+  const selectedMentionIndex = filteredMentionOptions.length
+    ? Math.min(highlightedMentionIndex, filteredMentionOptions.length - 1)
+    : 0;
+
+  useEffect(() => {
+    if (!state.ok) return;
+
+    queueMicrotask(() => {
+      setNoteBody("");
+      setCaretIndex(0);
+      setIsTextareaFocused(false);
+      formRef.current?.reset();
+      router.refresh();
+    });
+  }, [router, state.ok, state.message]);
+
+  function updateCaretFromTextarea(element: HTMLTextAreaElement) {
+    setCaretIndex(element.selectionStart ?? element.value.length);
+  }
+
+  function insertMention(option: MentionOption) {
+    if (!activeMention) return;
+
+    const replacement = `@${option.handle} `;
+    const nextBody = `${noteBody.slice(0, activeMention.start)}${replacement}${noteBody.slice(activeMention.end)}`;
+    const nextCaretIndex = activeMention.start + replacement.length;
+
+    setNoteBody(nextBody);
+    setCaretIndex(nextCaretIndex);
+
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCaretIndex, nextCaretIndex);
+    });
+  }
+
+  function handleNoteKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) {
+    if (!showMentionDropdown) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsTextareaFocused(false);
+      return;
+    }
+
+    if (!filteredMentionOptions.length) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlightedMentionIndex((current) =>
+        current + 1 >= filteredMentionOptions.length ? 0 : current + 1,
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlightedMentionIndex((current) =>
+        current - 1 < 0 ? filteredMentionOptions.length - 1 : current - 1,
+      );
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      insertMention(filteredMentionOptions[selectedMentionIndex]);
+    }
+  }
 
   return (
     <div className="p-4">
-      <Link
-        href="/notes"
-        className="mb-3 inline-flex h-9 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300"
+      <form
+        ref={formRef}
+        action={formAction}
+        className="mb-3 space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950/40"
       >
-        Add note
-      </Link>
+        <input type="hidden" name="saleId" value={saleId} />
+        <label className="block">
+          <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+            Add note
+          </span>
+          <textarea
+            ref={textareaRef}
+            name="body"
+            rows={3}
+            value={noteBody}
+            onBlur={() => setIsTextareaFocused(false)}
+            onChange={(event) => {
+              setNoteBody(event.target.value);
+              setHighlightedMentionIndex(0);
+              updateCaretFromTextarea(event.target);
+            }}
+            onClick={(event) => updateCaretFromTextarea(event.currentTarget)}
+            onFocus={(event) => {
+              setIsTextareaFocused(true);
+              updateCaretFromTextarea(event.currentTarget);
+            }}
+            onKeyDown={handleNoteKeyDown}
+            onKeyUp={(event) => updateCaretFromTextarea(event.currentTarget)}
+            onSelect={(event) => updateCaretFromTextarea(event.currentTarget)}
+            placeholder="Record a sales note..."
+            disabled={isPending}
+            className="mt-1 w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          />
+          {showMentionDropdown ? (
+            <div
+              role="listbox"
+              aria-label="Team members"
+              className="mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-950"
+            >
+              {filteredMentionOptions.length ? (
+                filteredMentionOptions.map((option, index) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="option"
+                    aria-selected={index === selectedMentionIndex}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      insertMention(option);
+                    }}
+                    className={[
+                      "flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left transition",
+                      index === selectedMentionIndex
+                        ? "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+                        : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.04]",
+                    ].join(" ")}
+                  >
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-600 dark:bg-white/[0.08] dark:text-gray-300">
+                      {mentionInitials(option)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">
+                        {mentionDisplayName(option)}
+                      </span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                        @{option.handle} · {option.email}
+                      </span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  No matching members
+                </div>
+              )}
+            </div>
+          ) : null}
+        </label>
+        <button
+          type="submit"
+          disabled={isPending}
+          className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isPending ? "Saving..." : "Save note"}
+        </button>
+        <ActionStateMessage state={state.message ? state : undefined} />
+      </form>
       {note ? (
         <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-3 dark:border-purple-900/40 dark:bg-purple-500/10">
           <div className="flex items-center justify-between gap-3">
@@ -506,7 +794,7 @@ function NotesPanel({ notes }: { notes: SaleNote[] }) {
         </div>
       ) : (
         <p className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-sm leading-6 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-          No notes yet. Add the first customer or lead note from Notes.
+          No notes yet. Add the first lead note here.
         </p>
       )}
       <Link
@@ -731,6 +1019,39 @@ function draftForChannel(
 
 function subjectForResult(result: SalesLeadAIResult | null) {
   return result?.drafts.email.subject ?? "Follow-up on your enquiry";
+}
+
+type DraftState = Record<ChannelKey, string>;
+type DraftDirtyState = Record<ChannelKey, boolean>;
+
+function draftsForResult(result: SalesLeadAIResult | null): DraftState {
+  return {
+    email: draftForChannel(result, "email"),
+    sms: draftForChannel(result, "sms"),
+    phone: draftForChannel(result, "phone"),
+  };
+}
+
+function cleanDraftDirtyState(): DraftDirtyState {
+  return {
+    email: false,
+    sms: false,
+    phone: false,
+  };
+}
+
+function mergeDraftsForResult(
+  current: DraftState,
+  result: SalesLeadAIResult | null,
+  dirty: DraftDirtyState,
+): DraftState {
+  const generated = draftsForResult(result);
+
+  return {
+    email: dirty.email ? current.email : generated.email,
+    sms: dirty.sms ? current.sms : generated.sms,
+    phone: dirty.phone ? current.phone : generated.phone,
+  };
 }
 
 function AIGradientButton({
@@ -1168,6 +1489,7 @@ export default function SaleDetailAIWorkspace({
   notes,
   documentsPanel,
   discoveryPanel,
+  mentionMembers,
   recipientEmail,
   recipientName,
   recipientPhone,
@@ -1200,12 +1522,16 @@ export default function SaleDetailAIWorkspace({
   const [result, setResult] = useState<SalesLeadAIResult | null>(
     initialResult ?? null,
   );
-  const [draft, setDraft] = useState(() =>
-    draftForChannel(initialResult ?? null, "email"),
+  const [drafts, setDrafts] = useState<DraftState>(() =>
+    draftsForResult(initialResult ?? null),
+  );
+  const [draftDirty, setDraftDirty] = useState<DraftDirtyState>(() =>
+    cleanDraftDirtyState(),
   );
   const [emailSubject, setEmailSubject] = useState(() =>
     subjectForResult(initialResult ?? null),
   );
+  const [emailSubjectDirty, setEmailSubjectDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(!initialResult);
   const [isSending, setIsSending] = useState(false);
@@ -1213,6 +1539,8 @@ export default function SaleDetailAIWorkspace({
   const [taskFeedback, setTaskFeedback] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isComposerFullScreen, setIsComposerFullScreen] = useState(false);
+  const previousSaleIdRef = useRef(saleId);
+  const draft = drafts[selectedChannel] ?? "";
   const tabsByKey = useMemo(
     () => new Map(workspaceTabs.map((tab) => [tab.key, tab])),
     [],
@@ -1324,6 +1652,8 @@ export default function SaleDetailAIWorkspace({
     forceRefresh = false,
     showLoading = true,
     tone = selectedTone,
+    replaceEditedDrafts = false,
+    showError = true,
   ) {
     if (showLoading) {
       setIsLoading(true);
@@ -1354,13 +1684,23 @@ export default function SaleDetailAIWorkspace({
         );
       }
 
-      setResult(payload as SalesLeadAIResult);
+      const nextResult = payload as SalesLeadAIResult;
+      setResult(nextResult);
+
+      if (replaceEditedDrafts) {
+        setDrafts(draftsForResult(nextResult));
+        setDraftDirty(cleanDraftDirtyState());
+        setEmailSubject(subjectForResult(nextResult));
+        setEmailSubjectDirty(false);
+      }
     } catch (fetchError) {
-      setError(
-        fetchError instanceof Error
-          ? fetchError.message
-          : "Sales AI could not generate guidance.",
-      );
+      if (showError || !result) {
+        setError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "Sales AI could not generate guidance.",
+        );
+      }
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -1369,13 +1709,23 @@ export default function SaleDetailAIWorkspace({
   }
 
   useEffect(() => {
+    const saleChanged = previousSaleIdRef.current !== saleId;
+    previousSaleIdRef.current = saleId;
+
     setResult(initialResult ?? null);
     setIsLoading(!initialResult);
+
+    if (saleChanged) {
+      setDrafts(draftsForResult(initialResult ?? null));
+      setDraftDirty(cleanDraftDirtyState());
+      setEmailSubject(subjectForResult(initialResult ?? null));
+      setEmailSubjectDirty(false);
+    }
   }, [initialResult, saleId]);
 
   useEffect(() => {
     if (initialResult) {
-      void generate("email", false, false);
+      void generate("email", false, false, selectedTone, false, false);
       return;
     }
 
@@ -1384,15 +1734,37 @@ export default function SaleDetailAIWorkspace({
   }, [initialResult, saleId]);
 
   useEffect(() => {
-    setDraft(draftForChannel(result, selectedChannel));
-    if (selectedChannel === "email") {
+    setDrafts((current) =>
+      mergeDraftsForResult(current, result, draftDirty),
+    );
+    if (!emailSubjectDirty) {
       setEmailSubject(subjectForResult(result));
     }
-  }, [result, selectedChannel]);
+  }, [draftDirty, emailSubjectDirty, result]);
+
+  function changeDraft(value: string) {
+    setDrafts((current) => ({
+      ...current,
+      [selectedChannel]: value,
+    }));
+    setDraftDirty((current) =>
+      current[selectedChannel]
+        ? current
+        : {
+            ...current,
+            [selectedChannel]: true,
+          },
+    );
+  }
+
+  function changeEmailSubject(value: string) {
+    setEmailSubject(value);
+    setEmailSubjectDirty(true);
+  }
 
   function changeTone(tone: ToneKey) {
     setSelectedTone(tone);
-    void generate(selectedChannel, true, true, tone);
+    void generate(selectedChannel, true, true, tone, true);
   }
 
   const actionError = useMemo(() => {
@@ -1514,6 +1886,8 @@ export default function SaleDetailAIWorkspace({
         }
 
         setIsComposerOpen(false);
+        setDraftDirty(cleanDraftDirtyState());
+        setEmailSubjectDirty(false);
         router.refresh();
       } finally {
         setIsSending(false);
@@ -1551,6 +1925,8 @@ export default function SaleDetailAIWorkspace({
       }
 
       setIsComposerOpen(false);
+      setDraftDirty(cleanDraftDirtyState());
+      setEmailSubjectDirty(false);
       router.refresh();
     } finally {
       setIsSending(false);
@@ -1656,11 +2032,11 @@ export default function SaleDetailAIWorkspace({
               isOpen={isComposerOpen}
               isPending={isSending}
               onClose={() => setIsComposerOpen(false)}
-              onDraftChange={setDraft}
-              onEmailSubjectChange={setEmailSubject}
+              onDraftChange={changeDraft}
+              onEmailSubjectChange={changeEmailSubject}
               onOpen={() => setIsComposerOpen(true)}
               onRegenerate={() =>
-                void generate(selectedChannel, true, true, selectedTone)
+                void generate(selectedChannel, true, true, selectedTone, true)
               }
               onSubmit={() => void submitDraft()}
               onToggleFullScreen={() =>
@@ -1689,7 +2065,11 @@ export default function SaleDetailAIWorkspace({
                   onDragStart={setDraggedSidebarPanel}
                   onDrop={reorderSidebarPanels}
                 >
-                  <NotesPanel notes={notes} />
+                  <NotesPanel
+                    mentionMembers={mentionMembers}
+                    notes={notes}
+                    saleId={saleId}
+                  />
                 </SidebarSection>
               );
             }
@@ -1740,7 +2120,7 @@ export default function SaleDetailAIWorkspace({
                     setIsComposerOpen(true);
                   }}
                   onRegenerate={() =>
-                    void generate(selectedChannel, true, true, selectedTone)
+                    void generate(selectedChannel, true, true, selectedTone, true)
                   }
                   result={result}
                   statusLabel={sale.stage}

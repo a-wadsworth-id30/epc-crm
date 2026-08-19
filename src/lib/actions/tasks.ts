@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 
 export async function completeTask(taskId: string) {
   const user = await requireUser();
@@ -22,4 +24,6 @@ export async function completeTask(taskId: string) {
   });
 
   revalidatePath("/tasks");
+  revalidateHeaderNotifications();
+  await bumpRealtimeTopics([realtimeTopics.tasks]);
 }

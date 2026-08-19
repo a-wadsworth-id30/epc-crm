@@ -72,6 +72,28 @@ async function safeCount<T>(
   }
 }
 
+function jsonObject(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function notificationDetail(value: string | null | undefined) {
+  const detail = value?.replace(/\s+/g, " ").trim();
+
+  if (!detail) {
+    return "Open the linked sales note review task.";
+  }
+
+  return detail.length > 180 ? `${detail.slice(0, 177).trimEnd()}...` : detail;
+}
+
 async function loadGeneratedHeaderNotificationsUncached(
   currentUserId: string,
 ): Promise<GeneratedHeaderNotification[]> {
@@ -101,6 +123,7 @@ async function loadGeneratedHeaderNotificationsUncached(
     missedCalls,
     overdueTasks,
     blockedTasks,
+    saleNoteMentionTasks,
     overdueSalesOpportunities,
     staleSalesOpportunities,
     newAttributionRecords,
@@ -171,6 +194,24 @@ async function loadGeneratedHeaderNotificationsUncached(
       where: {
         assigneeId: currentUserId,
         status: "BLOCKED",
+      },
+    }),
+    prisma.task.findMany({
+      where: {
+        assigneeId: currentUserId,
+        metadata: {
+          path: ["source"],
+          equals: "sale-note-mention",
+        },
+        status: { not: "DONE" },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+      select: {
+        description: true,
+        id: true,
+        metadata: true,
+        title: true,
       },
     }),
     prisma.salesOpportunity.count({
@@ -319,6 +360,20 @@ async function loadGeneratedHeaderNotificationsUncached(
       href: "/telephony/live?view=logs&status=MISSED",
       severity: "warning",
       title: "Missed calls to review",
+    });
+  }
+
+  for (const task of saleNoteMentionTasks) {
+    const metadata = jsonObject(task.metadata);
+    const opportunityId = stringValue(metadata.opportunityId);
+
+    notifications.push({
+      id: `sale-note-mention:${task.id}`,
+      category: "Sales",
+      detail: notificationDetail(task.description),
+      href: opportunityId ? `/sales/${opportunityId}` : "/tasks",
+      severity: "warning",
+      title: task.title || "Sales note mention",
     });
   }
 

@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-04
+Last updated: 2026-08-19
 
 ## Current Product Shape
 
@@ -558,6 +558,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   assigned tasks, can be switched to all tasks, supports due-date range and
   quick status views, orders incomplete tasks by due-date urgency and marks
   overdue/today rows visually.
+- Sale detail notes support `@` mentions for active CRM users. Mention handles
+  resolve from email local-parts and first/last-name combinations, and the note
+  composer offers a member picker while typing a mention. Resolved mentions
+  create assigned review tasks linked to the sales opportunity and source note.
+  Open mention-review tasks generate user-specific Sales header notifications
+  until the task is completed or dismissed. Resolved mention tasks also send a
+  best-effort MailerSend email alert to the mentioned CRM user so reviews are
+  not missed when the user is not logged in.
 - Admin-created users; public signup is disabled. Settings > Users supports
   both single-user creation and bulk CSV import. Bulk imports validate emails,
   names, roles, duplicate rows and existing CRM accounts before creation, then
