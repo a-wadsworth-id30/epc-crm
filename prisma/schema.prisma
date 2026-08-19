@@ -1860,16 +1860,37 @@ model Task {
 }
 
 model IntegrationConnection {
-  id                String                        @id @default(cuid())
-  provider          String                        @unique
-  name              String
-  description       String
-  status            IntegrationStatus             @default(NOT_CONNECTED)
-  config            Json?
-  createdAt         DateTime                      @default(now())
-  updatedAt         DateTime                      @updatedAt
-  healthSnapshots   IntegrationHealthSnapshot[]
-  marketingSyncLogs MarketingIntegrationSyncLog[]
+  id                  String                        @id @default(cuid())
+  provider            String                        @unique
+  name                String
+  description         String
+  status              IntegrationStatus             @default(NOT_CONNECTED)
+  config              Json?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  externalRecordLinks ExternalRecordLink[]
+  healthSnapshots     IntegrationHealthSnapshot[]
+  marketingSyncLogs   MarketingIntegrationSyncLog[]
+}
+
+model ExternalRecordLink {
+  id            String                 @id @default(cuid())
+  provider      String
+  externalType  String
+  externalId    String
+  internalType  String
+  internalId    String
+  integrationId String?
+  integration   IntegrationConnection? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  lastSeenAt    DateTime?
+  metadata      Json?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([provider, externalType, externalId])
+  @@index([provider, internalType, internalId])
+  @@index([integrationId, updatedAt])
+  @@index([provider, updatedAt])
 }
 
 model IntegrationHealthSnapshot {

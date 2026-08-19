@@ -113,6 +113,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   provider IDs, statuses, timestamps and links to source/signed/certificate
   `FileAsset` rows, not OAuth tokens or raw provider payloads.
 - `IntegrationConnection`: provider config and encrypted credentials.
+- `ExternalRecordLink`: provider-neutral mapping from external records to CRM
+  record IDs. Pipedrive import will use it to make lead/person/organisation
+  sync retries idempotent without trusting names or email addresses as primary
+  provider identity.
 - `BackgroundJobRun`: compact operational job history for maintenance,
   marketing rollup refreshes, conversion uploads and ad spend imports. It
   stores status, trigger, duration and read/write counts, not credentials or
@@ -244,10 +248,13 @@ Main files:
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
 - `/settings/integrations/pipedrive`
 
-The first Pipedrive phase covers connection storage and readiness display.
-Lead import, idempotent external record links and webhook handling should be
-implemented as a dedicated server-side sync layer rather than posting provider
-payloads through the public attribution lead endpoint.
+The first Pipedrive phase covers connection storage, readiness display and the
+`ExternalRecordLink` idempotency foundation. Lead import and webhook handling
+should be implemented as a dedicated server-side sync layer rather than posting
+provider payloads through the public attribution lead endpoint.
+Pipedrive integration work is pull-only by default. Do not push, update,
+delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
+approves that specific write-back operation.
 
 ### DocuSign
 

@@ -81,6 +81,10 @@ export default function PipedriveSettingsForm({
               Used for importing Pipedrive leads into CRM contacts, companies
               and opportunities.
             </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              This integration is pull-only. The CRM will not write back to
+              Pipedrive unless that is explicitly approved for a later change.
+            </p>
           </div>
           <span
             className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-medium ${

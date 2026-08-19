@@ -145,7 +145,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   The CRM can store a Pipedrive API token encrypted in
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
   runtime fallback. This first phase covers connection storage and readiness;
-  the lead import worker/webhook layer is still intentionally separate.
+  `ExternalRecordLink` now provides the provider-neutral idempotency table for
+  future Pipedrive lead/person/organisation imports. The lead import
+  worker/webhook layer is still intentionally separate. Pipedrive is pull-only
+  by default; do not write back to Pipedrive without Adam's explicit permission
+  for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity
