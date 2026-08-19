@@ -144,9 +144,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Settings > Integrations includes Pipedrive as a real CRM data integration.
   The CRM can store a Pipedrive API token encrypted in
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
-  runtime fallback. This first phase covers connection storage and readiness;
-  `ExternalRecordLink` now provides the provider-neutral idempotency table for
-  future Pipedrive lead/person/organisation imports. The lead import
+  runtime fallback. `src/lib/integrations/pipedrive.ts` provides the
+  server-side read-only Pipedrive client for current-user, user, lead, person
+  and organisation GET requests, and `ExternalRecordLink` provides the
+  provider-neutral idempotency table for future imports. The lead import
   worker/webhook layer is still intentionally separate. Pipedrive is pull-only
   by default; do not write back to Pipedrive without Adam's explicit permission
   for that specific operation.

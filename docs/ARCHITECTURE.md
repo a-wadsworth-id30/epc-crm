@@ -249,9 +249,12 @@ Main files:
 - `/settings/integrations/pipedrive`
 
 The first Pipedrive phase covers connection storage, readiness display and the
-`ExternalRecordLink` idempotency foundation. Lead import and webhook handling
-should be implemented as a dedicated server-side sync layer rather than posting
-provider payloads through the public attribution lead endpoint.
+`ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
+also exposes a server-side read-only client that uses Pipedrive's `x-api-token`
+header for GET-only current-user, user, lead, person and organisation requests.
+Lead import and webhook handling should be implemented as a dedicated
+server-side sync layer rather than posting provider payloads through the public
+attribution lead endpoint.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.
