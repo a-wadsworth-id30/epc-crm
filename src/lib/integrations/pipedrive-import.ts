@@ -138,12 +138,17 @@ export async function importPipedriveLeadPage({
     };
   }
 
-  const page = await readClient.listLeads({
+  const leadParams: PipedriveListLeadsParams = {
     limit: params.limit ?? 50,
-    sort: params.sort ?? "update_time ASC",
-    start: params.start,
-    updatedSince: params.updatedSince,
-  });
+    sort: params.sort ?? "update_time DESC",
+  };
+
+  if (params.start !== undefined) leadParams.start = params.start;
+  if (params.updatedSince !== undefined) {
+    leadParams.updatedSince = params.updatedSince;
+  }
+
+  const page = await readClient.listLeads(leadParams);
   const results: PipedriveLeadImportResult[] = [];
 
   for (const lead of page.data) {

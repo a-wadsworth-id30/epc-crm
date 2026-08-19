@@ -62,6 +62,33 @@ before(async () => {
 });
 
 describe("Pipedrive lead import mapping", () => {
+  it("requests the latest updated leads first when importing a page", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.deepEqual(listCalls, [{ limit: 50, sort: "update_time DESC" }]);
+  });
+
   it("maps Pipedrive lead, person and organisation fields into CRM records", () => {
     const mapping = pipedriveImport.mapPipedriveLeadToCrm({
       defaultLeadSource: "Pipedrive Import",
