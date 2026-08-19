@@ -146,11 +146,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
   runtime fallback. `src/lib/integrations/pipedrive.ts` provides the
   server-side read-only Pipedrive client for current-user, user, lead, person
-  and organisation GET requests, and `ExternalRecordLink` provides the
-  provider-neutral idempotency table for future imports. The lead import
-  worker/webhook layer is still intentionally separate. Pipedrive is pull-only
-  by default; do not write back to Pipedrive without Adam's explicit permission
-  for that specific operation.
+  and organisation GET requests. `src/lib/integrations/pipedrive-import.ts`
+  maps Pipedrive leads into CRM contacts, companies, opportunities,
+  communications and `ExternalRecordLink` rows. The Pipedrive settings page has
+  an admin-only manual pull action that imports one page of latest leads and
+  records the result in sync history. Scheduled import/webhook handling is
+  still intentionally separate. Pipedrive is pull-only by default; do not write
+  back to Pipedrive without Adam's explicit permission for that specific
+  operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

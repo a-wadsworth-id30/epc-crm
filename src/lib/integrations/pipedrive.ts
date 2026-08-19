@@ -109,10 +109,15 @@ export type PipedriveUser = Record<string, unknown> & {
 
 export type PipedriveLead = Record<string, unknown> & {
   id?: string;
+  name?: string;
   title?: string;
   owner_id?: unknown;
   person_id?: unknown;
+  person?: unknown;
   organization_id?: unknown;
+  organization?: unknown;
+  org_id?: unknown;
+  value?: unknown;
   expected_close_date?: string | null;
   add_time?: string;
   update_time?: string;

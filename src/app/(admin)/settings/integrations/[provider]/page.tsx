@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleDashed,
+  Download,
   XCircle,
 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
@@ -102,6 +103,7 @@ import {
 } from "@/lib/integrations/geoapify";
 import { hasStoredR2Credentials, r2ConfigSchema } from "@/lib/storage/r2";
 import { dryRunMarketingProviderConversionUploadsAction } from "@/lib/actions/marketing-lifecycle";
+import { pullPipedriveLeadsAction } from "@/lib/actions/integrations";
 
 type ProviderSyncLog = {
   id: string;
@@ -352,6 +354,22 @@ export default async function IntegrationSettingsPage({
   }
 
   if (provider === pipedriveProvider) {
+    const recentPipedriveSyncLogs =
+      await prisma.marketingIntegrationSyncLog.findMany({
+        orderBy: { startedAt: "desc" },
+        select: {
+          id: true,
+          message: true,
+          provider: true,
+          recordsRead: true,
+          recordsWritten: true,
+          startedAt: true,
+          status: true,
+          syncType: true,
+        },
+        take: 8,
+        where: { provider: pipedriveProvider },
+      });
     const config = pipedriveConfigSchema.safeParse(integration?.config ?? {});
     const hasStoredPipedriveConfig = hasStoredPipedriveCredentials(
       integration?.config,
@@ -377,6 +395,40 @@ export default async function IntegrationSettingsPage({
             canEdit
           />
         </div>
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                  Lead import
+                </h2>
+                <LazyHelpTooltip content="Pulls the latest Pipedrive leads into CRM records. This action does not write back to Pipedrive." />
+              </div>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Pull latest Pipedrive leads into CRM contacts, companies and
+                opportunities.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <form action={pullPipedriveLeadsAction}>
+                <button
+                  type="submit"
+                  disabled={pipedriveCredentialSource === "missing"}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Pull latest leads
+                </button>
+              </form>
+              <StatusBadge>
+                {recentPipedriveSyncLogs.length
+                  ? recentPipedriveSyncLogs[0].status
+                  : "Planned"}
+              </StatusBadge>
+            </div>
+          </div>
+          <SyncHistoryTable logs={recentPipedriveSyncLogs} />
+        </section>
       </>
     );
   }
