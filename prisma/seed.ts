@@ -921,6 +921,11 @@ async function main() {
       "Transactional email, domain authentication and inbound email routing.",
     ],
     [
+      "pipedrive",
+      "Pipedrive",
+      "Lead inbox import and CRM data synchronisation.",
+    ],
+    [
       "email-provider",
       "Email provider",
       "Connect SMTP, Microsoft 365 or Gmail later.",

@@ -232,6 +232,23 @@ or environment API key server-side, forwards the optional country/language
 settings to Geoapify with a bounded timeout and returns only normalized CRM
 address suggestion fields.
 
+### Pipedrive
+
+Pipedrive config is stored in `IntegrationConnection` with provider
+`pipedrive`. API tokens are encrypted using `CREDENTIAL_ENCRYPTION_KEY`; a
+deployment may also provide `PIPEDRIVE_API_TOKEN` as a runtime fallback.
+
+Main files:
+
+- `src/lib/integrations/pipedrive.ts`
+- `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
+- `/settings/integrations/pipedrive`
+
+The first Pipedrive phase covers connection storage and readiness display.
+Lead import, idempotent external record links and webhook handling should be
+implemented as a dedicated server-side sync layer rather than posting provider
+payloads through the public attribution lead endpoint.
+
 ### DocuSign
 
 DocuSign config is stored in `IntegrationConnection` with provider `docusign`.

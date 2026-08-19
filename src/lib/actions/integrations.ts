@@ -24,6 +24,12 @@ import {
   openaiStoredConfigSchema,
 } from "@/lib/integrations/openai";
 import {
+  hasStoredPipedriveCredentials,
+  pipedriveConfigSchema,
+  pipedriveProvider,
+  pipedriveStoredConfigSchema,
+} from "@/lib/integrations/pipedrive";
+import {
   geoapifyConfigSchema,
   geoapifyProvider,
   geoapifyStoredConfigSchema,
@@ -304,6 +310,110 @@ export async function updateGeoapifyIntegrationAction(
     message: isConnected
       ? "Geoapify settings saved."
       : "Geoapify settings saved. Add an API key to enable address lookup.",
+    savedAt: Date.now(),
+    connected: isConnected,
+  };
+}
+
+export async function updatePipedriveIntegrationAction(
+  _: IntegrationActionState,
+  formData: FormData,
+): Promise<IntegrationActionState> {
+  await requireAdmin();
+
+  const parsed = pipedriveConfigSchema.safeParse({
+    apiBaseUrl: formData.get("apiBaseUrl"),
+    defaultLeadSource: formData.get("defaultLeadSource"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message:
+        parsed.error.issues[0]?.message ?? "Enter valid Pipedrive settings.",
+      savedAt: null,
+      connected: false,
+    };
+  }
+
+  const apiToken = String(formData.get("apiToken") ?? "").trim();
+  const existing = await prisma.integrationConnection.findUnique({
+    where: { provider: pipedriveProvider },
+  });
+  const existingConfig = pipedriveStoredConfigSchema.safeParse(
+    existing?.config ?? {},
+  );
+  const existingCredentials = existingConfig.success
+    ? existingConfig.data.credentials
+    : undefined;
+  const existingSyncState =
+    existingConfig.success && existingConfig.data.lastLeadSyncAt
+      ? { lastLeadSyncAt: existingConfig.data.lastLeadSyncAt }
+      : {};
+  let credentials = existingCredentials;
+
+  if (apiToken) {
+    if (!hasCredentialEncryptionKey()) {
+      return {
+        ok: false,
+        message:
+          "Set CREDENTIAL_ENCRYPTION_KEY before saving Pipedrive credentials.",
+        savedAt: null,
+        connected: false,
+      };
+    }
+
+    credentials = {
+      apiToken: encryptSecret(apiToken),
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  const config = {
+    ...existingSyncState,
+    ...parsed.data,
+    ...(credentials ? { credentials } : {}),
+  };
+  const isConnected = hasStoredPipedriveCredentials(config);
+
+  const savedConnection = await prisma.integrationConnection.upsert({
+    where: { provider: pipedriveProvider },
+    update: {
+      name: "Pipedrive",
+      description: "Lead inbox import and CRM data synchronisation.",
+      status: isConnected ? "CONNECTED" : "NOT_CONNECTED",
+      config,
+    },
+    create: {
+      provider: pipedriveProvider,
+      name: "Pipedrive",
+      description: "Lead inbox import and CRM data synchronisation.",
+      status: isConnected ? "CONNECTED" : "NOT_CONNECTED",
+      config,
+    },
+  });
+  await recordIntegrationSetupHealth({
+    connected: isConnected,
+    integrationId: savedConnection.id,
+    message: isConnected
+      ? "Pipedrive settings saved with lead API credentials."
+      : "Pipedrive settings saved without lead API credentials.",
+    metadata: {
+      apiBaseUrl: config.apiBaseUrl,
+      defaultLeadSource: config.defaultLeadSource,
+      leadSyncStatePreserved: "lastLeadSyncAt" in config,
+    },
+    provider: pipedriveProvider,
+  });
+
+  revalidatePath("/settings/integrations");
+  revalidatePath("/settings/integrations/pipedrive");
+
+  return {
+    ok: true,
+    message: isConnected
+      ? "Pipedrive settings saved."
+      : "Pipedrive settings saved. Add an API token to connect.",
     savedAt: Date.now(),
     connected: isConnected,
   };

@@ -15,10 +15,12 @@ import {
   Id30AuthSettingsForm,
   MailerSendSettingsForm,
   OpenAISettingsForm,
+  PipedriveSettingsForm,
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import type { MailerSendSettings } from "@/components/crm-boilerplate/MailerSendSettingsForm";
 import type { OpenAISettings } from "@/components/crm-boilerplate/OpenAISettingsForm";
+import type { PipedriveSettings } from "@/components/crm-boilerplate/PipedriveSettingsForm";
 import type { TwilioSettings } from "@/components/crm-boilerplate/TwilioSettingsForm";
 
 export type IntegrationSettingsDialogProps = {
@@ -34,6 +36,7 @@ export type IntegrationSettingsDialogProps = {
     | Id30AuthPublicSettings
     | MailerSendSettings
     | OpenAISettings
+    | PipedriveSettings
     | TwilioSettings;
   credentialSource?: "database" | "environment" | "missing" | "placeholder";
   hasEncryptionKey?: boolean;
@@ -93,6 +96,7 @@ export function IntegrationSettingsDialog({
   const isMailerSend = provider === "mailersend";
   const isTwilio = provider === "twilio";
   const isOpenAI = provider === "openai";
+  const isPipedrive = provider === "pipedrive";
   const isId30Auth = provider === "id30-auth";
 
   useEffect(() => {
@@ -134,9 +138,11 @@ export function IntegrationSettingsDialog({
                       ? "Configure MailerSend email delivery, DNS and inbound routing."
                       : isOpenAI
                         ? "Configure OpenAI credentials for Sidekick and AI-assisted CRM workflows."
-                        : isTwilio
-                          ? "Configure Twilio credentials for telephony, SMS and WhatsApp."
-                          : "Configure the placeholder connection details for this CRM integration."}
+                        : isPipedrive
+                          ? "Configure Pipedrive credentials for CRM lead imports."
+                          : isTwilio
+                            ? "Configure Twilio credentials for telephony, SMS and WhatsApp."
+                            : "Configure the placeholder connection details for this CRM integration."}
           </p>
           {isCloudflareR2 ? (
             <CloudflareR2SettingsForm
@@ -179,6 +185,15 @@ export function IntegrationSettingsDialog({
           ) : isOpenAI ? (
             <OpenAISettingsForm
               config={config as OpenAISettings}
+              hasStoredCredentials={hasStoredCredentials}
+              credentialSource={credentialSource}
+              hasEncryptionKey={hasEncryptionKey}
+              canEdit={canEdit}
+              onSaved={onSaved}
+            />
+          ) : isPipedrive ? (
+            <PipedriveSettingsForm
+              config={config as PipedriveSettings}
               hasStoredCredentials={hasStoredCredentials}
               credentialSource={credentialSource}
               hasEncryptionKey={hasEncryptionKey}

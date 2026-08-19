@@ -137,6 +137,7 @@ export default function IntegrationCard({
   const isMailerSend = provider === "mailersend";
   const isTwilio = provider === "twilio";
   const isOpenAI = provider === "openai";
+  const isPipedrive = provider === "pipedrive";
   const isId30Auth = provider === "id30-auth";
   const isRealIntegration =
     isCloudflareR2 ||
@@ -145,6 +146,7 @@ export default function IntegrationCard({
     isId30Auth ||
     isMailerSend ||
     isOpenAI ||
+    isPipedrive ||
     isTwilio;
   const displayStatus =
     status === "ERROR" || readinessStatus === "error"

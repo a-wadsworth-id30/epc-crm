@@ -81,6 +81,11 @@ export const OpenAISettingsForm = dynamic(
   { loading: IntegrationFormLoading, ssr: false },
 );
 
+export const PipedriveSettingsForm = dynamic(
+  () => import("@/components/crm-boilerplate/PipedriveSettingsForm"),
+  { loading: IntegrationFormLoading, ssr: false },
+);
+
 export const TwilioSettingsForm = dynamic(
   () => import("@/components/crm-boilerplate/TwilioSettingsForm"),
   { loading: IntegrationFormLoading, ssr: false },

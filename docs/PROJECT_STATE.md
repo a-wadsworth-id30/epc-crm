@@ -141,6 +141,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   then uses an authenticated server route with a bounded provider timeout to
   return normalized address suggestions for contact and company address forms.
   The browser never receives the raw Geoapify key.
+- Settings > Integrations includes Pipedrive as a real CRM data integration.
+  The CRM can store a Pipedrive API token encrypted in
+  `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
+  runtime fallback. This first phase covers connection storage and readiness;
+  the lead import worker/webhook layer is still intentionally separate.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

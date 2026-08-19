@@ -16,6 +16,7 @@ import {
   MailerSendSettingsForm,
   MetaIntegrationForm,
   OpenAISettingsForm,
+  PipedriveSettingsForm,
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
@@ -82,6 +83,12 @@ import {
   hasStoredOpenAICredentials,
   openaiConfigSchema,
 } from "@/lib/integrations/openai";
+import {
+  hasPipedriveEnvironmentConfig,
+  hasStoredPipedriveCredentials,
+  pipedriveConfigSchema,
+  pipedriveProvider,
+} from "@/lib/integrations/pipedrive";
 import {
   docusignConfigSchema,
   docusignProvider,
@@ -336,6 +343,36 @@ export default async function IntegrationSettingsPage({
             config={config.success ? config.data : {}}
             credentialSource={geoapifyCredentialSource}
             hasStoredCredentials={hasStoredGeoapifyConfig}
+            hasEncryptionKey={hasCredentialEncryptionKey()}
+            canEdit
+          />
+        </div>
+      </>
+    );
+  }
+
+  if (provider === pipedriveProvider) {
+    const config = pipedriveConfigSchema.safeParse(integration?.config ?? {});
+    const hasStoredPipedriveConfig = hasStoredPipedriveCredentials(
+      integration?.config,
+    );
+    const pipedriveCredentialSource = hasStoredPipedriveConfig
+      ? "database"
+      : hasPipedriveEnvironmentConfig()
+        ? "environment"
+        : "missing";
+
+    return (
+      <>
+        <PageHeader
+          title="Connect Pipedrive"
+          description="Connection credentials for importing Pipedrive leads into CRM contacts, companies and opportunities."
+        />
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <PipedriveSettingsForm
+            config={config.success ? config.data : {}}
+            credentialSource={pipedriveCredentialSource}
+            hasStoredCredentials={hasStoredPipedriveConfig}
             hasEncryptionKey={hasCredentialEncryptionKey()}
             canEdit
           />

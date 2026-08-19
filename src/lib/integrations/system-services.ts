@@ -32,6 +32,13 @@ import {
   openaiStoredConfigSchema,
 } from "@/lib/integrations/openai";
 import {
+  defaultPipedriveApiBaseUrl,
+  hasPipedriveEnvironmentConfig,
+  hasStoredPipedriveCredentials,
+  pipedriveProvider,
+  pipedriveStoredConfigSchema,
+} from "@/lib/integrations/pipedrive";
+import {
   hasStoredTwilioCredentials,
   twilioProvider,
   twilioStoredConfigSchema,
@@ -188,6 +195,19 @@ export const systemIntegrationDefinitions: SystemIntegrationDefinition[] = [
     provider: geoapifyProvider,
     realIntegration: true,
     setupHref: "/settings/integrations/geoapify",
+    showWhenMissing: true,
+  },
+  {
+    categoryLabel: "CRM data",
+    capabilities: pipedriveCapabilities,
+    description: "Lead inbox import and CRM data synchronisation.",
+    hasEnvironmentConfig: hasPipedriveEnvironmentConfig,
+    hasStoredCredentials: hasStoredPipedriveCredentials,
+    iconSrc: "/images/integration/pipedrive.svg",
+    name: "Pipedrive",
+    provider: pipedriveProvider,
+    realIntegration: true,
+    setupHref: "/settings/integrations/pipedrive",
     showWhenMissing: true,
   },
   {
@@ -497,6 +517,38 @@ function geoapifyCapabilities({
       label: "Search scope",
       optional: true,
       status: storedConfig?.countryFilter ? "ready" : "warning",
+    }),
+  ];
+}
+
+function pipedriveCapabilities({
+  config,
+  credentialSource,
+}: SystemIntegrationCapabilityInput) {
+  const parsed = pipedriveStoredConfigSchema.safeParse(config ?? {});
+  const storedConfig = parsed.success ? parsed.data : null;
+  const runtimeReady =
+    credentialSource === "database" || credentialSource === "environment";
+  const apiBaseUrl = storedConfig?.apiBaseUrl ?? defaultPipedriveApiBaseUrl;
+
+  return [
+    capability({
+      detail: runtimeReady
+        ? `API token loaded from ${sourceLabel(credentialSource)}.`
+        : "Save a Pipedrive API token.",
+      label: "Lead API",
+      status: runtimeReady ? "ready" : "missing",
+    }),
+    capability({
+      detail: `${hostLabel(apiBaseUrl)} is configured for API requests.`,
+      label: "API base URL",
+      status: "ready",
+    }),
+    capability({
+      detail: "Lead import jobs will be enabled in the sync phase.",
+      label: "Lead import",
+      optional: true,
+      status: "warning",
     }),
   ];
 }
