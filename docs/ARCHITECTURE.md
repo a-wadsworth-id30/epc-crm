@@ -256,13 +256,15 @@ header for GET-only current-user, user, lead, person and organisation requests.
 `src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/person/
 organisation records into CRM company, contact, sales opportunity,
 communication and external-link rows. The Pipedrive settings page can manually
-preview or pull one page of latest leads and writes sync-history rows with
-read/write counts. Preview classifies would-create, already-linked and skipped
-leads without creating CRM records and stores sanitized preview rows for the
-settings table; pull creates CRM records and external-link rows where needed.
-Scheduled import and webhook handling should be implemented as a dedicated
-server-side sync layer rather than posting provider payloads through the public
-attribution lead endpoint.
+preview, selected-import or pull Pipedrive leads and writes sync-history rows
+with read/write counts. Preview classifies would-create, already-linked and
+skipped leads without creating CRM records and stores sanitized preview rows
+for the settings table. Selected import fetches checked preview lead IDs by
+GET and imports only those CRM records; full pull creates CRM records and
+external-link rows for one page of latest leads where needed. Scheduled import
+and webhook handling should be implemented as a dedicated server-side sync
+layer rather than posting provider payloads through the public attribution lead
+endpoint.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

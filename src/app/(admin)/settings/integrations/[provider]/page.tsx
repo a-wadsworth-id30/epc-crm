@@ -106,6 +106,7 @@ import {
 import { hasStoredR2Credentials, r2ConfigSchema } from "@/lib/storage/r2";
 import { dryRunMarketingProviderConversionUploadsAction } from "@/lib/actions/marketing-lifecycle";
 import {
+  importSelectedPipedriveLeadsAction,
   previewPipedriveLeadsAction,
   pullPipedriveLeadsAction,
 } from "@/lib/actions/integrations";
@@ -486,6 +487,7 @@ export default async function IntegrationSettingsPage({
             </div>
           </div>
           <PipedrivePreviewTable
+            canImport={pipedriveCredentialSource !== "missing"}
             log={latestPipedrivePreviewLog}
             rows={pipedrivePreviewRows}
           />
@@ -2878,12 +2880,16 @@ function ProviderSetupForm({
 }
 
 function PipedrivePreviewTable({
+  canImport,
   log,
   rows,
 }: {
+  canImport: boolean;
   log: PipedrivePreviewLog | null;
   rows: PipedrivePreviewRow[];
 }) {
+  const actionableRows = rows.filter(canImportPipedrivePreviewRow);
+
   return (
     <div className="mb-6 border-t border-gray-100 pt-5 dark:border-gray-800">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -2897,80 +2903,114 @@ function PipedrivePreviewTable({
               : "No Pipedrive lead preview has run yet."}
           </p>
         </div>
-        {log ? <StatusBadge>{log.status}</StatusBadge> : null}
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          {log ? <StatusBadge>{log.status}</StatusBadge> : null}
+          {rows.length ? (
+            <button
+              type="submit"
+              form="pipedrive-selected-import-form"
+              disabled={!canImport || actionableRows.length === 0}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              Import selected
+            </button>
+          ) : null}
+        </div>
       </div>
       {rows.length ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-            <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
-              <tr>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Lead</th>
-                <th className="px-4 py-3">Contact</th>
-                <th className="px-4 py-3">Company</th>
-                <th className="px-4 py-3">Value</th>
-                <th className="px-4 py-3">Close</th>
-                <th className="px-4 py-3">Warnings</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {rows.map((row, index) => (
-                <tr key={`${row.externalLeadId ?? "lead"}-${index}`}>
-                  <td className="px-4 py-4 align-top">
-                    <StatusBadge>
-                      {pipedrivePreviewStatusLabel(row.status)}
-                    </StatusBadge>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="font-medium text-gray-800 dark:text-white/90">
-                      {row.title ?? "Untitled lead"}
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.externalLeadId ?? "No Pipedrive ID"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
-                    <div>{row.contactName ?? "No contact"}</div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {[row.contactEmail, row.contactPhone]
-                        .filter(Boolean)
-                        .join(" / ") || "No contact details"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
-                    {row.companyName ?? "No company"}
-                  </td>
-                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
-                    {formatPipedrivePreviewMoney(
-                      row.valueCents,
-                      row.currency,
-                    )}
-                  </td>
-                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
-                    {formatPipedrivePreviewDate(row.expectedCloseDate)}
-                  </td>
-                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
-                    {row.warningCount ? (
-                      <div>
-                        <div>
-                          {row.warningCount} warning
-                          {row.warningCount === 1 ? "" : "s"}
-                        </div>
-                        {row.warnings.length ? (
-                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {row.warnings.join(" / ")}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      "None"
-                    )}
-                  </td>
+        <form
+          id="pipedrive-selected-import-form"
+          action={importSelectedPipedriveLeadsAction}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+              <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
+                <tr>
+                  <th className="px-4 py-3">Select</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Lead</th>
+                  <th className="px-4 py-3">Contact</th>
+                  <th className="px-4 py-3">Company</th>
+                  <th className="px-4 py-3">Value</th>
+                  <th className="px-4 py-3">Close</th>
+                  <th className="px-4 py-3">Warnings</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {rows.map((row, index) => {
+                  const rowCanImport =
+                    canImport && canImportPipedrivePreviewRow(row);
+
+                  return (
+                    <tr key={`${row.externalLeadId ?? "lead"}-${index}`}>
+                      <td className="px-4 py-4 align-top">
+                        <input
+                          type="checkbox"
+                          name="externalLeadId"
+                          value={row.externalLeadId ?? ""}
+                          disabled={!rowCanImport}
+                          aria-label={`Select ${row.title ?? row.externalLeadId ?? "Pipedrive lead"}`}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900"
+                        />
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <StatusBadge>
+                          {pipedrivePreviewStatusLabel(row.status)}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="font-medium text-gray-800 dark:text-white/90">
+                          {row.title ?? "Untitled lead"}
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.externalLeadId ?? "No Pipedrive ID"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                        <div>{row.contactName ?? "No contact"}</div>
+                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {[row.contactEmail, row.contactPhone]
+                            .filter(Boolean)
+                            .join(" / ") || "No contact details"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                        {row.companyName ?? "No company"}
+                      </td>
+                      <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                        {formatPipedrivePreviewMoney(
+                          row.valueCents,
+                          row.currency,
+                        )}
+                      </td>
+                      <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                        {formatPipedrivePreviewDate(row.expectedCloseDate)}
+                      </td>
+                      <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                        {row.warningCount ? (
+                          <div>
+                            <div>
+                              {row.warningCount} warning
+                              {row.warningCount === 1 ? "" : "s"}
+                            </div>
+                            {row.warnings.length ? (
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {row.warnings.join(" / ")}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "None"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </form>
       ) : (
         <div className="py-6 text-sm text-gray-500 dark:text-gray-400">
           {log?.message ?? "Preview results will appear here after a dry-run."}
@@ -3035,6 +3075,10 @@ function pipedrivePreviewStatusLabel(
   if (status === "would_create") return "Would create";
   if (status === "linked_existing") return "Already linked";
   return "Skipped";
+}
+
+function canImportPipedrivePreviewRow(row: PipedrivePreviewRow) {
+  return Boolean(row.externalLeadId && row.status === "would_create");
 }
 
 function formatPipedrivePreviewMoney(

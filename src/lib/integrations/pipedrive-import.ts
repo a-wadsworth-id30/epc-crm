@@ -39,10 +39,16 @@ const pipedriveInternalTypes = {
 
 type JsonObject = Record<string, unknown>;
 
-export type PipedriveImportClient = Pick<
+type PipedriveRelatedRecordClient = Pick<
   PipedriveReadOnlyClient,
-  "defaultLeadSource" | "getOrganization" | "getPerson" | "listLeads"
+  "defaultLeadSource" | "getOrganization" | "getPerson"
 >;
+
+export type PipedriveImportClient = PipedriveRelatedRecordClient &
+  Pick<PipedriveReadOnlyClient, "listLeads">;
+
+export type PipedriveSelectedImportClient = PipedriveRelatedRecordClient &
+  Pick<PipedriveReadOnlyClient, "getLead">;
 
 export type PipedriveLeadImportMapping = {
   company: {
@@ -139,7 +145,7 @@ type ResolvedContact = {
 };
 
 type ImportLeadRecordOptions = {
-  client: PipedriveImportClient;
+  client: PipedriveRelatedRecordClient;
   lead: PipedriveLead;
   now?: Date;
 };
@@ -150,13 +156,19 @@ type ImportLeadPageOptions = {
 };
 
 type PreviewLeadRecordOptions = {
-  client: PipedriveImportClient;
+  client: PipedriveRelatedRecordClient;
   lead: PipedriveLead;
 };
 
 type PreviewLeadPageOptions = {
   client?: PipedriveImportClient | null;
   params?: PipedriveListLeadsParams;
+};
+
+type ImportLeadIdsOptions = {
+  client?: PipedriveSelectedImportClient | null;
+  leadIds: string[];
+  now?: Date;
 };
 
 type ImportedRelatedRecords = {
@@ -325,6 +337,57 @@ export function pipedriveLeadPreviewMetadataRows(
       .slice(0, 3)
       .map((warning) => truncateText(warning, 240)),
   }));
+}
+
+export async function importPipedriveLeadIds({
+  client,
+  leadIds,
+  now = new Date(),
+}: ImportLeadIdsOptions) {
+  const selectedLeadIds = normalizedSelectedLeadIds(leadIds);
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      requested: selectedLeadIds.length,
+      results: [],
+      skipped: selectedLeadIds.length,
+      status: "not_configured" as const,
+    };
+  }
+
+  const results: PipedriveLeadImportResult[] = [];
+
+  for (const leadId of selectedLeadIds) {
+    try {
+      const lead = await readClient.getLead(leadId);
+      results.push(
+        await importPipedriveLeadRecord({
+          client: readClient,
+          lead,
+          now,
+        }),
+      );
+    } catch (error) {
+      results.push(
+        skippedLeadResult(
+          pipedriveReadWarning("lead", leadId, error),
+          leadId,
+        ),
+      );
+    }
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    requested: selectedLeadIds.length,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
 }
 
 export async function importPipedriveLeadRecord({
@@ -611,7 +674,7 @@ export function mapPipedriveLeadToCrm({
 }
 
 async function fetchRelatedRecords(
-  client: PipedriveImportClient,
+  client: PipedriveRelatedRecordClient,
   lead: PipedriveLead,
 ): Promise<ImportedRelatedRecords> {
   const warnings: string[] = [];
@@ -667,7 +730,7 @@ function previewFieldsFromMapping(
 }
 
 async function readPipedrivePerson(
-  client: PipedriveImportClient,
+  client: PipedriveRelatedRecordClient,
   personId: number,
   warnings: string[],
 ) {
@@ -680,7 +743,7 @@ async function readPipedrivePerson(
 }
 
 async function readPipedriveOrganization(
-  client: PipedriveImportClient,
+  client: PipedriveRelatedRecordClient,
   organizationId: number,
   warnings: string[],
 ) {
@@ -694,7 +757,7 @@ async function readPipedriveOrganization(
 
 function pipedriveReadWarning(
   recordType: string,
-  recordId: number,
+  recordId: number | string,
   error: unknown,
 ) {
   const detail = error instanceof Error ? `: ${error.message}` : "";
@@ -990,12 +1053,15 @@ async function upsertExternalRecordLink(
   });
 }
 
-function skippedLeadResult(warning: string): PipedriveLeadImportResult {
+function skippedLeadResult(
+  warning: string,
+  externalLeadId: string | null = null,
+): PipedriveLeadImportResult {
   return {
     companyId: null,
     contactId: null,
     created: { company: false, contact: false, opportunity: false },
-    externalLeadId: null,
+    externalLeadId,
     opportunityId: null,
     status: "skipped",
     warnings: [warning],
@@ -1025,6 +1091,18 @@ function skippedLeadPreviewResult({
     valueCents: null,
     warnings: [warning],
   };
+}
+
+function normalizedSelectedLeadIds(leadIds: string[]) {
+  const selectedLeadIds = new Set<string>();
+
+  for (const leadId of leadIds) {
+    const normalized = cleanText(leadId);
+    if (normalized) selectedLeadIds.add(normalized);
+    if (selectedLeadIds.size >= 50) break;
+  }
+
+  return [...selectedLeadIds];
 }
 
 function opportunityValue(value: unknown, workspaceCurrency: string) {

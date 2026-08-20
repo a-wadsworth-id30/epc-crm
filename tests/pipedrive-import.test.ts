@@ -273,6 +273,52 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(crmWriteCalls, 0);
   });
 
+  it("imports selected lead IDs after reading each Pipedrive lead once", async () => {
+    const getLeadCalls: string[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-a",
+        externalType: "lead",
+        internalId: "opportunity-a",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+      {
+        externalId: "lead-b",
+        externalType: "lead",
+        internalId: "opportunity-b",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedriveLeadIds({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getLead: async (id) => {
+          getLeadCalls.push(id);
+          return { id, title: `Selected ${id}` };
+        },
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+      },
+      leadIds: [" lead-a ", "lead-a", "", "lead-b"],
+    });
+
+    assert.equal(result.status, "ok");
+    if (result.status !== "ok") throw new Error("Expected selected import");
+    assert.deepEqual(getLeadCalls, ["lead-a", "lead-b"]);
+    assert.equal(result.requested, 2);
+    assert.equal(result.created, 0);
+    assert.equal(result.linkedExisting, 2);
+    assert.equal(result.skipped, 0);
+    assert.deepEqual(
+      result.results.map((leadResult) => leadResult.opportunityId),
+      ["opportunity-a", "opportunity-b"],
+    );
+    assert.equal(crmWriteCalls, 2);
+  });
+
   it("maps Pipedrive lead, person and organisation fields into CRM records", () => {
     const mapping = pipedriveImport.mapPipedriveLeadToCrm({
       defaultLeadSource: "Pipedrive Import",
