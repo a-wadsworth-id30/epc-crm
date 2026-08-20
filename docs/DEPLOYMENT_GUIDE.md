@@ -281,6 +281,8 @@ non-stale `pipedrive.lead_import` job is already running, the newer run is
 skipped and logged as a warning instead of reading Pipedrive or moving the CRM
 cursor. `BACKGROUND_JOB_STALE_MINUTES` controls when old running jobs are
 ignored by the guard. This does not write back to Pipedrive.
+Settings > Integrations > Pipedrive shows the schedule, dry-run, cursor,
+continuation and active guard state for production verification.
 
 ## Current Dev-Phase Rule
 

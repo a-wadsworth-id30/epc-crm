@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Prisma } from "@prisma/client";
+import { BackgroundJobRunStatus, type Prisma } from "@prisma/client";
 import type { ReactNode } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import {
@@ -91,6 +91,7 @@ import {
   hasStoredPipedriveCredentials,
   pipedriveConfigSchema,
   pipedriveProvider,
+  pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
   docusignConfigSchema,
@@ -110,6 +111,7 @@ import {
   previewPipedriveLeadsAction,
   pullPipedriveLeadsAction,
 } from "@/lib/actions/integrations";
+import { backgroundJobStaleCutoff } from "@/lib/maintenance/background-jobs";
 
 type ProviderSyncLog = {
   id: string;
@@ -169,6 +171,8 @@ type PipedriveImportRow = {
   warnings: string[];
 };
 
+type PipedriveCredentialSource = "database" | "environment" | "missing";
+
 type PageSearchParams = {
   authSetup?: string | string[];
   message?: string | string[];
@@ -192,6 +196,14 @@ const conversionDryRunProviderSlugs = new Set<MarketingIntegrationProviderSlug>(
 
 function searchParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function booleanEnv(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase();
+
+  return Boolean(
+    normalized && ["1", "true", "yes", "on"].includes(normalized),
+  );
 }
 
 export default async function IntegrationSettingsPage({
@@ -411,6 +423,7 @@ export default async function IntegrationSettingsPage({
       recentPipedriveSyncLogs,
       latestPipedrivePreviewLog,
       latestPipedriveImportLog,
+      activePipedrivePullRun,
     ] =
       await Promise.all([
         prisma.marketingIntegrationSyncLog.findMany({
@@ -458,6 +471,18 @@ export default async function IntegrationSettingsPage({
             syncType: { in: ["lead-import", "lead-import-selected"] },
           },
         }),
+        prisma.backgroundJobRun.findFirst({
+          orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
+          select: {
+            startedAt: true,
+            trigger: true,
+          },
+          where: {
+            jobName: "pipedrive.lead_import",
+            startedAt: { gte: backgroundJobStaleCutoff() },
+            status: BackgroundJobRunStatus.RUNNING,
+          },
+        }),
       ]);
     const pipedrivePreviewRows = pipedrivePreviewRowsFromMetadata(
       latestPipedrivePreviewLog?.metadata,
@@ -466,6 +491,9 @@ export default async function IntegrationSettingsPage({
       latestPipedriveImportLog?.metadata,
     );
     const config = pipedriveConfigSchema.safeParse(integration?.config ?? {});
+    const storedConfig = pipedriveStoredConfigSchema.safeParse(
+      integration?.config ?? {},
+    );
     const hasStoredPipedriveConfig = hasStoredPipedriveCredentials(
       integration?.config,
     );
@@ -474,6 +502,30 @@ export default async function IntegrationSettingsPage({
       : hasPipedriveEnvironmentConfig()
         ? "environment"
         : "missing";
+    const pipedriveScheduleEnabled = booleanEnv(
+      process.env.PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED,
+    );
+    const pipedriveScheduleDryRun = booleanEnv(
+      process.env.PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN,
+    );
+    const pipedriveScheduleSecretConfigured = Boolean(
+      process.env.PIPEDRIVE_LEAD_IMPORT_SECRET?.trim() ||
+        process.env.CRON_SECRET?.trim(),
+    );
+    const pipedrivePullState = storedConfig.success
+      ? {
+          lastFullLeadSyncAt: storedConfig.data.lastFullLeadSyncAt ?? null,
+          lastFullLeadSyncNextStart:
+            typeof storedConfig.data.lastFullLeadSyncNextStart === "number"
+              ? storedConfig.data.lastFullLeadSyncNextStart
+              : null,
+          lastLeadSyncAt: storedConfig.data.lastLeadSyncAt ?? null,
+        }
+      : {
+          lastFullLeadSyncAt: null,
+          lastFullLeadSyncNextStart: null,
+          lastLeadSyncAt: null,
+        };
 
     return (
       <>
@@ -541,6 +593,18 @@ export default async function IntegrationSettingsPage({
           <PipedriveImportDetailTable
             log={latestPipedriveImportLog}
             rows={pipedriveImportRows}
+          />
+          <PipedrivePullStateSummary
+            activeRun={activePipedrivePullRun}
+            credentialSource={pipedriveCredentialSource}
+            lastFullLeadSyncAt={pipedrivePullState.lastFullLeadSyncAt}
+            lastFullLeadSyncNextStart={
+              pipedrivePullState.lastFullLeadSyncNextStart
+            }
+            lastLeadSyncAt={pipedrivePullState.lastLeadSyncAt}
+            scheduleDryRun={pipedriveScheduleDryRun}
+            scheduleEnabled={pipedriveScheduleEnabled}
+            scheduleSecretConfigured={pipedriveScheduleSecretConfigured}
           />
           <SyncHistoryTable logs={recentPipedriveSyncLogs} />
         </section>
@@ -3204,6 +3268,137 @@ function PipedriveImportDetailTable({
       )}
     </div>
   );
+}
+
+function PipedrivePullStateSummary({
+  activeRun,
+  credentialSource,
+  lastFullLeadSyncAt,
+  lastFullLeadSyncNextStart,
+  lastLeadSyncAt,
+  scheduleDryRun,
+  scheduleEnabled,
+  scheduleSecretConfigured,
+}: {
+  activeRun: { startedAt: Date; trigger: string } | null;
+  credentialSource: PipedriveCredentialSource;
+  lastFullLeadSyncAt: string | null;
+  lastFullLeadSyncNextStart: number | null;
+  lastLeadSyncAt: string | null;
+  scheduleDryRun: boolean;
+  scheduleEnabled: boolean;
+  scheduleSecretConfigured: boolean;
+}) {
+  const scheduleBadge = pipedriveScheduleBadge({
+    credentialSource,
+    scheduleDryRun,
+    scheduleEnabled,
+    scheduleSecretConfigured,
+  });
+  const scheduleValue = scheduleEnabled
+    ? scheduleDryRun
+      ? "Enabled, dry-run"
+      : "Enabled"
+    : "Disabled";
+  const scheduleDetail = scheduleEnabled
+    ? scheduleSecretConfigured
+      ? "Secret configured"
+      : "Missing secret"
+    : "Waiting for Netlify env flag";
+  const credentialValue =
+    credentialSource === "database"
+      ? "Stored token"
+      : credentialSource === "environment"
+        ? "Environment token"
+        : "Missing token";
+  const activeRunAt = formattedDateTime(activeRun?.startedAt);
+
+  return (
+    <div className="mb-6 border-t border-gray-100 pt-5 dark:border-gray-800">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+            Pull state
+          </h3>
+        </div>
+        <StatusBadge>{scheduleBadge}</StatusBadge>
+      </div>
+      <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <PipedrivePullStateItem
+          label="Schedule"
+          value={scheduleValue}
+          detail={scheduleDetail}
+        />
+        <PipedrivePullStateItem
+          label="Credentials"
+          value={credentialValue}
+          detail={credentialSource === "missing" ? "Pulls disabled" : "Pull-only"}
+        />
+        <PipedrivePullStateItem
+          label="Full cursor"
+          value={formattedDateTime(lastFullLeadSyncAt) ?? "Not completed"}
+          detail={
+            lastFullLeadSyncNextStart !== null
+              ? `Continuation start ${lastFullLeadSyncNextStart}`
+              : "No saved continuation"
+          }
+        />
+        <PipedrivePullStateItem
+          label="Overlap guard"
+          value={activeRun ? "Running" : "Ready"}
+          detail={
+            activeRun
+              ? `${activeRun.trigger} since ${activeRunAt ?? "unknown"}`
+              : `Last sync ${formattedDateTime(lastLeadSyncAt) ?? "not recorded"}`
+          }
+        />
+      </dl>
+    </div>
+  );
+}
+
+function PipedrivePullStateItem({
+  detail,
+  label,
+  value,
+}: {
+  detail: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+        {label}
+      </dt>
+      <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
+        {value}
+      </dd>
+      <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {detail}
+      </dd>
+    </div>
+  );
+}
+
+function pipedriveScheduleBadge({
+  credentialSource,
+  scheduleDryRun,
+  scheduleEnabled,
+  scheduleSecretConfigured,
+}: {
+  credentialSource: PipedriveCredentialSource;
+  scheduleDryRun: boolean;
+  scheduleEnabled: boolean;
+  scheduleSecretConfigured: boolean;
+}) {
+  if (!scheduleEnabled) return "Planned";
+  if (credentialSource === "missing" || !scheduleSecretConfigured) {
+    return "Needed";
+  }
+  if (scheduleDryRun) return "WARNING";
+
+  return "Ready";
 }
 
 function PipedriveCrmRecordLink({

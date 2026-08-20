@@ -178,10 +178,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` are configured. Manual and
   scheduled pulls start a compact `pipedrive.lead_import` background job before
   importing; if another non-stale Pipedrive pull is already running, the newer
-  pull is skipped and logged as a warning without reading Pipedrive. Pipedrive
-  webhook handling is still intentionally separate. Pipedrive is pull-only by
-  default; do not write back to Pipedrive without Adam's explicit permission
-  for that specific operation.
+  pull is skipped and logged as a warning without reading Pipedrive. The
+  Pipedrive settings page shows the scheduled pull state, credential source,
+  full-pull cursor, saved continuation and active overlap guard state for
+  admins. Pipedrive webhook handling is still intentionally separate.
+  Pipedrive is pull-only by default; do not write back to Pipedrive without
+  Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity
