@@ -36,6 +36,7 @@ import {
 import {
   importPipedriveLeadIds,
   importPipedriveLeadPage,
+  pipedriveImportablePreviewLeadIdsFromMetadata,
   pipedriveLeadImportMetadataRows,
   pipedriveLeadPreviewMetadataRows,
   previewPipedriveLeadPage,
@@ -709,6 +710,62 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
     return;
   }
 
+  const latestPreviewLog = await prisma.marketingIntegrationSyncLog.findFirst({
+    orderBy: { startedAt: "desc" },
+    select: {
+      metadata: true,
+      startedAt: true,
+    },
+    where: {
+      provider: pipedriveProvider,
+      syncType: "lead-import-preview",
+    },
+  });
+  const importablePreviewLeadIds =
+    pipedriveImportablePreviewLeadIdsFromMetadata(
+      latestPreviewLog?.metadata,
+    );
+  const importablePreviewLeadIdSet = new Set(importablePreviewLeadIds);
+  const approvedLeadIds = selectedLeadIds.filter((leadId) =>
+    importablePreviewLeadIdSet.has(leadId),
+  );
+  const rejectedLeadIds = selectedLeadIds.filter(
+    (leadId) => !importablePreviewLeadIdSet.has(leadId),
+  );
+
+  if (!approvedLeadIds.length) {
+    const reason = latestPreviewLog
+      ? "no-importable-preview-selection"
+      : "missing-preview";
+
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt: new Date(),
+        integrationId: connection.id,
+        message: latestPreviewLog
+          ? "Selected import did not run because none of the submitted Pipedrive leads were marked would-create in the latest preview."
+          : "Run a Pipedrive preview before importing selected leads.",
+        metadata: {
+          actorId: user.id,
+          importablePreviewLeadCount: importablePreviewLeadIds.length,
+          previewStartedAt: latestPreviewLog?.startedAt.toISOString() ?? null,
+          pullOnly: true,
+          reason,
+          rejectedLeadIds,
+          selectedLeadIds,
+        },
+        provider: pipedriveProvider,
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "WARNING",
+        syncType: "lead-import-selected",
+      },
+    });
+    revalidatePipedriveSettingsPaths();
+    return;
+  }
+
   const client = await getPipedriveReadOnlyClient();
 
   if (!client) {
@@ -722,7 +779,9 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
           actorId: user.id,
           pullOnly: true,
           reason: "missing-credentials",
-          selectedLeadIds,
+          rejectedLeadIds,
+          selectedLeadIds: approvedLeadIds,
+          submittedLeadIds: selectedLeadIds,
         },
         provider: pipedriveProvider,
         recordsRead: 0,
@@ -739,7 +798,7 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
   try {
     const result = await importPipedriveLeadIds({
       client,
-      leadIds: selectedLeadIds,
+      leadIds: approvedLeadIds,
     });
     const finishedAt = new Date();
     const recordsRead = result.status === "ok" ? result.requested : 0;
@@ -780,9 +839,12 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
             created: recordsWritten,
             imports: importRows,
             linkedExisting,
+            previewStartedAt: latestPreviewLog?.startedAt.toISOString() ?? null,
             pullOnly: true,
-            selectedLeadIds,
+            rejectedLeadIds,
+            selectedLeadIds: approvedLeadIds,
             skipped,
+            submittedLeadIds: selectedLeadIds,
             warningCount,
           },
           provider: pipedriveProvider,
@@ -826,7 +888,9 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
         metadata: {
           actorId: user.id,
           pullOnly: true,
-          selectedLeadIds,
+          rejectedLeadIds,
+          selectedLeadIds: approvedLeadIds,
+          submittedLeadIds: selectedLeadIds,
         },
         provider: pipedriveProvider,
         recordsRead: 0,

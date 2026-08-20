@@ -371,6 +371,26 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(crmWriteCalls, 0);
   });
 
+  it("extracts only importable lead IDs from preview metadata", () => {
+    assert.deepEqual(
+      pipedriveImport.pipedriveImportablePreviewLeadIdsFromMetadata({
+        previews: [
+          { externalLeadId: "lead-create", status: "would_create" },
+          { externalLeadId: "lead-linked", status: "linked_existing" },
+          { externalLeadId: "lead-skipped", status: "skipped" },
+          { externalLeadId: " lead-trimmed ", status: "would_create" },
+          { externalLeadId: "", status: "would_create" },
+          { externalLeadId: "lead-create", status: "would_create" },
+        ],
+      }),
+      ["lead-create", "lead-trimmed"],
+    );
+    assert.deepEqual(
+      pipedriveImport.pipedriveImportablePreviewLeadIdsFromMetadata(null),
+      [],
+    );
+  });
+
   it("marks already linked Pipedrive leads as existing in preview", async () => {
     externalRecordLinkRows = [
       {

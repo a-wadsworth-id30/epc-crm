@@ -377,6 +377,27 @@ export function pipedriveLeadPreviewMetadataRows(
   }));
 }
 
+export function pipedriveImportablePreviewLeadIdsFromMetadata(
+  metadata: unknown,
+) {
+  const record = objectValue(metadata);
+  const previews = Array.isArray(record.previews) ? record.previews : [];
+  const leadIds = new Set<string>();
+
+  for (const preview of previews) {
+    const previewRecord = objectValue(preview);
+    const externalLeadId = cleanText(previewRecord.externalLeadId);
+
+    if (previewRecord.status === "would_create" && externalLeadId) {
+      leadIds.add(externalLeadId);
+    }
+
+    if (leadIds.size >= 50) break;
+  }
+
+  return [...leadIds];
+}
+
 export function pipedriveLeadImportMetadataRows(
   results: PipedriveLeadImportResult[],
 ): PipedriveLeadImportMetadataRow[] {
