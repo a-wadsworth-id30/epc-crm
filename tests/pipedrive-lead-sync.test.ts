@@ -19,8 +19,10 @@ let client: {
 let connectionConfig: Record<string, unknown>;
 let importPagesArgs: unknown;
 let importPagesResult: Record<string, unknown>;
+let runningJobRun: { id: string; startedAt: Date; trigger: string } | null;
 let completedJob: unknown;
 let startedJob: unknown;
+let syncCreates: unknown[];
 let transactionWrites: unknown[];
 
 before(async () => {
@@ -81,6 +83,8 @@ before(async () => {
 
     if (request === "@/lib/maintenance/background-jobs") {
       return {
+        backgroundJobStaleCutoff: () =>
+          new Date("2026-08-20T09:30:00.000Z"),
         completeBackgroundJobRun: async (
           handle: unknown,
           completion: unknown,
@@ -95,6 +99,7 @@ before(async () => {
             startedAt: new Date("2026-08-20T10:00:00.000Z"),
           };
         },
+        isBackgroundJobSchemaPending: () => false,
       };
     }
 
@@ -104,6 +109,9 @@ before(async () => {
           $transaction: async (writes: unknown[]) => {
             transactionWrites = writes;
             return writes;
+          },
+          backgroundJobRun: {
+            findFirst: async () => runningJobRun,
           },
           integrationConnection: {
             findUnique: async () => ({
@@ -122,10 +130,15 @@ before(async () => {
             }),
           },
           marketingIntegrationSyncLog: {
-            create: (args: unknown) => ({
-              args,
-              type: "sync.create",
-            }),
+            create: (args: unknown) => {
+              const write = {
+                args,
+                type: "sync.create",
+              };
+              syncCreates.push(write);
+
+              return write;
+            },
           },
         },
       };
@@ -166,8 +179,10 @@ beforeEach(() => {
     skipped: 0,
     status: "ok",
   };
+  runningJobRun = null;
   completedJob = null;
   startedJob = null;
+  syncCreates = [];
   transactionWrites = [];
 });
 
@@ -200,6 +215,34 @@ describe("Pipedrive scheduled lead sync", () => {
     );
     assert.equal(updateWrite.args.data.config.lastFullLeadSyncNextStart, 50);
     assert.equal(typeof updateWrite.args.data.config.lastLeadSyncAt, "string");
+  });
+
+  it("skips a pull when another non-stale Pipedrive pull is running", async () => {
+    runningJobRun = {
+      id: "job-active",
+      startedAt: new Date("2026-08-20T09:45:00.000Z"),
+      trigger: "scheduled",
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveLeadPull({
+      actorId: "user-1",
+      trigger: "manual",
+    });
+
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.mode, "already_running");
+    assert.equal(importPagesArgs, null);
+    assert.equal(transactionWrites.length, 0);
+    assert.equal(syncCreates.length, 1);
+    assert.match(result.message, /already running/);
+    assert.equal(
+      (
+        completedJob as {
+          completion?: { summary?: { activeRunId?: string } };
+        }
+      ).completion?.summary?.activeRunId,
+      "job-active",
+    );
   });
 
   it("records compact background job history for scheduled pulls", async () => {

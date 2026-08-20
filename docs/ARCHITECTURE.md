@@ -282,9 +282,12 @@ manual pull action and protected `/api/maintenance/pipedrive-lead-import`
 route share `src/lib/integrations/pipedrive-lead-sync.ts`; the route can be
 called by the disabled-by-default Netlify scheduled function
 `netlify/functions/pull-pipedrive-leads.mjs` and writes compact background job
-history for scheduled runs. Webhook handling should be implemented as a
-dedicated server-side sync layer rather than posting provider payloads through
-the public attribution lead endpoint.
+history for scheduled runs. Manual and scheduled pulls start a
+`pipedrive.lead_import` background job before importing, and newer overlapping
+runs skip with a warning when another non-stale Pipedrive pull is already
+running. Webhook handling should be implemented as a dedicated server-side sync
+layer rather than posting provider payloads through the public attribution lead
+endpoint.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

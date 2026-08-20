@@ -14,13 +14,16 @@ import {
   pipedriveLeadImportMetadataRows,
 } from "@/lib/integrations/pipedrive-import";
 import {
+  backgroundJobStaleCutoff,
   completeBackgroundJobRun,
   failBackgroundJobRun,
+  isBackgroundJobSchemaPending,
   startBackgroundJobRun,
 } from "@/lib/maintenance/background-jobs";
 import { prisma } from "@/lib/prisma";
 
 type PipedriveLeadPullStatus = "SUCCESS" | "WARNING" | "ERROR";
+const pipedriveLeadImportJobName = "pipedrive.lead_import";
 
 export type PipedriveLeadPullResult = {
   connectionId: string;
@@ -28,7 +31,12 @@ export type PipedriveLeadPullResult = {
   linkedExisting: number;
   message: string;
   metadata: Prisma.InputJsonObject;
-  mode: "continuation" | "incremental" | "initial" | "not_configured";
+  mode:
+    | "already_running"
+    | "continuation"
+    | "incremental"
+    | "initial"
+    | "not_configured";
   moreAvailable: boolean;
   pagesRead: number;
   recordsRead: number;
@@ -46,7 +54,7 @@ type PipedriveLeadPullOptions = {
 
 export async function runPipedriveLeadPull({
   actorId = null,
-  recordBackgroundJob = false,
+  recordBackgroundJob = true,
   trigger = "manual",
 }: PipedriveLeadPullOptions = {}): Promise<PipedriveLeadPullResult> {
   const normalizedTrigger = syncTrigger(trigger);
@@ -54,7 +62,7 @@ export async function runPipedriveLeadPull({
     ? await startBackgroundJobRun({
         actorId,
         dryRun: false,
-        jobName: "pipedrive.lead_import",
+        jobName: pipedriveLeadImportJobName,
         jobType: "integration-sync",
         metadata: {
           provider: pipedriveProvider,
@@ -65,6 +73,37 @@ export async function runPipedriveLeadPull({
     : null;
 
   try {
+    const activeRun = await currentPipedriveLeadPullRun(jobRun);
+
+    if (activeRun) {
+      const result = await skipPipedriveLeadPull({
+        actorId,
+        activeRun,
+        trigger: normalizedTrigger,
+      });
+
+      await completeBackgroundJobRun(jobRun, {
+        message: result.message,
+        metadata: {
+          provider: pipedriveProvider,
+          pullOnly: true,
+          reason: "already-running",
+          trigger: normalizedTrigger,
+        },
+        recordsRead: 0,
+        recordsWritten: 0,
+        status: BackgroundJobRunStatus.WARNING,
+        summary: {
+          activeRunId: activeRun.id,
+          activeRunStartedAt: activeRun.startedAt.toISOString(),
+          activeRunTrigger: activeRun.trigger,
+          mode: result.mode,
+        },
+      });
+
+      return result;
+    }
+
     const result = await writePipedriveLeadPull({
       actorId,
       trigger: normalizedTrigger,
@@ -141,6 +180,12 @@ export async function readPipedriveLeadPullReadiness() {
     updatedAt: connection?.updatedAt.toISOString() ?? null,
   };
 }
+
+type ActivePipedriveLeadPullRun = {
+  id: string;
+  startedAt: Date;
+  trigger: string;
+};
 
 export async function ensurePipedriveIntegrationConnection() {
   return prisma.integrationConnection.upsert({
@@ -384,6 +429,92 @@ async function writePipedriveLeadPull({
       warningCount: 1,
     } satisfies PipedriveLeadPullResult;
   }
+}
+
+async function currentPipedriveLeadPullRun(
+  jobRun: { id: string; startedAt: Date } | null,
+): Promise<ActivePipedriveLeadPullRun | null> {
+  if (!jobRun) return null;
+
+  try {
+    const run = await prisma.backgroundJobRun.findFirst({
+      orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        startedAt: true,
+        trigger: true,
+      },
+      where: {
+        jobName: pipedriveLeadImportJobName,
+        startedAt: { gte: backgroundJobStaleCutoff() },
+        status: BackgroundJobRunStatus.RUNNING,
+      },
+    });
+
+    if (!run || run.id === jobRun.id) return null;
+
+    return run;
+  } catch (error) {
+    if (isBackgroundJobSchemaPending(error)) return null;
+
+    throw error;
+  }
+}
+
+async function skipPipedriveLeadPull({
+  actorId,
+  activeRun,
+  trigger,
+}: {
+  actorId: string | null;
+  activeRun: ActivePipedriveLeadPullRun;
+  trigger: string;
+}) {
+  const startedAt = new Date();
+  const connection = await ensurePipedriveIntegrationConnection();
+  const finishedAt = new Date();
+  const message =
+    "Pipedrive lead import skipped because another pull is already running.";
+  const metadata: Prisma.InputJsonObject = {
+    actorId,
+    activeRunId: activeRun.id,
+    activeRunStartedAt: activeRun.startedAt.toISOString(),
+    activeRunTrigger: activeRun.trigger,
+    pullOnly: true,
+    reason: "already-running",
+    trigger,
+  };
+
+  await prisma.marketingIntegrationSyncLog.create({
+    data: {
+      finishedAt,
+      integrationId: connection.id,
+      message,
+      metadata,
+      provider: pipedriveProvider,
+      recordsRead: 0,
+      recordsWritten: 0,
+      startedAt,
+      status: "WARNING",
+      syncType: "lead-import",
+    },
+  });
+
+  return {
+    connectionId: connection.id,
+    created: 0,
+    linkedExisting: 0,
+    message,
+    metadata,
+    mode: "already_running",
+    moreAvailable: false,
+    pagesRead: 0,
+    recordsRead: 0,
+    recordsWritten: 0,
+    skipped: 0,
+    status: "WARNING",
+    warningCount: 1,
+  } satisfies PipedriveLeadPullResult;
 }
 
 function backgroundStatus(status: PipedriveLeadPullStatus) {

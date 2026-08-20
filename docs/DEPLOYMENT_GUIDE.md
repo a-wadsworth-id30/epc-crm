@@ -275,8 +275,12 @@ it calls `/api/maintenance/pipedrive-lead-import` with
 bounded Pipedrive lead import helper as the manual settings action. Start with
 `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify credentials/readiness before
 allowing CRM lead records to be imported. API and scheduled runs write compact
-background job history visible in Settings > System. This does not write back
-to Pipedrive.
+background job history visible in Settings > System. Manual and scheduled
+Pipedrive pulls use that background job state as an overlap guard: if a
+non-stale `pipedrive.lead_import` job is already running, the newer run is
+skipped and logged as a warning instead of reading Pipedrive or moving the CRM
+cursor. `BACKGROUND_JOB_STALE_MINUTES` controls when old running jobs are
+ignored by the guard. This does not write back to Pipedrive.
 
 ## Current Dev-Phase Rule
 

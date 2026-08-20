@@ -175,7 +175,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   scheduled function, `netlify/functions/pull-pipedrive-leads.mjs`, can run the
   same full-pull helper with background job history when
   `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` and
-  `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` are configured. Pipedrive
+  `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` are configured. Manual and
+  scheduled pulls start a compact `pipedrive.lead_import` background job before
+  importing; if another non-stale Pipedrive pull is already running, the newer
+  pull is skipped and logged as a warning without reading Pipedrive. Pipedrive
   webhook handling is still intentionally separate. Pipedrive is pull-only by
   default; do not write back to Pipedrive without Adam's explicit permission
   for that specific operation.
