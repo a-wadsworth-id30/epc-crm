@@ -170,9 +170,15 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   updates the general `lastLeadSyncAt` timestamp but does not advance the
   full-pull cursor. Both import paths record the result in sync history with
   sanitized per-lead import detail rows showing created, already-linked and
-  skipped outcomes. Scheduled import/webhook handling is still intentionally
-  separate. Pipedrive is pull-only by default; do not write back to Pipedrive
-  without Adam's explicit permission for that specific operation.
+  skipped outcomes. A protected pull-only maintenance route,
+  `/api/maintenance/pipedrive-lead-import`, and disabled-by-default Netlify
+  scheduled function, `netlify/functions/pull-pipedrive-leads.mjs`, can run the
+  same full-pull helper with background job history when
+  `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` and
+  `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` are configured. Pipedrive
+  webhook handling is still intentionally separate. Pipedrive is pull-only by
+  default; do not write back to Pipedrive without Adam's explicit permission
+  for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

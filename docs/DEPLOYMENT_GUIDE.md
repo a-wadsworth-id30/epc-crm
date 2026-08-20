@@ -124,6 +124,12 @@ Optional:
   without writing summary rows.
 - `MARKETING_ROLLUP_CRON_WINDOW_DAYS`: optional rollup refresh window, default
   `90`, maximum `730`.
+- `PIPEDRIVE_LEAD_IMPORT_SECRET`: shared secret for
+  `/api/maintenance/pipedrive-lead-import`; `CRON_SECRET` can be used instead.
+- `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED`: set to `true` to let the scheduled
+  Netlify function pull Pipedrive leads into CRM.
+- `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN`: set to `true` to let the scheduled
+  function verify readiness without importing CRM lead records.
 - `BACKGROUND_JOB_STALE_MINUTES`: optional running background job age threshold
   for Settings > System and admin header alerts, default `30`, minimum `5`,
   maximum `1440`.
@@ -260,6 +266,17 @@ it calls `/api/maintenance/marketing-rollups` with `MARKETING_ROLLUP_SECRET`
 or `CRON_SECRET` and refreshes compact daily marketing summary rows for the
 configured window. API and scheduled refreshes write compact background job
 history visible in Settings > System.
+
+The repository also includes
+`netlify/functions/pull-pipedrive-leads.mjs`, scheduled every 15 minutes. It is
+disabled unless `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` is set. When enabled,
+it calls `/api/maintenance/pipedrive-lead-import` with
+`PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` and runs the same pull-only,
+bounded Pipedrive lead import helper as the manual settings action. Start with
+`PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify credentials/readiness before
+allowing CRM lead records to be imported. API and scheduled runs write compact
+background job history visible in Settings > System. This does not write back
+to Pipedrive.
 
 ## Current Dev-Phase Rule
 

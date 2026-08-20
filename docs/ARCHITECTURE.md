@@ -246,7 +246,9 @@ Main files:
 
 - `src/lib/integrations/pipedrive.ts`
 - `src/lib/integrations/pipedrive-import.ts`
+- `src/lib/integrations/pipedrive-lead-sync.ts`
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
+- `/api/maintenance/pipedrive-lead-import`
 - `/settings/integrations/pipedrive`
 
 The first Pipedrive phase covers connection storage, readiness display and the
@@ -275,10 +277,14 @@ only when Pipedrive reports no more pages are available; capped runs store
 `lastFullLeadSyncNextStart` and the next full pull resumes from that Pipedrive
 `start` offset before the cursor advances. Import runs store sanitized per-lead
 outcome rows in sync-history metadata so admins can review created,
-already-linked and skipped records without storing raw Pipedrive payloads.
-Scheduled import and webhook handling should be implemented as a dedicated
-server-side sync layer rather than posting provider payloads through the public
-attribution lead endpoint.
+already-linked and skipped records without storing raw Pipedrive payloads. The
+manual pull action and protected `/api/maintenance/pipedrive-lead-import`
+route share `src/lib/integrations/pipedrive-lead-sync.ts`; the route can be
+called by the disabled-by-default Netlify scheduled function
+`netlify/functions/pull-pipedrive-leads.mjs` and writes compact background job
+history for scheduled runs. Webhook handling should be implemented as a
+dedicated server-side sync layer rather than posting provider payloads through
+the public attribution lead endpoint.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

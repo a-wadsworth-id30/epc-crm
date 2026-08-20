@@ -24,10 +24,7 @@ import {
   openaiStoredConfigSchema,
 } from "@/lib/integrations/openai";
 import {
-  defaultPipedriveApiBaseUrl,
-  defaultPipedriveLeadSource,
   getPipedriveReadOnlyClient,
-  hasPipedriveEnvironmentConfig,
   hasStoredPipedriveCredentials,
   pipedriveConfigSchema,
   pipedriveProvider,
@@ -35,12 +32,15 @@ import {
 } from "@/lib/integrations/pipedrive";
 import {
   importPipedriveLeadIds,
-  importPipedriveLeadPages,
   pipedriveImportablePreviewLeadIdsFromMetadata,
   pipedriveLeadImportMetadataRows,
   pipedriveLeadPreviewMetadataRows,
   previewPipedriveLeadPage,
 } from "@/lib/integrations/pipedrive-import";
+import {
+  ensurePipedriveIntegrationConnection,
+  runPipedriveLeadPull,
+} from "@/lib/integrations/pipedrive-lead-sync";
 import {
   geoapifyConfigSchema,
   geoapifyProvider,
@@ -448,175 +448,8 @@ export async function updatePipedriveIntegrationAction(
 
 export async function pullPipedriveLeadsAction() {
   const user = await requireAdmin();
-  const startedAt = new Date();
-  const connection = await ensurePipedriveIntegrationConnection();
-
-  const client = await getPipedriveReadOnlyClient();
-
-  if (!client) {
-    await prisma.marketingIntegrationSyncLog.create({
-      data: {
-        finishedAt: new Date(),
-        integrationId: connection.id,
-        message:
-          "Pipedrive API credentials are missing, so lead import could not run.",
-        metadata: {
-          actorId: user.id,
-          pullOnly: true,
-          reason: "missing-credentials",
-        },
-        provider: pipedriveProvider,
-        recordsRead: 0,
-        recordsWritten: 0,
-        startedAt,
-        status: "WARNING",
-        syncType: "lead-import",
-      },
-    });
-    revalidatePipedriveImportPaths();
-    return;
-  }
-
-  try {
-    const start = client.lastFullLeadSyncNextStart;
-    const updatedSince = client.lastFullLeadSyncAt;
-    const result = await importPipedriveLeadPages({
-      client,
-      params: { limit: 50, start, updatedSince },
-    });
-    const finishedAt = new Date();
-    const recordsRead = result.status === "ok" ? result.recordsRead : 0;
-    const recordsWritten = result.status === "ok" ? result.created : 0;
-    const linkedExisting =
-      result.status === "ok" ? result.linkedExisting : 0;
-    const skipped = result.skipped;
-    const moreAvailable =
-      result.status === "ok" ? result.moreAvailable : false;
-    const pagesRead = result.status === "ok" ? result.pagesRead : 0;
-    const warningCount =
-      result.status === "ok"
-        ? result.results.reduce(
-            (count, leadResult) => count + leadResult.warnings.length,
-            0,
-          )
-        : 1;
-    const status =
-      warningCount > 0 || skipped > 0 || recordsRead === 0 || moreAvailable
-        ? "WARNING"
-        : "SUCCESS";
-    const importMode =
-      start !== null
-        ? "Continuation pull"
-        : updatedSince
-          ? "Incremental pull"
-          : "Initial pull";
-    const pageSummary =
-      pagesRead > 1 ? ` across ${pagesRead} pages` : "";
-    const moreAvailableSummary = moreAvailable
-      ? " More Pipedrive pages are available, so a continuation was saved and the full-pull cursor was not advanced."
-      : "";
-    const message =
-      recordsRead === 0
-        ? `${importMode}: no Pipedrive leads were available to import.`
-        : `${importMode}: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}${pageSummary}.${moreAvailableSummary}`;
-    const importRows =
-      result.status === "ok"
-        ? pipedriveLeadImportMetadataRows(result.results)
-        : [];
-    const existingConfig = pipedriveStoredConfigSchema.safeParse(
-      connection.config ?? {},
-    );
-
-    const writes: Prisma.PrismaPromise<unknown>[] = [
-      prisma.marketingIntegrationSyncLog.create({
-        data: {
-          finishedAt,
-          integrationId: connection.id,
-          message,
-          metadata: {
-            actorId: user.id,
-            created: recordsWritten,
-            imports: importRows,
-            linkedExisting,
-            maxPages: result.status === "ok" ? result.maxPages : null,
-            mode:
-              start !== null
-                ? "continuation"
-                : updatedSince
-                  ? "incremental"
-                  : "initial",
-            moreAvailable,
-            nextStart: result.status === "ok" ? result.nextStart : null,
-            pagesRead,
-            pullOnly: true,
-            skipped,
-            start,
-            updatedSince,
-            warningCount,
-          },
-          provider: pipedriveProvider,
-          recordsRead,
-          recordsWritten,
-          startedAt,
-          status,
-          syncType: "lead-import",
-        },
-      }),
-    ];
-
-    if (existingConfig.success) {
-      const nextConfig =
-        moreAvailable && result.status === "ok" && result.nextStart !== null
-          ? {
-              ...existingConfig.data,
-              lastFullLeadSyncNextStart: result.nextStart,
-              lastLeadSyncAt: finishedAt.toISOString(),
-            }
-          : {
-              ...existingConfig.data,
-              lastFullLeadSyncAt: finishedAt.toISOString(),
-              lastFullLeadSyncNextStart: null,
-              lastLeadSyncAt: finishedAt.toISOString(),
-            };
-
-      writes.push(
-        prisma.integrationConnection.update({
-          where: { provider: pipedriveProvider },
-          data: {
-            config: nextConfig,
-          },
-        }),
-      );
-    }
-
-    await prisma.$transaction(writes);
-    revalidatePipedriveImportPaths();
-  } catch (error) {
-    const finishedAt = new Date();
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Pipedrive lead import failed.";
-
-    await prisma.marketingIntegrationSyncLog.create({
-      data: {
-        finishedAt,
-        integrationId: connection.id,
-        message,
-        metadata: {
-          actorId: user.id,
-          pullOnly: true,
-        },
-        provider: pipedriveProvider,
-        recordsRead: 0,
-        recordsWritten: 0,
-        startedAt,
-        status: "ERROR",
-        syncType: "lead-import",
-      },
-    });
-    revalidatePipedriveImportPaths();
-  }
+  await runPipedriveLeadPull({ actorId: user.id, trigger: "manual" });
+  revalidatePipedriveImportPaths();
 }
 
 export async function previewPipedriveLeadsAction() {
@@ -956,24 +789,6 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
     });
     revalidatePipedriveImportPaths();
   }
-}
-
-async function ensurePipedriveIntegrationConnection() {
-  return prisma.integrationConnection.upsert({
-    where: { provider: pipedriveProvider },
-    update: {},
-    create: {
-      config: {
-        apiBaseUrl: defaultPipedriveApiBaseUrl,
-        defaultLeadSource: defaultPipedriveLeadSource,
-      },
-      description: "Lead inbox import and CRM data synchronisation.",
-      name: "Pipedrive",
-      provider: pipedriveProvider,
-      status: hasPipedriveEnvironmentConfig() ? "CONNECTED" : "NOT_CONNECTED",
-    },
-    select: { config: true, id: true },
-  });
 }
 
 function selectedPipedriveLeadIds(formData: FormData) {
