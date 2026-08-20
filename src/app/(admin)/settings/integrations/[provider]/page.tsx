@@ -130,6 +130,11 @@ type PipedrivePreviewLog = {
   status: string;
 };
 
+type PipedriveImportLog = PipedrivePreviewLog & {
+  recordsWritten: number;
+  syncType: string;
+};
+
 type PipedrivePreviewRow = {
   companyName: string | null;
   contactEmail: string | null;
@@ -142,6 +147,20 @@ type PipedrivePreviewRow = {
   status: "would_create" | "linked_existing" | "skipped";
   title: string | null;
   valueCents: number | null;
+  warningCount: number;
+  warnings: string[];
+};
+
+type PipedriveImportRow = {
+  companyId: string | null;
+  contactId: string | null;
+  createdCompany: boolean;
+  createdContact: boolean;
+  createdOpportunity: boolean;
+  externalLeadId: string | null;
+  opportunityId: string | null;
+  status: "created" | "linked_existing" | "skipped";
+  title: string | null;
   warningCount: number;
   warnings: string[];
 };
@@ -384,7 +403,11 @@ export default async function IntegrationSettingsPage({
   }
 
   if (provider === pipedriveProvider) {
-    const [recentPipedriveSyncLogs, latestPipedrivePreviewLog] =
+    const [
+      recentPipedriveSyncLogs,
+      latestPipedrivePreviewLog,
+      latestPipedriveImportLog,
+    ] =
       await Promise.all([
         prisma.marketingIntegrationSyncLog.findMany({
           orderBy: { startedAt: "desc" },
@@ -415,9 +438,28 @@ export default async function IntegrationSettingsPage({
             syncType: "lead-import-preview",
           },
         }),
+        prisma.marketingIntegrationSyncLog.findFirst({
+          orderBy: { startedAt: "desc" },
+          select: {
+            message: true,
+            metadata: true,
+            recordsRead: true,
+            recordsWritten: true,
+            startedAt: true,
+            status: true,
+            syncType: true,
+          },
+          where: {
+            provider: pipedriveProvider,
+            syncType: { in: ["lead-import", "lead-import-selected"] },
+          },
+        }),
       ]);
     const pipedrivePreviewRows = pipedrivePreviewRowsFromMetadata(
       latestPipedrivePreviewLog?.metadata,
+    );
+    const pipedriveImportRows = pipedriveImportRowsFromMetadata(
+      latestPipedriveImportLog?.metadata,
     );
     const config = pipedriveConfigSchema.safeParse(integration?.config ?? {});
     const hasStoredPipedriveConfig = hasStoredPipedriveCredentials(
@@ -490,6 +532,10 @@ export default async function IntegrationSettingsPage({
             canImport={pipedriveCredentialSource !== "missing"}
             log={latestPipedrivePreviewLog}
             rows={pipedrivePreviewRows}
+          />
+          <PipedriveImportDetailTable
+            log={latestPipedriveImportLog}
+            rows={pipedriveImportRows}
           />
           <SyncHistoryTable logs={recentPipedriveSyncLogs} />
         </section>
@@ -3020,6 +3066,134 @@ function PipedrivePreviewTable({
   );
 }
 
+function PipedriveImportDetailTable({
+  log,
+  rows,
+}: {
+  log: PipedriveImportLog | null;
+  rows: PipedriveImportRow[];
+}) {
+  return (
+    <div className="mb-6 border-t border-gray-100 pt-5 dark:border-gray-800">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+            Latest import details
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {log
+              ? `${formatPipedriveImportJobLabel(log.syncType)} checked ${log.recordsRead} lead${log.recordsRead === 1 ? "" : "s"} and wrote ${log.recordsWritten} on ${log.startedAt.toLocaleString("en-GB")}.`
+              : "No Pipedrive import has run yet."}
+          </p>
+        </div>
+        {log ? <StatusBadge>{log.status}</StatusBadge> : null}
+      </div>
+      {rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+            <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
+              <tr>
+                <th className="px-4 py-3">Outcome</th>
+                <th className="px-4 py-3">Lead</th>
+                <th className="px-4 py-3">CRM records</th>
+                <th className="px-4 py-3">Warnings</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {rows.map((row, index) => (
+                <tr key={`${row.externalLeadId ?? "import"}-${index}`}>
+                  <td className="px-4 py-4 align-top">
+                    <StatusBadge>{pipedriveImportStatusLabel(row.status)}</StatusBadge>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <div className="font-medium text-gray-800 dark:text-white/90">
+                      {row.title ?? "Untitled lead"}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {row.externalLeadId ?? "No Pipedrive ID"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    <div className="flex flex-col gap-1">
+                      <PipedriveCrmRecordLink
+                        href={row.opportunityId ? `/sales/${row.opportunityId}` : null}
+                        label={
+                          row.createdOpportunity
+                            ? "Opportunity created"
+                            : "Opportunity"
+                        }
+                        recordId={row.opportunityId}
+                      />
+                      <PipedriveCrmRecordLink
+                        href={row.contactId ? `/contacts/${row.contactId}` : null}
+                        label={row.createdContact ? "Contact created" : "Contact"}
+                        recordId={row.contactId}
+                      />
+                      <PipedriveCrmRecordLink
+                        href={row.companyId ? `/clients/${row.companyId}` : null}
+                        label={row.createdCompany ? "Company created" : "Company"}
+                        recordId={row.companyId}
+                      />
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {row.warningCount ? (
+                      <div>
+                        <div>
+                          {row.warningCount} warning
+                          {row.warningCount === 1 ? "" : "s"}
+                        </div>
+                        {row.warnings.length ? (
+                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {row.warnings.join(" / ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      "None"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-6 text-sm text-gray-500 dark:text-gray-400">
+          {log?.message ?? "Import details will appear after a Pipedrive import runs."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipedriveCrmRecordLink({
+  href,
+  label,
+  recordId,
+}: {
+  href: string | null;
+  label: string;
+  recordId: string | null;
+}) {
+  if (!recordId || !href) {
+    return (
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        {label}: n/a
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+    >
+      {label}: {shortRecordId(recordId)}
+    </Link>
+  );
+}
+
 function pipedrivePreviewRowsFromMetadata(
   metadata: Prisma.JsonValue | null | undefined,
 ) {
@@ -3029,6 +3203,18 @@ function pipedrivePreviewRowsFromMetadata(
   return rows
     .map(parsePipedrivePreviewRow)
     .filter((row): row is PipedrivePreviewRow => Boolean(row))
+    .slice(0, 50);
+}
+
+function pipedriveImportRowsFromMetadata(
+  metadata: Prisma.JsonValue | null | undefined,
+) {
+  const record = jsonRecord(metadata);
+  const rows = Array.isArray(record.imports) ? record.imports : [];
+
+  return rows
+    .map(parsePipedriveImportRow)
+    .filter((row): row is PipedriveImportRow => Boolean(row))
     .slice(0, 50);
 }
 
@@ -3057,9 +3243,44 @@ function parsePipedrivePreviewRow(value: unknown) {
   };
 }
 
+function parsePipedriveImportRow(value: unknown) {
+  const record = jsonRecord(value);
+  const status = pipedriveImportStatus(record.status);
+
+  if (!status) return null;
+
+  return {
+    companyId: nullableString(record.companyId),
+    contactId: nullableString(record.contactId),
+    createdCompany: nullableBoolean(record.createdCompany),
+    createdContact: nullableBoolean(record.createdContact),
+    createdOpportunity: nullableBoolean(record.createdOpportunity),
+    externalLeadId: nullableString(record.externalLeadId),
+    opportunityId: nullableString(record.opportunityId),
+    status,
+    title: nullableString(record.title),
+    warningCount: Math.max(0, Math.trunc(nullableNumber(record.warningCount) ?? 0)),
+    warnings: Array.isArray(record.warnings)
+      ? record.warnings.map(nullableString).filter((warning): warning is string => Boolean(warning))
+      : [],
+  };
+}
+
 function pipedrivePreviewStatus(value: unknown) {
   if (
     value === "would_create" ||
+    value === "linked_existing" ||
+    value === "skipped"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function pipedriveImportStatus(value: unknown) {
+  if (
+    value === "created" ||
     value === "linked_existing" ||
     value === "skipped"
   ) {
@@ -3075,6 +3296,18 @@ function pipedrivePreviewStatusLabel(
   if (status === "would_create") return "Would create";
   if (status === "linked_existing") return "Already linked";
   return "Skipped";
+}
+
+function pipedriveImportStatusLabel(status: PipedriveImportRow["status"]) {
+  if (status === "created") return "Created";
+  if (status === "linked_existing") return "Already linked";
+  return "Skipped";
+}
+
+function formatPipedriveImportJobLabel(syncType: string) {
+  if (syncType === "lead-import-selected") return "Selected import";
+  if (syncType === "lead-import") return "Full pull";
+  return syncType;
 }
 
 function canImportPipedrivePreviewRow(row: PipedrivePreviewRow) {
@@ -3122,6 +3355,14 @@ function nullableString(value: unknown) {
 
 function nullableNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function nullableBoolean(value: unknown) {
+  return value === true;
+}
+
+function shortRecordId(value: string) {
+  return value.length > 10 ? `${value.slice(0, 10)}...` : value;
 }
 
 function SyncHistoryTable({ logs }: { logs: ProviderSyncLog[] }) {

@@ -316,6 +316,34 @@ describe("Pipedrive lead import mapping", () => {
       result.results.map((leadResult) => leadResult.opportunityId),
       ["opportunity-a", "opportunity-b"],
     );
+    assert.deepEqual(pipedriveImport.pipedriveLeadImportMetadataRows(result.results), [
+      {
+        companyId: null,
+        contactId: null,
+        createdCompany: false,
+        createdContact: false,
+        createdOpportunity: false,
+        externalLeadId: "lead-a",
+        opportunityId: "opportunity-a",
+        status: "linked_existing",
+        title: "Selected lead-a",
+        warningCount: 0,
+        warnings: [],
+      },
+      {
+        companyId: null,
+        contactId: null,
+        createdCompany: false,
+        createdContact: false,
+        createdOpportunity: false,
+        externalLeadId: "lead-b",
+        opportunityId: "opportunity-b",
+        status: "linked_existing",
+        title: "Selected lead-b",
+        warningCount: 0,
+        warnings: [],
+      },
+    ]);
     assert.equal(crmWriteCalls, 2);
   });
 

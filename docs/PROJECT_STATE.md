@@ -156,9 +156,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   or external-link rows. Selected import fetches checked preview lead IDs from
   Pipedrive with GET requests and imports only those CRM records; full pull
   imports one page of latest leads. Both import paths record the result in sync
-  history. Scheduled import/webhook handling is still intentionally separate.
-  Pipedrive is pull-only by default; do not write back to Pipedrive without
-  Adam's explicit permission for that specific operation.
+  history with sanitized per-lead import detail rows showing created,
+  already-linked and skipped outcomes. Scheduled import/webhook handling is
+  still intentionally separate. Pipedrive is pull-only by default; do not write
+  back to Pipedrive without Adam's explicit permission for that specific
+  operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

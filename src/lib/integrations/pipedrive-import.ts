@@ -99,6 +99,7 @@ export type PipedriveLeadImportResult = {
   externalLeadId: string | null;
   opportunityId: string | null;
   status: "created" | "linked_existing" | "skipped";
+  title: string | null;
   warnings: string[];
 };
 
@@ -129,6 +130,20 @@ export type PipedriveLeadPreviewMetadataRow = {
   status: PipedriveLeadPreviewResult["status"];
   title: string | null;
   valueCents: number | null;
+  warningCount: number;
+  warnings: string[];
+};
+
+export type PipedriveLeadImportMetadataRow = {
+  companyId: string | null;
+  contactId: string | null;
+  createdCompany: boolean;
+  createdContact: boolean;
+  createdOpportunity: boolean;
+  externalLeadId: string | null;
+  opportunityId: string | null;
+  status: PipedriveLeadImportResult["status"];
+  title: string | null;
   warningCount: number;
   warnings: string[];
 };
@@ -339,6 +354,26 @@ export function pipedriveLeadPreviewMetadataRows(
   }));
 }
 
+export function pipedriveLeadImportMetadataRows(
+  results: PipedriveLeadImportResult[],
+): PipedriveLeadImportMetadataRow[] {
+  return results.map((result) => ({
+    companyId: previewMetadataText(result.companyId),
+    contactId: previewMetadataText(result.contactId),
+    createdCompany: result.created.company,
+    createdContact: result.created.contact,
+    createdOpportunity: result.created.opportunity,
+    externalLeadId: previewMetadataText(result.externalLeadId),
+    opportunityId: previewMetadataText(result.opportunityId),
+    status: result.status,
+    title: previewMetadataText(result.title),
+    warningCount: result.warnings.length,
+    warnings: result.warnings
+      .slice(0, 3)
+      .map((warning) => truncateText(warning, 240)),
+  }));
+}
+
 export async function importPipedriveLeadIds({
   client,
   leadIds,
@@ -370,10 +405,10 @@ export async function importPipedriveLeadIds({
       );
     } catch (error) {
       results.push(
-        skippedLeadResult(
-          pipedriveReadWarning("lead", leadId, error),
-          leadId,
-        ),
+        skippedLeadResult({
+          externalLeadId: leadId,
+          warning: pipedriveReadWarning("lead", leadId, error),
+        }),
       );
     }
   }
@@ -398,7 +433,10 @@ export async function importPipedriveLeadRecord({
   const leadId = externalId(lead.id);
 
   if (!leadId) {
-    return skippedLeadResult("Pipedrive lead was missing an ID.");
+    return skippedLeadResult({
+      title: cleanText(lead.title),
+      warning: "Pipedrive lead was missing an ID.",
+    });
   }
 
   const [integration, relatedRecords, settings] = await Promise.all([
@@ -423,7 +461,10 @@ export async function importPipedriveLeadRecord({
   const externalLeadId = mapping.externalIds.lead;
 
   if (!externalLeadId) {
-    return skippedLeadResult("Pipedrive lead was missing an ID.");
+    return skippedLeadResult({
+      title: mapping.opportunity.title,
+      warning: "Pipedrive lead was missing an ID.",
+    });
   }
 
   return prisma.$transaction(async (tx) => {
@@ -458,6 +499,7 @@ export async function importPipedriveLeadRecord({
         externalLeadId,
         opportunityId: existingLeadLink.internalId,
         status: "linked_existing" as const,
+        title: mapping.opportunity.title,
         warnings: relatedRecords.warnings,
       };
     }
@@ -541,6 +583,7 @@ export async function importPipedriveLeadRecord({
       externalLeadId,
       opportunityId: opportunity.id,
       status: "created" as const,
+      title: mapping.opportunity.title,
       warnings: relatedRecords.warnings,
     };
   });
@@ -1053,10 +1096,15 @@ async function upsertExternalRecordLink(
   });
 }
 
-function skippedLeadResult(
-  warning: string,
-  externalLeadId: string | null = null,
-): PipedriveLeadImportResult {
+function skippedLeadResult({
+  externalLeadId = null,
+  title = null,
+  warning,
+}: {
+  externalLeadId?: string | null;
+  title?: string | null;
+  warning: string;
+}): PipedriveLeadImportResult {
   return {
     companyId: null,
     contactId: null,
@@ -1064,6 +1112,7 @@ function skippedLeadResult(
     externalLeadId,
     opportunityId: null,
     status: "skipped",
+    title,
     warnings: [warning],
   };
 }

@@ -34,6 +34,7 @@ const styles: Record<string, string> = {
   RUNNING: "bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300",
   ERROR: "bg-error-50 text-error-700 dark:bg-error-900/20 dark:text-error-300",
   "Would create": "bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300",
+  Created: "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300",
   "Already linked": "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300",
   Skipped: "bg-warning-50 text-warning-700 dark:bg-warning-900/20 dark:text-warning-300",
   Pending: "bg-warning-50 text-warning-700 dark:bg-warning-900/20 dark:text-warning-300",

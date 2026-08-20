@@ -36,6 +36,7 @@ import {
 import {
   importPipedriveLeadIds,
   importPipedriveLeadPage,
+  pipedriveLeadImportMetadataRows,
   pipedriveLeadPreviewMetadataRows,
   previewPipedriveLeadPage,
 } from "@/lib/integrations/pipedrive-import";
@@ -486,6 +487,10 @@ export async function pullPipedriveLeadsAction() {
       recordsRead === 0
         ? "No Pipedrive leads were available to import."
         : `${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}.`;
+    const importRows =
+      result.status === "ok"
+        ? pipedriveLeadImportMetadataRows(result.results)
+        : [];
     const existingConfig = pipedriveStoredConfigSchema.safeParse(
       connection.config ?? {},
     );
@@ -499,6 +504,7 @@ export async function pullPipedriveLeadsAction() {
           metadata: {
             actorId: user.id,
             created: recordsWritten,
+            imports: importRows,
             linkedExisting,
             pullOnly: true,
             skipped,
@@ -756,6 +762,10 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
       recordsRead === 0
         ? "Selected import found no Pipedrive leads to import."
         : `Selected import: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} selected Pipedrive lead${recordsRead === 1 ? "" : "s"}.`;
+    const importRows =
+      result.status === "ok"
+        ? pipedriveLeadImportMetadataRows(result.results)
+        : [];
     const existingConfig = pipedriveStoredConfigSchema.safeParse(
       connection.config ?? {},
     );
@@ -768,6 +778,7 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
           metadata: {
             actorId: user.id,
             created: recordsWritten,
+            imports: importRows,
             linkedExisting,
             pullOnly: true,
             selectedLeadIds,
