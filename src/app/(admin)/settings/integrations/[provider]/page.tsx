@@ -497,7 +497,7 @@ export default async function IntegrationSettingsPage({
                 <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
                   Lead import
                 </h2>
-                <LazyHelpTooltip content="Preview reads Pipedrive and CRM links without changing lead records. Pull imports into CRM only, uses the last full-pull timestamp after the first run, and never writes back to Pipedrive." />
+                <LazyHelpTooltip content="Preview reads Pipedrive and CRM links without changing lead records. Pull imports a bounded batch into CRM only, uses the last full-pull timestamp after the first complete run, and never writes back to Pipedrive." />
               </div>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Preview the latest Pipedrive leads, then pull new or updated

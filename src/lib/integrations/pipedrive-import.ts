@@ -31,6 +31,7 @@ const pipedriveExternalTypes = {
   organization: "organization",
   person: "person",
 } as const;
+const defaultPipedriveFullPullMaxPages = 5;
 const pipedriveInternalTypes = {
   company: "company",
   contact: "contact",
@@ -178,6 +179,10 @@ type ImportLeadPageOptions = {
   params?: PipedriveListLeadsParams;
 };
 
+type ImportLeadPagesOptions = ImportLeadPageOptions & {
+  maxPages?: number;
+};
+
 type PreviewLeadRecordOptions = {
   client: PipedriveRelatedRecordClient;
   lead: PipedriveLead;
@@ -237,6 +242,76 @@ export async function importPipedriveLeadPage({
       (result) => result.status === "linked_existing",
     ).length,
     page: page as PipedriveListResult<PipedriveLead>,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedriveLeadPages({
+  client,
+  maxPages,
+  params = {},
+}: ImportLeadPagesOptions = {}) {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+  const pageLimit = boundedFullPullMaxPages(maxPages);
+
+  if (!readClient) {
+    return {
+      maxPages: pageLimit,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 0,
+      recordsRead: 0,
+      results: [],
+      skipped: 0,
+      status: "not_configured" as const,
+    };
+  }
+
+  const results: PipedriveLeadImportResult[] = [];
+  let moreAvailable = false;
+  let nextStart: number | null = null;
+  let pagesRead = 0;
+  let recordsRead = 0;
+  let start = params.start ?? null;
+
+  while (pagesRead < pageLimit) {
+    const pageParams: PipedriveListLeadsParams = { ...params };
+    if (start !== null) pageParams.start = start;
+
+    const page = await readClient.listLeads(latestLeadListParams(pageParams));
+    pagesRead += 1;
+    recordsRead += page.data.length;
+
+    for (const lead of page.data) {
+      results.push(
+        await importPipedriveLeadRecord({ client: readClient, lead }),
+      );
+    }
+
+    moreAvailable = page.pagination.moreItemsInCollection;
+    nextStart = page.pagination.nextStart;
+
+    if (!moreAvailable || nextStart === null) {
+      moreAvailable = false;
+      nextStart = null;
+      break;
+    }
+
+    start = nextStart;
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    maxPages: pageLimit,
+    moreAvailable,
+    nextStart,
+    pagesRead,
+    recordsRead,
     results,
     skipped: results.filter((result) => result.status === "skipped").length,
     status: "ok" as const,
@@ -792,6 +867,12 @@ function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   }
 
   return leadParams;
+}
+
+function boundedFullPullMaxPages(value: number | null | undefined) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? Math.min(value, 10)
+    : defaultPipedriveFullPullMaxPages;
 }
 
 function previewFieldsFromMapping(

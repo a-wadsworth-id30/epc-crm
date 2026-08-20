@@ -35,7 +35,7 @@ import {
 } from "@/lib/integrations/pipedrive";
 import {
   importPipedriveLeadIds,
-  importPipedriveLeadPage,
+  importPipedriveLeadPages,
   pipedriveImportablePreviewLeadIdsFromMetadata,
   pipedriveLeadImportMetadataRows,
   pipedriveLeadPreviewMetadataRows,
@@ -471,16 +471,19 @@ export async function pullPipedriveLeadsAction() {
 
   try {
     const updatedSince = client.lastFullLeadSyncAt;
-    const result = await importPipedriveLeadPage({
+    const result = await importPipedriveLeadPages({
       client,
       params: { limit: 50, updatedSince },
     });
     const finishedAt = new Date();
-    const recordsRead = result.status === "ok" ? result.page.data.length : 0;
+    const recordsRead = result.status === "ok" ? result.recordsRead : 0;
     const recordsWritten = result.status === "ok" ? result.created : 0;
     const linkedExisting =
       result.status === "ok" ? result.linkedExisting : 0;
     const skipped = result.skipped;
+    const moreAvailable =
+      result.status === "ok" ? result.moreAvailable : false;
+    const pagesRead = result.status === "ok" ? result.pagesRead : 0;
     const warningCount =
       result.status === "ok"
         ? result.results.reduce(
@@ -489,14 +492,19 @@ export async function pullPipedriveLeadsAction() {
           )
         : 1;
     const status =
-      warningCount > 0 || skipped > 0 || recordsRead === 0
+      warningCount > 0 || skipped > 0 || recordsRead === 0 || moreAvailable
         ? "WARNING"
         : "SUCCESS";
     const importMode = updatedSince ? "Incremental pull" : "Initial pull";
+    const pageSummary =
+      pagesRead > 1 ? ` across ${pagesRead} pages` : "";
+    const moreAvailableSummary = moreAvailable
+      ? " More Pipedrive pages are available, so the full-pull cursor was not advanced."
+      : "";
     const message =
       recordsRead === 0
         ? `${importMode}: no Pipedrive leads were available to import.`
-        : `${importMode}: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}.`;
+        : `${importMode}: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}${pageSummary}.${moreAvailableSummary}`;
     const importRows =
       result.status === "ok"
         ? pipedriveLeadImportMetadataRows(result.results)
@@ -516,7 +524,11 @@ export async function pullPipedriveLeadsAction() {
             created: recordsWritten,
             imports: importRows,
             linkedExisting,
+            maxPages: result.status === "ok" ? result.maxPages : null,
             mode: updatedSince ? "incremental" : "initial",
+            moreAvailable,
+            nextStart: result.status === "ok" ? result.nextStart : null,
+            pagesRead,
             pullOnly: true,
             skipped,
             updatedSince,
@@ -539,7 +551,9 @@ export async function pullPipedriveLeadsAction() {
           data: {
             config: {
               ...existingConfig.data,
-              lastFullLeadSyncAt: finishedAt.toISOString(),
+              ...(moreAvailable
+                ? {}
+                : { lastFullLeadSyncAt: finishedAt.toISOString() }),
               lastLeadSyncAt: finishedAt.toISOString(),
             },
           },

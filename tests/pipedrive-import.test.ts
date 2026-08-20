@@ -248,6 +248,86 @@ describe("Pipedrive lead import mapping", () => {
     ]);
   });
 
+  it("follows Pipedrive pagination for bounded full pulls", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedriveLeadPages({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination:
+              listCalls.length === 1
+                ? {
+                    limit: 2,
+                    moreItemsInCollection: true,
+                    nextStart: 2,
+                    start: 0,
+                  }
+                : {
+                    limit: 2,
+                    moreItemsInCollection: false,
+                    nextStart: null,
+                    start: 2,
+                  },
+            relatedObjects: null,
+          };
+        },
+      },
+      maxPages: 3,
+      params: { limit: 2, updatedSince: "2026-08-20T10:00:00.000Z" },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.pagesRead, 2);
+    assert.equal(result.recordsRead, 0);
+    assert.equal(result.moreAvailable, false);
+    assert.equal(result.nextStart, null);
+    assert.deepEqual(listCalls, [
+      {
+        limit: 2,
+        sort: "update_time DESC",
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+      {
+        limit: 2,
+        sort: "update_time DESC",
+        start: 2,
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("reports when bounded full pulls leave more Pipedrive pages available", async () => {
+    const result = await pipedriveImport.importPipedriveLeadPages({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async () => ({
+          data: [],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: true,
+            nextStart: 50,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+      maxPages: 1,
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.maxPages, 1);
+    assert.equal(result.pagesRead, 1);
+    assert.equal(result.moreAvailable, true);
+    assert.equal(result.nextStart, 50);
+  });
+
   it("previews latest leads without writing CRM records", async () => {
     const listCalls: unknown[] = [];
     const result = await pipedriveImport.previewPipedriveLeadPage({
