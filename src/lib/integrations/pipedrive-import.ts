@@ -96,6 +96,21 @@ export type PipedriveLeadImportResult = {
   warnings: string[];
 };
 
+export type PipedriveLeadPreviewResult = {
+  companyName: string | null;
+  contactEmail: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  currency: string | null;
+  expectedCloseDate: Date | null;
+  externalLeadId: string | null;
+  linkedOpportunityId: string | null;
+  status: "would_create" | "linked_existing" | "skipped";
+  title: string | null;
+  valueCents: number | null;
+  warnings: string[];
+};
+
 type ResolvedCompany = {
   created: boolean;
   id: string | null;
@@ -114,6 +129,16 @@ type ImportLeadRecordOptions = {
 };
 
 type ImportLeadPageOptions = {
+  client?: PipedriveImportClient | null;
+  params?: PipedriveListLeadsParams;
+};
+
+type PreviewLeadRecordOptions = {
+  client: PipedriveImportClient;
+  lead: PipedriveLead;
+};
+
+type PreviewLeadPageOptions = {
   client?: PipedriveImportClient | null;
   params?: PipedriveListLeadsParams;
 };
@@ -138,17 +163,7 @@ export async function importPipedriveLeadPage({
     };
   }
 
-  const leadParams: PipedriveListLeadsParams = {
-    limit: params.limit ?? 50,
-    sort: params.sort ?? "update_time DESC",
-  };
-
-  if (params.start !== undefined) leadParams.start = params.start;
-  if (params.updatedSince !== undefined) {
-    leadParams.updatedSince = params.updatedSince;
-  }
-
-  const page = await readClient.listLeads(leadParams);
+  const page = await readClient.listLeads(latestLeadListParams(params));
   const results: PipedriveLeadImportResult[] = [];
 
   for (const lead of page.data) {
@@ -164,6 +179,111 @@ export async function importPipedriveLeadPage({
     results,
     skipped: results.filter((result) => result.status === "skipped").length,
     status: "ok" as const,
+  };
+}
+
+export async function previewPipedriveLeadPage({
+  client,
+  params = {},
+}: PreviewLeadPageOptions = {}) {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      linkedExisting: 0,
+      page: null,
+      previews: [],
+      skipped: 0,
+      status: "not_configured" as const,
+      wouldCreate: 0,
+    };
+  }
+
+  const page = await readClient.listLeads(latestLeadListParams(params));
+  const previews = await Promise.all(
+    page.data.map((lead) =>
+      previewPipedriveLeadRecord({ client: readClient, lead }),
+    ),
+  );
+
+  return {
+    linkedExisting: previews.filter(
+      (preview) => preview.status === "linked_existing",
+    ).length,
+    page: page as PipedriveListResult<PipedriveLead>,
+    previews,
+    skipped: previews.filter((preview) => preview.status === "skipped").length,
+    status: "ok" as const,
+    wouldCreate: previews.filter(
+      (preview) => preview.status === "would_create",
+    ).length,
+  };
+}
+
+export async function previewPipedriveLeadRecord({
+  client,
+  lead,
+}: PreviewLeadRecordOptions): Promise<PipedriveLeadPreviewResult> {
+  const leadId = externalId(lead.id);
+
+  if (!leadId) {
+    return skippedLeadPreviewResult({
+      lead,
+      warning: "Pipedrive lead was missing an ID.",
+    });
+  }
+
+  const [existingLeadLink, relatedRecords, settings] = await Promise.all([
+    prisma.externalRecordLink.findUnique({
+      where: {
+        provider_externalType_externalId: {
+          externalId: leadId,
+          externalType: pipedriveExternalTypes.lead,
+          provider: pipedriveProvider,
+        },
+      },
+      select: { internalId: true, internalType: true },
+    }),
+    fetchRelatedRecords(client, lead),
+    getCrmSettings(),
+  ]);
+  const workspaceDefaults = parseWorkspaceDefaults(settings.workspaceDefaults);
+  const mapping = mapPipedriveLeadToCrm({
+    defaultLeadSource: client.defaultLeadSource,
+    lead,
+    organization: relatedRecords.organization,
+    person: relatedRecords.person,
+    workspaceCurrency: workspaceDefaults.currency,
+  });
+  const externalLeadId = mapping.externalIds.lead;
+
+  if (!externalLeadId) {
+    return skippedLeadPreviewResult({
+      lead,
+      warning: "Pipedrive lead was missing an ID.",
+    });
+  }
+
+  const preview = previewFieldsFromMapping(mapping);
+
+  if (
+    existingLeadLink?.internalType === pipedriveInternalTypes.opportunity
+  ) {
+    return {
+      ...preview,
+      externalLeadId,
+      linkedOpportunityId: existingLeadLink.internalId,
+      status: "linked_existing",
+      warnings: relatedRecords.warnings,
+    };
+  }
+
+  return {
+    ...preview,
+    externalLeadId,
+    linkedOpportunityId: null,
+    status: "would_create",
+    warnings: relatedRecords.warnings,
   };
 }
 
@@ -468,6 +588,42 @@ async function fetchRelatedRecords(
   ]);
 
   return { organization, person, warnings };
+}
+
+function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
+  const leadParams: PipedriveListLeadsParams = {
+    limit: params.limit ?? 50,
+    sort: params.sort ?? "update_time DESC",
+  };
+
+  if (params.start !== undefined) leadParams.start = params.start;
+  if (params.updatedSince !== undefined) {
+    leadParams.updatedSince = params.updatedSince;
+  }
+
+  return leadParams;
+}
+
+function previewFieldsFromMapping(
+  mapping: PipedriveLeadImportMapping,
+): Omit<
+  PipedriveLeadPreviewResult,
+  "externalLeadId" | "linkedOpportunityId" | "status" | "warnings"
+> {
+  const contactName = mapping.contact
+    ? `${mapping.contact.firstName} ${mapping.contact.lastName}`.trim()
+    : null;
+
+  return {
+    companyName: mapping.company?.name ?? mapping.contact?.companyName ?? null,
+    contactEmail: mapping.contact?.email ?? null,
+    contactName: contactName || null,
+    contactPhone: mapping.contact?.phone ?? null,
+    currency: mapping.opportunity.currency,
+    expectedCloseDate: mapping.opportunity.expectedCloseDate,
+    title: mapping.opportunity.title,
+    valueCents: mapping.opportunity.valueCents,
+  };
 }
 
 async function readPipedrivePerson(
@@ -802,6 +958,31 @@ function skippedLeadResult(warning: string): PipedriveLeadImportResult {
     externalLeadId: null,
     opportunityId: null,
     status: "skipped",
+    warnings: [warning],
+  };
+}
+
+function skippedLeadPreviewResult({
+  lead,
+  warning,
+}: {
+  lead: PipedriveLead;
+  warning: string;
+}): PipedriveLeadPreviewResult {
+  const leadRecord = objectValue(lead);
+
+  return {
+    companyName: null,
+    contactEmail: null,
+    contactName: null,
+    contactPhone: null,
+    currency: null,
+    expectedCloseDate: null,
+    externalLeadId: null,
+    linkedOpportunityId: null,
+    status: "skipped",
+    title: cleanText(lead.title) ?? cleanText(leadRecord.name),
+    valueCents: null,
     warnings: [warning],
   };
 }

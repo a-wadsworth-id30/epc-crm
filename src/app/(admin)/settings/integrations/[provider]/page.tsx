@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   CircleDashed,
   Download,
+  Eye,
   XCircle,
 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
@@ -103,7 +104,10 @@ import {
 } from "@/lib/integrations/geoapify";
 import { hasStoredR2Credentials, r2ConfigSchema } from "@/lib/storage/r2";
 import { dryRunMarketingProviderConversionUploadsAction } from "@/lib/actions/marketing-lifecycle";
-import { pullPipedriveLeadsAction } from "@/lib/actions/integrations";
+import {
+  previewPipedriveLeadsAction,
+  pullPipedriveLeadsAction,
+} from "@/lib/actions/integrations";
 
 type ProviderSyncLog = {
   id: string;
@@ -402,14 +406,24 @@ export default async function IntegrationSettingsPage({
                 <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
                   Lead import
                 </h2>
-                <LazyHelpTooltip content="Pulls the latest Pipedrive leads into CRM records. This action does not write back to Pipedrive." />
+                <LazyHelpTooltip content="Preview reads Pipedrive and CRM links without changing lead records. Pull imports into CRM only and never writes back to Pipedrive." />
               </div>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Pull latest Pipedrive leads into CRM contacts, companies and
-                opportunities.
+                Preview the latest Pipedrive leads, then pull them into CRM
+                contacts, companies and opportunities when ready.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <form action={previewPipedriveLeadsAction}>
+                <button
+                  type="submit"
+                  disabled={pipedriveCredentialSource === "missing"}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  Preview latest leads
+                </button>
+              </form>
               <form action={pullPipedriveLeadsAction}>
                 <button
                   type="submit"

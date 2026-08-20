@@ -33,7 +33,10 @@ import {
   pipedriveProvider,
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
-import { importPipedriveLeadPage } from "@/lib/integrations/pipedrive-import";
+import {
+  importPipedriveLeadPage,
+  previewPipedriveLeadPage,
+} from "@/lib/integrations/pipedrive-import";
 import {
   geoapifyConfigSchema,
   geoapifyProvider,
@@ -427,21 +430,7 @@ export async function updatePipedriveIntegrationAction(
 export async function pullPipedriveLeadsAction() {
   const user = await requireAdmin();
   const startedAt = new Date();
-  const connection = await prisma.integrationConnection.upsert({
-    where: { provider: pipedriveProvider },
-    update: {},
-    create: {
-      config: {
-        apiBaseUrl: defaultPipedriveApiBaseUrl,
-        defaultLeadSource: defaultPipedriveLeadSource,
-      },
-      description: "Lead inbox import and CRM data synchronisation.",
-      name: "Pipedrive",
-      provider: pipedriveProvider,
-      status: hasPipedriveEnvironmentConfig() ? "CONNECTED" : "NOT_CONNECTED",
-    },
-    select: { config: true, id: true },
-  });
+  const connection = await ensurePipedriveIntegrationConnection();
 
   const client = await getPipedriveReadOnlyClient();
 
@@ -567,9 +556,141 @@ export async function pullPipedriveLeadsAction() {
   }
 }
 
-function revalidatePipedriveImportPaths() {
+export async function previewPipedriveLeadsAction() {
+  const user = await requireAdmin();
+  const startedAt = new Date();
+  const connection = await ensurePipedriveIntegrationConnection();
+  const client = await getPipedriveReadOnlyClient();
+
+  if (!client) {
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt: new Date(),
+        integrationId: connection.id,
+        message:
+          "Pipedrive API credentials are missing, so lead import preview could not run.",
+        metadata: {
+          actorId: user.id,
+          dryRun: true,
+          pullOnly: true,
+          reason: "missing-credentials",
+        },
+        provider: pipedriveProvider,
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "WARNING",
+        syncType: "lead-import-preview",
+      },
+    });
+    revalidatePipedriveSettingsPaths();
+    return;
+  }
+
+  try {
+    const result = await previewPipedriveLeadPage({
+      client,
+      params: { limit: 50 },
+    });
+    const finishedAt = new Date();
+    const recordsRead = result.status === "ok" ? result.page.data.length : 0;
+    const wouldCreate = result.status === "ok" ? result.wouldCreate : 0;
+    const linkedExisting =
+      result.status === "ok" ? result.linkedExisting : 0;
+    const skipped = result.skipped;
+    const warningCount =
+      result.status === "ok"
+        ? result.previews.reduce(
+            (count, preview) => count + preview.warnings.length,
+            0,
+          )
+        : 1;
+    const status =
+      warningCount > 0 || skipped > 0 || recordsRead === 0
+        ? "WARNING"
+        : "SUCCESS";
+    const message =
+      recordsRead === 0
+        ? "Dry-run: no Pipedrive leads were available to preview. No contacts, companies or opportunities were changed."
+        : `Dry-run: ${wouldCreate} would be created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}. No contacts, companies or opportunities were changed.`;
+
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt,
+        integrationId: connection.id,
+        message,
+        metadata: {
+          actorId: user.id,
+          dryRun: true,
+          linkedExisting,
+          pullOnly: true,
+          skipped,
+          warningCount,
+          wouldCreate,
+        },
+        provider: pipedriveProvider,
+        recordsRead,
+        recordsWritten: 0,
+        startedAt,
+        status,
+        syncType: "lead-import-preview",
+      },
+    });
+    revalidatePipedriveSettingsPaths();
+  } catch (error) {
+    const finishedAt = new Date();
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Pipedrive lead import preview failed.";
+
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt,
+        integrationId: connection.id,
+        message,
+        metadata: {
+          actorId: user.id,
+          dryRun: true,
+          pullOnly: true,
+        },
+        provider: pipedriveProvider,
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "ERROR",
+        syncType: "lead-import-preview",
+      },
+    });
+    revalidatePipedriveSettingsPaths();
+  }
+}
+
+async function ensurePipedriveIntegrationConnection() {
+  return prisma.integrationConnection.upsert({
+    where: { provider: pipedriveProvider },
+    update: {},
+    create: {
+      config: {
+        apiBaseUrl: defaultPipedriveApiBaseUrl,
+        defaultLeadSource: defaultPipedriveLeadSource,
+      },
+      description: "Lead inbox import and CRM data synchronisation.",
+      name: "Pipedrive",
+      provider: pipedriveProvider,
+      status: hasPipedriveEnvironmentConfig() ? "CONNECTED" : "NOT_CONNECTED",
+    },
+    select: { config: true, id: true },
+  });
+}
+
+function revalidatePipedriveSettingsPaths() {
   revalidatePath("/settings/integrations");
   revalidatePath("/settings/integrations/pipedrive");
+}
+
+function revalidatePipedriveImportPaths() {
+  revalidatePipedriveSettingsPaths();
   revalidatePath("/sales");
   revalidatePath("/contacts");
   revalidatePath("/clients");

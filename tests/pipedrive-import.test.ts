@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import Module from "node:module";
-import { before, describe, it } from "node:test";
+import { before, beforeEach, describe, it } from "node:test";
 
 type ModuleWithLoad = typeof Module & {
   _load(request: string, parent: unknown, isMain: boolean): unknown;
@@ -12,6 +12,44 @@ const moduleWithLoad = Module as ModuleWithLoad;
 const originalLoad = moduleWithLoad._load;
 
 let pipedriveImport: PipedriveImportModule;
+let crmWriteCalls = 0;
+let externalRecordLinkRows: Array<{
+  externalId: string;
+  externalType: string;
+  internalId: string;
+  internalType: string;
+  provider: string;
+}> = [];
+
+async function findExternalRecordLink(args: unknown) {
+  const key = (
+    args as {
+      where?: {
+        provider_externalType_externalId?: {
+          externalId?: string;
+          externalType?: string;
+          provider?: string;
+        };
+      };
+    }
+  ).where?.provider_externalType_externalId;
+
+  if (!key) return null;
+
+  return (
+    externalRecordLinkRows.find(
+      (row) =>
+        row.externalId === key.externalId &&
+        row.externalType === key.externalType &&
+        row.provider === key.provider,
+    ) ?? null
+  );
+}
+
+async function recordCrmWrite() {
+  crmWriteCalls += 1;
+  return { id: "stub-id", name: "Stub record" };
+}
 
 before(async () => {
   moduleWithLoad._load = function loadWithPipedriveImportStubs(
@@ -29,11 +67,39 @@ before(async () => {
     }
 
     if (request === "@/lib/prisma") {
+      const transactionClient = {
+        company: {
+          create: recordCrmWrite,
+          findFirst: async () => null,
+          findUnique: async () => null,
+        },
+        contact: {
+          create: recordCrmWrite,
+          findFirst: async () => null,
+          findUnique: async () => null,
+          update: recordCrmWrite,
+        },
+        externalRecordLink: {
+          findUnique: findExternalRecordLink,
+          upsert: recordCrmWrite,
+        },
+        salesCommunication: {
+          create: recordCrmWrite,
+        },
+        salesOpportunity: {
+          create: recordCrmWrite,
+        },
+      };
+
       return {
         prisma: {
-          $transaction: async (callback: unknown) => {
-            if (typeof callback !== "function") return null;
-            return callback({});
+          $transaction: async (operation: unknown) => {
+            if (Array.isArray(operation)) return Promise.all(operation);
+            if (typeof operation !== "function") return null;
+            return operation(transactionClient);
+          },
+          externalRecordLink: {
+            findUnique: findExternalRecordLink,
           },
           integrationConnection: {
             findUnique: async () => null,
@@ -59,6 +125,11 @@ before(async () => {
   } finally {
     moduleWithLoad._load = originalLoad;
   }
+});
+
+beforeEach(() => {
+  crmWriteCalls = 0;
+  externalRecordLinkRows = [];
 });
 
 describe("Pipedrive lead import mapping", () => {
@@ -87,6 +158,97 @@ describe("Pipedrive lead import mapping", () => {
 
     assert.equal(result.status, "ok");
     assert.deepEqual(listCalls, [{ limit: 50, sort: "update_time DESC" }]);
+  });
+
+  it("previews latest leads without writing CRM records", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.previewPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async (id) => ({
+          id,
+          name: "Preview Homes",
+        }),
+        getPerson: async (id) => ({
+          email: [{ primary: true, value: "pat@example.com" }],
+          first_name: "Pat",
+          id,
+          last_name: "Lee",
+          phone: [{ primary: true, value: "07123 456789" }],
+        }),
+        listLeads: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [
+              {
+                id: "lead-preview",
+                organization_id: 321,
+                person_id: { id: 654 },
+                title: "Preview retrofit",
+                value: { amount: "500", currency: "GBP" },
+              },
+            ],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.deepEqual(listCalls, [{ limit: 50, sort: "update_time DESC" }]);
+    assert.equal(result.wouldCreate, 1);
+    assert.equal(result.linkedExisting, 0);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.previews[0]?.status, "would_create");
+    assert.equal(result.previews[0]?.title, "Preview retrofit");
+    assert.equal(result.previews[0]?.companyName, "Preview Homes");
+    assert.equal(result.previews[0]?.contactName, "Pat Lee");
+    assert.equal(result.previews[0]?.contactEmail, "pat@example.com");
+    assert.equal(result.previews[0]?.valueCents, 50000);
+    assert.equal(crmWriteCalls, 0);
+  });
+
+  it("marks already linked Pipedrive leads as existing in preview", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-linked",
+        externalType: "lead",
+        internalId: "opportunity-1",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.previewPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async () => ({
+          data: [{ id: "lead-linked", title: "Existing lead" }],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.wouldCreate, 0);
+    assert.equal(result.linkedExisting, 1);
+    assert.equal(result.previews[0]?.status, "linked_existing");
+    assert.equal(result.previews[0]?.linkedOpportunityId, "opportunity-1");
+    assert.equal(crmWriteCalls, 0);
   });
 
   it("maps Pipedrive lead, person and organisation fields into CRM records", () => {

@@ -149,8 +149,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   and organisation GET requests. `src/lib/integrations/pipedrive-import.ts`
   maps Pipedrive leads into CRM contacts, companies, opportunities,
   communications and `ExternalRecordLink` rows. The Pipedrive settings page has
-  an admin-only manual pull action that imports one page of latest leads and
-  records the result in sync history. Scheduled import/webhook handling is
+  admin-only preview and manual pull actions for one page of latest leads.
+  Preview classifies would-create, already-linked and skipped leads and records
+  sync-history feedback without creating contacts, companies, opportunities,
+  communications or external-link rows. Pull imports the page into CRM records
+  and records the result in sync history. Scheduled import/webhook handling is
   still intentionally separate. Pipedrive is pull-only by default; do not write
   back to Pipedrive without Adam's explicit permission for that specific
   operation.
