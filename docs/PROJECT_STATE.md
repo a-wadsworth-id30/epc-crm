@@ -159,9 +159,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   preview lead IDs from Pipedrive with GET requests and imports only those CRM
   records after the server confirms the imported IDs were marked would-create
   in the latest preview; submitted IDs outside that latest would-create set are
-  rejected and logged. Full pull imports one page of latest leads. Both import
-  paths record the result in sync history with sanitized per-lead import detail
-  rows showing created, already-linked and skipped outcomes. Scheduled
+  rejected and logged. Full pull imports one page of latest leads on the first
+  run, then uses the dedicated `lastFullLeadSyncAt` cursor as Pipedrive
+  `updated_since` for later full pulls. Selected import updates the general
+  `lastLeadSyncAt` timestamp but does not advance the full-pull cursor. Both
+  import paths record the result in sync history with sanitized per-lead import
+  detail rows showing created, already-linked and skipped outcomes. Scheduled
   import/webhook handling is still intentionally separate. Pipedrive is
   pull-only by default; do not write back to Pipedrive without Adam's explicit
   permission for that specific operation.

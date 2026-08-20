@@ -358,10 +358,16 @@ export async function updatePipedriveIntegrationAction(
   const existingCredentials = existingConfig.success
     ? existingConfig.data.credentials
     : undefined;
-  const existingSyncState =
-    existingConfig.success && existingConfig.data.lastLeadSyncAt
-      ? { lastLeadSyncAt: existingConfig.data.lastLeadSyncAt }
-      : {};
+  const existingSyncState = existingConfig.success
+    ? {
+        ...(existingConfig.data.lastFullLeadSyncAt
+          ? { lastFullLeadSyncAt: existingConfig.data.lastFullLeadSyncAt }
+          : {}),
+        ...(existingConfig.data.lastLeadSyncAt
+          ? { lastLeadSyncAt: existingConfig.data.lastLeadSyncAt }
+          : {}),
+      }
+    : {};
   let credentials = existingCredentials;
 
   if (apiToken) {
@@ -413,6 +419,7 @@ export async function updatePipedriveIntegrationAction(
     metadata: {
       apiBaseUrl: config.apiBaseUrl,
       defaultLeadSource: config.defaultLeadSource,
+      fullLeadSyncStatePreserved: "lastFullLeadSyncAt" in config,
       leadSyncStatePreserved: "lastLeadSyncAt" in config,
     },
     provider: pipedriveProvider,
@@ -463,9 +470,10 @@ export async function pullPipedriveLeadsAction() {
   }
 
   try {
+    const updatedSince = client.lastFullLeadSyncAt;
     const result = await importPipedriveLeadPage({
       client,
-      params: { limit: 50 },
+      params: { limit: 50, updatedSince },
     });
     const finishedAt = new Date();
     const recordsRead = result.status === "ok" ? result.page.data.length : 0;
@@ -484,10 +492,11 @@ export async function pullPipedriveLeadsAction() {
       warningCount > 0 || skipped > 0 || recordsRead === 0
         ? "WARNING"
         : "SUCCESS";
+    const importMode = updatedSince ? "Incremental pull" : "Initial pull";
     const message =
       recordsRead === 0
-        ? "No Pipedrive leads were available to import."
-        : `${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}.`;
+        ? `${importMode}: no Pipedrive leads were available to import.`
+        : `${importMode}: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}.`;
     const importRows =
       result.status === "ok"
         ? pipedriveLeadImportMetadataRows(result.results)
@@ -507,8 +516,10 @@ export async function pullPipedriveLeadsAction() {
             created: recordsWritten,
             imports: importRows,
             linkedExisting,
+            mode: updatedSince ? "incremental" : "initial",
             pullOnly: true,
             skipped,
+            updatedSince,
             warningCount,
           },
           provider: pipedriveProvider,
@@ -528,6 +539,7 @@ export async function pullPipedriveLeadsAction() {
           data: {
             config: {
               ...existingConfig.data,
+              lastFullLeadSyncAt: finishedAt.toISOString(),
               lastLeadSyncAt: finishedAt.toISOString(),
             },
           },

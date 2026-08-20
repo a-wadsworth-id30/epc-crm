@@ -185,6 +185,7 @@ function createClient(
       apiBaseUrl: "https://api.pipedrive.com/v1",
       apiToken: "token",
       defaultLeadSource: "Pipedrive",
+      lastFullLeadSyncAt: null,
       lastLeadSyncAt: null,
       ...overrides,
     },

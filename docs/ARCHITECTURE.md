@@ -266,12 +266,15 @@ Selected import fetches checked preview lead IDs by GET and imports only those
 CRM records after validating server-side that imported IDs were marked
 would-create in the latest preview; submitted IDs outside that latest
 would-create set are rejected and logged. Full pull creates CRM records and
-external-link rows for one page of latest leads where needed. Import runs store
-sanitized per-lead outcome rows in sync-history metadata so admins can review
-created, already-linked and skipped records without storing raw Pipedrive
-payloads. Scheduled import and webhook handling should be implemented as a
-dedicated server-side sync layer rather than posting provider payloads through
-the public attribution lead endpoint.
+external-link rows for one page of latest leads where needed. After the first
+full pull, CRM stores `lastFullLeadSyncAt` separately from the general
+`lastLeadSyncAt` timestamp and sends it to Pipedrive as `updated_since` on
+later full pulls so selected imports cannot move the full-pull cursor past
+unselected leads. Import runs store sanitized per-lead outcome rows in
+sync-history metadata so admins can review created, already-linked and skipped
+records without storing raw Pipedrive payloads. Scheduled import and webhook
+handling should be implemented as a dedicated server-side sync layer rather
+than posting provider payloads through the public attribution lead endpoint.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

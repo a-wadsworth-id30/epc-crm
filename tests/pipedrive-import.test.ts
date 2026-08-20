@@ -214,6 +214,40 @@ describe("Pipedrive lead import mapping", () => {
     assert.deepEqual(listCalls, [{ limit: 50, sort: "update_time DESC" }]);
   });
 
+  it("forwards an updated-since cursor for incremental full pulls", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      params: { limit: 50, updatedSince: "2026-08-20T10:00:00.000Z" },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.deepEqual(listCalls, [
+      {
+        limit: 50,
+        sort: "update_time DESC",
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+    ]);
+  });
+
   it("previews latest leads without writing CRM records", async () => {
     const listCalls: unknown[] = [];
     const result = await pipedriveImport.previewPipedriveLeadPage({
