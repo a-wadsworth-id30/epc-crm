@@ -45,6 +45,7 @@ const pipedriveStoredCredentialsSchema = z.object({
 export const pipedriveStoredConfigSchema = pipedriveConfigSchema.extend({
   credentials: pipedriveStoredCredentialsSchema.optional(),
   lastFullLeadSyncAt: z.string().datetime().optional(),
+  lastFullLeadSyncNextStart: z.number().int().nonnegative().nullable().optional(),
   lastLeadSyncAt: z.string().datetime().optional(),
 });
 
@@ -213,6 +214,10 @@ export async function getPipedriveRuntimeConfig() {
     defaultLeadSource:
       config?.defaultLeadSource || defaultPipedriveLeadSource,
     lastFullLeadSyncAt: config?.lastFullLeadSyncAt ?? null,
+    lastFullLeadSyncNextStart:
+      typeof config?.lastFullLeadSyncNextStart === "number"
+        ? config.lastFullLeadSyncNextStart
+        : null,
     lastLeadSyncAt: config?.lastLeadSyncAt ?? null,
   };
 }
@@ -231,6 +236,7 @@ export class PipedriveReadOnlyClient {
   private readonly apiToken: string;
   readonly defaultLeadSource: string;
   readonly lastFullLeadSyncAt: string | null;
+  readonly lastFullLeadSyncNextStart: number | null;
   readonly lastLeadSyncAt: string | null;
   private readonly timeoutMs: number;
 
@@ -242,6 +248,7 @@ export class PipedriveReadOnlyClient {
     this.apiToken = config.apiToken;
     this.defaultLeadSource = config.defaultLeadSource;
     this.lastFullLeadSyncAt = config.lastFullLeadSyncAt;
+    this.lastFullLeadSyncNextStart = config.lastFullLeadSyncNextStart;
     this.lastLeadSyncAt = config.lastLeadSyncAt;
     this.timeoutMs = boundedTimeoutMs(options.timeoutMs);
   }

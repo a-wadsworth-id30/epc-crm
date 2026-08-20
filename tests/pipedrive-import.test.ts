@@ -301,6 +301,47 @@ describe("Pipedrive lead import mapping", () => {
     ]);
   });
 
+  it("starts bounded full pulls at a saved pagination continuation", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedriveLeadPages({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination: {
+              limit: 2,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 100,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      maxPages: 2,
+      params: {
+        limit: 2,
+        start: 100,
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.pagesRead, 1);
+    assert.deepEqual(listCalls, [
+      {
+        limit: 2,
+        sort: "update_time DESC",
+        start: 100,
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+    ]);
+  });
+
   it("reports when bounded full pulls leave more Pipedrive pages available", async () => {
     const result = await pipedriveImport.importPipedriveLeadPages({
       client: {

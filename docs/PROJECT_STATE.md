@@ -162,15 +162,17 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   rejected and logged. Full pull imports a bounded batch of up to five
   Pipedrive lead pages per manual run. The first full pull reads latest leads;
   later full pulls use the dedicated `lastFullLeadSyncAt` cursor as Pipedrive
-  `updated_since`. CRM advances that full-pull cursor only when Pipedrive
-  reports no more pages are available, so a capped run cannot skip unprocessed
-  leads. Selected import updates the general `lastLeadSyncAt` timestamp but
-  does not advance the full-pull cursor. Both import paths record the result in
-  sync history with sanitized per-lead import detail rows showing created,
-  already-linked and skipped outcomes. Scheduled import/webhook handling is
-  still intentionally separate. Pipedrive is pull-only by default; do not write
-  back to Pipedrive without Adam's explicit permission for that specific
-  operation.
+  `updated_since`. If a run hits the five-page cap while Pipedrive still has
+  more pages, CRM stores `lastFullLeadSyncNextStart` and the next full pull
+  resumes from that Pipedrive `start` offset. CRM advances the full-pull cursor
+  and clears the continuation only when Pipedrive reports no more pages are
+  available, so capped runs cannot skip unprocessed leads. Selected import
+  updates the general `lastLeadSyncAt` timestamp but does not advance the
+  full-pull cursor. Both import paths record the result in sync history with
+  sanitized per-lead import detail rows showing created, already-linked and
+  skipped outcomes. Scheduled import/webhook handling is still intentionally
+  separate. Pipedrive is pull-only by default; do not write back to Pipedrive
+  without Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

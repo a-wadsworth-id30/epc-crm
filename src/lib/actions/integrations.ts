@@ -363,6 +363,12 @@ export async function updatePipedriveIntegrationAction(
         ...(existingConfig.data.lastFullLeadSyncAt
           ? { lastFullLeadSyncAt: existingConfig.data.lastFullLeadSyncAt }
           : {}),
+        ...(typeof existingConfig.data.lastFullLeadSyncNextStart === "number"
+          ? {
+              lastFullLeadSyncNextStart:
+                existingConfig.data.lastFullLeadSyncNextStart,
+            }
+          : {}),
         ...(existingConfig.data.lastLeadSyncAt
           ? { lastLeadSyncAt: existingConfig.data.lastLeadSyncAt }
           : {}),
@@ -419,6 +425,8 @@ export async function updatePipedriveIntegrationAction(
     metadata: {
       apiBaseUrl: config.apiBaseUrl,
       defaultLeadSource: config.defaultLeadSource,
+      fullLeadSyncContinuationPreserved:
+        "lastFullLeadSyncNextStart" in config,
       fullLeadSyncStatePreserved: "lastFullLeadSyncAt" in config,
       leadSyncStatePreserved: "lastLeadSyncAt" in config,
     },
@@ -470,10 +478,11 @@ export async function pullPipedriveLeadsAction() {
   }
 
   try {
+    const start = client.lastFullLeadSyncNextStart;
     const updatedSince = client.lastFullLeadSyncAt;
     const result = await importPipedriveLeadPages({
       client,
-      params: { limit: 50, updatedSince },
+      params: { limit: 50, start, updatedSince },
     });
     const finishedAt = new Date();
     const recordsRead = result.status === "ok" ? result.recordsRead : 0;
@@ -495,11 +504,16 @@ export async function pullPipedriveLeadsAction() {
       warningCount > 0 || skipped > 0 || recordsRead === 0 || moreAvailable
         ? "WARNING"
         : "SUCCESS";
-    const importMode = updatedSince ? "Incremental pull" : "Initial pull";
+    const importMode =
+      start !== null
+        ? "Continuation pull"
+        : updatedSince
+          ? "Incremental pull"
+          : "Initial pull";
     const pageSummary =
       pagesRead > 1 ? ` across ${pagesRead} pages` : "";
     const moreAvailableSummary = moreAvailable
-      ? " More Pipedrive pages are available, so the full-pull cursor was not advanced."
+      ? " More Pipedrive pages are available, so a continuation was saved and the full-pull cursor was not advanced."
       : "";
     const message =
       recordsRead === 0
@@ -525,12 +539,18 @@ export async function pullPipedriveLeadsAction() {
             imports: importRows,
             linkedExisting,
             maxPages: result.status === "ok" ? result.maxPages : null,
-            mode: updatedSince ? "incremental" : "initial",
+            mode:
+              start !== null
+                ? "continuation"
+                : updatedSince
+                  ? "incremental"
+                  : "initial",
             moreAvailable,
             nextStart: result.status === "ok" ? result.nextStart : null,
             pagesRead,
             pullOnly: true,
             skipped,
+            start,
             updatedSince,
             warningCount,
           },
@@ -545,17 +565,25 @@ export async function pullPipedriveLeadsAction() {
     ];
 
     if (existingConfig.success) {
+      const nextConfig =
+        moreAvailable && result.status === "ok" && result.nextStart !== null
+          ? {
+              ...existingConfig.data,
+              lastFullLeadSyncNextStart: result.nextStart,
+              lastLeadSyncAt: finishedAt.toISOString(),
+            }
+          : {
+              ...existingConfig.data,
+              lastFullLeadSyncAt: finishedAt.toISOString(),
+              lastFullLeadSyncNextStart: null,
+              lastLeadSyncAt: finishedAt.toISOString(),
+            };
+
       writes.push(
         prisma.integrationConnection.update({
           where: { provider: pipedriveProvider },
           data: {
-            config: {
-              ...existingConfig.data,
-              ...(moreAvailable
-                ? {}
-                : { lastFullLeadSyncAt: finishedAt.toISOString() }),
-              lastLeadSyncAt: finishedAt.toISOString(),
-            },
+            config: nextConfig,
           },
         }),
       );

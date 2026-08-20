@@ -271,9 +271,10 @@ manual run. After the first full pull, CRM stores `lastFullLeadSyncAt`
 separately from the general `lastLeadSyncAt` timestamp and sends it to
 Pipedrive as `updated_since` on later full pulls so selected imports cannot
 move the full-pull cursor past unselected leads. The full-pull cursor advances
-only when Pipedrive reports no more pages are available; capped runs log the
-remaining-page state instead of moving the cursor. Import runs store sanitized
-per-lead outcome rows in sync-history metadata so admins can review created,
+only when Pipedrive reports no more pages are available; capped runs store
+`lastFullLeadSyncNextStart` and the next full pull resumes from that Pipedrive
+`start` offset before the cursor advances. Import runs store sanitized per-lead
+outcome rows in sync-history metadata so admins can review created,
 already-linked and skipped records without storing raw Pipedrive payloads.
 Scheduled import and webhook handling should be implemented as a dedicated
 server-side sync layer rather than posting provider payloads through the public
