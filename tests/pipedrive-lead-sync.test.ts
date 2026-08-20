@@ -6,7 +6,8 @@ type ModuleWithLoad = typeof Module & {
   _load(request: string, parent: unknown, isMain: boolean): unknown;
 };
 
-type PipedriveLeadSyncModule = typeof import("../src/lib/integrations/pipedrive-lead-sync");
+type PipedriveLeadSyncModule =
+  typeof import("../src/lib/integrations/pipedrive-lead-sync");
 
 const moduleWithLoad = Module as ModuleWithLoad;
 
@@ -19,6 +20,8 @@ let client: {
 let connectionConfig: Record<string, unknown>;
 let importPagesArgs: unknown;
 let importPagesResult: Record<string, unknown>;
+let previewPageArgs: unknown;
+let previewPageResult: Record<string, unknown>;
 let runningJobRun: { id: string; startedAt: Date; trigger: string } | null;
 let completedJob: unknown;
 let startedJob: unknown;
@@ -78,13 +81,16 @@ before(async () => {
             warnings: [],
           },
         ],
+        previewPipedriveLeadPage: async (args: unknown) => {
+          previewPageArgs = args;
+          return previewPageResult;
+        },
       };
     }
 
     if (request === "@/lib/maintenance/background-jobs") {
       return {
-        backgroundJobStaleCutoff: () =>
-          new Date("2026-08-20T09:30:00.000Z"),
+        backgroundJobStaleCutoff: () => new Date("2026-08-20T09:30:00.000Z"),
         completeBackgroundJobRun: async (
           handle: unknown,
           completion: unknown,
@@ -147,7 +153,8 @@ before(async () => {
     return originalLoad.call(this, request, parent, isMain);
   };
 
-  pipedriveLeadSync = await import("../src/lib/integrations/pipedrive-lead-sync");
+  pipedriveLeadSync =
+    await import("../src/lib/integrations/pipedrive-lead-sync");
 });
 
 beforeEach(() => {
@@ -179,6 +186,43 @@ beforeEach(() => {
     skipped: 0,
     status: "ok",
   };
+  previewPageArgs = null;
+  previewPageResult = {
+    linkedExisting: 1,
+    page: {
+      data: [{ id: "lead-1" }, { id: "lead-2" }, { id: "lead-3" }],
+      pagination: {
+        moreItemsInCollection: true,
+        nextStart: 3,
+      },
+    },
+    previews: [
+      {
+        linkedOpportunityId: null,
+        matchedCompanyId: "company-1",
+        matchedContactId: null,
+        status: "would_create",
+        warnings: [],
+      },
+      {
+        linkedOpportunityId: "opportunity-1",
+        matchedCompanyId: null,
+        matchedContactId: null,
+        status: "linked_existing",
+        warnings: [],
+      },
+      {
+        linkedOpportunityId: null,
+        matchedCompanyId: null,
+        matchedContactId: null,
+        status: "would_create",
+        warnings: ["Missing related person"],
+      },
+    ],
+    skipped: 0,
+    status: "ok",
+    wouldCreate: 2,
+  };
   runningJobRun = null;
   completedJob = null;
   startedJob = null;
@@ -195,18 +239,14 @@ describe("Pipedrive scheduled lead sync", () => {
 
     assert.equal(result.status, "WARNING");
     assert.equal(result.moreAvailable, true);
-    assert.deepEqual(
-      (importPagesArgs as { params?: unknown }).params,
-      {
-        limit: 50,
-        start: null,
-        updatedSince: "2026-08-20T08:00:00.000Z",
-      },
-    );
+    assert.deepEqual((importPagesArgs as { params?: unknown }).params, {
+      limit: 50,
+      start: null,
+      updatedSince: "2026-08-20T08:00:00.000Z",
+    });
 
     const updateWrite = transactionWrites.find(
-      (write) =>
-        (write as { type?: string }).type === "integration.update",
+      (write) => (write as { type?: string }).type === "integration.update",
     ) as { args: { data: { config: Record<string, unknown> } } };
 
     assert.equal(
@@ -289,5 +329,45 @@ describe("Pipedrive scheduled lead sync", () => {
       ).completion?.summary?.mode,
       "continuation",
     );
+  });
+
+  it("returns a sanitized read-only preview summary without creating CRM records", async () => {
+    const result = await pipedriveLeadSync.readPipedriveLeadPullPreview({
+      limit: 100,
+      start: -1,
+    });
+
+    assert.equal(result.connected, true);
+    assert.equal(result.pullOnly, true);
+    assert.equal(result.recordsRead, 3);
+    assert.equal(result.recordsWritten, 0);
+    assert.equal(result.wouldCreate, 2);
+    assert.equal(result.linkedExisting, 1);
+    assert.equal(result.warningCount, 1);
+    assert.equal(result.withCrmMatch, 2);
+    assert.equal(result.moreAvailable, true);
+    assert.equal(result.nextStart, 3);
+    assert.equal(result.pageLimit, 50);
+    assert.equal(result.pageStart, 0);
+    assert.equal(importPagesArgs, null);
+    assert.equal(syncCreates.length, 0);
+    assert.equal(transactionWrites.length, 0);
+    assert.deepEqual((previewPageArgs as { params?: unknown }).params, {
+      limit: 50,
+      start: 0,
+    });
+  });
+
+  it("does not run a preview when Pipedrive credentials are missing", async () => {
+    client = null;
+
+    const result = await pipedriveLeadSync.readPipedriveLeadPullPreview();
+
+    assert.equal(result.connected, false);
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.recordsRead, 0);
+    assert.equal(result.recordsWritten, 0);
+    assert.equal(result.warningCount, 1);
+    assert.equal(previewPageArgs, null);
   });
 });

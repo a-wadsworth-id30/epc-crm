@@ -282,7 +282,9 @@ manual pull action and protected `/api/maintenance/pipedrive-lead-import`
 route share `src/lib/integrations/pipedrive-lead-sync.ts`; the route can be
 called by the disabled-by-default Netlify scheduled function
 `netlify/functions/pull-pipedrive-leads.mjs` and writes compact background job
-history for scheduled runs. Manual and scheduled pulls start a
+history for scheduled runs. The route also supports `preview=1` for protected
+Pipedrive GET-only operational previews that return aggregate counts only and
+do not create CRM records. Manual and scheduled pulls start a
 `pipedrive.lead_import` background job before importing, and newer overlapping
 runs skip with a warning when another non-stale Pipedrive pull is already
 running. The Pipedrive settings page surfaces schedule readiness, credential

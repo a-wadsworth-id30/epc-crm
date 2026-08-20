@@ -12,6 +12,7 @@ import {
 import {
   importPipedriveLeadPages,
   pipedriveLeadImportMetadataRows,
+  previewPipedriveLeadPage,
 } from "@/lib/integrations/pipedrive-import";
 import {
   backgroundJobStaleCutoff,
@@ -50,6 +51,31 @@ type PipedriveLeadPullOptions = {
   actorId?: string | null;
   recordBackgroundJob?: boolean;
   trigger?: string;
+};
+
+type PipedriveLeadPullPreviewOptions = {
+  limit?: number | null;
+  start?: number | null;
+};
+
+export type PipedriveLeadPullPreviewResult = {
+  connected: boolean;
+  connectionId: string | null;
+  linkedExisting: number;
+  message: string;
+  moreAvailable: boolean;
+  nextStart: number | null;
+  pageLimit: number;
+  pageStart: number | null;
+  provider: typeof pipedriveProvider;
+  pullOnly: true;
+  recordsRead: number;
+  recordsWritten: 0;
+  skipped: number;
+  status: PipedriveLeadPullStatus;
+  warningCount: number;
+  withCrmMatch: number;
+  wouldCreate: number;
 };
 
 export async function runPipedriveLeadPull({
@@ -181,6 +207,101 @@ export async function readPipedriveLeadPullReadiness() {
   };
 }
 
+export async function readPipedriveLeadPullPreview({
+  limit = 10,
+  start = null,
+}: PipedriveLeadPullPreviewOptions = {}): Promise<PipedriveLeadPullPreviewResult> {
+  const [connection, client] = await Promise.all([
+    prisma.integrationConnection.findUnique({
+      where: { provider: pipedriveProvider },
+      select: {
+        id: true,
+        status: true,
+      },
+    }),
+    getPipedriveReadOnlyClient(),
+  ]);
+  const pageLimit = boundedPreviewLimit(limit);
+  const pageStart = boundedPreviewStart(start);
+
+  if (!client) {
+    return {
+      connected: false,
+      connectionId: connection?.id ?? null,
+      linkedExisting: 0,
+      message:
+        "Pipedrive API credentials are missing, so the lead preview could not run.",
+      moreAvailable: false,
+      nextStart: null,
+      pageLimit,
+      pageStart,
+      provider: pipedriveProvider,
+      pullOnly: true,
+      recordsRead: 0,
+      recordsWritten: 0,
+      skipped: 0,
+      status: "WARNING",
+      warningCount: 1,
+      withCrmMatch: 0,
+      wouldCreate: 0,
+    };
+  }
+
+  const result = await previewPipedriveLeadPage({
+    client,
+    params: { limit: pageLimit, start: pageStart },
+  });
+  const recordsRead = result.status === "ok" ? result.page.data.length : 0;
+  const moreAvailable =
+    result.status === "ok"
+      ? result.page.pagination.moreItemsInCollection
+      : false;
+  const nextStart =
+    result.status === "ok" ? result.page.pagination.nextStart : null;
+  const warningCount =
+    result.status === "ok"
+      ? result.previews.reduce(
+          (count, preview) => count + preview.warnings.length,
+          0,
+        )
+      : 1;
+  const withCrmMatch =
+    result.status === "ok"
+      ? result.previews.filter(
+          (preview) =>
+            preview.matchedCompanyId ||
+            preview.matchedContactId ||
+            preview.linkedOpportunityId,
+        ).length
+      : 0;
+  const wouldCreate = result.status === "ok" ? result.wouldCreate : 0;
+  const status: PipedriveLeadPullStatus =
+    warningCount > 0 || result.skipped > 0 ? "WARNING" : "SUCCESS";
+
+  return {
+    connected: true,
+    connectionId: connection?.id ?? null,
+    linkedExisting: result.status === "ok" ? result.linkedExisting : 0,
+    message:
+      recordsRead === 0
+        ? "Preview read no Pipedrive leads and did not write CRM records."
+        : `Preview read ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"} and would create ${wouldCreate} CRM lead${wouldCreate === 1 ? "" : "s"}.`,
+    moreAvailable,
+    nextStart,
+    pageLimit,
+    pageStart,
+    provider: pipedriveProvider,
+    pullOnly: true,
+    recordsRead,
+    recordsWritten: 0,
+    skipped: result.skipped,
+    status,
+    warningCount,
+    withCrmMatch,
+    wouldCreate,
+  };
+}
+
 type ActivePipedriveLeadPullRun = {
   id: string;
   startedAt: Date;
@@ -269,11 +390,9 @@ async function writePipedriveLeadPull({
     const finishedAt = new Date();
     const recordsRead = result.status === "ok" ? result.recordsRead : 0;
     const recordsWritten = result.status === "ok" ? result.created : 0;
-    const linkedExisting =
-      result.status === "ok" ? result.linkedExisting : 0;
+    const linkedExisting = result.status === "ok" ? result.linkedExisting : 0;
     const skipped = result.skipped;
-    const moreAvailable =
-      result.status === "ok" ? result.moreAvailable : false;
+    const moreAvailable = result.status === "ok" ? result.moreAvailable : false;
     const pagesRead = result.status === "ok" ? result.pagesRead : 0;
     const warningCount =
       result.status === "ok"
@@ -287,15 +406,18 @@ async function writePipedriveLeadPull({
         ? "WARNING"
         : "SUCCESS";
     const mode =
-      start !== null ? "continuation" : updatedSince ? "incremental" : "initial";
+      start !== null
+        ? "continuation"
+        : updatedSince
+          ? "incremental"
+          : "initial";
     const importMode =
       mode === "continuation"
         ? "Continuation pull"
         : mode === "incremental"
           ? "Incremental pull"
           : "Initial pull";
-    const pageSummary =
-      pagesRead > 1 ? ` across ${pagesRead} pages` : "";
+    const pageSummary = pagesRead > 1 ? ` across ${pagesRead} pages` : "";
     const moreAvailableSummary = moreAvailable
       ? " More Pipedrive pages are available, so a continuation was saved and the full-pull cursor was not advanced."
       : "";
@@ -389,9 +511,7 @@ async function writePipedriveLeadPull({
   } catch (error) {
     const finishedAt = new Date();
     const message =
-      error instanceof Error
-        ? error.message
-        : "Pipedrive lead import failed.";
+      error instanceof Error ? error.message : "Pipedrive lead import failed.";
     const metadata: Prisma.InputJsonObject = {
       actorId,
       pullOnly: true,
@@ -526,6 +646,18 @@ function backgroundStatus(status: PipedriveLeadPullStatus) {
     case "ERROR":
       return BackgroundJobRunStatus.ERROR;
   }
+}
+
+function boundedPreviewLimit(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 10;
+
+  return Math.min(Math.max(Math.trunc(value), 1), 50);
+}
+
+function boundedPreviewStart(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+
+  return Math.max(Math.trunc(value), 0);
 }
 
 function syncTrigger(trigger: string) {

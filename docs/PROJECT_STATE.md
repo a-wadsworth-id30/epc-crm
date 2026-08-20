@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 
 ## Current Product Shape
 
@@ -181,7 +181,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   pull is skipped and logged as a warning without reading Pipedrive. The
   Pipedrive settings page shows the scheduled pull state, credential source,
   full-pull cursor, saved continuation and active overlap guard state for
-  admins. Pipedrive webhook handling is still intentionally separate.
+  admins. The protected maintenance route also supports `preview=1`, which
+  performs a Pipedrive GET-only lead preview and returns aggregate counts only
+  with `recordsWritten: 0` for operational verification before enabling real
+  CRM imports. Pipedrive webhook handling is still intentionally separate.
   Pipedrive is pull-only by default; do not write back to Pipedrive without
   Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
@@ -200,8 +203,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   record, folder, upload type, file name and tags so refresh retries reuse the
   existing signed/certificate files instead of adding duplicate documents. A
   maintenance script, `npm run maintenance:docusign-dedupe`, dry-runs cleanup
-  for legacy duplicate signed/certificate PDFs and `npm run
-  maintenance:docusign-dedupe:apply` deletes only unreferenced exact
+  for legacy duplicate signed/certificate PDFs. The apply variant,
+  `npm run maintenance:docusign-dedupe:apply`, deletes only unreferenced exact
   duplicates after re-checking related CRM/share/signature/upload references.
   Production cleanup can also run through the disabled-by-default protected
   `/api/maintenance/docusign-document-dedupe` endpoint when

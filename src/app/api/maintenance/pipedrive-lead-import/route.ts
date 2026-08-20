@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  readPipedriveLeadPullPreview,
   readPipedriveLeadPullReadiness,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
@@ -9,7 +10,9 @@ type PipedriveLeadPullResult = Awaited<ReturnType<typeof runPipedriveLeadPull>>;
 export const dynamic = "force-dynamic";
 
 function pipedriveLeadImportSecret() {
-  return process.env.PIPEDRIVE_LEAD_IMPORT_SECRET || process.env.CRON_SECRET || "";
+  return (
+    process.env.PIPEDRIVE_LEAD_IMPORT_SECRET || process.env.CRON_SECRET || ""
+  );
 }
 
 function bearerToken(request: Request) {
@@ -37,6 +40,17 @@ function booleanQuery(request: Request, key: string, defaultValue = false) {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
+function integerQuery(
+  request: Request,
+  key: string,
+  { max, min }: { max: number; min: number },
+) {
+  const value = Number(new URL(request.url).searchParams.get(key) ?? "");
+  if (!Number.isFinite(value)) return null;
+
+  return Math.min(Math.max(Math.trunc(value), min), max);
+}
+
 function jobTrigger(request: Request) {
   const trigger = request.headers.get("x-crm-job-trigger")?.trim() || "api";
 
@@ -48,7 +62,8 @@ async function pipedriveLeadImportResponse(request: Request, dryRun: boolean) {
     return NextResponse.json(
       {
         ok: false,
-        message: "PIPEDRIVE_LEAD_IMPORT_SECRET or CRON_SECRET is not configured.",
+        message:
+          "PIPEDRIVE_LEAD_IMPORT_SECRET or CRON_SECRET is not configured.",
       },
       { status: 503 },
     );
@@ -62,6 +77,18 @@ async function pipedriveLeadImportResponse(request: Request, dryRun: boolean) {
       },
       { status: 401 },
     );
+  }
+
+  if (booleanQuery(request, "preview")) {
+    return NextResponse.json({
+      dryRun: true,
+      ok: true,
+      preview: true,
+      result: await readPipedriveLeadPullPreview({
+        limit: integerQuery(request, "limit", { max: 50, min: 1 }),
+        start: integerQuery(request, "start", { max: 50_000, min: 0 }),
+      }),
+    });
   }
 
   if (dryRun) {
