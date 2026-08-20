@@ -112,6 +112,10 @@ export type PipedriveLeadPreviewResult = {
   expectedCloseDate: Date | null;
   externalLeadId: string | null;
   linkedOpportunityId: string | null;
+  matchedCompanyId: string | null;
+  matchedCompanyName: string | null;
+  matchedContactId: string | null;
+  matchedContactName: string | null;
   status: "would_create" | "linked_existing" | "skipped";
   title: string | null;
   valueCents: number | null;
@@ -127,6 +131,10 @@ export type PipedriveLeadPreviewMetadataRow = {
   expectedCloseDate: string | null;
   externalLeadId: string | null;
   linkedOpportunityId: string | null;
+  matchedCompanyId: string | null;
+  matchedCompanyName: string | null;
+  matchedContactId: string | null;
+  matchedContactName: string | null;
   status: PipedriveLeadPreviewResult["status"];
   title: string | null;
   valueCents: number | null;
@@ -190,6 +198,16 @@ type ImportedRelatedRecords = {
   organization: PipedriveOrganization | null;
   person: PipedrivePerson | null;
   warnings: string[];
+};
+
+type PreviewCrmMatch = {
+  id: string;
+  name: string | null;
+};
+
+type PreviewCrmMatches = {
+  company: PreviewCrmMatch | null;
+  contact: PreviewCrmMatch | null;
 };
 
 export async function importPipedriveLeadPage({
@@ -307,7 +325,8 @@ export async function previewPipedriveLeadRecord({
     });
   }
 
-  const preview = previewFieldsFromMapping(mapping);
+  const crmMatches = await previewCrmMatches(mapping);
+  const preview = previewFieldsFromMapping(mapping, crmMatches);
 
   if (
     existingLeadLink?.internalType === pipedriveInternalTypes.opportunity
@@ -344,6 +363,10 @@ export function pipedriveLeadPreviewMetadataRows(
       : null,
     externalLeadId: previewMetadataText(preview.externalLeadId),
     linkedOpportunityId: previewMetadataText(preview.linkedOpportunityId),
+    matchedCompanyId: previewMetadataText(preview.matchedCompanyId),
+    matchedCompanyName: previewMetadataText(preview.matchedCompanyName),
+    matchedContactId: previewMetadataText(preview.matchedContactId),
+    matchedContactName: previewMetadataText(preview.matchedContactName),
     status: preview.status,
     title: previewMetadataText(preview.title),
     valueCents: preview.valueCents,
@@ -752,6 +775,7 @@ function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
 
 function previewFieldsFromMapping(
   mapping: PipedriveLeadImportMapping,
+  crmMatches: PreviewCrmMatches,
 ): Omit<
   PipedriveLeadPreviewResult,
   "externalLeadId" | "linkedOpportunityId" | "status" | "warnings"
@@ -767,9 +791,110 @@ function previewFieldsFromMapping(
     contactPhone: mapping.contact?.phone ?? null,
     currency: mapping.opportunity.currency,
     expectedCloseDate: mapping.opportunity.expectedCloseDate,
+    matchedCompanyId: crmMatches.company?.id ?? null,
+    matchedCompanyName: crmMatches.company?.name ?? null,
+    matchedContactId: crmMatches.contact?.id ?? null,
+    matchedContactName: crmMatches.contact?.name ?? null,
     title: mapping.opportunity.title,
     valueCents: mapping.opportunity.valueCents,
   };
+}
+
+async function previewCrmMatches(
+  mapping: PipedriveLeadImportMapping,
+): Promise<PreviewCrmMatches> {
+  const [company, contact] = await Promise.all([
+    previewMatchedCompany(mapping),
+    previewMatchedContact(mapping),
+  ]);
+
+  return { company, contact };
+}
+
+async function previewMatchedCompany(
+  mapping: PipedriveLeadImportMapping,
+): Promise<PreviewCrmMatch | null> {
+  if (!mapping.company) return null;
+
+  const externalOrganizationId = mapping.externalIds.organization;
+
+  if (externalOrganizationId) {
+    const linkedCompany = await prisma.externalRecordLink.findUnique({
+      where: {
+        provider_externalType_externalId: {
+          externalId: externalOrganizationId,
+          externalType: pipedriveExternalTypes.organization,
+          provider: pipedriveProvider,
+        },
+      },
+      select: { internalId: true, internalType: true },
+    });
+
+    if (linkedCompany?.internalType === pipedriveInternalTypes.company) {
+      const company = await prisma.company.findUnique({
+        where: { id: linkedCompany.internalId },
+        select: { id: true, name: true },
+      });
+
+      if (company) return { id: company.id, name: company.name };
+    }
+  }
+
+  const existingCompany = await prisma.company.findFirst({
+    where: {
+      name: { equals: mapping.company.name, mode: "insensitive" },
+    },
+    select: { id: true, name: true },
+  });
+
+  return existingCompany
+    ? { id: existingCompany.id, name: existingCompany.name }
+    : null;
+}
+
+async function previewMatchedContact(
+  mapping: PipedriveLeadImportMapping,
+): Promise<PreviewCrmMatch | null> {
+  if (!mapping.contact) return null;
+
+  const externalPersonId = mapping.externalIds.person;
+
+  if (externalPersonId) {
+    const linkedContact = await prisma.externalRecordLink.findUnique({
+      where: {
+        provider_externalType_externalId: {
+          externalId: externalPersonId,
+          externalType: pipedriveExternalTypes.person,
+          provider: pipedriveProvider,
+        },
+      },
+      select: { internalId: true, internalType: true },
+    });
+
+    if (linkedContact?.internalType === pipedriveInternalTypes.contact) {
+      const contact = await prisma.contact.findUnique({
+        where: { id: linkedContact.internalId },
+        select: { email: true, firstName: true, id: true, lastName: true },
+      });
+
+      if (contact) {
+        return { id: contact.id, name: previewContactName(contact) };
+      }
+    }
+  }
+
+  const matches = contactIdentityMatches(mapping.contact);
+
+  if (!matches.length) return null;
+
+  const existingContact = await prisma.contact.findFirst({
+    where: { OR: matches },
+    select: { email: true, firstName: true, id: true, lastName: true },
+  });
+
+  return existingContact
+    ? { id: existingContact.id, name: previewContactName(existingContact) }
+    : null;
 }
 
 async function readPipedrivePerson(
@@ -967,6 +1092,28 @@ async function findExistingContact(
   tx: Prisma.TransactionClient,
   contact: NonNullable<PipedriveLeadImportMapping["contact"]>,
 ) {
+  const matches = contactIdentityMatches(contact);
+
+  if (!matches.length) return null;
+
+  return tx.contact.findFirst({
+    where: { OR: matches },
+    select: {
+      companyId: true,
+      companyName: true,
+      email: true,
+      id: true,
+      leadSource: true,
+      phone: true,
+      phoneNormalized: true,
+      role: true,
+    },
+  });
+}
+
+function contactIdentityMatches(
+  contact: NonNullable<PipedriveLeadImportMapping["contact"]>,
+) {
   const matches: Prisma.ContactWhereInput[] = [];
 
   if (contact.email) {
@@ -987,21 +1134,25 @@ async function findExistingContact(
     );
   }
 
-  if (!matches.length) return null;
+  return matches;
+}
 
-  return tx.contact.findFirst({
-    where: { OR: matches },
-    select: {
-      companyId: true,
-      companyName: true,
-      email: true,
-      id: true,
-      leadSource: true,
-      phone: true,
-      phoneNormalized: true,
-      role: true,
-    },
-  });
+function previewContactName({
+  email,
+  firstName,
+  id,
+  lastName,
+}: {
+  email: string | null;
+  firstName: string | null;
+  id: string;
+  lastName: string | null;
+}) {
+  return (
+    [cleanText(firstName), cleanText(lastName)].filter(Boolean).join(" ") ||
+    cleanText(email) ||
+    id
+  );
 }
 
 async function linkedInternalRecord(
@@ -1135,6 +1286,10 @@ function skippedLeadPreviewResult({
     expectedCloseDate: null,
     externalLeadId: null,
     linkedOpportunityId: null,
+    matchedCompanyId: null,
+    matchedCompanyName: null,
+    matchedContactId: null,
+    matchedContactName: null,
     status: "skipped",
     title: cleanText(lead.title) ?? cleanText(leadRecord.name),
     valueCents: null,

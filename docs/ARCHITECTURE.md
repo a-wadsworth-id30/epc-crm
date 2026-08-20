@@ -259,14 +259,17 @@ communication and external-link rows. The Pipedrive settings page can manually
 preview, selected-import or pull Pipedrive leads and writes sync-history rows
 with read/write counts. Preview classifies would-create, already-linked and
 skipped leads without creating CRM records and stores sanitized preview rows
-for the settings table. Selected import fetches checked preview lead IDs by
-GET and imports only those CRM records; full pull creates CRM records and
-external-link rows for one page of latest leads where needed. Import runs
-store sanitized per-lead outcome rows in sync-history metadata so admins can
-review created, already-linked and skipped records without storing raw
-Pipedrive payloads. Scheduled import and webhook handling should be implemented
-as a dedicated server-side sync layer rather than posting provider payloads
-through the public attribution lead endpoint.
+for the settings table. Preview also resolves the CRM company/contact that
+import would reuse from Pipedrive external links, company name, contact email
+or normalized phone so admins can review duplicates before selected import.
+Selected import fetches checked preview lead IDs by GET and imports only those
+CRM records; full pull creates CRM records and external-link rows for one page
+of latest leads where needed. Import runs store sanitized per-lead outcome rows
+in sync-history metadata so admins can review created, already-linked and
+skipped records without storing raw Pipedrive payloads. Scheduled import and
+webhook handling should be implemented as a dedicated server-side sync layer
+rather than posting provider payloads through the public attribution lead
+endpoint.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

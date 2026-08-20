@@ -13,6 +13,14 @@ const originalLoad = moduleWithLoad._load;
 
 let pipedriveImport: PipedriveImportModule;
 let crmWriteCalls = 0;
+let companyRows: Array<{ id: string; name: string }> = [];
+let contactRows: Array<{
+  email: string | null;
+  firstName: string | null;
+  id: string;
+  lastName: string | null;
+  phoneNormalized?: string | null;
+}> = [];
 let externalRecordLinkRows: Array<{
   externalId: string;
   externalType: string;
@@ -42,6 +50,42 @@ async function findExternalRecordLink(args: unknown) {
         row.externalId === key.externalId &&
         row.externalType === key.externalType &&
         row.provider === key.provider,
+    ) ?? null
+  );
+}
+
+async function findCompanyById(args: unknown) {
+  const id = (args as { where?: { id?: string } }).where?.id;
+  return companyRows.find((row) => row.id === id) ?? null;
+}
+
+async function findCompanyByName(args: unknown) {
+  const name = (args as { where?: { name?: { equals?: string } } }).where
+    ?.name?.equals;
+
+  if (!name) return null;
+
+  return (
+    companyRows.find(
+      (row) => row.name.toLowerCase() === name.toLowerCase(),
+    ) ?? null
+  );
+}
+
+async function findContactById(args: unknown) {
+  const id = (args as { where?: { id?: string } }).where?.id;
+  return contactRows.find((row) => row.id === id) ?? null;
+}
+
+async function findContactByIdentity(args: unknown) {
+  const lookup = JSON.stringify(args).toLowerCase();
+
+  return (
+    contactRows.find(
+      (row) =>
+        (row.email && lookup.includes(row.email.toLowerCase())) ||
+        (row.phoneNormalized &&
+          lookup.includes(row.phoneNormalized.toLowerCase())),
     ) ?? null
   );
 }
@@ -104,6 +148,14 @@ before(async () => {
           integrationConnection: {
             findUnique: async () => null,
           },
+          company: {
+            findFirst: findCompanyByName,
+            findUnique: findCompanyById,
+          },
+          contact: {
+            findFirst: findContactByIdentity,
+            findUnique: findContactById,
+          },
         },
       };
     }
@@ -129,6 +181,8 @@ before(async () => {
 
 beforeEach(() => {
   crmWriteCalls = 0;
+  companyRows = [];
+  contactRows = [];
   externalRecordLinkRows = [];
 });
 
@@ -226,6 +280,10 @@ describe("Pipedrive lead import mapping", () => {
         expectedCloseDate: "2026-09-20",
         externalLeadId: "lead-preview",
         linkedOpportunityId: null,
+        matchedCompanyId: null,
+        matchedCompanyName: null,
+        matchedContactId: null,
+        matchedContactName: null,
         status: "would_create",
         title: "Preview retrofit",
         valueCents: 50000,
@@ -233,6 +291,83 @@ describe("Pipedrive lead import mapping", () => {
         warnings: [],
       },
     ]);
+    assert.equal(crmWriteCalls, 0);
+  });
+
+  it("shows CRM company and contact matches in preview metadata without writing", async () => {
+    companyRows = [{ id: "company-existing", name: "Preview Homes" }];
+    contactRows = [
+      {
+        email: "pat@example.com",
+        firstName: "Pat",
+        id: "contact-existing",
+        lastName: "Lee",
+      },
+    ];
+
+    const result = await pipedriveImport.previewPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async (id) => ({
+          id,
+          name: "Preview Homes",
+        }),
+        getPerson: async (id) => ({
+          email: [{ primary: true, value: "pat@example.com" }],
+          first_name: "Pat",
+          id,
+          last_name: "Lee",
+        }),
+        listLeads: async () => ({
+          data: [
+            {
+              id: "lead-preview",
+              organization_id: 321,
+              person_id: { id: 654 },
+              title: "Preview retrofit",
+            },
+          ],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.wouldCreate, 1);
+    assert.equal(result.previews[0]?.matchedCompanyId, "company-existing");
+    assert.equal(result.previews[0]?.matchedCompanyName, "Preview Homes");
+    assert.equal(result.previews[0]?.matchedContactId, "contact-existing");
+    assert.equal(result.previews[0]?.matchedContactName, "Pat Lee");
+    assert.deepEqual(
+      pipedriveImport.pipedriveLeadPreviewMetadataRows(result.previews),
+      [
+        {
+          companyName: "Preview Homes",
+          contactEmail: "pat@example.com",
+          contactName: "Pat Lee",
+          contactPhone: null,
+          currency: "GBP",
+          expectedCloseDate: null,
+          externalLeadId: "lead-preview",
+          linkedOpportunityId: null,
+          matchedCompanyId: "company-existing",
+          matchedCompanyName: "Preview Homes",
+          matchedContactId: "contact-existing",
+          matchedContactName: "Pat Lee",
+          status: "would_create",
+          title: "Preview retrofit",
+          valueCents: 0,
+          warningCount: 0,
+          warnings: [],
+        },
+      ],
+    );
     assert.equal(crmWriteCalls, 0);
   });
 

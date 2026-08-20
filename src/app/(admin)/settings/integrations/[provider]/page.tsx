@@ -144,6 +144,10 @@ type PipedrivePreviewRow = {
   expectedCloseDate: string | null;
   externalLeadId: string | null;
   linkedOpportunityId: string | null;
+  matchedCompanyId: string | null;
+  matchedCompanyName: string | null;
+  matchedContactId: string | null;
+  matchedContactName: string | null;
   status: "would_create" | "linked_existing" | "skipped";
   title: string | null;
   valueCents: number | null;
@@ -2978,6 +2982,7 @@ function PipedrivePreviewTable({
                   <th className="px-4 py-3">Lead</th>
                   <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3">Company</th>
+                  <th className="px-4 py-3">CRM match</th>
                   <th className="px-4 py-3">Value</th>
                   <th className="px-4 py-3">Close</th>
                   <th className="px-4 py-3">Warnings</th>
@@ -2987,6 +2992,9 @@ function PipedrivePreviewTable({
                 {rows.map((row, index) => {
                   const rowCanImport =
                     canImport && canImportPipedrivePreviewRow(row);
+                  const hasCrmMatch = Boolean(
+                    row.matchedContactId || row.matchedCompanyId,
+                  );
 
                   return (
                     <tr key={`${row.externalLeadId ?? "lead"}-${index}`}>
@@ -3023,6 +3031,36 @@ function PipedrivePreviewTable({
                       </td>
                       <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
                         {row.companyName ?? "No company"}
+                      </td>
+                      <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                        {hasCrmMatch ? (
+                          <div className="flex flex-col gap-1">
+                            <PipedriveCrmMatchLink
+                              href={
+                                row.matchedContactId
+                                  ? `/contacts/${row.matchedContactId}`
+                                  : null
+                              }
+                              label="Contact"
+                              name={row.matchedContactName}
+                              recordId={row.matchedContactId}
+                            />
+                            <PipedriveCrmMatchLink
+                              href={
+                                row.matchedCompanyId
+                                  ? `/clients/${row.matchedCompanyId}`
+                                  : null
+                              }
+                              label="Company"
+                              name={row.matchedCompanyName}
+                              recordId={row.matchedCompanyId}
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            No existing match
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
                         {formatPipedrivePreviewMoney(
@@ -3194,6 +3232,31 @@ function PipedriveCrmRecordLink({
   );
 }
 
+function PipedriveCrmMatchLink({
+  href,
+  label,
+  name,
+  recordId,
+}: {
+  href: string | null;
+  label: string;
+  name: string | null;
+  recordId: string | null;
+}) {
+  if (!recordId || !href) {
+    return null;
+  }
+
+  return (
+    <Link
+      href={href}
+      className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+    >
+      {label}: {name ?? shortRecordId(recordId)}
+    </Link>
+  );
+}
+
 function pipedrivePreviewRowsFromMetadata(
   metadata: Prisma.JsonValue | null | undefined,
 ) {
@@ -3233,6 +3296,10 @@ function parsePipedrivePreviewRow(value: unknown) {
     expectedCloseDate: nullableString(record.expectedCloseDate),
     externalLeadId: nullableString(record.externalLeadId),
     linkedOpportunityId: nullableString(record.linkedOpportunityId),
+    matchedCompanyId: nullableString(record.matchedCompanyId),
+    matchedCompanyName: nullableString(record.matchedCompanyName),
+    matchedContactId: nullableString(record.matchedContactId),
+    matchedContactName: nullableString(record.matchedContactName),
     status,
     title: nullableString(record.title),
     valueCents: nullableNumber(record.valueCents),
