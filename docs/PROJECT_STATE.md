@@ -151,12 +151,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   communications and `ExternalRecordLink` rows. The Pipedrive settings page has
   admin-only preview and manual pull actions for one page of latest leads.
   Preview classifies would-create, already-linked and skipped leads and records
-  sync-history feedback without creating contacts, companies, opportunities,
-  communications or external-link rows. Pull imports the page into CRM records
-  and records the result in sync history. Scheduled import/webhook handling is
-  still intentionally separate. Pipedrive is pull-only by default; do not write
-  back to Pipedrive without Adam's explicit permission for that specific
-  operation.
+  sync-history feedback with sanitized table rows for the latest preview
+  without creating contacts, companies, opportunities, communications or
+  external-link rows. Pull imports the page into CRM records and records the
+  result in sync history. Scheduled import/webhook handling is still
+  intentionally separate. Pipedrive is pull-only by default; do not write back
+  to Pipedrive without Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

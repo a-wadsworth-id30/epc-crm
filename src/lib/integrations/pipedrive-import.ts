@@ -111,6 +111,22 @@ export type PipedriveLeadPreviewResult = {
   warnings: string[];
 };
 
+export type PipedriveLeadPreviewMetadataRow = {
+  companyName: string | null;
+  contactEmail: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  currency: string | null;
+  expectedCloseDate: string | null;
+  externalLeadId: string | null;
+  linkedOpportunityId: string | null;
+  status: PipedriveLeadPreviewResult["status"];
+  title: string | null;
+  valueCents: number | null;
+  warningCount: number;
+  warnings: string[];
+};
+
 type ResolvedCompany = {
   created: boolean;
   id: string | null;
@@ -285,6 +301,30 @@ export async function previewPipedriveLeadRecord({
     status: "would_create",
     warnings: relatedRecords.warnings,
   };
+}
+
+export function pipedriveLeadPreviewMetadataRows(
+  previews: PipedriveLeadPreviewResult[],
+): PipedriveLeadPreviewMetadataRow[] {
+  return previews.map((preview) => ({
+    companyName: previewMetadataText(preview.companyName),
+    contactEmail: previewMetadataText(preview.contactEmail),
+    contactName: previewMetadataText(preview.contactName),
+    contactPhone: previewMetadataText(preview.contactPhone),
+    currency: previewMetadataText(preview.currency),
+    expectedCloseDate: preview.expectedCloseDate
+      ? preview.expectedCloseDate.toISOString().slice(0, 10)
+      : null,
+    externalLeadId: previewMetadataText(preview.externalLeadId),
+    linkedOpportunityId: previewMetadataText(preview.linkedOpportunityId),
+    status: preview.status,
+    title: previewMetadataText(preview.title),
+    valueCents: preview.valueCents,
+    warningCount: preview.warnings.length,
+    warnings: preview.warnings
+      .slice(0, 3)
+      .map((warning) => truncateText(warning, 240)),
+  }));
 }
 
 export async function importPipedriveLeadRecord({
@@ -1131,6 +1171,10 @@ function objectValue(value: unknown): JsonObject {
 
 function cleanText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function previewMetadataText(value: string | null) {
+  return value ? truncateText(value, 240) : null;
 }
 
 function truncateText(value: string, maxLength: number) {

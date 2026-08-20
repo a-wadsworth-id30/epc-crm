@@ -181,6 +181,7 @@ describe("Pipedrive lead import mapping", () => {
           return {
             data: [
               {
+                expected_close_date: "2026-09-20",
                 id: "lead-preview",
                 organization_id: 321,
                 person_id: { id: 654 },
@@ -211,6 +212,27 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(result.previews[0]?.contactName, "Pat Lee");
     assert.equal(result.previews[0]?.contactEmail, "pat@example.com");
     assert.equal(result.previews[0]?.valueCents, 50000);
+    assert.equal(
+      result.previews[0]?.expectedCloseDate?.toISOString(),
+      "2026-09-20T00:00:00.000Z",
+    );
+    assert.deepEqual(pipedriveImport.pipedriveLeadPreviewMetadataRows(result.previews), [
+      {
+        companyName: "Preview Homes",
+        contactEmail: "pat@example.com",
+        contactName: "Pat Lee",
+        contactPhone: "07123 456789",
+        currency: "GBP",
+        expectedCloseDate: "2026-09-20",
+        externalLeadId: "lead-preview",
+        linkedOpportunityId: null,
+        status: "would_create",
+        title: "Preview retrofit",
+        valueCents: 50000,
+        warningCount: 0,
+        warnings: [],
+      },
+    ]);
     assert.equal(crmWriteCalls, 0);
   });
 

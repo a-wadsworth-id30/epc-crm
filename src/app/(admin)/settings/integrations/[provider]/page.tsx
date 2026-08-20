@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import type { ReactNode } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import {
@@ -118,6 +119,30 @@ type ProviderSyncLog = {
   recordsWritten: number;
   startedAt: Date;
   message: string | null;
+};
+
+type PipedrivePreviewLog = {
+  message: string | null;
+  metadata: Prisma.JsonValue | null;
+  recordsRead: number;
+  startedAt: Date;
+  status: string;
+};
+
+type PipedrivePreviewRow = {
+  companyName: string | null;
+  contactEmail: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  currency: string | null;
+  expectedCloseDate: string | null;
+  externalLeadId: string | null;
+  linkedOpportunityId: string | null;
+  status: "would_create" | "linked_existing" | "skipped";
+  title: string | null;
+  valueCents: number | null;
+  warningCount: number;
+  warnings: string[];
 };
 
 type PageSearchParams = {
@@ -358,22 +383,41 @@ export default async function IntegrationSettingsPage({
   }
 
   if (provider === pipedriveProvider) {
-    const recentPipedriveSyncLogs =
-      await prisma.marketingIntegrationSyncLog.findMany({
-        orderBy: { startedAt: "desc" },
-        select: {
-          id: true,
-          message: true,
-          provider: true,
-          recordsRead: true,
-          recordsWritten: true,
-          startedAt: true,
-          status: true,
-          syncType: true,
-        },
-        take: 8,
-        where: { provider: pipedriveProvider },
-      });
+    const [recentPipedriveSyncLogs, latestPipedrivePreviewLog] =
+      await Promise.all([
+        prisma.marketingIntegrationSyncLog.findMany({
+          orderBy: { startedAt: "desc" },
+          select: {
+            id: true,
+            message: true,
+            provider: true,
+            recordsRead: true,
+            recordsWritten: true,
+            startedAt: true,
+            status: true,
+            syncType: true,
+          },
+          take: 8,
+          where: { provider: pipedriveProvider },
+        }),
+        prisma.marketingIntegrationSyncLog.findFirst({
+          orderBy: { startedAt: "desc" },
+          select: {
+            message: true,
+            metadata: true,
+            recordsRead: true,
+            startedAt: true,
+            status: true,
+          },
+          where: {
+            provider: pipedriveProvider,
+            syncType: "lead-import-preview",
+          },
+        }),
+      ]);
+    const pipedrivePreviewRows = pipedrivePreviewRowsFromMetadata(
+      latestPipedrivePreviewLog?.metadata,
+    );
     const config = pipedriveConfigSchema.safeParse(integration?.config ?? {});
     const hasStoredPipedriveConfig = hasStoredPipedriveCredentials(
       integration?.config,
@@ -441,6 +485,10 @@ export default async function IntegrationSettingsPage({
               </StatusBadge>
             </div>
           </div>
+          <PipedrivePreviewTable
+            log={latestPipedrivePreviewLog}
+            rows={pipedrivePreviewRows}
+          />
           <SyncHistoryTable logs={recentPipedriveSyncLogs} />
         </section>
       </>
@@ -2827,6 +2875,209 @@ function ProviderSetupForm({
       canEdit={canEdit}
     />
   );
+}
+
+function PipedrivePreviewTable({
+  log,
+  rows,
+}: {
+  log: PipedrivePreviewLog | null;
+  rows: PipedrivePreviewRow[];
+}) {
+  return (
+    <div className="mb-6 border-t border-gray-100 pt-5 dark:border-gray-800">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+            Latest preview
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {log
+              ? `${log.recordsRead} Pipedrive lead${log.recordsRead === 1 ? "" : "s"} checked on ${log.startedAt.toLocaleString("en-GB")}.`
+              : "No Pipedrive lead preview has run yet."}
+          </p>
+        </div>
+        {log ? <StatusBadge>{log.status}</StatusBadge> : null}
+      </div>
+      {rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+            <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
+              <tr>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Lead</th>
+                <th className="px-4 py-3">Contact</th>
+                <th className="px-4 py-3">Company</th>
+                <th className="px-4 py-3">Value</th>
+                <th className="px-4 py-3">Close</th>
+                <th className="px-4 py-3">Warnings</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {rows.map((row, index) => (
+                <tr key={`${row.externalLeadId ?? "lead"}-${index}`}>
+                  <td className="px-4 py-4 align-top">
+                    <StatusBadge>
+                      {pipedrivePreviewStatusLabel(row.status)}
+                    </StatusBadge>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <div className="font-medium text-gray-800 dark:text-white/90">
+                      {row.title ?? "Untitled lead"}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {row.externalLeadId ?? "No Pipedrive ID"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    <div>{row.contactName ?? "No contact"}</div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {[row.contactEmail, row.contactPhone]
+                        .filter(Boolean)
+                        .join(" / ") || "No contact details"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {row.companyName ?? "No company"}
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {formatPipedrivePreviewMoney(
+                      row.valueCents,
+                      row.currency,
+                    )}
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {formatPipedrivePreviewDate(row.expectedCloseDate)}
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {row.warningCount ? (
+                      <div>
+                        <div>
+                          {row.warningCount} warning
+                          {row.warningCount === 1 ? "" : "s"}
+                        </div>
+                        {row.warnings.length ? (
+                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {row.warnings.join(" / ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      "None"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-6 text-sm text-gray-500 dark:text-gray-400">
+          {log?.message ?? "Preview results will appear here after a dry-run."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function pipedrivePreviewRowsFromMetadata(
+  metadata: Prisma.JsonValue | null | undefined,
+) {
+  const record = jsonRecord(metadata);
+  const rows = Array.isArray(record.previews) ? record.previews : [];
+
+  return rows
+    .map(parsePipedrivePreviewRow)
+    .filter((row): row is PipedrivePreviewRow => Boolean(row))
+    .slice(0, 50);
+}
+
+function parsePipedrivePreviewRow(value: unknown) {
+  const record = jsonRecord(value);
+  const status = pipedrivePreviewStatus(record.status);
+
+  if (!status) return null;
+
+  return {
+    companyName: nullableString(record.companyName),
+    contactEmail: nullableString(record.contactEmail),
+    contactName: nullableString(record.contactName),
+    contactPhone: nullableString(record.contactPhone),
+    currency: nullableString(record.currency),
+    expectedCloseDate: nullableString(record.expectedCloseDate),
+    externalLeadId: nullableString(record.externalLeadId),
+    linkedOpportunityId: nullableString(record.linkedOpportunityId),
+    status,
+    title: nullableString(record.title),
+    valueCents: nullableNumber(record.valueCents),
+    warningCount: Math.max(0, Math.trunc(nullableNumber(record.warningCount) ?? 0)),
+    warnings: Array.isArray(record.warnings)
+      ? record.warnings.map(nullableString).filter((warning): warning is string => Boolean(warning))
+      : [],
+  };
+}
+
+function pipedrivePreviewStatus(value: unknown) {
+  if (
+    value === "would_create" ||
+    value === "linked_existing" ||
+    value === "skipped"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function pipedrivePreviewStatusLabel(
+  status: PipedrivePreviewRow["status"],
+) {
+  if (status === "would_create") return "Would create";
+  if (status === "linked_existing") return "Already linked";
+  return "Skipped";
+}
+
+function formatPipedrivePreviewMoney(
+  valueCents: number | null,
+  currency: string | null,
+) {
+  if (valueCents === null) return "n/a";
+
+  const amount = valueCents / 100;
+  const code = currency || "GBP";
+
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      currency: code,
+      style: "currency",
+    }).format(amount);
+  } catch {
+    return `${code} ${amount.toFixed(2)}`;
+  }
+}
+
+function formatPipedrivePreviewDate(value: string | null) {
+  if (!value) return "n/a";
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-GB");
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function nullableString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function nullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function SyncHistoryTable({ logs }: { logs: ProviderSyncLog[] }) {

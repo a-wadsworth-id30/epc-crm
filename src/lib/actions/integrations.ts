@@ -35,6 +35,7 @@ import {
 } from "@/lib/integrations/pipedrive";
 import {
   importPipedriveLeadPage,
+  pipedriveLeadPreviewMetadataRows,
   previewPipedriveLeadPage,
 } from "@/lib/integrations/pipedrive-import";
 import {
@@ -613,6 +614,10 @@ export async function previewPipedriveLeadsAction() {
       recordsRead === 0
         ? "Dry-run: no Pipedrive leads were available to preview. No contacts, companies or opportunities were changed."
         : `Dry-run: ${wouldCreate} would be created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}. No contacts, companies or opportunities were changed.`;
+    const previewRows =
+      result.status === "ok"
+        ? pipedriveLeadPreviewMetadataRows(result.previews)
+        : [];
 
     await prisma.marketingIntegrationSyncLog.create({
       data: {
@@ -623,6 +628,7 @@ export async function previewPipedriveLeadsAction() {
           actorId: user.id,
           dryRun: true,
           linkedExisting,
+          previews: previewRows,
           pullOnly: true,
           skipped,
           warningCount,
