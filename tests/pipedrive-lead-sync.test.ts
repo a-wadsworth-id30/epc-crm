@@ -18,6 +18,8 @@ let client: {
   lastFullLeadSyncNextStart: number | null;
 } | null;
 let connectionConfig: Record<string, unknown>;
+let importLeadIdsArgs: unknown;
+let importLeadIdsResult: Record<string, unknown>;
 let importPagesArgs: unknown;
 let importPagesResult: Record<string, unknown>;
 let previewPageArgs: unknown;
@@ -45,6 +47,7 @@ before(async () => {
       return {
         BackgroundJobRunStatus: {
           ERROR: "ERROR",
+          RUNNING: "RUNNING",
           SUCCESS: "SUCCESS",
           WARNING: "WARNING",
         },
@@ -69,6 +72,10 @@ before(async () => {
 
     if (request === "@/lib/integrations/pipedrive-import") {
       return {
+        importPipedriveLeadIds: async (args: unknown) => {
+          importLeadIdsArgs = args;
+          return importLeadIdsResult;
+        },
         importPipedriveLeadPages: async (args: unknown) => {
           importPagesArgs = args;
           return importPagesResult;
@@ -168,6 +175,36 @@ beforeEach(() => {
     defaultLeadSource: "Pipedrive",
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastLeadSyncAt: "2026-08-20T08:05:00.000Z",
+  };
+  importLeadIdsArgs = null;
+  importLeadIdsResult = {
+    created: 2,
+    linkedExisting: 0,
+    requested: 2,
+    results: [
+      {
+        created: {
+          company: true,
+          contact: true,
+          opportunity: true,
+        },
+        externalLeadId: "lead-1",
+        status: "created",
+        warnings: [],
+      },
+      {
+        created: {
+          company: true,
+          contact: true,
+          opportunity: true,
+        },
+        externalLeadId: "lead-2",
+        status: "created",
+        warnings: [],
+      },
+    ],
+    skipped: 0,
+    status: "ok",
   };
   importPagesArgs = null;
   importPagesResult = {
@@ -370,4 +407,75 @@ describe("Pipedrive scheduled lead sync", () => {
     assert.equal(result.warningCount, 1);
     assert.equal(previewPageArgs, null);
   });
+
+  it("does not import an approved page when the expected count no longer matches", async () => {
+    previewPageResult = cleanWouldCreatePreviewResult();
+
+    const result = await pipedriveLeadSync.runPipedriveApprovedLeadPageImport({
+      expectedWouldCreate: 3,
+      limit: 10,
+      recordBackgroundJob: false,
+      start: 50,
+    });
+
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.recordsWritten, 0);
+    assert.equal(result.approvedLeadCount, 2);
+    assert.equal(importLeadIdsArgs, null);
+    assert.equal(syncCreates.length, 1);
+    assert.match(result.message, /did not run/);
+  });
+
+  it("imports only the approved would-create leads from a bounded page", async () => {
+    previewPageResult = cleanWouldCreatePreviewResult();
+
+    const result = await pipedriveLeadSync.runPipedriveApprovedLeadPageImport({
+      expectedWouldCreate: 2,
+      limit: 50,
+      recordBackgroundJob: false,
+      start: 50,
+    });
+
+    assert.equal(result.status, "SUCCESS");
+    assert.equal(result.recordsRead, 2);
+    assert.equal(result.recordsWritten, 2);
+    assert.equal(result.approvedLeadCount, 2);
+    assert.equal(result.pageLimit, 10);
+    assert.deepEqual((previewPageArgs as { params?: unknown }).params, {
+      limit: 10,
+      start: 50,
+    });
+    assert.deepEqual((importLeadIdsArgs as { leadIds?: unknown }).leadIds, [
+      "lead-1",
+      "lead-2",
+    ]);
+    assert.equal(transactionWrites.length, 2);
+  });
 });
+
+function cleanWouldCreatePreviewResult() {
+  return {
+    ...previewPageResult,
+    linkedExisting: 0,
+    previews: [
+      {
+        externalLeadId: "lead-1",
+        linkedOpportunityId: null,
+        matchedCompanyId: null,
+        matchedContactId: null,
+        status: "would_create",
+        warnings: [],
+      },
+      {
+        externalLeadId: "lead-2",
+        linkedOpportunityId: null,
+        matchedCompanyId: null,
+        matchedContactId: null,
+        status: "would_create",
+        warnings: [],
+      },
+    ],
+    skipped: 0,
+    wouldCreate: 2,
+  };
+}

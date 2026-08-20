@@ -285,6 +285,10 @@ For live verification before the first CRM import, call the protected
 maintenance route with `preview=1&limit=10`; the route performs Pipedrive
 GET-only reads and CRM matching, then returns aggregate counts only with
 `recordsWritten: 0`.
+For the first controlled CRM import, use `POST` with
+`approvedImport=1&start=<previewNextStart>&limit=10&expectedWouldCreate=<count>`.
+The route re-previews the page, aborts if the expected count changed or if
+warnings/skips appear, and imports only those would-create lead IDs into CRM.
 Settings > Integrations > Pipedrive shows the schedule, dry-run, cursor,
 continuation and active guard state for production verification.
 

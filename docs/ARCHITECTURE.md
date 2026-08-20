@@ -284,7 +284,11 @@ called by the disabled-by-default Netlify scheduled function
 `netlify/functions/pull-pipedrive-leads.mjs` and writes compact background job
 history for scheduled runs. The route also supports `preview=1` for protected
 Pipedrive GET-only operational previews that return aggregate counts only and
-do not create CRM records. Manual and scheduled pulls start a
+do not create CRM records. `POST` requests can use `approvedImport=1` for
+controlled first imports: CRM re-previews the exact requested page, requires
+the expected would-create count to match, caps the batch at 10 leads, aborts on
+preview warnings/skips, and imports only those approved lead IDs into CRM.
+Manual and scheduled pulls start a
 `pipedrive.lead_import` background job before importing, and newer overlapping
 runs skip with a warning when another non-stale Pipedrive pull is already
 running. The Pipedrive settings page surfaces schedule readiness, credential

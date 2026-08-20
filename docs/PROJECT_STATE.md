@@ -184,7 +184,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   admins. The protected maintenance route also supports `preview=1`, which
   performs a Pipedrive GET-only lead preview and returns aggregate counts only
   with `recordsWritten: 0` for operational verification before enabling real
-  CRM imports. Pipedrive webhook handling is still intentionally separate.
+  CRM imports. For controlled first imports, the same protected route supports
+  `approvedImport=1` on `POST` only; it re-previews the requested page, requires
+  the caller's `expectedWouldCreate` count to still match, caps the batch at 10
+  would-create leads, aborts on preview warnings/skips, and imports only those
+  exact lead IDs into CRM. Pipedrive webhook handling is still intentionally
+  separate.
   Pipedrive is pull-only by default; do not write back to Pipedrive without
   Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.

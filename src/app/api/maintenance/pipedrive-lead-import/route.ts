@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import {
   readPipedriveLeadPullPreview,
   readPipedriveLeadPullReadiness,
+  runPipedriveApprovedLeadPageImport,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
 
 type PipedriveLeadPullResult = Awaited<ReturnType<typeof runPipedriveLeadPull>>;
+type PipedriveApprovedLeadPageImportResult = Awaited<
+  ReturnType<typeof runPipedriveApprovedLeadPageImport>
+>;
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +103,28 @@ async function pipedriveLeadImportResponse(request: Request, dryRun: boolean) {
     });
   }
 
+  if (booleanQuery(request, "approvedImport")) {
+    const result = await runPipedriveApprovedLeadPageImport({
+      expectedWouldCreate: integerQuery(request, "expectedWouldCreate", {
+        max: 10,
+        min: 1,
+      }),
+      limit: integerQuery(request, "limit", { max: 10, min: 1 }),
+      recordBackgroundJob: true,
+      start: integerQuery(request, "start", { max: 50_000, min: 0 }),
+      trigger: jobTrigger(request),
+    });
+
+    return NextResponse.json(
+      {
+        approvedImport: true,
+        ok: result.status !== "ERROR",
+        result: compactApprovedPageImportResult(result),
+      },
+      { status: result.status === "ERROR" ? 502 : 200 },
+    );
+  }
+
   const result = await runPipedriveLeadPull({
     recordBackgroundJob: true,
     trigger: jobTrigger(request),
@@ -122,6 +148,29 @@ function compactResult(result: PipedriveLeadPullResult) {
     mode: result.mode,
     moreAvailable: result.moreAvailable,
     pagesRead: result.pagesRead,
+    pullOnly: true,
+    recordsRead: result.recordsRead,
+    recordsWritten: result.recordsWritten,
+    skipped: result.skipped,
+    status: result.status,
+    warningCount: result.warningCount,
+  };
+}
+
+function compactApprovedPageImportResult(
+  result: PipedriveApprovedLeadPageImportResult,
+) {
+  return {
+    approvedLeadCount: result.approvedLeadCount,
+    connectionId: result.connectionId,
+    created: result.created,
+    expectedWouldCreate: result.expectedWouldCreate,
+    linkedExisting: result.linkedExisting,
+    message: result.message,
+    mode: result.mode,
+    pageLimit: result.pageLimit,
+    pagesRead: result.pagesRead,
+    pageStart: result.pageStart,
     pullOnly: true,
     recordsRead: result.recordsRead,
     recordsWritten: result.recordsWritten,
