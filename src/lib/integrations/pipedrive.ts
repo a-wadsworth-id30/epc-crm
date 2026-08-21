@@ -44,8 +44,11 @@ const pipedriveStoredCredentialsSchema = z.object({
 
 export const pipedriveStoredConfigSchema = pipedriveConfigSchema.extend({
   credentials: pipedriveStoredCredentialsSchema.optional(),
+  lastContactSyncAt: z.string().datetime().optional(),
   lastFullLeadSyncAt: z.string().datetime().optional(),
   lastFullLeadSyncNextStart: z.number().int().nonnegative().nullable().optional(),
+  lastFullPersonSyncAt: z.string().datetime().optional(),
+  lastFullPersonSyncNextCursor: z.string().nullable().optional(),
   lastLeadSyncAt: z.string().datetime().optional(),
 });
 
@@ -76,6 +79,7 @@ type PipedriveApiEnvelope<T> = {
 type PipedrivePaginationPayload = {
   limit?: unknown;
   more_items_in_collection?: unknown;
+  next_cursor?: unknown;
   next_start?: unknown;
   start?: unknown;
 };
@@ -83,6 +87,7 @@ type PipedrivePaginationPayload = {
 export type PipedrivePagination = {
   limit: number | null;
   moreItemsInCollection: boolean;
+  nextCursor?: string | null;
   nextStart: number | null;
   start: number | null;
 };
@@ -131,8 +136,12 @@ export type PipedrivePerson = Record<string, unknown> & {
   first_name?: string;
   last_name?: string;
   email?: unknown;
+  emails?: unknown;
   phone?: unknown;
+  phones?: unknown;
   org_id?: unknown;
+  update_time?: string;
+  add_time?: string;
 };
 
 export type PipedriveOrganization = Record<string, unknown> & {
@@ -150,6 +159,19 @@ export type PipedriveListLeadsParams = {
   sort?: string | null;
   start?: number | null;
   updatedSince?: string | null;
+};
+
+export type PipedriveListPersonsParams = {
+  cursor?: string | null;
+  filterId?: number | null;
+  ids?: string[] | null;
+  limit?: number | null;
+  organizationId?: number | null;
+  ownerId?: number | null;
+  sortBy?: "add_time" | "id" | "update_time" | null;
+  sortDirection?: "asc" | "desc" | null;
+  updatedSince?: string | null;
+  updatedUntil?: string | null;
 };
 
 export class PipedriveApiError extends Error {
@@ -213,10 +235,17 @@ export async function getPipedriveRuntimeConfig() {
     apiToken: apiToken ?? process.env.PIPEDRIVE_API_TOKEN?.trim() ?? null,
     defaultLeadSource:
       config?.defaultLeadSource || defaultPipedriveLeadSource,
+    lastContactSyncAt: config?.lastContactSyncAt ?? null,
     lastFullLeadSyncAt: config?.lastFullLeadSyncAt ?? null,
     lastFullLeadSyncNextStart:
       typeof config?.lastFullLeadSyncNextStart === "number"
         ? config.lastFullLeadSyncNextStart
+        : null,
+    lastFullPersonSyncAt: config?.lastFullPersonSyncAt ?? null,
+    lastFullPersonSyncNextCursor:
+      typeof config?.lastFullPersonSyncNextCursor === "string" &&
+      config.lastFullPersonSyncNextCursor.trim()
+        ? config.lastFullPersonSyncNextCursor
         : null,
     lastLeadSyncAt: config?.lastLeadSyncAt ?? null,
   };
@@ -235,8 +264,11 @@ export class PipedriveReadOnlyClient {
   private readonly apiBaseUrl: string;
   private readonly apiToken: string;
   readonly defaultLeadSource: string;
+  readonly lastContactSyncAt: string | null;
   readonly lastFullLeadSyncAt: string | null;
   readonly lastFullLeadSyncNextStart: number | null;
+  readonly lastFullPersonSyncAt: string | null;
+  readonly lastFullPersonSyncNextCursor: string | null;
   readonly lastLeadSyncAt: string | null;
   private readonly timeoutMs: number;
 
@@ -247,8 +279,11 @@ export class PipedriveReadOnlyClient {
     this.apiBaseUrl = config.apiBaseUrl;
     this.apiToken = config.apiToken;
     this.defaultLeadSource = config.defaultLeadSource;
+    this.lastContactSyncAt = config.lastContactSyncAt;
     this.lastFullLeadSyncAt = config.lastFullLeadSyncAt;
     this.lastFullLeadSyncNextStart = config.lastFullLeadSyncNextStart;
+    this.lastFullPersonSyncAt = config.lastFullPersonSyncAt;
+    this.lastFullPersonSyncNextCursor = config.lastFullPersonSyncNextCursor;
     this.lastLeadSyncAt = config.lastLeadSyncAt;
     this.timeoutMs = boundedTimeoutMs(options.timeoutMs);
   }
@@ -275,6 +310,25 @@ export class PipedriveReadOnlyClient {
       start: integerParam(params.start, { min: 0 }),
       updated_since: params.updatedSince || undefined,
     });
+  }
+
+  async listPersons(params: PipedriveListPersonsParams = {}) {
+    return this.getList<PipedrivePerson>(
+      "persons",
+      {
+        cursor: params.cursor || undefined,
+        filter_id: integerParam(params.filterId),
+        ids: personIdsParam(params.ids),
+        limit: integerParam(params.limit, { max: 500 }),
+        org_id: integerParam(params.organizationId),
+        owner_id: integerParam(params.ownerId),
+        sort_by: params.sortBy || undefined,
+        sort_direction: params.sortDirection || undefined,
+        updated_since: params.updatedSince || undefined,
+        updated_until: params.updatedUntil || undefined,
+      },
+      { apiVersion: "v2" },
+    );
   }
 
   async getLead(id: string) {
@@ -312,8 +366,9 @@ export class PipedriveReadOnlyClient {
   private async getList<T>(
     path: string,
     params: PipedriveQueryParams = {},
+    options: { apiVersion?: string } = {},
   ): Promise<PipedriveListResult<T>> {
-    const envelope = await this.getEnvelope<T[]>(path, params);
+    const envelope = await this.getEnvelope<T[]>(path, params, options);
 
     return {
       data: Array.isArray(envelope.data) ? envelope.data : [],
@@ -325,8 +380,9 @@ export class PipedriveReadOnlyClient {
   private async getEnvelope<T>(
     path: string,
     params: PipedriveQueryParams = {},
+    options: { apiVersion?: string } = {},
   ): Promise<PipedriveApiEnvelope<T>> {
-    const url = pipedriveUrl(this.apiBaseUrl, path);
+    const url = pipedriveUrl(this.apiBaseUrl, path, options.apiVersion);
     appendQueryParams(url, params);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -398,9 +454,31 @@ function appendQueryParams(url: URL, params: PipedriveQueryParams) {
   }
 }
 
-function pipedriveUrl(apiBaseUrl: string, path: string) {
+function pipedriveUrl(apiBaseUrl: string, path: string, apiVersion?: string) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
-  return new URL(path.replace(/^\/+/, ""), baseUrl);
+  const base = new URL(baseUrl);
+
+  if (apiVersion) {
+    const parts = base.pathname.split("/").filter(Boolean);
+    let versionIndex = -1;
+
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+      if (/^v\d+$/i.test(parts[index]!)) {
+        versionIndex = index;
+        break;
+      }
+    }
+
+    if (versionIndex >= 0) {
+      parts[versionIndex] = apiVersion;
+    } else {
+      parts.push(apiVersion);
+    }
+
+    base.pathname = `/${parts.join("/")}/`;
+  }
+
+  return new URL(path.replace(/^\/+/, ""), base);
 }
 
 function pipedriveTextId(value: string, label: string) {
@@ -461,6 +539,10 @@ function pipedriveApiErrorFromResponse(
 function normalizePipedrivePagination(
   additionalData: unknown,
 ): PipedrivePagination {
+  const additional =
+    additionalData && typeof additionalData === "object"
+      ? (additionalData as { next_cursor?: unknown; pagination?: PipedrivePaginationPayload })
+      : null;
   const pagination =
     additionalData && typeof additionalData === "object"
       ? (additionalData as { pagination?: PipedrivePaginationPayload })
@@ -470,9 +552,21 @@ function normalizePipedrivePagination(
   return {
     limit: numberValue(pagination?.limit),
     moreItemsInCollection: Boolean(pagination?.more_items_in_collection),
+    nextCursor: textValue(additional?.next_cursor ?? pagination?.next_cursor),
     nextStart: numberValue(pagination?.next_start),
     start: numberValue(pagination?.start),
   };
+}
+
+function personIdsParam(value: string[] | null | undefined) {
+  if (!Array.isArray(value)) return undefined;
+
+  const ids = value
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
+  return ids.length ? ids.join(",") : undefined;
 }
 
 function numberValue(value: unknown) {

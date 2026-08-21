@@ -13,6 +13,7 @@ const originalLoad = moduleWithLoad._load;
 
 let pipedriveImport: PipedriveImportModule;
 let crmWriteCalls = 0;
+let crmWriteLabels: string[] = [];
 let companyRows: Array<{ id: string; name: string }> = [];
 let contactRows: Array<{
   email: string | null;
@@ -90,9 +91,12 @@ async function findContactByIdentity(args: unknown) {
   );
 }
 
-async function recordCrmWrite() {
-  crmWriteCalls += 1;
-  return { id: "stub-id", name: "Stub record" };
+function recordCrmWriteFor(label: string) {
+  return async () => {
+    crmWriteCalls += 1;
+    crmWriteLabels.push(label);
+    return { id: "stub-id", name: "Stub record" };
+  };
 }
 
 before(async () => {
@@ -113,25 +117,25 @@ before(async () => {
     if (request === "@/lib/prisma") {
       const transactionClient = {
         company: {
-          create: recordCrmWrite,
+          create: recordCrmWriteFor("company.create"),
           findFirst: async () => null,
           findUnique: async () => null,
         },
         contact: {
-          create: recordCrmWrite,
+          create: recordCrmWriteFor("contact.create"),
           findFirst: async () => null,
           findUnique: async () => null,
-          update: recordCrmWrite,
+          update: recordCrmWriteFor("contact.update"),
         },
         externalRecordLink: {
           findUnique: findExternalRecordLink,
-          upsert: recordCrmWrite,
+          upsert: recordCrmWriteFor("externalRecordLink.upsert"),
         },
         salesCommunication: {
-          create: recordCrmWrite,
+          create: recordCrmWriteFor("salesCommunication.create"),
         },
         salesOpportunity: {
-          create: recordCrmWrite,
+          create: recordCrmWriteFor("salesOpportunity.create"),
         },
       };
 
@@ -181,6 +185,7 @@ before(async () => {
 
 beforeEach(() => {
   crmWriteCalls = 0;
+  crmWriteLabels = [];
   companyRows = [];
   contactRows = [];
   externalRecordLinkRows = [];
@@ -367,6 +372,125 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(result.pagesRead, 1);
     assert.equal(result.moreAvailable, true);
     assert.equal(result.nextStart, 50);
+  });
+
+  it("follows cursor pagination for bounded Pipedrive person pulls", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedrivePersonPages({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listPersons: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination:
+              listCalls.length === 1
+                ? {
+                    limit: 2,
+                    moreItemsInCollection: false,
+                    nextCursor: "cursor-2",
+                    nextStart: null,
+                    start: null,
+                  }
+                : {
+                    limit: 2,
+                    moreItemsInCollection: false,
+                    nextCursor: null,
+                    nextStart: null,
+                    start: null,
+                  },
+            relatedObjects: null,
+          };
+        },
+      },
+      maxPages: 3,
+      params: { limit: 2, updatedSince: "2026-08-20T10:00:00.000Z" },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.pagesRead, 2);
+    assert.equal(result.recordsRead, 0);
+    assert.equal(result.moreAvailable, false);
+    assert.equal(result.nextCursor, null);
+    assert.deepEqual(listCalls, [
+      {
+        limit: 2,
+        sortBy: "update_time",
+        sortDirection: "desc",
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+      {
+        cursor: "cursor-2",
+        limit: 2,
+        sortBy: "update_time",
+        sortDirection: "desc",
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("imports Pipedrive persons as CRM contacts without creating opportunities", async () => {
+    const result = await pipedriveImport.importPipedrivePersonPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async (id) => ({
+          id,
+          name: "Contact Homes",
+        }),
+        getPerson: async () => ({}),
+        listPersons: async () => ({
+          data: [
+            {
+              emails: [{ primary: true, value: "casey@example.com" }],
+              id: 123,
+              name: "Casey Contact",
+              org_id: 321,
+              phones: [{ primary: true, value: "07123 111222" }],
+            },
+          ],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextCursor: null,
+            nextStart: null,
+            start: null,
+          },
+          relatedObjects: null,
+        }),
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.created, 1);
+    assert.equal(result.linkedExisting, 0);
+    assert.equal(result.results[0]?.externalPersonId, "123");
+    assert.equal(result.results[0]?.name, "Casey Contact");
+    assert.equal(
+      crmWriteLabels.includes("salesOpportunity.create"),
+      false,
+    );
+    assert.equal(
+      crmWriteLabels.includes("salesCommunication.create"),
+      false,
+    );
+    assert.deepEqual(
+      pipedriveImport.pipedrivePersonImportMetadataRows(result.results),
+      [
+        {
+          companyId: "stub-id",
+          contactId: "stub-id",
+          createdCompany: true,
+          createdContact: true,
+          externalPersonId: "123",
+          name: "Casey Contact",
+          status: "created",
+          warningCount: 0,
+          warnings: [],
+        },
+      ],
+    );
   });
 
   it("previews latest leads without writing CRM records", async () => {

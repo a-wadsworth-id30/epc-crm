@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 ## Current Product Shape
 
@@ -146,11 +146,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
   runtime fallback. `src/lib/integrations/pipedrive.ts` provides the
   server-side read-only Pipedrive client for current-user, user, lead, person
-  and organisation GET requests. `src/lib/integrations/pipedrive-import.ts`
-  maps Pipedrive leads into CRM contacts, companies, opportunities,
-  communications and `ExternalRecordLink` rows. The Pipedrive settings page has
-  admin-only preview, selected import and manual pull actions for Pipedrive
-  leads. Preview classifies would-create, already-linked and skipped leads and
+  and organisation GET requests, plus cursor-paginated Pipedrive v2 person
+  listing. `src/lib/integrations/pipedrive-import.ts` maps Pipedrive leads into
+  CRM contacts, companies, opportunities, communications and
+  `ExternalRecordLink` rows, and also maps standalone Pipedrive persons into
+  CRM contacts and companies without creating opportunities. The Pipedrive
+  settings page has admin-only preview, selected import and manual pull actions
+  for Pipedrive leads plus a separate manual contact pull for Pipedrive
+  persons. Preview classifies would-create, already-linked and skipped leads and
   records sync-history feedback with sanitized table rows for the latest
   preview without creating contacts, companies, opportunities, communications
   or external-link rows. Preview rows also show existing CRM company/contact
@@ -168,28 +171,44 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   and clears the continuation only when Pipedrive reports no more pages are
   available, so capped runs cannot skip unprocessed leads. Selected import
   updates the general `lastLeadSyncAt` timestamp but does not advance the
-  full-pull cursor. Both import paths record the result in sync history with
-  sanitized per-lead import detail rows showing created, already-linked and
-  skipped outcomes. A protected pull-only maintenance route,
+  full-pull cursor. Both lead import paths record the result in sync history
+  with sanitized per-lead import detail rows showing created, already-linked and
+  skipped outcomes. Separate contact pulls use `lastFullPersonSyncAt` and
+  `lastFullPersonSyncNextCursor` so standalone person imports cannot disturb
+  the lead cursor and cannot skip unprocessed Pipedrive person pages. A
+  protected pull-only maintenance route,
   `/api/maintenance/pipedrive-lead-import`, and disabled-by-default Netlify
   scheduled function, `netlify/functions/pull-pipedrive-leads.mjs`, can run the
   same full-pull helper with background job history when
   `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` and
-  `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` are configured. Manual and
-  scheduled pulls start a compact `pipedrive.lead_import` background job before
-  importing; if another non-stale Pipedrive pull is already running, the newer
-  pull is skipped and logged as a warning without reading Pipedrive. The
-  Pipedrive settings page shows the scheduled pull state, credential source,
-  full-pull cursor, saved continuation and active overlap guard state for
-  admins. The protected maintenance route also supports `preview=1`, which
+  `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` are configured. A separate
+  protected contact maintenance route,
+  `/api/maintenance/pipedrive-contact-import`, and disabled-by-default Netlify
+  scheduled function, `netlify/functions/pull-pipedrive-contacts.mjs`, can run
+  the standalone person/contact pull when
+  `PIPEDRIVE_CONTACT_IMPORT_CRON_ENABLED=true` and
+  `PIPEDRIVE_CONTACT_IMPORT_SECRET`, `PIPEDRIVE_LEAD_IMPORT_SECRET` or
+  `CRON_SECRET` are configured. Manual and scheduled pulls start compact
+  `pipedrive.lead_import` or `pipedrive.contact_import` background jobs before
+  importing; if another non-stale pull of the same type is already running, the
+  newer pull is skipped and logged as a warning without reading Pipedrive. The
+  Pipedrive settings page shows lead and contact scheduled pull state,
+  credential source, full-pull cursor, saved continuation and active overlap
+  guard state for admins. The protected lead maintenance route also supports
+  `preview=1`, which
   performs a Pipedrive GET-only lead preview and returns aggregate counts only
   with `recordsWritten: 0` for operational verification before enabling real
   CRM imports. For controlled first imports, the same protected route supports
   `approvedImport=1` on `POST` only; it re-previews the requested page, requires
   the caller's `expectedWouldCreate` count to still match, caps the batch at 10
   would-create leads, aborts on preview warnings/skips, and imports only those
-  exact lead IDs into CRM. Pipedrive webhook handling is still intentionally
-  separate.
+  exact lead IDs into CRM. The CRM also exposes an authenticated pull-only
+  Pipedrive webhook receiver at `/api/webhooks/pipedrive`. It supports
+  Pipedrive v1/v2 lead and person create/change webhook payloads by reading the
+  current lead/person back from Pipedrive with GET requests and importing it
+  into CRM; delete and organisation webhooks are recorded but do not delete or
+  mutate Pipedrive data. Webhook registration in Pipedrive is not automated,
+  because creating provider webhooks would be a Pipedrive write operation.
   Pipedrive is pull-only by default; do not write back to Pipedrive without
   Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.

@@ -247,23 +247,31 @@ Main files:
 - `src/lib/integrations/pipedrive.ts`
 - `src/lib/integrations/pipedrive-import.ts`
 - `src/lib/integrations/pipedrive-lead-sync.ts`
+- `src/lib/integrations/pipedrive-contact-sync.ts`
+- `src/lib/integrations/pipedrive-webhooks.ts`
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
 - `/api/maintenance/pipedrive-lead-import`
+- `/api/maintenance/pipedrive-contact-import`
+- `/api/webhooks/pipedrive`
 - `/settings/integrations/pipedrive`
 
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
 also exposes a server-side read-only client that uses Pipedrive's `x-api-token`
-header for GET-only current-user, user, lead, person and organisation requests.
+header for GET-only current-user, user, lead, person and organisation requests,
+plus cursor-paginated Pipedrive v2 person listing.
 `src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/person/
 organisation records into CRM company, contact, sales opportunity,
-communication and external-link rows. The Pipedrive settings page can manually
-preview, selected-import or pull Pipedrive leads and writes sync-history rows
-with read/write counts. Preview classifies would-create, already-linked and
-skipped leads without creating CRM records and stores sanitized preview rows
-for the settings table. Preview also resolves the CRM company/contact that
-import would reuse from Pipedrive external links, company name, contact email
-or normalized phone so admins can review duplicates before selected import.
+communication and external-link rows. The same import module also maps
+standalone Pipedrive persons into CRM contacts and companies without creating
+sales opportunities. The Pipedrive settings page can manually preview,
+selected-import or pull Pipedrive leads, and can separately pull Pipedrive
+persons into CRM contacts. These actions write sync-history rows with
+read/write counts. Preview classifies would-create, already-linked and skipped
+leads without creating CRM records and stores sanitized preview rows for the
+settings table. Preview also resolves the CRM company/contact that import would
+reuse from Pipedrive external links, company name, contact email or normalized
+phone so admins can review duplicates before selected import.
 Selected import fetches checked preview lead IDs by GET and imports only those
 CRM records after validating server-side that imported IDs were marked
 would-create in the latest preview; submitted IDs outside that latest
@@ -293,9 +301,19 @@ Manual and scheduled pulls start a
 runs skip with a warning when another non-stale Pipedrive pull is already
 running. The Pipedrive settings page surfaces schedule readiness, credential
 source, cursor, saved continuation and active guard state from the same CRM
-state. Webhook handling should be implemented as a dedicated server-side sync
-layer rather than posting provider payloads through the public attribution lead
-endpoint.
+state. Standalone Pipedrive person/contact pulls use
+`src/lib/integrations/pipedrive-contact-sync.ts`, the protected
+`/api/maintenance/pipedrive-contact-import` route and the disabled-by-default
+`netlify/functions/pull-pipedrive-contacts.mjs` scheduled function. Contact
+pulls use a separate `pipedrive.contact_import` background job,
+`lastFullPersonSyncAt` timestamp and `lastFullPersonSyncNextCursor` cursor so
+they cannot move or skip the lead full-pull cursor. The authenticated
+`/api/webhooks/pipedrive` receiver supports Pipedrive v1/v2 lead and person
+create/change payloads by reading the current record back from Pipedrive using
+GET requests before importing into CRM. Delete and organization webhook events
+are recorded in sync history but do not delete CRM records and do not write to
+Pipedrive. Webhook registration is intentionally manual because creating a
+Pipedrive webhook is a provider-side write operation.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.
