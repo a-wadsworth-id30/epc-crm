@@ -94,6 +94,10 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
+  readPipedriveValidationSummary,
+  type PipedriveValidationSummary,
+} from "@/lib/integrations/pipedrive-validation";
+import {
   docusignConfigSchema,
   docusignProvider,
   hasStoredDocuSignCredentials,
@@ -439,6 +443,7 @@ export default async function IntegrationSettingsPage({
       latestPipedriveContactImportLog,
       activePipedrivePullRun,
       activePipedriveContactPullRun,
+      pipedriveValidationSummary,
     ] =
       await Promise.all([
         prisma.marketingIntegrationSyncLog.findMany({
@@ -526,6 +531,10 @@ export default async function IntegrationSettingsPage({
             status: BackgroundJobRunStatus.RUNNING,
           },
         }),
+        readPipedriveValidationSummary({
+          includeWebhookRegistration: true,
+          limit: 5,
+        }),
       ]);
     const pipedrivePreviewRows = pipedrivePreviewRowsFromMetadata(
       latestPipedrivePreviewLog?.metadata,
@@ -612,6 +621,7 @@ export default async function IntegrationSettingsPage({
             canEdit
           />
         </div>
+        <PipedriveValidationSummaryPanel summary={pipedriveValidationSummary} />
         <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -3164,6 +3174,106 @@ function ProviderSetupForm({
   );
 }
 
+function PipedriveValidationSummaryPanel({
+  summary,
+}: {
+  summary: PipedriveValidationSummary;
+}) {
+  const contactLinkCount = pipedriveExternalLinkCount({
+    externalType: "person",
+    internalType: "contact",
+    summary,
+  });
+  const companyLinkCount = pipedriveExternalLinkCount({
+    externalType: "organization",
+    internalType: "company",
+    summary,
+  });
+  const opportunityLinkCount = pipedriveExternalLinkCount({
+    externalType: "lead",
+    internalType: "salesOpportunity",
+    summary,
+  });
+  const latestSyncLog = summary.syncLogs[0] ?? null;
+  const latestBackgroundJob = summary.backgroundJobs[0] ?? null;
+
+  return (
+    <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+              Operational validation
+            </h2>
+            <LazyHelpTooltip content="Shows sanitized CRM-side Pipedrive readiness, linked-record totals, recent jobs and read-only webhook registration status." />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Last checked {formattedDateTime(summary.generatedAt) ?? "unknown"}.
+          </p>
+        </div>
+        <StatusBadge>{summary.status}</StatusBadge>
+      </div>
+      <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <PipedrivePullStateItem
+          label="Mode"
+          value={summary.pullOnly ? "Pull-only" : "Review"}
+          detail="Provider write-back requires approval"
+        />
+        <PipedrivePullStateItem
+          label="Contacts linked"
+          value={formatPipedriveValidationCount(contactLinkCount)}
+          detail="Pipedrive person to CRM contact"
+        />
+        <PipedrivePullStateItem
+          label="Companies linked"
+          value={formatPipedriveValidationCount(companyLinkCount)}
+          detail="Pipedrive organisation to CRM company"
+        />
+        <PipedrivePullStateItem
+          label="Opportunities linked"
+          value={formatPipedriveValidationCount(opportunityLinkCount)}
+          detail="Pipedrive lead to CRM opportunity"
+        />
+        <PipedrivePullStateItem
+          label="Lead full pull"
+          value={
+            formattedDateTime(summary.leadReadiness.lastFullLeadSyncAt) ??
+            "Not completed"
+          }
+          detail={pipedriveLeadCursorDetail(summary)}
+        />
+        <PipedrivePullStateItem
+          label="Contact full pull"
+          value={
+            formattedDateTime(summary.contactReadiness.lastFullPersonSyncAt) ??
+            "Not completed"
+          }
+          detail={pipedriveContactCursorDetail(summary)}
+        />
+        <PipedrivePullStateItem
+          label="Webhooks"
+          value={pipedriveWebhookRegistrationValue(summary.webhookRegistration)}
+          detail={pipedriveWebhookRegistrationDetail(
+            summary.webhookRegistration,
+          )}
+        />
+        <PipedrivePullStateItem
+          label="Latest job"
+          value={
+            latestBackgroundJob
+              ? latestBackgroundJob.status
+              : latestSyncLog?.status ?? "No history"
+          }
+          detail={pipedriveLatestActivityDetail({
+            latestBackgroundJob,
+            latestSyncLog,
+          })}
+        />
+      </dl>
+    </section>
+  );
+}
+
 function PipedrivePreviewTable({
   canImport,
   log,
@@ -3662,6 +3772,95 @@ function pipedriveScheduleBadge({
   if (scheduleDryRun) return "WARNING";
 
   return "Ready";
+}
+
+function pipedriveExternalLinkCount({
+  externalType,
+  internalType,
+  summary,
+}: {
+  externalType: string;
+  internalType: string;
+  summary: PipedriveValidationSummary;
+}) {
+  return (
+    summary.externalRecordLinks.find(
+      (row) =>
+        row.externalType === externalType && row.internalType === internalType,
+    )?.count ?? 0
+  );
+}
+
+function formatPipedriveValidationCount(value: number) {
+  return new Intl.NumberFormat("en-GB").format(value);
+}
+
+function pipedriveLeadCursorDetail(summary: PipedriveValidationSummary) {
+  const nextStart = summary.leadReadiness.lastFullLeadSyncNextStart;
+  if (typeof nextStart === "number") return `Continuation start ${nextStart}`;
+
+  return summary.leadReadiness.connected
+    ? "No saved continuation"
+    : "Credential check failed";
+}
+
+function pipedriveContactCursorDetail(summary: PipedriveValidationSummary) {
+  if (summary.contactReadiness.hasContinuationCursor) {
+    return "Continuation cursor saved";
+  }
+
+  return summary.contactReadiness.connected
+    ? "No saved continuation"
+    : "Credential check failed";
+}
+
+function pipedriveWebhookRegistrationValue(
+  webhookRegistration: PipedriveValidationSummary["webhookRegistration"],
+) {
+  if (!webhookRegistration) return "Not checked";
+  if (webhookRegistration.status === "ERROR") return "Check failed";
+
+  const desiredCount = webhookRegistration.desiredCount ?? 4;
+  const existingTargetCount = webhookRegistration.existingTargetCount ?? 0;
+
+  return `${existingTargetCount}/${desiredCount} registered`;
+}
+
+function pipedriveWebhookRegistrationDetail(
+  webhookRegistration: PipedriveValidationSummary["webhookRegistration"],
+) {
+  if (!webhookRegistration) return "Registration check skipped";
+  if (webhookRegistration.missingEvents.length) {
+    return `Missing ${webhookRegistration.missingEvents.join(", ")}`;
+  }
+  if (webhookRegistration.receiverAuthConfigured === false) {
+    return "Receiver auth missing";
+  }
+
+  return webhookRegistration.pipedriveWritesPerformed
+    ? `${webhookRegistration.pipedriveWritesPerformed} provider write checked`
+    : "No provider writes performed";
+}
+
+function pipedriveLatestActivityDetail({
+  latestBackgroundJob,
+  latestSyncLog,
+}: {
+  latestBackgroundJob: PipedriveValidationSummary["backgroundJobs"][number] | null;
+  latestSyncLog: PipedriveValidationSummary["syncLogs"][number] | null;
+}) {
+  if (latestBackgroundJob) {
+    return `${latestBackgroundJob.jobName} at ${
+      formattedDateTime(latestBackgroundJob.startedAt) ?? "unknown"
+    }`;
+  }
+  if (latestSyncLog) {
+    return `${latestSyncLog.syncType} at ${
+      formattedDateTime(latestSyncLog.startedAt) ?? "unknown"
+    }`;
+  }
+
+  return "No Pipedrive sync history";
 }
 
 function PipedriveCrmRecordLink({

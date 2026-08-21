@@ -345,7 +345,8 @@ Use `/api/maintenance/pipedrive-validation` with `GET` for a sanitized
 operational summary of Pipedrive readiness, external-link counts, recent sync
 logs, recent background jobs and webhook-registration status. Add
 `skipWebhookCheck=1` to avoid the provider GET used by the registration status
-check.
+check. Admins can see the same sanitized validation summary in
+Settings > Integrations > Pipedrive.
 
 ## Current Dev-Phase Rule
 

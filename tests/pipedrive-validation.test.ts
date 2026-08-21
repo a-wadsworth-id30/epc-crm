@@ -140,6 +140,7 @@ beforeEach(() => {
     hasContinuationCursor: false,
     lastContactSyncAt: "2026-08-21T10:34:18.097Z",
     lastFullPersonSyncAt: "2026-08-21T10:34:18.097Z",
+    lastFullPersonSyncNextCursor: null,
     pullOnly: true,
     status: "CONNECTED",
     updatedAt: "2026-08-21T10:34:18.103Z",
@@ -206,12 +207,16 @@ describe("Pipedrive validation summary", () => {
   it("reports warning while a cursor continuation is still present", async () => {
     contactReadiness = {
       ...contactReadiness,
-      hasContinuationCursor: true,
+      lastFullPersonSyncNextCursor: "cursor-2",
     };
 
     const result = await pipedriveValidation.readPipedriveValidationSummary();
 
     assert.equal(result.status, "WARNING");
     assert.equal(result.contactReadiness.hasContinuationCursor, true);
+    assert.equal(
+      result.contactReadiness.lastFullPersonSyncNextCursor,
+      "cursor-2",
+    );
   });
 });

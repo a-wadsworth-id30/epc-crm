@@ -71,6 +71,7 @@ type SanitizedReadiness = {
   lastFullLeadSyncAt: string | null;
   lastFullLeadSyncNextStart: number | null;
   lastFullPersonSyncAt: string | null;
+  lastFullPersonSyncNextCursor: string | null;
   lastLeadSyncAt: string | null;
   provider: typeof pipedriveProvider;
   pullOnly: true;
@@ -218,13 +219,18 @@ async function safeWebhookRegistrationSummary() {
 }
 
 function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
+  const lastFullPersonSyncNextCursor = stringValue(
+    value.lastFullPersonSyncNextCursor,
+  );
+
   return {
     connected: value.connected === true,
     credentialSource: stringValue(value.credentialSource),
     defaultLeadSource: stringValue(value.defaultLeadSource),
     hasContinuationCursor:
       value.hasContinuationCursor === true ||
-      typeof value.lastFullLeadSyncNextStart === "number",
+      typeof value.lastFullLeadSyncNextStart === "number" ||
+      Boolean(lastFullPersonSyncNextCursor),
     lastContactSyncAt: stringValue(value.lastContactSyncAt),
     lastFullLeadSyncAt: stringValue(value.lastFullLeadSyncAt),
     lastFullLeadSyncNextStart:
@@ -232,6 +238,7 @@ function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
         ? value.lastFullLeadSyncNextStart
         : null,
     lastFullPersonSyncAt: stringValue(value.lastFullPersonSyncAt),
+    lastFullPersonSyncNextCursor,
     lastLeadSyncAt: stringValue(value.lastLeadSyncAt),
     provider: pipedriveProvider,
     pullOnly: true,
