@@ -154,6 +154,25 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.nextCursor, "cursor-2");
   });
 
+  it("uses the global API v2 path for the default persons endpoint", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: { next_cursor: null },
+        data: [],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    await createClient().listPersons({ limit: 50 });
+
+    assert.equal(
+      requests[0]?.url,
+      "https://api.pipedrive.com/api/v2/persons?limit=50",
+    );
+  });
+
   it("supports company-domain API base URLs", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {
