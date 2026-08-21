@@ -249,9 +249,11 @@ Main files:
 - `src/lib/integrations/pipedrive-lead-sync.ts`
 - `src/lib/integrations/pipedrive-contact-sync.ts`
 - `src/lib/integrations/pipedrive-webhooks.ts`
+- `src/lib/integrations/pipedrive-webhook-registration.ts`
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
 - `/api/maintenance/pipedrive-lead-import`
 - `/api/maintenance/pipedrive-contact-import`
+- `/api/maintenance/pipedrive-webhook-registration`
 - `/api/webhooks/pipedrive`
 - `/settings/integrations/pipedrive`
 
@@ -312,8 +314,13 @@ they cannot move or skip the lead full-pull cursor. The authenticated
 create/change payloads by reading the current record back from Pipedrive using
 GET requests before importing into CRM. Delete and organization webhook events
 are recorded in sync history but do not delete CRM records and do not write to
-Pipedrive. Webhook registration is intentionally manual because creating a
-Pipedrive webhook is a provider-side write operation.
+Pipedrive. The protected
+`/api/maintenance/pipedrive-webhook-registration` route previews required
+Pipedrive v2 lead/person create/change webhook subscriptions with GET-only
+provider checks. It only creates missing provider webhooks when called with
+`POST`, `apply=1` and the explicit provider-write approval token
+`pipedrive-webhook-registration`; creating Pipedrive webhooks is still a
+provider-side write operation.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

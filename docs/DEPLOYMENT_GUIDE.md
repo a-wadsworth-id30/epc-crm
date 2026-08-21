@@ -142,6 +142,11 @@ Optional:
   `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` can be used instead.
 - `PIPEDRIVE_WEBHOOK_BASIC_USER`: optional Basic Auth username required by the
   webhook receiver when Pipedrive webhook HTTP auth is configured.
+- `PIPEDRIVE_WEBHOOK_REGISTRATION_SECRET`: shared secret for
+  `/api/maintenance/pipedrive-webhook-registration`; `PIPEDRIVE_LEAD_IMPORT_SECRET`
+  or `CRON_SECRET` can be used instead.
+- `PIPEDRIVE_WEBHOOK_SUBSCRIPTION_URL`: optional full webhook receiver URL.
+  Leave blank to derive `<APP_BASE_URL>/api/webhooks/pipedrive`.
 - `BACKGROUND_JOB_STALE_MINUTES`: optional running background job age threshold
   for Settings > System and admin header alerts, default `30`, minimum `5`,
   maximum `1440`.
@@ -323,7 +328,13 @@ HTTP Basic Auth with `PIPEDRIVE_WEBHOOK_BASIC_USER` and
 `PIPEDRIVE_WEBHOOK_SECRET`, or use the lead import/cron secret fallback. The
 CRM receiver reads the current lead/person from Pipedrive with GET requests
 before importing into CRM. Delete and organisation webhooks are recorded but do
-not delete CRM records and do not write to Pipedrive. Registering or changing
+not delete CRM records and do not write to Pipedrive.
+
+Use `/api/maintenance/pipedrive-webhook-registration` with `GET` to preview the
+four required Pipedrive v2 webhook subscriptions without performing provider
+writes: lead create, lead change, person create and person change. To create
+missing webhooks, call `POST` with `apply=1` and
+`providerWriteApproval=pipedrive-webhook-registration`. Registering or changing
 webhooks inside Pipedrive is a provider write operation and must be approved by
 Adam before it is performed.
 
