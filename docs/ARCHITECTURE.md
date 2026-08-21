@@ -254,6 +254,7 @@ Main files:
 - `/api/maintenance/pipedrive-lead-import`
 - `/api/maintenance/pipedrive-contact-import`
 - `/api/maintenance/pipedrive-webhook-registration`
+- `/api/maintenance/pipedrive-validation`
 - `/api/webhooks/pipedrive`
 - `/settings/integrations/pipedrive`
 
@@ -320,7 +321,11 @@ Pipedrive v2 lead/person create/change webhook subscriptions with GET-only
 provider checks. It only creates missing provider webhooks when called with
 `POST`, `apply=1` and the explicit provider-write approval token
 `pipedrive-webhook-registration`; creating Pipedrive webhooks is still a
-provider-side write operation.
+provider-side write operation. The protected
+`/api/maintenance/pipedrive-validation` route returns sanitized CRM-side
+operational summaries for readiness, external-link counts, recent sync logs,
+recent background jobs and webhook-registration status without exposing raw
+provider payloads or secrets.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

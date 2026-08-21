@@ -147,6 +147,9 @@ Optional:
   or `CRON_SECRET` can be used instead.
 - `PIPEDRIVE_WEBHOOK_SUBSCRIPTION_URL`: optional full webhook receiver URL.
   Leave blank to derive `<APP_BASE_URL>/api/webhooks/pipedrive`.
+- `PIPEDRIVE_VALIDATION_SECRET`: shared secret for
+  `/api/maintenance/pipedrive-validation`; `PIPEDRIVE_LEAD_IMPORT_SECRET` or
+  `CRON_SECRET` can be used instead.
 - `BACKGROUND_JOB_STALE_MINUTES`: optional running background job age threshold
   for Settings > System and admin header alerts, default `30`, minimum `5`,
   maximum `1440`.
@@ -337,6 +340,12 @@ missing webhooks, call `POST` with `apply=1` and
 `providerWriteApproval=pipedrive-webhook-registration`. Registering or changing
 webhooks inside Pipedrive is a provider write operation and must be approved by
 Adam before it is performed.
+
+Use `/api/maintenance/pipedrive-validation` with `GET` for a sanitized
+operational summary of Pipedrive readiness, external-link counts, recent sync
+logs, recent background jobs and webhook-registration status. Add
+`skipWebhookCheck=1` to avoid the provider GET used by the registration status
+check.
 
 ## Current Dev-Phase Rule
 
