@@ -109,6 +109,7 @@ import { dryRunMarketingProviderConversionUploadsAction } from "@/lib/actions/ma
 import {
   importSelectedPipedriveLeadsAction,
   previewPipedriveLeadsAction,
+  pullPipedriveContactsAction,
   pullPipedriveLeadsAction,
 } from "@/lib/actions/integrations";
 import { backgroundJobStaleCutoff } from "@/lib/maintenance/background-jobs";
@@ -167,6 +168,18 @@ type PipedriveImportRow = {
   opportunityId: string | null;
   status: "created" | "linked_existing" | "skipped";
   title: string | null;
+  warningCount: number;
+  warnings: string[];
+};
+
+type PipedriveContactImportRow = {
+  companyId: string | null;
+  contactId: string | null;
+  createdCompany: boolean;
+  createdContact: boolean;
+  externalPersonId: string | null;
+  name: string | null;
+  status: "created" | "linked_existing" | "skipped";
   warningCount: number;
   warnings: string[];
 };
@@ -423,7 +436,9 @@ export default async function IntegrationSettingsPage({
       recentPipedriveSyncLogs,
       latestPipedrivePreviewLog,
       latestPipedriveImportLog,
+      latestPipedriveContactImportLog,
       activePipedrivePullRun,
+      activePipedriveContactPullRun,
     ] =
       await Promise.all([
         prisma.marketingIntegrationSyncLog.findMany({
@@ -471,6 +486,22 @@ export default async function IntegrationSettingsPage({
             syncType: { in: ["lead-import", "lead-import-selected"] },
           },
         }),
+        prisma.marketingIntegrationSyncLog.findFirst({
+          orderBy: { startedAt: "desc" },
+          select: {
+            message: true,
+            metadata: true,
+            recordsRead: true,
+            recordsWritten: true,
+            startedAt: true,
+            status: true,
+            syncType: true,
+          },
+          where: {
+            provider: pipedriveProvider,
+            syncType: { in: ["contact-import", "contact-import-webhook"] },
+          },
+        }),
         prisma.backgroundJobRun.findFirst({
           orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
           select: {
@@ -483,12 +514,27 @@ export default async function IntegrationSettingsPage({
             status: BackgroundJobRunStatus.RUNNING,
           },
         }),
+        prisma.backgroundJobRun.findFirst({
+          orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
+          select: {
+            startedAt: true,
+            trigger: true,
+          },
+          where: {
+            jobName: "pipedrive.contact_import",
+            startedAt: { gte: backgroundJobStaleCutoff() },
+            status: BackgroundJobRunStatus.RUNNING,
+          },
+        }),
       ]);
     const pipedrivePreviewRows = pipedrivePreviewRowsFromMetadata(
       latestPipedrivePreviewLog?.metadata,
     );
     const pipedriveImportRows = pipedriveImportRowsFromMetadata(
       latestPipedriveImportLog?.metadata,
+    );
+    const pipedriveContactImportRows = pipedriveContactImportRowsFromMetadata(
+      latestPipedriveContactImportLog?.metadata,
     );
     const config = pipedriveConfigSchema.safeParse(integration?.config ?? {});
     const storedConfig = pipedriveStoredConfigSchema.safeParse(
@@ -512,18 +558,42 @@ export default async function IntegrationSettingsPage({
       process.env.PIPEDRIVE_LEAD_IMPORT_SECRET?.trim() ||
         process.env.CRON_SECRET?.trim(),
     );
+    const pipedriveContactScheduleEnabled = booleanEnv(
+      process.env.PIPEDRIVE_CONTACT_IMPORT_CRON_ENABLED,
+    );
+    const pipedriveContactScheduleDryRun = booleanEnv(
+      process.env.PIPEDRIVE_CONTACT_IMPORT_CRON_DRY_RUN,
+    );
+    const pipedriveContactScheduleSecretConfigured = Boolean(
+      process.env.PIPEDRIVE_CONTACT_IMPORT_SECRET?.trim() ||
+        process.env.PIPEDRIVE_LEAD_IMPORT_SECRET?.trim() ||
+        process.env.CRON_SECRET?.trim(),
+    );
+    const pipedriveWebhookSecretConfigured = Boolean(
+      process.env.PIPEDRIVE_WEBHOOK_SECRET?.trim() ||
+        process.env.PIPEDRIVE_LEAD_IMPORT_SECRET?.trim() ||
+        process.env.CRON_SECRET?.trim(),
+    );
     const pipedrivePullState = storedConfig.success
       ? {
+          lastContactSyncAt: storedConfig.data.lastContactSyncAt ?? null,
           lastFullLeadSyncAt: storedConfig.data.lastFullLeadSyncAt ?? null,
           lastFullLeadSyncNextStart:
             typeof storedConfig.data.lastFullLeadSyncNextStart === "number"
               ? storedConfig.data.lastFullLeadSyncNextStart
               : null,
+          lastFullPersonSyncAt:
+            storedConfig.data.lastFullPersonSyncAt ?? null,
+          lastFullPersonSyncNextCursor:
+            storedConfig.data.lastFullPersonSyncNextCursor ?? null,
           lastLeadSyncAt: storedConfig.data.lastLeadSyncAt ?? null,
         }
       : {
+          lastContactSyncAt: null,
           lastFullLeadSyncAt: null,
           lastFullLeadSyncNextStart: null,
+          lastFullPersonSyncAt: null,
+          lastFullPersonSyncNextCursor: null,
           lastLeadSyncAt: null,
         };
 
@@ -531,7 +601,7 @@ export default async function IntegrationSettingsPage({
       <>
         <PageHeader
           title="Connect Pipedrive"
-          description="Connection credentials for importing Pipedrive leads into CRM contacts, companies and opportunities."
+          description="Connection credentials for pull-only Pipedrive lead, person and organisation imports."
         />
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <PipedriveSettingsForm
@@ -597,15 +667,115 @@ export default async function IntegrationSettingsPage({
           <PipedrivePullStateSummary
             activeRun={activePipedrivePullRun}
             credentialSource={pipedriveCredentialSource}
-            lastFullLeadSyncAt={pipedrivePullState.lastFullLeadSyncAt}
-            lastFullLeadSyncNextStart={
-              pipedrivePullState.lastFullLeadSyncNextStart
+            continuationDetail={
+              pipedrivePullState.lastFullLeadSyncNextStart !== null
+                ? `Continuation start ${pipedrivePullState.lastFullLeadSyncNextStart}`
+                : "No saved continuation"
             }
-            lastLeadSyncAt={pipedrivePullState.lastLeadSyncAt}
+            lastFullSyncAt={pipedrivePullState.lastFullLeadSyncAt}
+            lastSyncAt={pipedrivePullState.lastLeadSyncAt}
             scheduleDryRun={pipedriveScheduleDryRun}
             scheduleEnabled={pipedriveScheduleEnabled}
             scheduleSecretConfigured={pipedriveScheduleSecretConfigured}
+            title="Lead pull state"
           />
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                  Contact import
+                </h2>
+                <LazyHelpTooltip content="Pulls Pipedrive persons into CRM contacts and linked companies without creating sales opportunities or writing back to Pipedrive." />
+              </div>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Pull Pipedrive persons into CRM contacts independently from the
+                lead inbox.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <form action={pullPipedriveContactsAction}>
+                <button
+                  type="submit"
+                  disabled={pipedriveCredentialSource === "missing"}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Pull Pipedrive contacts
+                </button>
+              </form>
+              <StatusBadge>
+                {latestPipedriveContactImportLog?.status ?? "Planned"}
+              </StatusBadge>
+            </div>
+          </div>
+          <PipedriveContactImportDetailTable
+            log={latestPipedriveContactImportLog}
+            rows={pipedriveContactImportRows}
+          />
+          <PipedrivePullStateSummary
+            activeRun={activePipedriveContactPullRun}
+            credentialSource={pipedriveCredentialSource}
+            continuationDetail={
+              pipedrivePullState.lastFullPersonSyncNextCursor
+                ? "Continuation cursor saved"
+                : "No saved continuation"
+            }
+            lastFullSyncAt={pipedrivePullState.lastFullPersonSyncAt}
+            lastSyncAt={pipedrivePullState.lastContactSyncAt}
+            scheduleDryRun={pipedriveContactScheduleDryRun}
+            scheduleEnabled={pipedriveContactScheduleEnabled}
+            scheduleSecretConfigured={pipedriveContactScheduleSecretConfigured}
+            title="Contact pull state"
+          />
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="mb-4 flex flex-col gap-2">
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+              Webhook receiver
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Endpoint:{" "}
+              <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700 dark:bg-white/10 dark:text-gray-300">
+                /api/webhooks/pipedrive
+              </code>
+            </p>
+          </div>
+          <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <PipedrivePullStateItem
+              label="Webhook secret"
+              value={pipedriveWebhookSecretConfigured ? "Configured" : "Missing"}
+              detail={
+                pipedriveWebhookSecretConfigured
+                  ? "Basic auth or bearer supported"
+                  : "Set webhook secret before registration"
+              }
+            />
+            <PipedrivePullStateItem
+              label="Write-back"
+              value="Disabled"
+              detail="CRM receiver is pull-only"
+            />
+            <PipedrivePullStateItem
+              label="Lead events"
+              value="Supported"
+              detail="Create/change imports matching lead"
+            />
+            <PipedrivePullStateItem
+              label="Person events"
+              value="Supported"
+              detail="Create/change imports matching contact"
+            />
+          </dl>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <h2 className="mb-4 text-base font-semibold text-gray-800 dark:text-white/90">
+            Sync history
+          </h2>
           <SyncHistoryTable logs={recentPipedriveSyncLogs} />
         </section>
       </>
@@ -3270,24 +3440,121 @@ function PipedriveImportDetailTable({
   );
 }
 
+function PipedriveContactImportDetailTable({
+  log,
+  rows,
+}: {
+  log: PipedriveImportLog | null;
+  rows: PipedriveContactImportRow[];
+}) {
+  return (
+    <div className="mb-6 border-t border-gray-100 pt-5 dark:border-gray-800">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+            Latest contact import details
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {log
+              ? `${formatPipedriveImportJobLabel(log.syncType)} checked ${log.recordsRead} person${log.recordsRead === 1 ? "" : "s"} and wrote ${log.recordsWritten} on ${log.startedAt.toLocaleString("en-GB")}.`
+              : "No Pipedrive contact import has run yet."}
+          </p>
+        </div>
+        {log ? <StatusBadge>{log.status}</StatusBadge> : null}
+      </div>
+      {rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+            <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
+              <tr>
+                <th className="px-4 py-3">Outcome</th>
+                <th className="px-4 py-3">Person</th>
+                <th className="px-4 py-3">CRM records</th>
+                <th className="px-4 py-3">Warnings</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {rows.map((row, index) => (
+                <tr key={`${row.externalPersonId ?? "person"}-${index}`}>
+                  <td className="px-4 py-4 align-top">
+                    <StatusBadge>
+                      {pipedriveImportStatusLabel(row.status)}
+                    </StatusBadge>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <div className="font-medium text-gray-800 dark:text-white/90">
+                      {row.name ?? "Unnamed person"}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {row.externalPersonId ?? "No Pipedrive ID"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    <div className="flex flex-col gap-1">
+                      <PipedriveCrmRecordLink
+                        href={row.contactId ? `/contacts/${row.contactId}` : null}
+                        label={row.createdContact ? "Contact created" : "Contact"}
+                        recordId={row.contactId}
+                      />
+                      <PipedriveCrmRecordLink
+                        href={row.companyId ? `/clients/${row.companyId}` : null}
+                        label={row.createdCompany ? "Company created" : "Company"}
+                        recordId={row.companyId}
+                      />
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {row.warningCount ? (
+                      <div>
+                        <div>
+                          {row.warningCount} warning
+                          {row.warningCount === 1 ? "" : "s"}
+                        </div>
+                        {row.warnings.length ? (
+                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {row.warnings.join(" / ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      "None"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="py-6 text-sm text-gray-500 dark:text-gray-400">
+          {log?.message ??
+            "Contact import details will appear after a Pipedrive contact import runs."}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PipedrivePullStateSummary({
   activeRun,
   credentialSource,
-  lastFullLeadSyncAt,
-  lastFullLeadSyncNextStart,
-  lastLeadSyncAt,
+  continuationDetail,
+  lastFullSyncAt,
+  lastSyncAt,
   scheduleDryRun,
   scheduleEnabled,
   scheduleSecretConfigured,
+  title,
 }: {
   activeRun: { startedAt: Date; trigger: string } | null;
   credentialSource: PipedriveCredentialSource;
-  lastFullLeadSyncAt: string | null;
-  lastFullLeadSyncNextStart: number | null;
-  lastLeadSyncAt: string | null;
+  continuationDetail: string;
+  lastFullSyncAt: string | null;
+  lastSyncAt: string | null;
   scheduleDryRun: boolean;
   scheduleEnabled: boolean;
   scheduleSecretConfigured: boolean;
+  title: string;
 }) {
   const scheduleBadge = pipedriveScheduleBadge({
     credentialSource,
@@ -3318,7 +3585,7 @@ function PipedrivePullStateSummary({
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
-            Pull state
+            {title}
           </h3>
         </div>
         <StatusBadge>{scheduleBadge}</StatusBadge>
@@ -3336,12 +3603,8 @@ function PipedrivePullStateSummary({
         />
         <PipedrivePullStateItem
           label="Full cursor"
-          value={formattedDateTime(lastFullLeadSyncAt) ?? "Not completed"}
-          detail={
-            lastFullLeadSyncNextStart !== null
-              ? `Continuation start ${lastFullLeadSyncNextStart}`
-              : "No saved continuation"
-          }
+          value={formattedDateTime(lastFullSyncAt) ?? "Not completed"}
+          detail={continuationDetail}
         />
         <PipedrivePullStateItem
           label="Overlap guard"
@@ -3349,7 +3612,7 @@ function PipedrivePullStateSummary({
           detail={
             activeRun
               ? `${activeRun.trigger} since ${activeRunAt ?? "unknown"}`
-              : `Last sync ${formattedDateTime(lastLeadSyncAt) ?? "not recorded"}`
+              : `Last sync ${formattedDateTime(lastSyncAt) ?? "not recorded"}`
           }
         />
       </dl>
@@ -3477,6 +3740,18 @@ function pipedriveImportRowsFromMetadata(
     .slice(0, 50);
 }
 
+function pipedriveContactImportRowsFromMetadata(
+  metadata: Prisma.JsonValue | null | undefined,
+) {
+  const record = jsonRecord(metadata);
+  const rows = Array.isArray(record.imports) ? record.imports : [];
+
+  return rows
+    .map(parsePipedriveContactImportRow)
+    .filter((row): row is PipedriveContactImportRow => Boolean(row))
+    .slice(0, 50);
+}
+
 function parsePipedrivePreviewRow(value: unknown) {
   const record = jsonRecord(value);
   const status = pipedrivePreviewStatus(record.status);
@@ -3529,6 +3804,32 @@ function parsePipedriveImportRow(value: unknown) {
   };
 }
 
+function parsePipedriveContactImportRow(value: unknown) {
+  const record = jsonRecord(value);
+  const status = pipedriveImportStatus(record.status);
+
+  if (!status) return null;
+
+  return {
+    companyId: nullableString(record.companyId),
+    contactId: nullableString(record.contactId),
+    createdCompany: nullableBoolean(record.createdCompany),
+    createdContact: nullableBoolean(record.createdContact),
+    externalPersonId: nullableString(record.externalPersonId),
+    name: nullableString(record.name),
+    status,
+    warningCount: Math.max(
+      0,
+      Math.trunc(nullableNumber(record.warningCount) ?? 0),
+    ),
+    warnings: Array.isArray(record.warnings)
+      ? record.warnings
+          .map(nullableString)
+          .filter((warning): warning is string => Boolean(warning))
+      : [],
+  };
+}
+
 function pipedrivePreviewStatus(value: unknown) {
   if (
     value === "would_create" ||
@@ -3568,6 +3869,9 @@ function pipedriveImportStatusLabel(status: PipedriveImportRow["status"]) {
 }
 
 function formatPipedriveImportJobLabel(syncType: string) {
+  if (syncType === "contact-import") return "Contact pull";
+  if (syncType === "contact-import-webhook") return "Contact webhook";
+  if (syncType === "lead-import-webhook") return "Lead webhook";
   if (syncType === "lead-import-selected") return "Selected import";
   if (syncType === "lead-import") return "Full pull";
   return syncType;

@@ -41,6 +41,7 @@ import {
   ensurePipedriveIntegrationConnection,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
+import { runPipedriveContactPull } from "@/lib/integrations/pipedrive-contact-sync";
 import {
   geoapifyConfigSchema,
   geoapifyProvider,
@@ -360,6 +361,9 @@ export async function updatePipedriveIntegrationAction(
     : undefined;
   const existingSyncState = existingConfig.success
     ? {
+        ...(existingConfig.data.lastContactSyncAt
+          ? { lastContactSyncAt: existingConfig.data.lastContactSyncAt }
+          : {}),
         ...(existingConfig.data.lastFullLeadSyncAt
           ? { lastFullLeadSyncAt: existingConfig.data.lastFullLeadSyncAt }
           : {}),
@@ -367,6 +371,15 @@ export async function updatePipedriveIntegrationAction(
           ? {
               lastFullLeadSyncNextStart:
                 existingConfig.data.lastFullLeadSyncNextStart,
+            }
+          : {}),
+        ...(existingConfig.data.lastFullPersonSyncAt
+          ? { lastFullPersonSyncAt: existingConfig.data.lastFullPersonSyncAt }
+          : {}),
+        ...(existingConfig.data.lastFullPersonSyncNextCursor
+          ? {
+              lastFullPersonSyncNextCursor:
+                existingConfig.data.lastFullPersonSyncNextCursor,
             }
           : {}),
         ...(existingConfig.data.lastLeadSyncAt
@@ -428,6 +441,10 @@ export async function updatePipedriveIntegrationAction(
       fullLeadSyncContinuationPreserved:
         "lastFullLeadSyncNextStart" in config,
       fullLeadSyncStatePreserved: "lastFullLeadSyncAt" in config,
+      fullPersonSyncContinuationPreserved:
+        "lastFullPersonSyncNextCursor" in config,
+      fullPersonSyncStatePreserved: "lastFullPersonSyncAt" in config,
+      contactSyncStatePreserved: "lastContactSyncAt" in config,
       leadSyncStatePreserved: "lastLeadSyncAt" in config,
     },
     provider: pipedriveProvider,
@@ -449,6 +466,12 @@ export async function updatePipedriveIntegrationAction(
 export async function pullPipedriveLeadsAction() {
   const user = await requireAdmin();
   await runPipedriveLeadPull({ actorId: user.id, trigger: "manual" });
+  revalidatePipedriveImportPaths();
+}
+
+export async function pullPipedriveContactsAction() {
+  const user = await requireAdmin();
+  await runPipedriveContactPull({ actorId: user.id, trigger: "manual" });
   revalidatePipedriveImportPaths();
 }
 

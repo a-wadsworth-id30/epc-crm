@@ -19,6 +19,7 @@ import {
   pipedriveProvider,
   type PipedriveLead,
   type PipedriveListLeadsParams,
+  type PipedriveListPersonsParams,
   type PipedriveListResult,
   type PipedriveOrganization,
   type PipedrivePerson,
@@ -32,6 +33,7 @@ const pipedriveExternalTypes = {
   person: "person",
 } as const;
 const defaultPipedriveFullPullMaxPages = 5;
+const defaultPipedriveFullPersonPullMaxPages = 5;
 const pipedriveInternalTypes = {
   company: "company",
   contact: "contact",
@@ -50,6 +52,12 @@ export type PipedriveImportClient = PipedriveRelatedRecordClient &
 
 export type PipedriveSelectedImportClient = PipedriveRelatedRecordClient &
   Pick<PipedriveReadOnlyClient, "getLead">;
+
+export type PipedrivePersonImportClient = PipedriveRelatedRecordClient &
+  Pick<PipedriveReadOnlyClient, "listPersons">;
+
+export type PipedriveSelectedPersonImportClient = PipedriveRelatedRecordClient &
+  Pick<PipedriveReadOnlyClient, "getPerson">;
 
 export type PipedriveLeadImportMapping = {
   company: {
@@ -157,6 +165,31 @@ export type PipedriveLeadImportMetadataRow = {
   warnings: string[];
 };
 
+export type PipedrivePersonImportResult = {
+  companyId: string | null;
+  contactId: string | null;
+  created: {
+    company: boolean;
+    contact: boolean;
+  };
+  externalPersonId: string | null;
+  name: string | null;
+  status: "created" | "linked_existing" | "skipped";
+  warnings: string[];
+};
+
+export type PipedrivePersonImportMetadataRow = {
+  companyId: string | null;
+  contactId: string | null;
+  createdCompany: boolean;
+  createdContact: boolean;
+  externalPersonId: string | null;
+  name: string | null;
+  status: PipedrivePersonImportResult["status"];
+  warningCount: number;
+  warnings: string[];
+};
+
 type ResolvedCompany = {
   created: boolean;
   id: string | null;
@@ -197,6 +230,27 @@ type ImportLeadIdsOptions = {
   client?: PipedriveSelectedImportClient | null;
   leadIds: string[];
   now?: Date;
+};
+
+type ImportPersonRecordOptions = {
+  client: PipedriveRelatedRecordClient;
+  now?: Date;
+  person: PipedrivePerson;
+};
+
+type ImportPersonPageOptions = {
+  client?: PipedrivePersonImportClient | null;
+  params?: PipedriveListPersonsParams;
+};
+
+type ImportPersonPagesOptions = ImportPersonPageOptions & {
+  maxPages?: number;
+};
+
+type ImportPersonIdsOptions = {
+  client?: PipedriveSelectedPersonImportClient | null;
+  now?: Date;
+  personIds: Array<number | string>;
 };
 
 type ImportedRelatedRecords = {
@@ -310,6 +364,108 @@ export async function importPipedriveLeadPages({
     maxPages: pageLimit,
     moreAvailable,
     nextStart,
+    pagesRead,
+    recordsRead,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedrivePersonPage({
+  client,
+  params = {},
+}: ImportPersonPageOptions = {}) {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      results: [],
+      skipped: 0,
+      status: "not_configured" as const,
+    };
+  }
+
+  const page = await readClient.listPersons(latestPersonListParams(params));
+  const results: PipedrivePersonImportResult[] = [];
+
+  for (const person of page.data) {
+    results.push(
+      await importPipedrivePersonRecord({ client: readClient, person }),
+    );
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    page: page as PipedriveListResult<PipedrivePerson>,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedrivePersonPages({
+  client,
+  maxPages,
+  params = {},
+}: ImportPersonPagesOptions = {}) {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveFullPersonPullMaxPages,
+  );
+
+  if (!readClient) {
+    return {
+      maxPages: pageLimit,
+      moreAvailable: false,
+      nextCursor: null,
+      pagesRead: 0,
+      recordsRead: 0,
+      results: [],
+      skipped: 0,
+      status: "not_configured" as const,
+    };
+  }
+
+  const results: PipedrivePersonImportResult[] = [];
+  let cursor = params.cursor ?? null;
+  let nextCursor: string | null = null;
+  let pagesRead = 0;
+  let recordsRead = 0;
+
+  while (pagesRead < pageLimit) {
+    const pageParams: PipedriveListPersonsParams = { ...params };
+    if (cursor) pageParams.cursor = cursor;
+
+    const page = await readClient.listPersons(latestPersonListParams(pageParams));
+    pagesRead += 1;
+    recordsRead += page.data.length;
+
+    for (const person of page.data) {
+      results.push(
+        await importPipedrivePersonRecord({ client: readClient, person }),
+      );
+    }
+
+    nextCursor = page.pagination.nextCursor ?? null;
+
+    if (!nextCursor) break;
+
+    cursor = nextCursor;
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    maxPages: pageLimit,
+    moreAvailable: Boolean(nextCursor),
+    nextCursor,
     pagesRead,
     recordsRead,
     results,
@@ -493,6 +649,24 @@ export function pipedriveLeadImportMetadataRows(
   }));
 }
 
+export function pipedrivePersonImportMetadataRows(
+  results: PipedrivePersonImportResult[],
+): PipedrivePersonImportMetadataRow[] {
+  return results.map((result) => ({
+    companyId: previewMetadataText(result.companyId),
+    contactId: previewMetadataText(result.contactId),
+    createdCompany: result.created.company,
+    createdContact: result.created.contact,
+    externalPersonId: previewMetadataText(result.externalPersonId),
+    name: previewMetadataText(result.name),
+    status: result.status,
+    warningCount: result.warnings.length,
+    warnings: result.warnings
+      .slice(0, 3)
+      .map((warning) => truncateText(warning, 240)),
+  }));
+}
+
 export async function importPipedriveLeadIds({
   client,
   leadIds,
@@ -542,6 +716,130 @@ export async function importPipedriveLeadIds({
     skipped: results.filter((result) => result.status === "skipped").length,
     status: "ok" as const,
   };
+}
+
+export async function importPipedrivePersonIds({
+  client,
+  now = new Date(),
+  personIds,
+}: ImportPersonIdsOptions) {
+  const selectedPersonIds = normalizedSelectedPersonIds(personIds);
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      requested: selectedPersonIds.length,
+      results: [],
+      skipped: selectedPersonIds.length,
+      status: "not_configured" as const,
+    };
+  }
+
+  const results: PipedrivePersonImportResult[] = [];
+
+  for (const personId of selectedPersonIds) {
+    try {
+      const person = await readClient.getPerson(personId);
+      results.push(
+        await importPipedrivePersonRecord({
+          client: readClient,
+          now,
+          person,
+        }),
+      );
+    } catch (error) {
+      results.push(
+        skippedPersonResult({
+          externalPersonId: String(personId),
+          warning: pipedriveReadWarning("person", personId, error),
+        }),
+      );
+    }
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    requested: selectedPersonIds.length,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedrivePersonRecord({
+  client,
+  now = new Date(),
+  person,
+}: ImportPersonRecordOptions): Promise<PipedrivePersonImportResult> {
+  const personId = externalId(person.id);
+
+  if (!personId) {
+    return skippedPersonResult({
+      name: cleanText(person.name),
+      warning: "Pipedrive person was missing an ID.",
+    });
+  }
+
+  const [integration, relatedRecords] = await Promise.all([
+    prisma.integrationConnection.findUnique({
+      where: { provider: pipedriveProvider },
+      select: { id: true },
+    }),
+    fetchPersonRelatedRecords(client, person),
+  ]);
+  const integrationId = integration?.id ?? null;
+  const mapping = mapPipedrivePersonToCrm({
+    defaultLeadSource: client.defaultLeadSource,
+    organization: relatedRecords.organization,
+    person,
+  });
+
+  if (!mapping.contact) {
+    return skippedPersonResult({
+      externalPersonId: personId,
+      name: cleanText(person.name),
+      warning: "Pipedrive person did not include enough contact identity.",
+    });
+  }
+  const contactMapping = mapping.contact;
+
+  return prisma.$transaction(async (tx) => {
+    const company = await resolvePipedriveCompany(tx, {
+      integrationId,
+      mapping,
+      now,
+    });
+    const contact = await resolvePipedriveContact(tx, {
+      company,
+      integrationId,
+      mapping,
+      now,
+    });
+
+    if (!contact.id) {
+      return skippedPersonResult({
+        externalPersonId: personId,
+        name: `${contactMapping.firstName} ${contactMapping.lastName}`.trim(),
+        warning: "Pipedrive person could not be linked to a CRM contact.",
+      });
+    }
+
+    return {
+      companyId: company.id,
+      contactId: contact.id,
+      created: {
+        company: company.created,
+        contact: contact.created,
+      },
+      externalPersonId: personId,
+      name: `${contactMapping.firstName} ${contactMapping.lastName}`.trim(),
+      status: contact.created ? "created" : ("linked_existing" as const),
+      warnings: relatedRecords.warnings,
+    };
+  });
 }
 
 export async function importPipedriveLeadRecord({
@@ -835,6 +1133,106 @@ export function mapPipedriveLeadToCrm({
   };
 }
 
+export function mapPipedrivePersonToCrm({
+  defaultLeadSource,
+  organization,
+  person,
+}: {
+  defaultLeadSource?: string | null;
+  organization?: PipedriveOrganization | null;
+  person: PipedrivePerson;
+}): PipedriveLeadImportMapping {
+  const personRecord = objectValue(person);
+  const embeddedOrganization = objectValue(
+    personRecord.organization ?? personRecord.org_id ?? personRecord.organization_id,
+  ) as PipedriveOrganization;
+  const organizationRecord = objectValue(
+    organization,
+  ) as PipedriveOrganization;
+  const resolvedOrganization = Object.keys(organizationRecord).length
+    ? organizationRecord
+    : embeddedOrganization;
+  const source = cleanText(defaultLeadSource) ?? defaultPipedriveLeadSource;
+  const externalPersonId = externalId(person.id);
+  const companyName =
+    cleanText(resolvedOrganization.name) ??
+    cleanText(embeddedOrganization.name);
+  const personName =
+    cleanText(person.name) ??
+    [cleanText(person.first_name), cleanText(person.last_name)]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  const email = firstContactValue(personRecord.email ?? personRecord.emails);
+  const phone = firstContactValue(personRecord.phone ?? personRecord.phones);
+  const contactName = contactNameParts({
+    email,
+    fallbackTitle: `person ${externalPersonId ?? "import"}`,
+    name: personName,
+  });
+  const externalOrganizationId =
+    externalId(resolvedOrganization.id) ??
+    externalId(embeddedOrganization.id) ??
+    externalId(objectValue(embeddedOrganization).value) ??
+    externalId(personRecord.organization_id) ??
+    externalId(personRecord.org_id);
+  const attribution = {
+    externalOrganizationId,
+    externalPersonId,
+    provider: pipedriveProvider,
+    source,
+  } satisfies Prisma.InputJsonObject;
+  const metadata = {
+    ...attribution,
+    importedFrom: "pipedrive",
+    pipedriveAddTime: cleanText(person.add_time),
+    pipedriveUpdateTime: cleanText(person.update_time),
+    source: "pipedrive-contact-import",
+  } satisfies Prisma.InputJsonObject;
+
+  return {
+    communication: {
+      body: "",
+      fromAddress: email,
+      metadata,
+      subject: "",
+      summary: "",
+    },
+    company: companyName
+      ? {
+          addressLine1: cleanText(resolvedOrganization.address),
+          name: companyName,
+        }
+      : null,
+    contact: externalPersonId || email || phone
+      ? {
+          companyName,
+          email,
+          firstName: contactName.firstName,
+          lastName: contactName.lastName,
+          leadSource: source,
+          phone,
+          phoneNormalized: normalizedContactPhone(phone),
+          role: "Pipedrive contact",
+        }
+      : null,
+    externalIds: {
+      lead: null,
+      organization: externalOrganizationId,
+      person: externalPersonId,
+    },
+    opportunity: {
+      attribution,
+      currency: "GBP",
+      expectedCloseDate: null,
+      nextStep: "",
+      source,
+      title: "",
+      valueCents: 0,
+    },
+  };
+}
+
 async function fetchRelatedRecords(
   client: PipedriveRelatedRecordClient,
   lead: PipedriveLead,
@@ -855,6 +1253,24 @@ async function fetchRelatedRecords(
   return { organization, person, warnings };
 }
 
+async function fetchPersonRelatedRecords(
+  client: PipedriveRelatedRecordClient,
+  person: PipedrivePerson,
+): Promise<Omit<ImportedRelatedRecords, "person">> {
+  const warnings: string[] = [];
+  const personRecord = objectValue(person);
+  const organizationId =
+    numericId(personRecord.organization_id) ??
+    numericId(personRecord.organization) ??
+    numericId(personRecord.org_id) ??
+    numericId(objectValue(personRecord.org_id).value);
+  const organization = organizationId
+    ? await readPipedriveOrganization(client, organizationId, warnings)
+    : null;
+
+  return { organization, warnings };
+}
+
 function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   const leadParams: PipedriveListLeadsParams = {
     limit: params.limit ?? 50,
@@ -869,10 +1285,37 @@ function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   return leadParams;
 }
 
-function boundedFullPullMaxPages(value: number | null | undefined) {
+function latestPersonListParams(params: PipedriveListPersonsParams = {}) {
+  const personParams: PipedriveListPersonsParams = {
+    limit: params.limit ?? 50,
+    sortBy: params.sortBy ?? "update_time",
+    sortDirection: params.sortDirection ?? "desc",
+  };
+
+  if (params.cursor) personParams.cursor = params.cursor;
+  if (params.filterId !== undefined) personParams.filterId = params.filterId;
+  if (params.ids !== undefined) personParams.ids = params.ids;
+  if (params.organizationId !== undefined) {
+    personParams.organizationId = params.organizationId;
+  }
+  if (params.ownerId !== undefined) personParams.ownerId = params.ownerId;
+  if (params.updatedSince !== undefined) {
+    personParams.updatedSince = params.updatedSince;
+  }
+  if (params.updatedUntil !== undefined) {
+    personParams.updatedUntil = params.updatedUntil;
+  }
+
+  return personParams;
+}
+
+function boundedFullPullMaxPages(
+  value: number | null | undefined,
+  defaultValue = defaultPipedriveFullPullMaxPages,
+) {
   return typeof value === "number" && Number.isInteger(value) && value > 0
     ? Math.min(value, 10)
-    : defaultPipedriveFullPullMaxPages;
+    : defaultValue;
 }
 
 function previewFieldsFromMapping(
@@ -1370,6 +1813,26 @@ function skippedLeadResult({
   };
 }
 
+function skippedPersonResult({
+  externalPersonId = null,
+  name = null,
+  warning,
+}: {
+  externalPersonId?: string | null;
+  name?: string | null;
+  warning: string;
+}): PipedrivePersonImportResult {
+  return {
+    companyId: null,
+    contactId: null,
+    created: { company: false, contact: false },
+    externalPersonId,
+    name,
+    status: "skipped",
+    warnings: [warning],
+  };
+}
+
 function skippedLeadPreviewResult({
   lead,
   warning,
@@ -1409,6 +1872,18 @@ function normalizedSelectedLeadIds(leadIds: string[]) {
   }
 
   return [...selectedLeadIds];
+}
+
+function normalizedSelectedPersonIds(personIds: Array<number | string>) {
+  const selectedPersonIds = new Set<number>();
+
+  for (const personId of personIds) {
+    const numeric = numericId(personId);
+    if (numeric) selectedPersonIds.add(numeric);
+    if (selectedPersonIds.size >= 50) break;
+  }
+
+  return [...selectedPersonIds];
 }
 
 function opportunityValue(value: unknown, workspaceCurrency: string) {

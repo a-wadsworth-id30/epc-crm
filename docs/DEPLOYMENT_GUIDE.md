@@ -130,6 +130,18 @@ Optional:
   Netlify function pull Pipedrive leads into CRM.
 - `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN`: set to `true` to let the scheduled
   function verify readiness without importing CRM lead records.
+- `PIPEDRIVE_CONTACT_IMPORT_SECRET`: shared secret for
+  `/api/maintenance/pipedrive-contact-import`; `PIPEDRIVE_LEAD_IMPORT_SECRET`
+  or `CRON_SECRET` can be used instead.
+- `PIPEDRIVE_CONTACT_IMPORT_CRON_ENABLED`: set to `true` to let the scheduled
+  Netlify function pull standalone Pipedrive persons into CRM contacts and
+  companies.
+- `PIPEDRIVE_CONTACT_IMPORT_CRON_DRY_RUN`: set to `true` to let the scheduled
+  function verify contact pull readiness without importing CRM contact records.
+- `PIPEDRIVE_WEBHOOK_SECRET`: shared secret for `/api/webhooks/pipedrive`;
+  `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` can be used instead.
+- `PIPEDRIVE_WEBHOOK_BASIC_USER`: optional Basic Auth username required by the
+  webhook receiver when Pipedrive webhook HTTP auth is configured.
 - `BACKGROUND_JOB_STALE_MINUTES`: optional running background job age threshold
   for Settings > System and admin header alerts, default `30`, minimum `5`,
   maximum `1440`.
@@ -291,6 +303,29 @@ The route re-previews the page, aborts if the expected count changed or if
 warnings/skips appear, and imports only those would-create lead IDs into CRM.
 Settings > Integrations > Pipedrive shows the schedule, dry-run, cursor,
 continuation and active guard state for production verification.
+
+The repository also includes
+`netlify/functions/pull-pipedrive-contacts.mjs`, scheduled twice an hour. It is
+disabled unless `PIPEDRIVE_CONTACT_IMPORT_CRON_ENABLED=true` is set. When
+enabled, it calls `/api/maintenance/pipedrive-contact-import` with
+`PIPEDRIVE_CONTACT_IMPORT_SECRET`, `PIPEDRIVE_LEAD_IMPORT_SECRET` or
+`CRON_SECRET` and runs the same pull-only, bounded Pipedrive person/contact
+import helper as the manual settings action. Start with
+`PIPEDRIVE_CONTACT_IMPORT_CRON_DRY_RUN=true` to verify credentials/readiness
+before allowing standalone CRM contact records to be imported. Contact pulls
+use a separate `pipedrive.contact_import` background job and separate
+`lastFullPersonSyncAt` / `lastFullPersonSyncNextCursor` state from lead pulls.
+This does not write back to Pipedrive.
+
+`/api/webhooks/pipedrive` accepts authenticated Pipedrive v1/v2 webhook
+payloads for lead and person create/change events. Configure Pipedrive webhook
+HTTP Basic Auth with `PIPEDRIVE_WEBHOOK_BASIC_USER` and
+`PIPEDRIVE_WEBHOOK_SECRET`, or use the lead import/cron secret fallback. The
+CRM receiver reads the current lead/person from Pipedrive with GET requests
+before importing into CRM. Delete and organisation webhooks are recorded but do
+not delete CRM records and do not write to Pipedrive. Registering or changing
+webhooks inside Pipedrive is a provider write operation and must be approved by
+Adam before it is performed.
 
 ## Current Dev-Phase Rule
 

@@ -115,6 +115,45 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.nextStart, 500);
   });
 
+  it("uses the v2 persons endpoint with cursor pagination", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          next_cursor: "cursor-2",
+        },
+        data: [{ id: 123, name: "Casey Contact" }],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient({
+      apiBaseUrl: "https://example.pipedrive.com/api/v1/",
+    }).listPersons({
+      cursor: "cursor-1",
+      limit: 999,
+      organizationId: 42,
+      sortBy: "update_time",
+      sortDirection: "desc",
+      updatedSince: "2026-08-20T10:20:00Z",
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/api/v2/persons");
+    assert.equal(url.searchParams.get("cursor"), "cursor-1");
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("org_id"), "42");
+    assert.equal(url.searchParams.get("sort_by"), "update_time");
+    assert.equal(url.searchParams.get("sort_direction"), "desc");
+    assert.equal(
+      url.searchParams.get("updated_since"),
+      "2026-08-20T10:20:00Z",
+    );
+    assert.equal(result.data[0]?.name, "Casey Contact");
+    assert.equal(result.pagination.nextCursor, "cursor-2");
+  });
+
   it("supports company-domain API base URLs", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {
@@ -185,8 +224,11 @@ function createClient(
       apiBaseUrl: "https://api.pipedrive.com/v1",
       apiToken: "token",
       defaultLeadSource: "Pipedrive",
+      lastContactSyncAt: null,
       lastFullLeadSyncAt: null,
       lastFullLeadSyncNextStart: null,
+      lastFullPersonSyncAt: null,
+      lastFullPersonSyncNextCursor: null,
       lastLeadSyncAt: null,
       ...overrides,
     },
