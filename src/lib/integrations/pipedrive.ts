@@ -475,6 +475,14 @@ function pipedriveUrl(apiBaseUrl: string, path: string, apiVersion?: string) {
       parts.push(apiVersion);
     }
 
+    if (
+      base.hostname === "api.pipedrive.com" &&
+      parts[0] !== "api" &&
+      /^v\d+$/i.test(parts[0] ?? "")
+    ) {
+      parts.unshift("api");
+    }
+
     base.pathname = `/${parts.join("/")}/`;
   }
 
