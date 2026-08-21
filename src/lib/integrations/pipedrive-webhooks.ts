@@ -20,11 +20,17 @@ import {
 import { prisma } from "@/lib/prisma";
 
 type PipedriveWebhookStatus = "SUCCESS" | "WARNING" | "ERROR";
-type PipedriveWebhookAction = "change" | "create" | "delete" | "unknown";
+type PipedriveWebhookAction =
+  | "change"
+  | "create"
+  | "delete"
+  | "test"
+  | "unknown";
 type PipedriveWebhookEntity =
   | "lead"
   | "organization"
   | "person"
+  | "receiver"
   | "unknown";
 
 const pipedriveWebhookJobName = "pipedrive.webhook";
@@ -139,6 +145,25 @@ async function writePipedriveWebhookResult(
   const connection = await ensurePipedriveIntegrationConnection();
   const startedAt = new Date();
   const metadata = webhookMetadata(event);
+
+  if (event.action === "test" && event.entity === "receiver") {
+    return writeWebhookLog({
+      connectionId: connection.id,
+      finishedAt: new Date(),
+      message:
+        "Pipedrive webhook receiver self-test completed. No Pipedrive records were read or written.",
+      metadata: {
+        ...metadata,
+        reason: "receiver-self-test",
+      },
+      recordsRead: 0,
+      recordsWritten: 0,
+      startedAt,
+      status: "SUCCESS",
+      syncType: "webhook-receiver-test",
+      warningCount: 0,
+    });
+  }
 
   if (event.action === "unknown" || event.entity === "unknown") {
     return writeWebhookLog({
@@ -425,6 +450,8 @@ function backgroundStatus(status: PipedriveWebhookStatus) {
 function normalizeWebhookAction(value: string): PipedriveWebhookAction {
   const normalized = value.trim().toLowerCase();
 
+  if (["ping", "test"].includes(normalized)) return "test";
+
   if (["add", "added", "create", "created"].includes(normalized)) {
     return "create";
   }
@@ -450,6 +477,9 @@ function normalizeWebhookEntity(value: string): PipedriveWebhookEntity {
     return "organization";
   }
   if (["person", "persons", "people"].includes(normalized)) return "person";
+  if (["receiver", "webhook-receiver"].includes(normalized)) {
+    return "receiver";
+  }
 
   return "unknown";
 }

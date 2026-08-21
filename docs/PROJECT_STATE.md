@@ -220,7 +220,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Settings > Integrations > Pipedrive also renders the same sanitized
   operational validation summary for admins, including recent webhook activity
   from CRM sync logs so delivery can be confirmed after Pipedrive sends a real
-  event.
+  event. The Pipedrive settings page includes a receiver self-test that posts a
+  no-op authenticated payload through `/api/webhooks/pipedrive`, records a
+  CRM-only `webhook-receiver-test` sync log and does not read or write
+  Pipedrive records.
   Pipedrive is pull-only by default; do not write back to Pipedrive without
   Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.

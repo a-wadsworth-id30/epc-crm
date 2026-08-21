@@ -347,7 +347,11 @@ logs, recent background jobs and webhook-registration status. Add
 `skipWebhookCheck=1` to avoid the provider GET used by the registration status
 check. Admins can see the same sanitized validation summary in
 Settings > Integrations > Pipedrive, including recent CRM-side webhook
-activity once Pipedrive has sent lead or person events.
+activity once Pipedrive has sent lead or person events. The Pipedrive settings
+page can also run a receiver self-test that posts a no-op authenticated payload
+through the CRM webhook route and records `webhook-receiver-test`; this checks
+CRM receiver routing/auth only and does not prove Pipedrive has delivered a
+real event.
 
 ## Current Dev-Phase Rule
 

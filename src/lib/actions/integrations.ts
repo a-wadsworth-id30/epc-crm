@@ -10,6 +10,7 @@ import {
   encryptSecret,
   hasCredentialEncryptionKey,
 } from "@/lib/crypto/secrets";
+import { appBaseUrlFromHeaders } from "@/lib/http/origin";
 import {
   hasStoredTwilioCredentials,
   twilioConfigSchema,
@@ -475,6 +476,72 @@ export async function pullPipedriveContactsAction() {
   revalidatePipedriveImportPaths();
 }
 
+export async function testPipedriveWebhookReceiverAction() {
+  const user = await requireAdmin();
+  const startedAt = new Date();
+  const secret = pipedriveWebhookSecret();
+
+  if (!secret) {
+    await writePipedriveWebhookReceiverTestFailure({
+      actorId: user.id,
+      message:
+        "Pipedrive webhook receiver self-test could not run because the webhook secret is missing.",
+      reason: "missing-webhook-secret",
+      startedAt,
+      status: "WARNING",
+    });
+    revalidatePipedriveSettingsPaths();
+    return;
+  }
+
+  const baseUrl = await appBaseUrlFromHeaders();
+  const url = new URL("/api/webhooks/pipedrive", baseUrl);
+
+  try {
+    const response = await fetch(url, {
+      body: JSON.stringify({
+        event: "test.receiver",
+        meta: {
+          action: "test",
+          entity: "receiver",
+          event_id: `crm-webhook-self-test-${startedAt.getTime()}`,
+          timestamp: startedAt.toISOString(),
+          version: "crm-self-test",
+        },
+      }),
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-pipedrive-webhook-secret": secret,
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      await writePipedriveWebhookReceiverTestFailure({
+        actorId: user.id,
+        message: `Pipedrive webhook receiver self-test failed with HTTP ${response.status}.`,
+        reason: "receiver-http-error",
+        startedAt,
+        status: "ERROR",
+      });
+    }
+  } catch (error) {
+    await writePipedriveWebhookReceiverTestFailure({
+      actorId: user.id,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Pipedrive webhook receiver self-test failed.",
+      reason: "receiver-request-failed",
+      startedAt,
+      status: "ERROR",
+    });
+  }
+
+  revalidatePipedriveSettingsPaths();
+}
+
 export async function previewPipedriveLeadsAction() {
   const user = await requireAdmin();
   const startedAt = new Date();
@@ -826,6 +893,52 @@ function selectedPipedriveLeadIds(formData: FormData) {
   }
 
   return [...leadIds];
+}
+
+function pipedriveWebhookSecret() {
+  return (
+    process.env.PIPEDRIVE_WEBHOOK_SECRET ||
+    process.env.PIPEDRIVE_LEAD_IMPORT_SECRET ||
+    process.env.CRON_SECRET ||
+    ""
+  );
+}
+
+async function writePipedriveWebhookReceiverTestFailure({
+  actorId,
+  message,
+  reason,
+  startedAt,
+  status,
+}: {
+  actorId: string;
+  message: string;
+  reason: string;
+  startedAt: Date;
+  status: "ERROR" | "WARNING";
+}) {
+  const connection = await ensurePipedriveIntegrationConnection();
+
+  await prisma.marketingIntegrationSyncLog.create({
+    data: {
+      finishedAt: new Date(),
+      integrationId: connection.id,
+      message,
+      metadata: {
+        action: "test",
+        actorId,
+        entity: "receiver",
+        pullOnly: true,
+        reason,
+      },
+      provider: pipedriveProvider,
+      recordsRead: 0,
+      recordsWritten: 0,
+      startedAt,
+      status,
+      syncType: "webhook-receiver-test",
+    },
+  });
 }
 
 function revalidatePipedriveSettingsPaths() {

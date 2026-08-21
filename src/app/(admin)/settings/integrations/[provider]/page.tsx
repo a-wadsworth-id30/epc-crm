@@ -115,6 +115,7 @@ import {
   previewPipedriveLeadsAction,
   pullPipedriveContactsAction,
   pullPipedriveLeadsAction,
+  testPipedriveWebhookReceiverAction,
 } from "@/lib/actions/integrations";
 import { backgroundJobStaleCutoff } from "@/lib/maintenance/background-jobs";
 
@@ -743,16 +744,28 @@ export default async function IntegrationSettingsPage({
         </section>
 
         <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="mb-4 flex flex-col gap-2">
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
-              Webhook receiver
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Endpoint:{" "}
-              <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700 dark:bg-white/10 dark:text-gray-300">
-                /api/webhooks/pipedrive
-              </code>
-            </p>
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                Webhook receiver
+              </h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Endpoint:{" "}
+                <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700 dark:bg-white/10 dark:text-gray-300">
+                  /api/webhooks/pipedrive
+                </code>
+              </p>
+            </div>
+            <form action={testPipedriveWebhookReceiverAction}>
+              <button
+                type="submit"
+                disabled={!pipedriveWebhookSecretConfigured}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                Test receiver
+              </button>
+            </form>
           </div>
           <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <PipedrivePullStateItem
@@ -4204,6 +4217,7 @@ function formatPipedriveImportJobLabel(syncType: string) {
   if (syncType === "contact-import") return "Contact pull";
   if (syncType === "contact-import-webhook") return "Contact webhook";
   if (syncType === "lead-import-webhook") return "Lead webhook";
+  if (syncType === "webhook-receiver-test") return "Receiver test";
   if (syncType === "lead-import-selected") return "Selected import";
   if (syncType === "lead-import") return "Full pull";
   return syncType;

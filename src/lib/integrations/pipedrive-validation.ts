@@ -104,6 +104,7 @@ const pipedriveWebhookSyncTypes = [
   "contact-import-webhook",
   "lead-import-webhook",
   "webhook",
+  "webhook-receiver-test",
 ];
 
 export async function readPipedriveValidationSummary({

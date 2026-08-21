@@ -324,8 +324,11 @@ provider checks. It only creates missing provider webhooks when called with
 provider-side write operation. The protected
 `/api/maintenance/pipedrive-validation` route returns sanitized CRM-side
 operational summaries for readiness, external-link counts, recent sync logs,
-recent background jobs and webhook-registration status without exposing raw
-provider payloads or secrets.
+recent background jobs, webhook activity and webhook-registration status
+without exposing raw provider payloads or secrets. Settings > Integrations >
+Pipedrive can run a CRM-only receiver self-test through the authenticated
+webhook route; it records `webhook-receiver-test` without reading or writing
+Pipedrive data.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.
