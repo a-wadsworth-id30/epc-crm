@@ -11,6 +11,8 @@ type PipedriveWebhookRegistrationModule =
 
 const moduleWithLoad = Module as ModuleWithLoad;
 const originalFetch = globalThis.fetch;
+const testAppBaseUrl = "https://crm.example.test";
+const testReceiverUrl = `${testAppBaseUrl}/api/webhooks/pipedrive`;
 
 let pipedriveWebhookRegistration: PipedriveWebhookRegistrationModule;
 let runtimeConfig: {
@@ -57,7 +59,7 @@ beforeEach(() => {
     apiToken: "token",
   };
   requests = [];
-  process.env.APP_BASE_URL = "https://crm.epc-improvements.co.uk";
+  process.env.APP_BASE_URL = testAppBaseUrl;
   process.env.PIPEDRIVE_WEBHOOK_BASIC_USER = "crm";
   process.env.PIPEDRIVE_WEBHOOK_SECRET = "receiver-secret";
 });
@@ -87,8 +89,7 @@ describe("Pipedrive webhook registration", () => {
             id: 1,
             is_active: 1,
             name: "Existing lead create",
-            subscription_url:
-              "https://crm.epc-improvements.co.uk/api/webhooks/pipedrive",
+            subscription_url: testReceiverUrl,
             version: "2.0",
           },
           {
@@ -97,8 +98,7 @@ describe("Pipedrive webhook registration", () => {
             id: 2,
             is_active: 1,
             name: "Existing person create",
-            subscription_url:
-              "https://crm.epc-improvements.co.uk/api/webhooks/pipedrive",
+            subscription_url: testReceiverUrl,
             version: "2.0",
           },
           {
@@ -107,8 +107,7 @@ describe("Pipedrive webhook registration", () => {
             id: 3,
             is_active: 1,
             name: "Other event",
-            subscription_url:
-              "https://crm.epc-improvements.co.uk/api/webhooks/pipedrive",
+            subscription_url: testReceiverUrl,
             version: "2.0",
           },
         ],
@@ -171,8 +170,7 @@ describe("Pipedrive webhook registration", () => {
               id: 1,
               is_active: 1,
               name: "Existing lead create",
-              subscription_url:
-                "https://crm.epc-improvements.co.uk/api/webhooks/pipedrive",
+              subscription_url: testReceiverUrl,
               version: "2.0",
             },
           ],
@@ -218,8 +216,7 @@ describe("Pipedrive webhook registration", () => {
         (body) =>
           body.http_auth_user === "crm" &&
           body.http_auth_password === "receiver-secret" &&
-          body.subscription_url ===
-            "https://crm.epc-improvements.co.uk/api/webhooks/pipedrive" &&
+          body.subscription_url === testReceiverUrl &&
           body.version === "2.0",
       ),
     );
