@@ -91,18 +91,59 @@ before(async () => {
             ],
           },
           marketingIntegrationSyncLog: {
-            findMany: async () => [
-              {
-                finishedAt: new Date("2026-08-21T10:02:00.000Z"),
-                message: "Contact import completed.",
-                metadata: { imports: [{ externalPersonId: "123" }] },
-                recordsRead: 250,
-                recordsWritten: 240,
-                startedAt: new Date("2026-08-21T10:00:00.000Z"),
-                status: "SUCCESS",
-                syncType: "contact-import",
-              },
-            ],
+            findMany: async (args?: {
+              where?: { syncType?: { in?: string[] } };
+            }) => {
+              const syncTypes = args?.where?.syncType?.in ?? [];
+
+              if (syncTypes.includes("contact-import-webhook")) {
+                return [
+                  {
+                    finishedAt: new Date("2026-08-21T10:22:00.000Z"),
+                    message: "Pipedrive webhook contact import completed.",
+                    metadata: {
+                      action: "change",
+                      entity: "person",
+                      eventId: "do-not-return-event",
+                      imports: [{ externalPersonId: "123" }],
+                      reason: "processed",
+                    },
+                    recordsRead: 1,
+                    recordsWritten: 0,
+                    startedAt: new Date("2026-08-21T10:21:00.000Z"),
+                    status: "SUCCESS",
+                    syncType: "contact-import-webhook",
+                  },
+                  {
+                    finishedAt: new Date("2026-08-21T10:12:00.000Z"),
+                    message: "Pipedrive delete webhook recorded.",
+                    metadata: {
+                      action: "delete",
+                      entity: "lead",
+                      reason: "delete-ignored",
+                    },
+                    recordsRead: 0,
+                    recordsWritten: 0,
+                    startedAt: new Date("2026-08-21T10:11:00.000Z"),
+                    status: "WARNING",
+                    syncType: "webhook",
+                  },
+                ];
+              }
+
+              return [
+                {
+                  finishedAt: new Date("2026-08-21T10:02:00.000Z"),
+                  message: "Contact import completed.",
+                  metadata: { imports: [{ externalPersonId: "123" }] },
+                  recordsRead: 250,
+                  recordsWritten: 240,
+                  startedAt: new Date("2026-08-21T10:00:00.000Z"),
+                  status: "SUCCESS",
+                  syncType: "contact-import",
+                },
+              ];
+            },
           },
         },
       };
@@ -191,6 +232,21 @@ describe("Pipedrive validation summary", () => {
       "status",
       "syncType",
     ]);
+    assert.equal(result.webhookActivity.recentCount, 2);
+    assert.equal(result.webhookActivity.successCount, 1);
+    assert.equal(result.webhookActivity.warningCount, 1);
+    assert.deepEqual(result.webhookActivity.recent[0], {
+      action: "change",
+      entity: "person",
+      finishedAt: "2026-08-21T10:22:00.000Z",
+      message: "Pipedrive webhook contact import completed.",
+      reason: "processed",
+      recordsRead: 1,
+      recordsWritten: 0,
+      startedAt: "2026-08-21T10:21:00.000Z",
+      status: "SUCCESS",
+      syncType: "contact-import-webhook",
+    });
     assert.equal(JSON.stringify(result).includes("do-not-return"), false);
     assert.equal(JSON.stringify(result).includes("externalPersonId"), false);
   });

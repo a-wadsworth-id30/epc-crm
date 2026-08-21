@@ -218,7 +218,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   external-link counts, recent sync logs, recent background jobs and
   webhook-registration state without exposing raw provider payloads or secrets.
   Settings > Integrations > Pipedrive also renders the same sanitized
-  operational validation summary for admins.
+  operational validation summary for admins, including recent webhook activity
+  from CRM sync logs so delivery can be confirmed after Pipedrive sends a real
+  event.
   Pipedrive is pull-only by default; do not write back to Pipedrive without
   Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.

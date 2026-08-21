@@ -45,6 +45,25 @@ export type PipedriveValidationSummary = {
     status: string;
     syncType: string;
   }>;
+  webhookActivity: {
+    errorCount: number;
+    lastReceivedAt: string | null;
+    recent: Array<{
+      action: string | null;
+      entity: string | null;
+      finishedAt: string | null;
+      message: string | null;
+      reason: string | null;
+      recordsRead: number;
+      recordsWritten: number;
+      startedAt: string;
+      status: string;
+      syncType: string;
+    }>;
+    recentCount: number;
+    successCount: number;
+    warningCount: number;
+  };
   webhookRegistration: {
     desiredCount: number | null;
     existingEvents: string[];
@@ -81,52 +100,81 @@ type SanitizedReadiness = {
 
 const defaultValidationLimit = 15;
 const maxValidationLimit = 50;
+const pipedriveWebhookSyncTypes = [
+  "contact-import-webhook",
+  "lead-import-webhook",
+  "webhook",
+];
 
 export async function readPipedriveValidationSummary({
   includeWebhookRegistration = true,
   limit,
 }: PipedriveValidationSummaryOptions = {}): Promise<PipedriveValidationSummary> {
   const rowLimit = boundedLimit(limit);
-  const [leadReadiness, contactReadiness, externalRecordLinks, syncLogs, jobs] =
-    await Promise.all([
-      readPipedriveLeadPullReadiness(),
-      readPipedriveContactPullReadiness(),
-      prisma.externalRecordLink.groupBy({
-        _count: { _all: true },
-        by: ["externalType", "internalType"],
-        where: { provider: pipedriveProvider },
-      }),
-      prisma.marketingIntegrationSyncLog.findMany({
-        orderBy: { startedAt: "desc" },
-        select: {
-          finishedAt: true,
-          message: true,
-          recordsRead: true,
-          recordsWritten: true,
-          startedAt: true,
-          status: true,
-          syncType: true,
-        },
-        take: rowLimit,
-        where: { provider: pipedriveProvider },
-      }),
-      prisma.backgroundJobRun.findMany({
-        orderBy: { startedAt: "desc" },
-        select: {
-          dryRun: true,
-          finishedAt: true,
-          jobName: true,
-          message: true,
-          recordsRead: true,
-          recordsWritten: true,
-          startedAt: true,
-          status: true,
-          trigger: true,
-        },
-        take: rowLimit,
-        where: { jobName: { startsWith: "pipedrive." } },
-      }),
-    ]);
+  const [
+    leadReadiness,
+    contactReadiness,
+    externalRecordLinks,
+    syncLogs,
+    webhookLogs,
+    jobs,
+  ] = await Promise.all([
+    readPipedriveLeadPullReadiness(),
+    readPipedriveContactPullReadiness(),
+    prisma.externalRecordLink.groupBy({
+      _count: { _all: true },
+      by: ["externalType", "internalType"],
+      where: { provider: pipedriveProvider },
+    }),
+    prisma.marketingIntegrationSyncLog.findMany({
+      orderBy: { startedAt: "desc" },
+      select: {
+        finishedAt: true,
+        message: true,
+        recordsRead: true,
+        recordsWritten: true,
+        startedAt: true,
+        status: true,
+        syncType: true,
+      },
+      take: rowLimit,
+      where: { provider: pipedriveProvider },
+    }),
+    prisma.marketingIntegrationSyncLog.findMany({
+      orderBy: { startedAt: "desc" },
+      select: {
+        finishedAt: true,
+        message: true,
+        metadata: true,
+        recordsRead: true,
+        recordsWritten: true,
+        startedAt: true,
+        status: true,
+        syncType: true,
+      },
+      take: rowLimit,
+      where: {
+        provider: pipedriveProvider,
+        syncType: { in: pipedriveWebhookSyncTypes },
+      },
+    }),
+    prisma.backgroundJobRun.findMany({
+      orderBy: { startedAt: "desc" },
+      select: {
+        dryRun: true,
+        finishedAt: true,
+        jobName: true,
+        message: true,
+        recordsRead: true,
+        recordsWritten: true,
+        startedAt: true,
+        status: true,
+        trigger: true,
+      },
+      take: rowLimit,
+      where: { jobName: { startsWith: "pipedrive." } },
+    }),
+  ]);
   const webhookRegistration = includeWebhookRegistration
     ? await safeWebhookRegistrationSummary()
     : null;
@@ -173,6 +221,7 @@ export async function readPipedriveValidationSummary({
       status: log.status,
       syncType: log.syncType,
     })),
+    webhookActivity: sanitizedWebhookActivity(webhookLogs),
     webhookRegistration,
   };
 }
@@ -247,6 +296,45 @@ function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
   };
 }
 
+function sanitizedWebhookActivity(
+  logs: Array<{
+    finishedAt: Date | string | null;
+    message: string | null;
+    metadata: unknown;
+    recordsRead: number;
+    recordsWritten: number;
+    startedAt: Date | string | null;
+    status: string;
+    syncType: string;
+  }>,
+): PipedriveValidationSummary["webhookActivity"] {
+  const recent = logs.map((log) => {
+    const metadata = objectValue(log.metadata);
+
+    return {
+      action: stringValue(metadata.action),
+      entity: stringValue(metadata.entity),
+      finishedAt: isoDate(log.finishedAt),
+      message: log.message,
+      reason: stringValue(metadata.reason),
+      recordsRead: log.recordsRead,
+      recordsWritten: log.recordsWritten,
+      startedAt: isoDate(log.startedAt) ?? new Date(0).toISOString(),
+      status: log.status,
+      syncType: log.syncType,
+    };
+  });
+
+  return {
+    errorCount: recent.filter((log) => log.status === "ERROR").length,
+    lastReceivedAt: recent[0]?.startedAt ?? null,
+    recent,
+    recentCount: recent.length,
+    successCount: recent.filter((log) => log.status === "SUCCESS").length,
+    warningCount: recent.filter((log) => log.status === "WARNING").length,
+  };
+}
+
 function validationStatus({
   contactReadiness,
   leadReadiness,
@@ -293,4 +381,10 @@ function isoDate(value: Date | string | null | undefined) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

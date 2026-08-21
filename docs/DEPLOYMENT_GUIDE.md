@@ -346,7 +346,8 @@ operational summary of Pipedrive readiness, external-link counts, recent sync
 logs, recent background jobs and webhook-registration status. Add
 `skipWebhookCheck=1` to avoid the provider GET used by the registration status
 check. Admins can see the same sanitized validation summary in
-Settings > Integrations > Pipedrive.
+Settings > Integrations > Pipedrive, including recent CRM-side webhook
+activity once Pipedrive has sent lead or person events.
 
 ## Current Dev-Phase Rule
 

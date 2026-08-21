@@ -782,6 +782,10 @@ export default async function IntegrationSettingsPage({
           </dl>
         </section>
 
+        <PipedriveWebhookActivityPanel
+          activity={pipedriveValidationSummary.webhookActivity}
+        />
+
         <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <h2 className="mb-4 text-base font-semibold text-gray-800 dark:text-white/90">
             Sync history
@@ -3274,6 +3278,109 @@ function PipedriveValidationSummaryPanel({
   );
 }
 
+function PipedriveWebhookActivityPanel({
+  activity,
+}: {
+  activity: PipedriveValidationSummary["webhookActivity"];
+}) {
+  const latest = activity.recent[0] ?? null;
+
+  return (
+    <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+              Webhook activity
+            </h2>
+            <LazyHelpTooltip content="Shows sanitized CRM-side logs created when Pipedrive webhook events reach the receiver." />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {latest
+              ? `Latest ${pipedriveWebhookEventLabel(latest)} at ${
+                  formattedDateTime(latest.startedAt) ?? "unknown"
+                }.`
+              : "No Pipedrive webhook event has reached CRM yet."}
+          </p>
+        </div>
+        <StatusBadge>{pipedriveWebhookActivityStatus(activity)}</StatusBadge>
+      </div>
+      <dl className="mb-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <PipedrivePullStateItem
+          label="Recent events"
+          value={formatPipedriveValidationCount(activity.recentCount)}
+          detail="Webhook sync logs retained in summary"
+        />
+        <PipedrivePullStateItem
+          label="Success"
+          value={formatPipedriveValidationCount(activity.successCount)}
+          detail="Recent successful webhook imports"
+        />
+        <PipedrivePullStateItem
+          label="Warnings"
+          value={formatPipedriveValidationCount(activity.warningCount)}
+          detail="Ignored or partial webhook events"
+        />
+        <PipedrivePullStateItem
+          label="Errors"
+          value={formatPipedriveValidationCount(activity.errorCount)}
+          detail="Recent failed webhook events"
+        />
+      </dl>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
+            <tr>
+              <th className="px-4 py-3">Event</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Records</th>
+              <th className="px-4 py-3">Received</th>
+              <th className="px-4 py-3">Message</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            {activity.recent.length ? (
+              activity.recent.map((event, index) => (
+                <tr key={`${event.syncType}-${event.startedAt}-${index}`}>
+                  <td className="px-4 py-4 align-top">
+                    <div className="font-medium text-gray-800 dark:text-white/90">
+                      {pipedriveWebhookEventLabel(event)}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {event.reason ?? event.syncType}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <StatusBadge>{event.status}</StatusBadge>
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {event.recordsWritten}/{event.recordsRead}
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-500 dark:text-gray-400">
+                    {formattedDateTime(event.startedAt) ?? "Unknown"}
+                  </td>
+                  <td className="px-4 py-4 align-top text-gray-600 dark:text-gray-300">
+                    {event.message ?? "No message"}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-4 py-8 text-center text-sm text-gray-500"
+                >
+                  No Pipedrive webhook events have reached CRM yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function PipedrivePreviewTable({
   canImport,
   log,
@@ -3861,6 +3968,32 @@ function pipedriveLatestActivityDetail({
   }
 
   return "No Pipedrive sync history";
+}
+
+function pipedriveWebhookActivityStatus(
+  activity: PipedriveValidationSummary["webhookActivity"],
+) {
+  if (activity.errorCount > 0) return "ERROR";
+  if (activity.warningCount > 0) return "WARNING";
+  if (activity.successCount > 0) return "SUCCESS";
+
+  return "Planned";
+}
+
+function pipedriveWebhookEventLabel(
+  event: PipedriveValidationSummary["webhookActivity"]["recent"][number],
+) {
+  const action = event.action ? titleCaseWord(event.action) : null;
+  const entity = event.entity ? titleCaseWord(event.entity) : null;
+
+  return [action, entity].filter(Boolean).join(" ") || event.syncType;
+}
+
+function titleCaseWord(value: string) {
+  const normalized = value.trim();
+  if (!normalized) return "";
+
+  return `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
 }
 
 function PipedriveCrmRecordLink({
