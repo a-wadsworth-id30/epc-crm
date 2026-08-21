@@ -213,8 +213,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   creates missing Pipedrive v2 lead/person create/change webhooks when called
   with `POST`, `apply=1` and the explicit provider-write approval token
   `pipedrive-webhook-registration`. Creating provider webhooks is a Pipedrive
-  write operation. Pipedrive is pull-only by default; do not write back to
-  Pipedrive without Adam's explicit permission for that specific operation.
+  write operation. A protected `/api/maintenance/pipedrive-validation` route
+  returns sanitized CRM-side operational summaries for readiness,
+  external-link counts, recent sync logs, recent background jobs and
+  webhook-registration state without exposing raw provider payloads or secrets.
+  Pipedrive is pull-only by default; do not write back to Pipedrive without
+  Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity
