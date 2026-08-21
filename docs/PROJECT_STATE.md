@@ -207,10 +207,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Pipedrive v1/v2 lead and person create/change webhook payloads by reading the
   current lead/person back from Pipedrive with GET requests and importing it
   into CRM; delete and organisation webhooks are recorded but do not delete or
-  mutate Pipedrive data. Webhook registration in Pipedrive is not automated,
-  because creating provider webhooks would be a Pipedrive write operation.
-  Pipedrive is pull-only by default; do not write back to Pipedrive without
-  Adam's explicit permission for that specific operation.
+  mutate Pipedrive data. A protected
+  `/api/maintenance/pipedrive-webhook-registration` route can preview required
+  Pipedrive webhook subscriptions with GET-only provider checks. It only
+  creates missing Pipedrive v2 lead/person create/change webhooks when called
+  with `POST`, `apply=1` and the explicit provider-write approval token
+  `pipedrive-webhook-registration`. Creating provider webhooks is a Pipedrive
+  write operation. Pipedrive is pull-only by default; do not write back to
+  Pipedrive without Adam's explicit permission for that specific operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity
