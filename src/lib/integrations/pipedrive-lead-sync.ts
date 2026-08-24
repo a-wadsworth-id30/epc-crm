@@ -650,6 +650,14 @@ async function writePipedriveLeadPull({
     const updatedSince = client.lastFullLeadSyncAt;
     const dealCursor = client.lastFullDealSyncNextCursor;
     const dealUpdatedSince = client.lastFullDealSyncAt;
+    const leadSweepResult =
+      start === null && updatedSince
+        ? await importPipedriveLeadPages({
+            client,
+            maxPages: 1,
+            params: { limit: 50 },
+          })
+        : null;
     const result = await importPipedriveLeadPages({
       client,
       params: { limit: 50, start, updatedSince },
@@ -663,14 +671,33 @@ async function writePipedriveLeadPull({
       },
     });
     const finishedAt = new Date();
-    const leadRecordsRead = result.status === "ok" ? result.recordsRead : 0;
-    const leadRecordsWritten = result.status === "ok" ? result.created : 0;
-    const leadLinkedExisting =
+    const leadSweepRecordsRead =
+      leadSweepResult?.status === "ok" ? leadSweepResult.recordsRead : 0;
+    const leadSweepRecordsWritten =
+      leadSweepResult?.status === "ok" ? leadSweepResult.created : 0;
+    const leadSweepLinkedExisting =
+      leadSweepResult?.status === "ok" ? leadSweepResult.linkedExisting : 0;
+    const leadSweepSkipped =
+      leadSweepResult?.status === "ok" ? leadSweepResult.skipped : 0;
+    const leadCursorRecordsRead =
+      result.status === "ok" ? result.recordsRead : 0;
+    const leadCursorRecordsWritten =
+      result.status === "ok" ? result.created : 0;
+    const leadCursorLinkedExisting =
       result.status === "ok" ? result.linkedExisting : 0;
-    const leadSkipped = result.skipped;
+    const leadCursorSkipped = result.skipped;
+    const leadRecordsRead = leadSweepRecordsRead + leadCursorRecordsRead;
+    const leadRecordsWritten =
+      leadSweepRecordsWritten + leadCursorRecordsWritten;
+    const leadLinkedExisting =
+      leadSweepLinkedExisting + leadCursorLinkedExisting;
+    const leadSkipped = leadSweepSkipped + leadCursorSkipped;
     const leadMoreAvailable =
       result.status === "ok" ? result.moreAvailable : false;
-    const leadPagesRead = result.status === "ok" ? result.pagesRead : 0;
+    const leadSweepPagesRead =
+      leadSweepResult?.status === "ok" ? leadSweepResult.pagesRead : 0;
+    const leadCursorPagesRead = result.status === "ok" ? result.pagesRead : 0;
+    const leadPagesRead = leadSweepPagesRead + leadCursorPagesRead;
     const dealRecordsRead =
       dealResult.status === "ok" ? dealResult.recordsRead : 0;
     const dealRecordsWritten =
@@ -688,6 +715,14 @@ async function writePipedriveLeadPull({
     const moreAvailable = leadMoreAvailable || dealMoreAvailable;
     const pagesRead = leadPagesRead + dealPagesRead;
     const warningCount =
+      (leadSweepResult
+        ? leadSweepResult.status === "ok"
+          ? leadSweepResult.results.reduce(
+              (count, leadResult) => count + leadResult.warnings.length,
+              0,
+            )
+          : 1
+        : 0) +
       (result.status === "ok"
         ? result.results.reduce(
             (count, leadResult) => count + leadResult.warnings.length,
@@ -715,7 +750,9 @@ async function writePipedriveLeadPull({
       mode === "continuation"
         ? "Continuation pull"
         : mode === "incremental"
-          ? "Incremental pull"
+          ? leadSweepResult
+            ? "Latest sweep and incremental pull"
+            : "Incremental pull"
           : "Initial pull";
     const pageSummary = pagesRead > 1 ? ` across ${pagesRead} pages` : "";
     const moreAvailableSummary = moreAvailable
@@ -725,10 +762,14 @@ async function writePipedriveLeadPull({
       recordsRead === 0
         ? `${importMode}: no Pipedrive leads or deals were available to import.`
         : `${importMode}: leads ${leadRecordsWritten} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}; deals ${dealRecordsWritten} created, ${dealLinkedExisting} already linked, ${dealSkipped} skipped from ${dealRecordsRead}${pageSummary}.${moreAvailableSummary}`;
-    const importRows =
-      result.status === "ok"
+    const importRows = [
+      ...(leadSweepResult?.status === "ok"
+        ? pipedriveLeadImportMetadataRows(leadSweepResult.results)
+        : []),
+      ...(result.status === "ok"
         ? pipedriveLeadImportMetadataRows(result.results)
-        : [];
+        : []),
+    ];
     const dealImportRows =
       dealResult.status === "ok"
         ? pipedriveDealImportMetadataRows(dealResult.results)
@@ -751,6 +792,11 @@ async function writePipedriveLeadPull({
       dealUpdatedSince,
       imports: importRows,
       leadCreated: leadRecordsWritten,
+      leadCursorCreated: leadCursorRecordsWritten,
+      leadCursorLinkedExisting,
+      leadCursorPagesRead,
+      leadCursorRecordsRead,
+      leadCursorSkipped,
       leadLinkedExisting,
       leadMaxPages: result.status === "ok" ? result.maxPages : null,
       leadMoreAvailable,
@@ -758,6 +804,12 @@ async function writePipedriveLeadPull({
       leadPagesRead,
       leadRecordsRead,
       leadSkipped,
+      leadSweepCreated: leadSweepRecordsWritten,
+      leadSweepEnabled: Boolean(leadSweepResult),
+      leadSweepLinkedExisting,
+      leadSweepPagesRead,
+      leadSweepRecordsRead,
+      leadSweepSkipped,
       linkedExisting,
       mode,
       moreAvailable,

@@ -25,6 +25,7 @@ let importDealPagesResult: Record<string, unknown>;
 let importLeadIdsArgs: unknown;
 let importLeadIdsResult: Record<string, unknown>;
 let importPagesArgs: unknown;
+let importPagesCalls: unknown[];
 let importPagesResult: Record<string, unknown>;
 let previewPageArgs: unknown;
 let previewPageResult: Record<string, unknown>;
@@ -86,6 +87,7 @@ before(async () => {
         },
         importPipedriveLeadPages: async (args: unknown) => {
           importPagesArgs = args;
+          importPagesCalls.push(args);
           return importPagesResult;
         },
         pipedriveLeadIdFromInput: (value: unknown) => {
@@ -247,6 +249,7 @@ beforeEach(() => {
     status: "ok",
   };
   importPagesArgs = null;
+  importPagesCalls = [];
   importPagesResult = {
     created: 1,
     linkedExisting: 0,
@@ -332,6 +335,52 @@ describe("Pipedrive scheduled lead sync", () => {
     );
     assert.equal(updateWrite.args.data.config.lastFullLeadSyncNextStart, 50);
     assert.equal(typeof updateWrite.args.data.config.lastLeadSyncAt, "string");
+  });
+
+  it("sweeps the latest lead page before an incremental cursor pull", async () => {
+    importPagesResult = {
+      ...importPagesResult,
+      created: 0,
+      linkedExisting: 1,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 1,
+      recordsRead: 1,
+      results: [{ warnings: [] }],
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveLeadPull({
+      actorId: "user-1",
+      recordBackgroundJob: false,
+      trigger: "scheduled",
+    });
+
+    assert.equal(result.status, "SUCCESS");
+    assert.equal(result.mode, "incremental");
+    assert.equal(result.recordsRead, 2);
+    assert.equal(importPagesCalls.length, 2);
+    assert.equal((importPagesCalls[0] as { maxPages?: unknown }).maxPages, 1);
+    assert.deepEqual((importPagesCalls[0] as { params?: unknown }).params, {
+      limit: 50,
+    });
+    assert.deepEqual((importPagesCalls[1] as { params?: unknown }).params, {
+      limit: 50,
+      start: null,
+      updatedSince: "2026-08-20T08:00:00.000Z",
+    });
+
+    const syncWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "sync.create",
+    ) as {
+      args: {
+        data: {
+          metadata: Record<string, unknown>;
+        };
+      };
+    };
+    assert.equal(syncWrite.args.data.metadata.leadSweepEnabled, true);
+    assert.equal(syncWrite.args.data.metadata.leadSweepRecordsRead, 1);
+    assert.equal(syncWrite.args.data.metadata.leadCursorRecordsRead, 1);
   });
 
   it("saves a deal pagination continuation without advancing the deal cursor", async () => {

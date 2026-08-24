@@ -172,7 +172,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Pipedrive lead pages and five open-deal pages per manual or scheduled run.
   The first full pull reads latest leads and open deals; later full pulls use
   dedicated `lastFullLeadSyncAt` and `lastFullDealSyncAt` cursors as Pipedrive
-  `updated_since`. If a run hits the five-page cap while Pipedrive still has
+  `updated_since`, and lead pulls also sweep the latest one lead page without a
+  cursor before incremental reads so very recent Lead Inbox records are retried
+  even if a previous cursor/list pass missed them. If a run hits the five-page
+  cap while Pipedrive still has
   more pages, CRM stores `lastFullLeadSyncNextStart` for leads or
   `lastFullDealSyncNextCursor` for deals and the next full pull resumes from
   that provider continuation. CRM advances each full-pull cursor and clears its
