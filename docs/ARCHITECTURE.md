@@ -282,7 +282,8 @@ same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and
 selected-import Pipedrive leads, can manually or automatically pull bounded
-Pipedrive lead batches, and can separately pull Pipedrive persons
+Pipedrive lead batches, sweeps updated Pipedrive lead notes with a separate
+note cursor during lead pulls, and can separately pull Pipedrive persons
 into CRM contacts. These actions write sync-history rows with
 read/write counts. Preview classifies would-create, already-linked and skipped
 leads without creating CRM records and stores sanitized preview rows for the
@@ -329,13 +330,15 @@ they cannot move or skip the lead full-pull cursor. Scheduled Pipedrive
 functions resolve the first valid HTTPS CRM base URL from app/Netlify URL
 environment variables and emit aggregate-only import logs for operational
 verification without exposing provider payload data. The authenticated
-`/api/webhooks/pipedrive` receiver supports Pipedrive v1/v2 lead and person
-create/change payloads by reading the current record back from Pipedrive using
-GET requests before importing into CRM. Deal, delete and organization webhook
-events are recorded in sync history but do not import, delete or mutate CRM
-records and do not write to Pipedrive. The protected
+`/api/webhooks/pipedrive` receiver supports Pipedrive v1/v2 lead, person and
+note create/change payloads by reading the current record back from Pipedrive
+using GET requests before importing into CRM. Note events only create or update
+CRM sale notes when the Pipedrive note belongs to a Lead Inbox lead already
+linked to a CRM sale. Deal, delete and organization webhook events are recorded
+in sync history but do not import, delete or mutate CRM records and do not
+write to Pipedrive. The protected
 `/api/maintenance/pipedrive-webhook-registration` route previews required
-Pipedrive v2 lead/person create/change webhook subscriptions with GET-only
+Pipedrive v2 lead/person/note create/change webhook subscriptions with GET-only
 provider checks. It only creates missing provider webhooks when called with
 `POST`, `apply=1` and the explicit provider-write approval token
 `pipedrive-webhook-registration`; creating Pipedrive webhooks is still a
@@ -348,7 +351,7 @@ Pipedrive can run a CRM-only receiver self-test through the authenticated
 webhook route; it records `webhook-receiver-test` without reading or writing
 Pipedrive data. Validation reports real provider deliveries separately from
 receiver self-tests so admins can see whether Pipedrive itself has sent a
-lead/person webhook event.
+lead/person/note webhook event.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

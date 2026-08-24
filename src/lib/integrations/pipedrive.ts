@@ -52,6 +52,9 @@ export const pipedriveStoredConfigSchema = pipedriveConfigSchema.extend({
   lastFullPersonSyncAt: z.string().datetime().optional(),
   lastFullPersonSyncNextCursor: z.string().nullable().optional(),
   lastLeadSyncAt: z.string().datetime().optional(),
+  lastLeadNoteSyncAt: z.string().datetime().optional(),
+  lastLeadNoteSyncNextStart: z.number().int().nonnegative().nullable().optional(),
+  lastLeadNoteSyncPendingUntil: z.string().datetime().nullable().optional(),
 });
 
 export type PipedriveConfig = z.infer<typeof pipedriveConfigSchema>;
@@ -172,7 +175,12 @@ export type PipedriveNote = Record<string, unknown> & {
   active_flag?: boolean;
   add_time?: string;
   content?: string;
+  deal_id?: unknown;
   lead_id?: string | null;
+  lead?: unknown;
+  org_id?: unknown;
+  organization_id?: unknown;
+  person_id?: unknown;
   update_time?: string;
   user?: unknown;
   user_id?: unknown;
@@ -310,6 +318,16 @@ export async function getPipedriveRuntimeConfig() {
         ? config.lastFullPersonSyncNextCursor
         : null,
     lastLeadSyncAt: config?.lastLeadSyncAt ?? null,
+    lastLeadNoteSyncAt: config?.lastLeadNoteSyncAt ?? null,
+    lastLeadNoteSyncNextStart:
+      typeof config?.lastLeadNoteSyncNextStart === "number"
+        ? config.lastLeadNoteSyncNextStart
+        : null,
+    lastLeadNoteSyncPendingUntil:
+      typeof config?.lastLeadNoteSyncPendingUntil === "string" &&
+      config.lastLeadNoteSyncPendingUntil.trim()
+        ? config.lastLeadNoteSyncPendingUntil
+        : null,
   };
 }
 
@@ -334,6 +352,9 @@ export class PipedriveReadOnlyClient {
   readonly lastFullPersonSyncAt: string | null;
   readonly lastFullPersonSyncNextCursor: string | null;
   readonly lastLeadSyncAt: string | null;
+  readonly lastLeadNoteSyncAt: string | null;
+  readonly lastLeadNoteSyncNextStart: number | null;
+  readonly lastLeadNoteSyncPendingUntil: string | null;
   private readonly timeoutMs: number;
 
   constructor(
@@ -351,6 +372,9 @@ export class PipedriveReadOnlyClient {
     this.lastFullPersonSyncAt = config.lastFullPersonSyncAt;
     this.lastFullPersonSyncNextCursor = config.lastFullPersonSyncNextCursor;
     this.lastLeadSyncAt = config.lastLeadSyncAt;
+    this.lastLeadNoteSyncAt = config.lastLeadNoteSyncAt;
+    this.lastLeadNoteSyncNextStart = config.lastLeadNoteSyncNextStart;
+    this.lastLeadNoteSyncPendingUntil = config.lastLeadNoteSyncPendingUntil;
     this.timeoutMs = boundedTimeoutMs(options.timeoutMs);
   }
 
@@ -442,6 +466,12 @@ export class PipedriveReadOnlyClient {
       `deals/${pipedriveNumericId(id, "deal")}`,
       {},
       { apiVersion: "v2" },
+    );
+  }
+
+  async getNote(id: number) {
+    return this.getSingle<PipedriveNote>(
+      `notes/${pipedriveNumericId(id, "note")}`,
     );
   }
 

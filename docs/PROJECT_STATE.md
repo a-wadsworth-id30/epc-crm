@@ -155,7 +155,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   note import converts Pipedrive HTML note content to plain text, uses stable
   Pipedrive note IDs to update existing CRM notes instead of duplicating them,
   and can be run from an admin-only sale detail "Pull Pipedrive notes" action
-  when the sale is linked to a Pipedrive lead. The Pipedrive
+  when the sale is linked to a Pipedrive lead. Scheduled/manual lead pulls also
+  sweep updated Pipedrive notes through a separate
+  `lastLeadNoteSyncAt` / `lastLeadNoteSyncNextStart` cursor so note changes
+  can auto-import even when the lead itself has not changed. The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies
@@ -226,14 +229,15 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   recover a specific Lead Inbox UUID through the same pull-only CRM importer.
   The CRM also exposes an authenticated pull-only
   Pipedrive webhook receiver at `/api/webhooks/pipedrive`. It supports
-  Pipedrive v1/v2 lead and person create/change webhook payloads by
-  reading the current lead/person back from Pipedrive with GET requests
-  and importing it into CRM. Deal, delete and organisation webhooks are recorded
-  but do not import, delete or mutate CRM records and do not mutate Pipedrive
-  data. A protected
+  Pipedrive v1/v2 lead, person and note create/change webhook payloads by
+  reading the current lead/person/note back from Pipedrive with GET requests
+  and importing it into CRM. Note webhooks only create or update CRM sale notes
+  when the Pipedrive note belongs to a Lead Inbox lead already linked to a CRM
+  sale. Deal, delete and organisation webhooks are recorded but do not import,
+  delete or mutate CRM records and do not mutate Pipedrive data. A protected
   `/api/maintenance/pipedrive-webhook-registration` route can preview required
   Pipedrive webhook subscriptions with GET-only provider checks. It only
-  creates missing Pipedrive v2 lead/person create/change webhooks when
+  creates missing Pipedrive v2 lead/person/note create/change webhooks when
   called with `POST`, `apply=1` and the explicit provider-write approval token
   `pipedrive-webhook-registration`. Creating provider webhooks is a Pipedrive
   write operation. A protected `/api/maintenance/pipedrive-validation` route
@@ -243,7 +247,7 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Settings > Integrations > Pipedrive also renders the same sanitized
   operational validation summary for admins, including recent webhook activity
   from CRM sync logs so delivery can be confirmed after Pipedrive sends a real
-  event. Webhook activity separates real Pipedrive lead/person deliveries
+  event. Webhook activity separates real Pipedrive lead/person/note deliveries
   from CRM receiver self-tests so a successful receiver test cannot be mistaken
   for provider delivery. The Pipedrive settings page includes a receiver self-test
   that posts a no-op authenticated payload through `/api/webhooks/pipedrive`,

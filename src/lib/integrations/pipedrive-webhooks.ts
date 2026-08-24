@@ -7,8 +7,10 @@ import {
 } from "@/lib/integrations/pipedrive";
 import {
   importPipedriveLeadIds,
+  importPipedriveLeadNoteIds,
   importPipedrivePersonIds,
   pipedriveLeadImportMetadataRows,
+  pipedriveLeadNoteImportMetadataRows,
   pipedrivePersonImportMetadataRows,
 } from "@/lib/integrations/pipedrive-import";
 import { ensurePipedriveIntegrationConnection } from "@/lib/integrations/pipedrive-lead-sync";
@@ -29,6 +31,7 @@ type PipedriveWebhookAction =
 type PipedriveWebhookEntity =
   | "deal"
   | "lead"
+  | "note"
   | "organization"
   | "person"
   | "receiver"
@@ -327,6 +330,78 @@ async function writePipedriveWebhookResult(
     });
   }
 
+  if (event.entity === "note") {
+    const noteId = Number(event.entityId);
+
+    if (!Number.isInteger(noteId) || noteId <= 0) {
+      return writeWebhookLog({
+        connectionId: connection.id,
+        finishedAt: new Date(),
+        message:
+          "Pipedrive note webhook ignored because the note ID was invalid.",
+        metadata: {
+          ...metadata,
+          reason: "invalid-note-id",
+        },
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "WARNING",
+        syncType: "lead-note-import-webhook",
+        warningCount: 1,
+      });
+    }
+
+    const result = await importPipedriveLeadNoteIds({
+      client,
+      noteIds: [noteId],
+      warnWhenUnlinked: true,
+    });
+    const recordsRead = result.status === "ok" ? result.recordsRead : 0;
+    const recordsWritten =
+      result.status === "ok" ? result.recordsWritten : 0;
+    const created = result.status === "ok" ? result.created : 0;
+    const updated = result.status === "ok" ? result.updated : 0;
+    const ignored = result.status === "ok" ? result.ignored : 0;
+    const skipped = result.skipped;
+    const warningCount =
+      result.status === "ok"
+        ? result.results.reduce(
+            (count, importResult) => count + importResult.warnings.length,
+            0,
+          )
+        : 1;
+    const status =
+      warningCount > 0 || skipped > 0 || recordsRead === 0
+        ? "WARNING"
+        : "SUCCESS";
+    const message = `Pipedrive webhook note import: ${created} created, ${updated} updated, ${skipped} skipped and ${ignored} ignored from ${recordsRead} note${recordsRead === 1 ? "" : "s"}.`;
+
+    return writeWebhookLog({
+      connectionId: connection.id,
+      finishedAt: new Date(),
+      message,
+      metadata: {
+        ...metadata,
+        created,
+        ignored,
+        imports:
+          result.status === "ok"
+            ? pipedriveLeadNoteImportMetadataRows(result.results)
+            : [],
+        skipped,
+        updated,
+        warningCount,
+      },
+      recordsRead,
+      recordsWritten,
+      startedAt,
+      status,
+      syncType: "lead-note-import-webhook",
+      warningCount,
+    });
+  }
+
   const personId = Number(event.entityId);
 
   if (!Number.isInteger(personId) || personId <= 0) {
@@ -494,6 +569,7 @@ function normalizeWebhookEntity(value: string): PipedriveWebhookEntity {
 
   if (["deal", "deals"].includes(normalized)) return "deal";
   if (["lead", "leads"].includes(normalized)) return "lead";
+  if (["note", "notes"].includes(normalized)) return "note";
   if (["organization", "organizations", "org"].includes(normalized)) {
     return "organization";
   }

@@ -90,6 +90,9 @@ type SanitizedReadiness = {
   credentialSource: string | null;
   defaultLeadSource: string | null;
   hasContinuationCursor: boolean;
+  lastLeadNoteSyncAt: string | null;
+  lastLeadNoteSyncNextStart: number | null;
+  lastLeadNoteSyncPendingUntil: string | null;
   lastFullDealSyncAt: string | null;
   lastFullDealSyncNextCursor: string | null;
   lastContactSyncAt: string | null;
@@ -109,6 +112,7 @@ const maxValidationLimit = 50;
 const pipedriveWebhookSyncTypes = [
   "contact-import-webhook",
   "lead-import-webhook",
+  "lead-note-import-webhook",
   "webhook",
   "webhook-receiver-test",
 ];
@@ -281,6 +285,10 @@ function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
   const lastFullPersonSyncNextCursor = stringValue(
     value.lastFullPersonSyncNextCursor,
   );
+  const lastLeadNoteSyncNextStart =
+    typeof value.lastLeadNoteSyncNextStart === "number"
+      ? value.lastLeadNoteSyncNextStart
+      : null;
 
   return {
     connected: value.connected === true,
@@ -290,7 +298,8 @@ function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
       value.hasContinuationCursor === true ||
       Boolean(lastFullDealSyncNextCursor) ||
       typeof value.lastFullLeadSyncNextStart === "number" ||
-      Boolean(lastFullPersonSyncNextCursor),
+      Boolean(lastFullPersonSyncNextCursor) ||
+      typeof lastLeadNoteSyncNextStart === "number",
     lastContactSyncAt: stringValue(value.lastContactSyncAt),
     lastFullDealSyncAt: stringValue(value.lastFullDealSyncAt),
     lastFullDealSyncNextCursor,
@@ -302,6 +311,11 @@ function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
     lastFullPersonSyncAt: stringValue(value.lastFullPersonSyncAt),
     lastFullPersonSyncNextCursor,
     lastLeadSyncAt: stringValue(value.lastLeadSyncAt),
+    lastLeadNoteSyncAt: stringValue(value.lastLeadNoteSyncAt),
+    lastLeadNoteSyncNextStart,
+    lastLeadNoteSyncPendingUntil: stringValue(
+      value.lastLeadNoteSyncPendingUntil,
+    ),
     provider: pipedriveProvider,
     pullOnly: true,
     status: stringValue(value.status),

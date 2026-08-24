@@ -223,6 +223,26 @@ before(async () => {
             return operation(transactionClient);
           },
           externalRecordLink: {
+            findFirst: async (args: unknown) => {
+              const where = (args as {
+                where?: {
+                  externalId?: string;
+                  externalType?: string;
+                  internalType?: string;
+                  provider?: string;
+                };
+              }).where;
+
+              return (
+                externalRecordLinkRows.find(
+                  (row) =>
+                    row.externalId === where?.externalId &&
+                    row.externalType === where?.externalType &&
+                    row.internalType === where?.internalType &&
+                    row.provider === where?.provider,
+                ) ?? null
+              );
+            },
             findUnique: findExternalRecordLink,
           },
           integrationConnection: {
@@ -235,6 +255,14 @@ before(async () => {
           contact: {
             findFirst: findContactByIdentity,
             findUnique: findContactById,
+          },
+          salesOpportunity: {
+            findUnique: async (args: unknown) => ({
+              contactId: "contact-existing",
+              id:
+                (args as { where?: { id?: string } }).where?.id ??
+                "opportunity-existing",
+            }),
           },
         },
       };
@@ -1095,6 +1123,106 @@ describe("Pipedrive lead import mapping", () => {
         .length,
       1,
     );
+  });
+
+  it("imports updated Pipedrive lead notes from note pages", async () => {
+    const listNoteCalls: unknown[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-notes",
+        externalType: "lead",
+        internalId: "opportunity-notes",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedriveLeadNotePages({
+      client: {
+        listNotes: async (params) => {
+          listNoteCalls.push(params);
+          return {
+            data: [
+              {
+                content: "<p>Fresh note</p>",
+                id: 101,
+                lead_id: "lead-notes",
+                update_time: "2026-08-24T10:15:00Z",
+              },
+              {
+                content: "<p>Deal note ignored</p>",
+                deal_id: 13059,
+                id: 102,
+                update_time: "2026-08-24T10:16:00Z",
+              },
+            ],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      now: new Date("2026-08-24T12:00:00Z"),
+      params: {
+        updatedSince: "2026-08-24T10:00:00Z",
+        updatedUntil: "2026-08-24T11:00:00Z",
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.recordsRead, 2);
+    assert.equal(result.recordsWritten, 1);
+    assert.equal(result.created, 1);
+    assert.equal(result.ignored, 1);
+    assert.deepEqual(listNoteCalls, [
+      {
+        limit: 50,
+        sort: "update_time DESC",
+        start: null,
+        updatedSince: "2026-08-24T10:00:00Z",
+        updatedUntil: "2026-08-24T11:00:00Z",
+      },
+    ]);
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(salesCommunicationRows[0]?.externalId, "pipedrive:note:101");
+    assert.equal(salesCommunicationRows[0]?.body, "Fresh note");
+  });
+
+  it("imports a Pipedrive lead note by ID for webhook events", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-notes",
+        externalType: "lead",
+        internalId: "opportunity-notes",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedriveLeadNoteIds({
+      client: {
+        getNote: async () => ({
+          content: "<p>Webhook note</p>",
+          id: 88,
+          lead_id: "lead-notes",
+          update_time: "2026-08-24T10:20:00Z",
+        }),
+      },
+      noteIds: [88],
+      now: new Date("2026-08-24T12:00:00Z"),
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.recordsRead, 1);
+    assert.equal(result.recordsWritten, 1);
+    assert.equal(result.created, 1);
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(salesCommunicationRows[0]?.externalId, "pipedrive:note:88");
+    assert.equal(salesCommunicationRows[0]?.body, "Webhook note");
   });
 
   it("extracts Pipedrive Lead Inbox UUIDs from URLs or raw IDs", () => {

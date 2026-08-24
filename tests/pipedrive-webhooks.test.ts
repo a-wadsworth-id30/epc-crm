@@ -33,6 +33,8 @@ let completedJobs: Array<{
 let dealImportArgs: unknown;
 let dealImportCalls: number;
 let leadImportCalls: number;
+let noteImportArgs: unknown;
+let noteImportCalls: number;
 let personImportCalls: number;
 let readClientCalls: number;
 let readClient: unknown | null;
@@ -90,6 +92,33 @@ before(async () => {
           leadImportCalls += 1;
           return { skipped: 0, status: "ok" };
         },
+        importPipedriveLeadNoteIds: async (args: unknown) => {
+          noteImportArgs = args;
+          noteImportCalls += 1;
+          return {
+            created: 0,
+            ignored: 0,
+            recordsRead: 1,
+            recordsWritten: 1,
+            requested: 1,
+            results: [
+              {
+                created: 0,
+                externalLeadId: "lead-1",
+                externalNoteId: "88",
+                ignored: false,
+                opportunityId: "opportunity-1",
+                skipped: 0,
+                status: "updated",
+                updated: 1,
+                warnings: [],
+              },
+            ],
+            skipped: 0,
+            status: "ok",
+            updated: 1,
+          };
+        },
         importPipedrivePersonIds: async () => {
           personImportCalls += 1;
           return { skipped: 0, status: "ok" };
@@ -103,6 +132,15 @@ before(async () => {
           },
         ],
         pipedriveLeadImportMetadataRows: () => [],
+        pipedriveLeadNoteImportMetadataRows: () => [
+          {
+            externalLeadId: "lead-1",
+            externalNoteId: "88",
+            status: "updated",
+            warningCount: 0,
+            warnings: [],
+          },
+        ],
         pipedrivePersonImportMetadataRows: () => [],
       };
     }
@@ -165,6 +203,8 @@ beforeEach(() => {
   dealImportArgs = null;
   dealImportCalls = 0;
   leadImportCalls = 0;
+  noteImportArgs = null;
+  noteImportCalls = 0;
   personImportCalls = 0;
   readClientCalls = 0;
   readClient = null;
@@ -190,6 +230,7 @@ describe("Pipedrive webhook receiver self-test", () => {
     assert.equal(result.recordsWritten, 0);
     assert.equal(readClientCalls, 0);
     assert.equal(leadImportCalls, 0);
+    assert.equal(noteImportCalls, 0);
     assert.equal(personImportCalls, 0);
     assert.equal(syncLogWrites.length, 1);
     assert.equal(syncLogWrites[0]!.data.syncType, "webhook-receiver-test");
@@ -233,6 +274,7 @@ describe("Pipedrive webhook receiver self-test", () => {
     assert.equal(readClientCalls, 0);
     assert.equal(dealImportCalls, 0);
     assert.equal(leadImportCalls, 0);
+    assert.equal(noteImportCalls, 0);
     assert.equal(personImportCalls, 0);
     assert.equal(dealImportArgs, null);
     assert.equal(syncLogWrites.length, 1);
@@ -248,6 +290,41 @@ describe("Pipedrive webhook receiver self-test", () => {
       entityId: "13059",
       syncType: "webhook",
       warningCount: 1,
+    });
+  });
+
+  it("imports note webhook events by reading the current Pipedrive note", async () => {
+    readClient = { defaultLeadSource: "Pipedrive" };
+
+    const result = await pipedriveWebhooks.processPipedriveWebhook({
+      event: "create.note",
+      meta: {
+        action: "create",
+        entity: "note",
+        entity_id: 88,
+        event_id: "note-event-1",
+        timestamp: "2026-08-24T12:00:00.000Z",
+        version: "2.0",
+      },
+    });
+
+    assert.equal(result.status, "SUCCESS");
+    assert.equal(result.syncType, "lead-note-import-webhook");
+    assert.equal(result.recordsRead, 1);
+    assert.equal(result.recordsWritten, 1);
+    assert.equal(readClientCalls, 1);
+    assert.equal(noteImportCalls, 1);
+    assert.deepEqual((noteImportArgs as { noteIds?: unknown }).noteIds, [88]);
+    assert.equal(syncLogWrites.length, 1);
+    assert.equal(syncLogWrites[0]!.data.syncType, "lead-note-import-webhook");
+    assert.equal(syncLogWrites[0]!.data.metadata.entity, "note");
+    assert.equal(syncLogWrites[0]!.data.metadata.updated, 1);
+    assert.deepEqual(completedJobs[0]!.result.summary, {
+      action: "create",
+      entity: "note",
+      entityId: "88",
+      syncType: "lead-note-import-webhook",
+      warningCount: 0,
     });
   });
 });

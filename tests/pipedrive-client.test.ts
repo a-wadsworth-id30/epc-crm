@@ -207,6 +207,23 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.moreItemsInCollection, false);
   });
 
+  it("reads a single note through the v1 notes endpoint", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        data: { content: "<p>Webhook note</p>", id: 88 },
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient().getNote(88);
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/v1/notes/88");
+    assert.equal(result.id, 88);
+  });
+
   it("uses the v2 deals endpoint with cursor pagination", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {
@@ -369,6 +386,9 @@ function createClient(
       lastFullPersonSyncAt: null,
       lastFullPersonSyncNextCursor: null,
       lastLeadSyncAt: null,
+      lastLeadNoteSyncAt: null,
+      lastLeadNoteSyncNextStart: null,
+      lastLeadNoteSyncPendingUntil: null,
       ...overrides,
     },
     { timeoutMs: 1_000 },

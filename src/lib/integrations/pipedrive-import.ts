@@ -81,6 +81,16 @@ export type PipedrivePersonImportClient = PipedriveRelatedRecordClient &
 export type PipedriveSelectedPersonImportClient = PipedriveRelatedRecordClient &
   Pick<PipedriveReadOnlyClient, "getPerson">;
 
+export type PipedriveLeadNoteImportClient = Pick<
+  PipedriveReadOnlyClient,
+  "listNotes"
+>;
+
+export type PipedriveSelectedLeadNoteImportClient = Pick<
+  PipedriveReadOnlyClient,
+  "getNote"
+>;
+
 export type PipedriveLeadImportMapping = {
   company: {
     addressLine1: string | null;
@@ -249,6 +259,31 @@ export type PipedriveLeadNotesSyncResult =
       warnings: string[];
     };
 
+export type PipedriveLeadNoteImportResult = {
+  created: number;
+  externalLeadId: string | null;
+  externalNoteId: string | null;
+  ignored: boolean;
+  opportunityId: string | null;
+  skipped: number;
+  status: "created" | "ignored" | "skipped" | "updated";
+  updated: number;
+  warnings: string[];
+};
+
+export type PipedriveLeadNoteImportMetadataRow = {
+  created: number;
+  externalLeadId: string | null;
+  externalNoteId: string | null;
+  ignored: boolean;
+  opportunityId: string | null;
+  skipped: number;
+  status: PipedriveLeadNoteImportResult["status"];
+  updated: number;
+  warningCount: number;
+  warnings: string[];
+};
+
 type ResolvedCompany = {
   created: boolean;
   id: string | null;
@@ -332,6 +367,78 @@ type ImportPersonIdsOptions = {
   now?: Date;
   personIds: Array<number | string>;
 };
+
+type ImportLeadNotePageOptions = {
+  client?: PipedriveLeadNoteImportClient | null;
+  now?: Date;
+  params?: PipedriveListNotesParams;
+  warnWhenUnlinked?: boolean;
+};
+
+type ImportLeadNotePagesOptions = ImportLeadNotePageOptions & {
+  maxPages?: number;
+};
+
+type ImportLeadNoteIdsOptions = {
+  client?: PipedriveSelectedLeadNoteImportClient | null;
+  noteIds: Array<number | string>;
+  now?: Date;
+  warnWhenUnlinked?: boolean;
+};
+
+export type PipedriveLeadNotePageImportResult =
+  | {
+      created: number;
+      ignored: number;
+      maxPages: number;
+      moreAvailable: boolean;
+      nextStart: number | null;
+      pagesRead: number;
+      recordsRead: number;
+      recordsWritten: number;
+      results: PipedriveLeadNoteImportResult[];
+      skipped: number;
+      status: "ok";
+      updated: number;
+    }
+  | {
+      created: 0;
+      ignored: 0;
+      maxPages: number;
+      moreAvailable: false;
+      nextStart: null;
+      pagesRead: 0;
+      recordsRead: 0;
+      recordsWritten: 0;
+      results: [];
+      skipped: 0;
+      status: "not_configured";
+      updated: 0;
+    };
+
+export type PipedriveLeadNoteIdsImportResult =
+  | {
+      created: number;
+      ignored: number;
+      recordsRead: number;
+      recordsWritten: number;
+      requested: number;
+      results: PipedriveLeadNoteImportResult[];
+      skipped: number;
+      status: "ok";
+      updated: number;
+    }
+  | {
+      created: 0;
+      ignored: 0;
+      recordsRead: 0;
+      recordsWritten: 0;
+      requested: number;
+      results: [];
+      skipped: number;
+      status: "not_configured";
+      updated: 0;
+    };
 
 type ImportedRelatedRecords = {
   organization: PipedriveOrganization | null;
@@ -537,6 +644,152 @@ export async function syncPipedriveLeadNotesForOpportunity({
     status: "ok",
     updated: writeResult.updated,
     warnings: noteRead.warnings,
+  };
+}
+
+export async function importPipedriveLeadNotePages({
+  client,
+  maxPages = defaultPipedriveLeadNoteMaxPages,
+  now = new Date(),
+  params = {},
+  warnWhenUnlinked = false,
+}: ImportLeadNotePagesOptions = {}): Promise<PipedriveLeadNotePageImportResult> {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveLeadNoteMaxPages,
+  );
+
+  if (!readClient) {
+    return {
+      created: 0,
+      ignored: 0,
+      maxPages: pageLimit,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 0,
+      recordsRead: 0,
+      recordsWritten: 0,
+      results: [],
+      skipped: 0,
+      status: "not_configured",
+      updated: 0,
+    };
+  }
+
+  const results: PipedriveLeadNoteImportResult[] = [];
+  let moreAvailable = false;
+  let nextStart: number | null = null;
+  let pagesRead = 0;
+  let recordsRead = 0;
+  let start = params.start ?? null;
+
+  while (pagesRead < pageLimit) {
+    const page = await readClient.listNotes(
+      latestLeadNoteListParams({ ...params, start }),
+    );
+    pagesRead += 1;
+    recordsRead += page.data.length;
+
+    for (const note of page.data) {
+      results.push(
+        await syncPipedriveLeadNoteRecord({
+          note,
+          now,
+          warnWhenUnlinked,
+        }),
+      );
+    }
+
+    moreAvailable = page.pagination.moreItemsInCollection;
+    nextStart = page.pagination.nextStart;
+
+    if (!moreAvailable || nextStart === null) {
+      moreAvailable = false;
+      nextStart = null;
+      break;
+    }
+
+    start = nextStart;
+  }
+
+  const created = results.reduce((count, result) => count + result.created, 0);
+  const updated = results.reduce((count, result) => count + result.updated, 0);
+
+  return {
+    created,
+    ignored: results.filter((result) => result.ignored).length,
+    maxPages: pageLimit,
+    moreAvailable,
+    nextStart,
+    pagesRead,
+    recordsRead,
+    recordsWritten: created + updated,
+    results,
+    skipped: results.reduce((count, result) => count + result.skipped, 0),
+    status: "ok",
+    updated,
+  };
+}
+
+export async function importPipedriveLeadNoteIds({
+  client,
+  noteIds,
+  now = new Date(),
+  warnWhenUnlinked = true,
+}: ImportLeadNoteIdsOptions): Promise<PipedriveLeadNoteIdsImportResult> {
+  const selectedNoteIds = normalizedSelectedNoteIds(noteIds);
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      created: 0,
+      ignored: 0,
+      recordsRead: 0,
+      recordsWritten: 0,
+      requested: selectedNoteIds.length,
+      results: [],
+      skipped: selectedNoteIds.length,
+      status: "not_configured",
+      updated: 0,
+    };
+  }
+
+  const results: PipedriveLeadNoteImportResult[] = [];
+
+  for (const noteId of selectedNoteIds) {
+    try {
+      const note = await readClient.getNote(noteId);
+      results.push(
+        await syncPipedriveLeadNoteRecord({
+          note,
+          now,
+          warnWhenUnlinked,
+        }),
+      );
+    } catch (error) {
+      results.push(
+        skippedLeadNoteResult({
+          externalNoteId: String(noteId),
+          warning: pipedriveReadWarning("note", String(noteId), error),
+        }),
+      );
+    }
+  }
+
+  const created = results.reduce((count, result) => count + result.created, 0);
+  const updated = results.reduce((count, result) => count + result.updated, 0);
+
+  return {
+    created,
+    ignored: results.filter((result) => result.ignored).length,
+    recordsRead: selectedNoteIds.length,
+    recordsWritten: created + updated,
+    requested: selectedNoteIds.length,
+    results,
+    skipped: results.reduce((count, result) => count + result.skipped, 0),
+    status: "ok",
+    updated,
   };
 }
 
@@ -934,6 +1187,25 @@ export function pipedrivePersonImportMetadataRows(
     externalPersonId: previewMetadataText(result.externalPersonId),
     name: previewMetadataText(result.name),
     status: result.status,
+    warningCount: result.warnings.length,
+    warnings: result.warnings
+      .slice(0, 3)
+      .map((warning) => truncateText(warning, 240)),
+  }));
+}
+
+export function pipedriveLeadNoteImportMetadataRows(
+  results: PipedriveLeadNoteImportResult[],
+): PipedriveLeadNoteImportMetadataRow[] {
+  return results.map((result) => ({
+    created: result.created,
+    externalLeadId: previewMetadataText(result.externalLeadId),
+    externalNoteId: previewMetadataText(result.externalNoteId),
+    ignored: result.ignored,
+    opportunityId: previewMetadataText(result.opportunityId),
+    skipped: result.skipped,
+    status: result.status,
+    updated: result.updated,
     warningCount: result.warnings.length,
     warnings: result.warnings
       .slice(0, 3)
@@ -2047,6 +2319,106 @@ async function readPipedriveLeadNotes(
   return { notes, notesRead, warnings };
 }
 
+async function syncPipedriveLeadNoteRecord({
+  note,
+  now,
+  warnWhenUnlinked,
+}: {
+  note: PipedriveNote;
+  now: Date;
+  warnWhenUnlinked: boolean;
+}): Promise<PipedriveLeadNoteImportResult> {
+  const externalNoteId = externalId(note.id);
+
+  if (!externalNoteId) {
+    return skippedLeadNoteResult({
+      warning: "Pipedrive note was missing an ID.",
+    });
+  }
+
+  const externalLeadId = pipedriveLeadIdFromNote(note);
+
+  if (!externalLeadId) {
+    return {
+      created: 0,
+      externalLeadId: null,
+      externalNoteId,
+      ignored: true,
+      opportunityId: null,
+      skipped: 0,
+      status: "ignored",
+      updated: 0,
+      warnings: [],
+    };
+  }
+
+  const linkedOpportunity = await prisma.externalRecordLink.findFirst({
+    where: {
+      externalId: externalLeadId,
+      externalType: pipedriveExternalTypes.lead,
+      internalType: pipedriveInternalTypes.opportunity,
+      provider: pipedriveProvider,
+    },
+    select: {
+      internalId: true,
+    },
+  });
+
+  if (!linkedOpportunity) {
+    return skippedLeadNoteResult({
+      externalLeadId,
+      externalNoteId,
+      warning: warnWhenUnlinked
+        ? "Pipedrive note lead is not linked to a CRM sale."
+        : null,
+    });
+  }
+
+  const opportunity = await prisma.salesOpportunity.findUnique({
+    where: { id: linkedOpportunity.internalId },
+    select: { contactId: true, id: true },
+  });
+
+  if (!opportunity) {
+    return skippedLeadNoteResult({
+      externalLeadId,
+      externalNoteId,
+      opportunityId: linkedOpportunity.internalId,
+      warning: warnWhenUnlinked
+        ? "Linked CRM sale could not be found for the Pipedrive note."
+        : null,
+    });
+  }
+
+  const writeResult = await prisma.$transaction((tx) =>
+    syncPipedriveLeadNoteRecords(tx, {
+      contactId: opportunity.contactId,
+      externalLeadId,
+      notes: [note],
+      now,
+      opportunityId: opportunity.id,
+    }),
+  );
+  const status =
+    writeResult.created > 0
+      ? "created"
+      : writeResult.updated > 0
+        ? "updated"
+        : "skipped";
+
+  return {
+    created: writeResult.created,
+    externalLeadId,
+    externalNoteId,
+    ignored: false,
+    opportunityId: opportunity.id,
+    skipped: writeResult.skipped,
+    status,
+    updated: writeResult.updated,
+    warnings: [],
+  };
+}
+
 async function syncPipedriveLeadNoteRecords(
   tx: Prisma.TransactionClient,
   {
@@ -2167,6 +2539,43 @@ function mapPipedriveNoteToSalesCommunication({
   };
 }
 
+function skippedLeadNoteResult({
+  externalLeadId = null,
+  externalNoteId = null,
+  opportunityId = null,
+  warning = null,
+}: {
+  externalLeadId?: string | null;
+  externalNoteId?: string | null;
+  opportunityId?: string | null;
+  warning?: string | null;
+}): PipedriveLeadNoteImportResult {
+  return {
+    created: 0,
+    externalLeadId,
+    externalNoteId,
+    ignored: false,
+    opportunityId,
+    skipped: 1,
+    status: "skipped",
+    updated: 0,
+    warnings: warning ? [warning] : [],
+  };
+}
+
+function pipedriveLeadIdFromNote(note: PipedriveNote) {
+  const noteRecord = objectValue(note);
+  const leadRecord = objectValue(noteRecord.lead);
+  const leadIdRecord = objectValue(noteRecord.lead_id);
+
+  return (
+    externalId(note.lead_id) ??
+    externalId(leadRecord.id) ??
+    externalId(leadIdRecord.id) ??
+    externalId(leadIdRecord.value)
+  );
+}
+
 function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   const leadParams: PipedriveListLeadsParams = {
     limit: params.limit ?? 50,
@@ -2179,6 +2588,24 @@ function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   }
 
   return leadParams;
+}
+
+function latestLeadNoteListParams(params: PipedriveListNotesParams = {}) {
+  const noteParams: PipedriveListNotesParams = {
+    limit: params.limit ?? 50,
+    sort: params.sort ?? "update_time DESC",
+  };
+
+  if (params.leadId !== undefined) noteParams.leadId = params.leadId;
+  if (params.start !== undefined) noteParams.start = params.start;
+  if (params.updatedSince !== undefined) {
+    noteParams.updatedSince = params.updatedSince;
+  }
+  if (params.updatedUntil !== undefined) {
+    noteParams.updatedUntil = params.updatedUntil;
+  }
+
+  return noteParams;
 }
 
 function emptyPipedriveDealPage(): PipedriveListResult<PipedriveDeal> {
@@ -2835,6 +3262,18 @@ function normalizedSelectedPersonIds(personIds: Array<number | string>) {
   }
 
   return [...selectedPersonIds];
+}
+
+function normalizedSelectedNoteIds(noteIds: Array<number | string>) {
+  const selectedNoteIds = new Set<number>();
+
+  for (const noteId of noteIds) {
+    const numeric = numericId(noteId);
+    if (numeric) selectedNoteIds.add(numeric);
+    if (selectedNoteIds.size >= 50) break;
+  }
+
+  return [...selectedNoteIds];
 }
 
 function opportunityValue(value: unknown, workspaceCurrency: string) {

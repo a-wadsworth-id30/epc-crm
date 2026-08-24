@@ -11,7 +11,9 @@ import {
 } from "@/lib/integrations/pipedrive";
 import {
   importPipedriveLeadIds,
+  importPipedriveLeadNotePages,
   importPipedriveLeadPages,
+  pipedriveLeadNoteImportMetadataRows,
   pipedriveLeadIdFromInput,
   pipedriveLeadImportMetadataRows,
   previewPipedriveLeadPage,
@@ -43,6 +45,14 @@ export type PipedriveLeadPullResult = {
     | "not_configured"
     | "page";
   moreAvailable: boolean;
+  noteCreated?: number;
+  noteIgnored?: number;
+  noteMoreAvailable?: boolean;
+  notePagesRead?: number;
+  noteRecordsRead?: number;
+  noteRecordsWritten?: number;
+  noteSkipped?: number;
+  noteUpdated?: number;
   pagesRead: number;
   recordsRead: number;
   recordsWritten: number;
@@ -449,7 +459,8 @@ export async function readPipedriveLeadPullReadiness() {
     connected: Boolean(client),
     connectionId: connection?.id ?? null,
     hasContinuationCursor:
-      typeof storedConfig?.lastFullLeadSyncNextStart === "number",
+      typeof storedConfig?.lastFullLeadSyncNextStart === "number" ||
+      typeof storedConfig?.lastLeadNoteSyncNextStart === "number",
     lastFullDealSyncAt: null,
     lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: storedConfig?.lastFullLeadSyncAt ?? null,
@@ -458,6 +469,15 @@ export async function readPipedriveLeadPullReadiness() {
         ? storedConfig.lastFullLeadSyncNextStart
         : null,
     lastLeadSyncAt: storedConfig?.lastLeadSyncAt ?? null,
+    lastLeadNoteSyncAt: storedConfig?.lastLeadNoteSyncAt ?? null,
+    lastLeadNoteSyncNextStart:
+      typeof storedConfig?.lastLeadNoteSyncNextStart === "number"
+        ? storedConfig.lastLeadNoteSyncNextStart
+        : null,
+    lastLeadNoteSyncPendingUntil:
+      typeof storedConfig?.lastLeadNoteSyncPendingUntil === "string"
+        ? storedConfig.lastLeadNoteSyncPendingUntil
+        : null,
     provider: pipedriveProvider,
     pullOnly: true,
     status: connection?.status ?? null,
@@ -641,6 +661,10 @@ async function writePipedriveLeadPull({
   try {
     const start = client.lastFullLeadSyncNextStart;
     const updatedSince = client.lastFullLeadSyncAt;
+    const noteStart = client.lastLeadNoteSyncNextStart;
+    const noteUpdatedSince = client.lastLeadNoteSyncAt;
+    const noteUpdatedUntil =
+      client.lastLeadNoteSyncPendingUntil ?? startedAt.toISOString();
     const leadSweepResult =
       start === null && updatedSince
         ? await importPipedriveLeadPages({
@@ -652,6 +676,15 @@ async function writePipedriveLeadPull({
     const result = await importPipedriveLeadPages({
       client,
       params: { limit: 50, start, updatedSince },
+    });
+    const noteResult = await importPipedriveLeadNotePages({
+      client,
+      params: {
+        limit: 50,
+        start: noteStart,
+        updatedSince: noteUpdatedSince,
+        updatedUntil: noteUpdatedUntil,
+      },
     });
     const finishedAt = new Date();
     const leadSweepRecordsRead =
@@ -681,12 +714,24 @@ async function writePipedriveLeadPull({
       leadSweepResult?.status === "ok" ? leadSweepResult.pagesRead : 0;
     const leadCursorPagesRead = result.status === "ok" ? result.pagesRead : 0;
     const leadPagesRead = leadSweepPagesRead + leadCursorPagesRead;
-    const recordsRead = leadRecordsRead;
-    const recordsWritten = leadRecordsWritten;
+    const noteRecordsRead =
+      noteResult.status === "ok" ? noteResult.recordsRead : 0;
+    const noteRecordsWritten =
+      noteResult.status === "ok" ? noteResult.recordsWritten : 0;
+    const noteCreated = noteResult.status === "ok" ? noteResult.created : 0;
+    const noteUpdated = noteResult.status === "ok" ? noteResult.updated : 0;
+    const noteIgnored = noteResult.status === "ok" ? noteResult.ignored : 0;
+    const noteSkipped = noteResult.status === "ok" ? noteResult.skipped : 0;
+    const noteMoreAvailable =
+      noteResult.status === "ok" ? noteResult.moreAvailable : false;
+    const notePagesRead =
+      noteResult.status === "ok" ? noteResult.pagesRead : 0;
+    const recordsRead = leadRecordsRead + noteRecordsRead;
+    const recordsWritten = leadRecordsWritten + noteRecordsWritten;
     const linkedExisting = leadLinkedExisting;
     const skipped = leadSkipped;
-    const moreAvailable = leadMoreAvailable;
-    const pagesRead = leadPagesRead;
+    const moreAvailable = leadMoreAvailable || noteMoreAvailable;
+    const pagesRead = leadPagesRead + notePagesRead;
     const warningCount =
       (leadSweepResult
         ? leadSweepResult.status === "ok"
@@ -699,6 +744,12 @@ async function writePipedriveLeadPull({
       (result.status === "ok"
         ? result.results.reduce(
             (count, leadResult) => count + leadResult.warnings.length,
+            0,
+          )
+        : 1) +
+      (noteResult.status === "ok"
+        ? noteResult.results.reduce(
+            (count, noteImport) => count + noteImport.warnings.length,
             0,
           )
         : 1);
@@ -724,10 +775,13 @@ async function writePipedriveLeadPull({
     const moreAvailableSummary = moreAvailable
       ? " More Pipedrive pages are available, so a continuation was saved and the relevant full-pull cursor was not advanced."
       : "";
+    const noteSummary = noteRecordsRead
+      ? ` Lead-note sweep: ${noteCreated} created, ${noteUpdated} updated, ${noteSkipped} skipped and ${noteIgnored} ignored from ${noteRecordsRead} Pipedrive note${noteRecordsRead === 1 ? "" : "s"}.`
+      : "";
     const message =
       recordsRead === 0
-        ? `${importMode}: no Pipedrive leads were available to import.`
-        : `${importMode}: ${leadRecordsWritten} lead${leadRecordsWritten === 1 ? "" : "s"} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}${pageSummary}.${moreAvailableSummary}`;
+        ? `${importMode}: no Pipedrive leads or notes were available to import.`
+        : `${importMode}: ${leadRecordsWritten} lead${leadRecordsWritten === 1 ? "" : "s"} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}${pageSummary}.${noteSummary}${moreAvailableSummary}`;
     const importRows = [
       ...(leadSweepResult?.status === "ok"
         ? pipedriveLeadImportMetadataRows(leadSweepResult.results)
@@ -736,12 +790,16 @@ async function writePipedriveLeadPull({
         ? pipedriveLeadImportMetadataRows(result.results)
         : []),
     ];
+    const noteImportRows =
+      noteResult.status === "ok"
+        ? pipedriveLeadNoteImportMetadataRows(noteResult.results)
+        : [];
     const existingConfig = pipedriveStoredConfigSchema.safeParse(
       connection.config ?? {},
     );
     const metadata: Prisma.InputJsonObject = {
       actorId,
-      created: recordsWritten,
+      created: leadRecordsWritten,
       dealImportEnabled: false,
       imports: importRows,
       leadCreated: leadRecordsWritten,
@@ -766,8 +824,23 @@ async function writePipedriveLeadPull({
       linkedExisting,
       mode,
       moreAvailable,
+      noteCreated,
+      noteIgnored,
+      noteImports: noteImportRows,
+      noteMaxPages: noteResult.status === "ok" ? noteResult.maxPages : null,
+      noteMoreAvailable,
+      noteNextStart: noteResult.status === "ok" ? noteResult.nextStart : null,
+      notePagesRead,
+      noteRecordsRead,
+      noteRecordsWritten,
+      noteSkipped,
+      noteStart,
+      noteUpdated,
+      noteUpdatedSince,
+      noteUpdatedUntil,
       pagesRead,
       pullOnly: true,
+      recordsWritten,
       skipped,
       start,
       trigger,
@@ -807,6 +880,17 @@ async function writePipedriveLeadPull({
         }
       }
 
+      if (noteResult.status === "ok") {
+        if (noteResult.moreAvailable && noteResult.nextStart !== null) {
+          nextConfig.lastLeadNoteSyncNextStart = noteResult.nextStart;
+          nextConfig.lastLeadNoteSyncPendingUntil = noteUpdatedUntil;
+        } else {
+          nextConfig.lastLeadNoteSyncAt = noteUpdatedUntil;
+          nextConfig.lastLeadNoteSyncNextStart = null;
+          nextConfig.lastLeadNoteSyncPendingUntil = null;
+        }
+      }
+
       writes.push(
         prisma.integrationConnection.update({
           where: { provider: pipedriveProvider },
@@ -821,12 +905,20 @@ async function writePipedriveLeadPull({
 
     return {
       connectionId: connection.id,
-      created: recordsWritten,
+      created: leadRecordsWritten,
       linkedExisting,
       message,
       metadata,
       mode,
       moreAvailable,
+      noteCreated,
+      noteIgnored,
+      noteMoreAvailable,
+      notePagesRead,
+      noteRecordsRead,
+      noteRecordsWritten,
+      noteSkipped,
+      noteUpdated,
       pagesRead,
       recordsRead,
       recordsWritten,

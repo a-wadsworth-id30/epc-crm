@@ -6,7 +6,7 @@ import {
 } from "@/lib/integrations/pipedrive";
 
 type PipedriveWebhookAction = "change" | "create";
-type PipedriveWebhookObject = "deal" | "lead" | "person";
+type PipedriveWebhookObject = "deal" | "lead" | "note" | "person";
 type PipedriveRegistrationStatus = "ERROR" | "READY" | "SUCCESS" | "WARNING";
 
 type PipedriveWebhookEnvelope<T> = {
@@ -95,6 +95,16 @@ const desiredWebhookEvents: Array<{
     action: "change",
     name: "EPC CRM Pipedrive person changed import",
     object: "person",
+  },
+  {
+    action: "create",
+    name: "EPC CRM Pipedrive note created import",
+    object: "note",
+  },
+  {
+    action: "change",
+    name: "EPC CRM Pipedrive note changed import",
+    object: "note",
   },
 ];
 
@@ -508,6 +518,7 @@ function webhookObject(value: unknown): PipedriveWebhookObject | "unknown" {
   const normalized = String(value).trim().toLowerCase();
 
   if (["deal", "deals"].includes(normalized)) return "deal";
+  if (["note", "notes"].includes(normalized)) return "note";
   if (["person", "persons"].includes(normalized)) return "person";
   if (["lead", "leads"].includes(normalized)) return "lead";
 

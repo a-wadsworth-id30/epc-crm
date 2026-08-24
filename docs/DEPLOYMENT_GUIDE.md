@@ -295,7 +295,8 @@ it calls `/api/maintenance/pipedrive-lead-import` with
 bounded Pipedrive lead import helper as the manual settings
 action. Start with `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
 credentials/readiness before allowing CRM lead records to be imported. API
-and scheduled runs write compact
+and scheduled runs also sweep updated Pipedrive notes into linked CRM sales
+using a separate note cursor, then write compact
 background job history visible in Settings > System. Manual and scheduled
 Pipedrive pulls use that background job state as an overlap guard: if a
 non-stale `pipedrive.lead_import` job is already running, the newer run is
@@ -331,17 +332,18 @@ use a separate `pipedrive.contact_import` background job and separate
 This does not write back to Pipedrive.
 
 `/api/webhooks/pipedrive` accepts authenticated Pipedrive v1/v2 webhook
-payloads for lead and person create/change events. Configure Pipedrive
+payloads for lead, person and note create/change events. Configure Pipedrive
 webhook HTTP Basic Auth with `PIPEDRIVE_WEBHOOK_BASIC_USER` and
 `PIPEDRIVE_WEBHOOK_SECRET`, or use the lead import/cron secret fallback. The
-CRM receiver reads the current lead/person from Pipedrive with GET
-requests before importing into CRM. Deal, delete and organisation webhooks are
-recorded but do not import, delete or mutate CRM records and do not write to
-Pipedrive.
+CRM receiver reads the current lead/person/note from Pipedrive with GET
+requests before importing into CRM. Note events only create or update CRM sale
+notes when the Pipedrive note belongs to a Lead Inbox lead already linked to a
+CRM sale. Deal, delete and organisation webhooks are recorded but do not import,
+delete or mutate CRM records and do not write to Pipedrive.
 
 Use `/api/maintenance/pipedrive-webhook-registration` with `GET` to preview the
-four required Pipedrive v2 webhook subscriptions without performing provider
-writes: lead create, lead change, person create and person change. To create missing webhooks, call `POST` with `apply=1` and
+six required Pipedrive v2 webhook subscriptions without performing provider
+writes: lead create/change, person create/change and note create/change. To create missing webhooks, call `POST` with `apply=1` and
 `providerWriteApproval=pipedrive-webhook-registration`. Registering or changing
 webhooks inside Pipedrive is a provider write operation and must be approved by
 Adam before it is performed.
@@ -352,7 +354,7 @@ logs, recent background jobs and webhook-registration status. Add
 `skipWebhookCheck=1` to avoid the provider GET used by the registration status
 check. Admins can see the same sanitized validation summary in
 Settings > Integrations > Pipedrive, including recent CRM-side webhook
-activity once Pipedrive has sent lead, deal or person events. The Pipedrive settings
+activity once Pipedrive has sent lead, deal, person or note events. The Pipedrive settings
 page can also run a receiver self-test that posts a no-op authenticated payload
 through the CRM webhook route and records `webhook-receiver-test`; this checks
 CRM receiver routing/auth only and does not prove Pipedrive has delivered a

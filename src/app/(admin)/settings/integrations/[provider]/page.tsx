@@ -785,13 +785,18 @@ export default async function IntegrationSettingsPage({
             />
             <PipedrivePullStateItem
               label="Deal events"
-              value="Supported"
-              detail="Create/change imports matching deal"
+              value="Recorded"
+              detail="Deals are not imported to sales"
             />
             <PipedrivePullStateItem
               label="Person events"
               value="Supported"
               detail="Create/change imports matching contact"
+            />
+            <PipedrivePullStateItem
+              label="Note events"
+              value="Supported"
+              detail="Create/change imports linked lead notes"
             />
           </dl>
         </section>
@@ -3319,7 +3324,7 @@ function PipedriveWebhookActivityPanel({
                   formattedDateTime(latestProviderEvent.startedAt) ?? "unknown"
                 }.`
               : activity.selfTestCount
-                ? "Receiver self-test has reached CRM, but no real Pipedrive lead/person webhook delivery has arrived yet."
+                ? "Receiver self-test has reached CRM, but no real Pipedrive lead/person/note webhook delivery has arrived yet."
                 : "No Pipedrive webhook delivery has reached CRM yet."}
           </p>
         </div>
@@ -3991,6 +3996,11 @@ function formatPipedriveValidationCount(value: number) {
 function pipedriveLeadCursorDetail(summary: PipedriveValidationSummary) {
   const nextStart = summary.leadReadiness.lastFullLeadSyncNextStart;
   if (typeof nextStart === "number") return `Continuation start ${nextStart}`;
+
+  const noteNextStart = summary.leadReadiness.lastLeadNoteSyncNextStart;
+  if (typeof noteNextStart === "number") {
+    return `Note continuation start ${noteNextStart}`;
+  }
 
   return summary.leadReadiness.connected
     ? "No saved continuation"

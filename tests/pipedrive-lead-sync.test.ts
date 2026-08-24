@@ -18,12 +18,17 @@ let client: {
   lastFullDealSyncNextCursor: string | null;
   lastFullLeadSyncAt: string | null;
   lastFullLeadSyncNextStart: number | null;
+  lastLeadNoteSyncAt: string | null;
+  lastLeadNoteSyncNextStart: number | null;
+  lastLeadNoteSyncPendingUntil: string | null;
 } | null;
 let connectionConfig: Record<string, unknown>;
 let importDealPagesArgs: unknown;
 let importDealPagesResult: Record<string, unknown>;
 let importLeadIdsArgs: unknown;
 let importLeadIdsResult: Record<string, unknown>;
+let importLeadNotePagesArgs: unknown;
+let importLeadNotePagesResult: Record<string, unknown>;
 let importPagesArgs: unknown;
 let importPagesCalls: unknown[];
 let importPagesResult: Record<string, unknown>;
@@ -85,6 +90,10 @@ before(async () => {
           importLeadIdsArgs = args;
           return importLeadIdsResult;
         },
+        importPipedriveLeadNotePages: async (args: unknown) => {
+          importLeadNotePagesArgs = args;
+          return importLeadNotePagesResult;
+        },
         importPipedriveLeadPages: async (args: unknown) => {
           importPagesArgs = args;
           importPagesCalls.push(args);
@@ -109,6 +118,15 @@ before(async () => {
           {
             externalLeadId: "lead-1",
             status: "created",
+            warningCount: 0,
+            warnings: [],
+          },
+        ],
+        pipedriveLeadNoteImportMetadataRows: () => [
+          {
+            externalLeadId: "lead-1",
+            externalNoteId: "88",
+            status: "updated",
             warningCount: 0,
             warnings: [],
           },
@@ -196,6 +214,9 @@ beforeEach(() => {
     lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastFullLeadSyncNextStart: null,
+    lastLeadNoteSyncAt: "2026-08-20T08:10:00.000Z",
+    lastLeadNoteSyncNextStart: null,
+    lastLeadNoteSyncPendingUntil: null,
   };
   connectionConfig = {
     apiBaseUrl: "https://api.pipedrive.com/v1",
@@ -204,6 +225,9 @@ beforeEach(() => {
     lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastLeadSyncAt: "2026-08-20T08:05:00.000Z",
+    lastLeadNoteSyncAt: "2026-08-20T08:10:00.000Z",
+    lastLeadNoteSyncNextStart: null,
+    lastLeadNoteSyncPendingUntil: null,
   };
   importDealPagesArgs = null;
   importDealPagesResult = {
@@ -247,6 +271,21 @@ beforeEach(() => {
     ],
     skipped: 0,
     status: "ok",
+  };
+  importLeadNotePagesArgs = null;
+  importLeadNotePagesResult = {
+    created: 0,
+    ignored: 0,
+    maxPages: 3,
+    moreAvailable: false,
+    nextStart: null,
+    pagesRead: 1,
+    recordsRead: 0,
+    recordsWritten: 0,
+    results: [],
+    skipped: 0,
+    status: "ok",
+    updated: 0,
   };
   importPagesArgs = null;
   importPagesCalls = [];
@@ -383,6 +422,148 @@ describe("Pipedrive scheduled lead sync", () => {
     assert.equal(syncWrite.args.data.metadata.leadCursorRecordsRead, 1);
   });
 
+  it("pulls updated lead notes during scheduled lead pulls", async () => {
+    importPagesResult = {
+      ...importPagesResult,
+      created: 0,
+      linkedExisting: 0,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 1,
+      recordsRead: 0,
+      results: [],
+      skipped: 0,
+    };
+    importLeadNotePagesResult = {
+      created: 1,
+      ignored: 2,
+      maxPages: 3,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 1,
+      recordsRead: 3,
+      recordsWritten: 1,
+      results: [
+        {
+          created: 1,
+          externalLeadId: "lead-1",
+          externalNoteId: "88",
+          ignored: false,
+          opportunityId: "opportunity-1",
+          skipped: 0,
+          status: "created",
+          updated: 0,
+          warnings: [],
+        },
+      ],
+      skipped: 0,
+      status: "ok",
+      updated: 0,
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveLeadPull({
+      actorId: "user-1",
+      recordBackgroundJob: false,
+      trigger: "scheduled",
+    });
+
+    assert.equal(result.noteRecordsRead, 3);
+    assert.equal(result.noteRecordsWritten, 1);
+    assert.equal(result.noteCreated, 1);
+    const noteParams = (importLeadNotePagesArgs as {
+      params?: Record<string, unknown>;
+    }).params;
+    assert.equal(noteParams?.limit, 50);
+    assert.equal(noteParams?.start, null);
+    assert.equal(noteParams?.updatedSince, "2026-08-20T08:10:00.000Z");
+    assert.equal(typeof noteParams?.updatedUntil, "string");
+
+    const syncWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "sync.create",
+    ) as {
+      args: {
+        data: {
+          metadata: Record<string, unknown>;
+          recordsRead: number;
+          recordsWritten: number;
+        };
+      };
+    };
+    assert.equal(syncWrite.args.data.recordsRead, 3);
+    assert.equal(syncWrite.args.data.recordsWritten, 1);
+    assert.equal(syncWrite.args.data.metadata.noteRecordsRead, 3);
+    assert.equal(syncWrite.args.data.metadata.noteRecordsWritten, 1);
+
+    const updateWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "integration.update",
+    ) as { args: { data: { config: Record<string, unknown> } } };
+    assert.equal(
+      updateWrite.args.data.config.lastLeadNoteSyncAt,
+      noteParams?.updatedUntil,
+    );
+    assert.equal(updateWrite.args.data.config.lastLeadNoteSyncNextStart, null);
+  });
+
+  it("saves a lead-note continuation without advancing the note cursor", async () => {
+    connectionConfig = {
+      ...connectionConfig,
+      lastLeadNoteSyncPendingUntil: "2026-08-20T09:55:00.000Z",
+      lastLeadNoteSyncNextStart: 50,
+    };
+    client = {
+      ...client!,
+      lastLeadNoteSyncPendingUntil: "2026-08-20T09:55:00.000Z",
+      lastLeadNoteSyncNextStart: 50,
+    };
+    importPagesResult = {
+      ...importPagesResult,
+      created: 0,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 1,
+      recordsRead: 0,
+      results: [],
+      skipped: 0,
+    };
+    importLeadNotePagesResult = {
+      ...importLeadNotePagesResult,
+      moreAvailable: true,
+      nextStart: 100,
+      pagesRead: 3,
+      recordsRead: 150,
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveLeadPull({
+      recordBackgroundJob: false,
+      trigger: "scheduled",
+    });
+
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.noteMoreAvailable, true);
+    assert.deepEqual(
+      (importLeadNotePagesArgs as { params?: unknown }).params,
+      {
+        limit: 50,
+        start: 50,
+        updatedSince: "2026-08-20T08:10:00.000Z",
+        updatedUntil: "2026-08-20T09:55:00.000Z",
+      },
+    );
+
+    const updateWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "integration.update",
+    ) as { args: { data: { config: Record<string, unknown> } } };
+    assert.equal(
+      updateWrite.args.data.config.lastLeadNoteSyncAt,
+      "2026-08-20T08:10:00.000Z",
+    );
+    assert.equal(updateWrite.args.data.config.lastLeadNoteSyncNextStart, 100);
+    assert.equal(
+      updateWrite.args.data.config.lastLeadNoteSyncPendingUntil,
+      "2026-08-20T09:55:00.000Z",
+    );
+  });
+
   it("does not import Pipedrive deals during lead pulls", async () => {
     connectionConfig = {
       ...connectionConfig,
@@ -394,6 +575,9 @@ describe("Pipedrive scheduled lead sync", () => {
       lastFullDealSyncNextCursor: null,
       lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
       lastFullLeadSyncNextStart: null,
+      lastLeadNoteSyncAt: "2026-08-20T08:10:00.000Z",
+      lastLeadNoteSyncNextStart: null,
+      lastLeadNoteSyncPendingUntil: null,
     };
     importPagesResult = {
       ...importPagesResult,
@@ -482,6 +666,9 @@ describe("Pipedrive scheduled lead sync", () => {
       lastFullDealSyncNextCursor: null,
       lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
       lastFullLeadSyncNextStart: 50,
+      lastLeadNoteSyncAt: "2026-08-20T08:10:00.000Z",
+      lastLeadNoteSyncNextStart: null,
+      lastLeadNoteSyncPendingUntil: null,
     };
 
     const result = await pipedriveLeadSync.runPipedriveLeadPull({
