@@ -90,6 +90,8 @@ type SanitizedReadiness = {
   credentialSource: string | null;
   defaultLeadSource: string | null;
   hasContinuationCursor: boolean;
+  lastFullDealSyncAt: string | null;
+  lastFullDealSyncNextCursor: string | null;
   lastContactSyncAt: string | null;
   lastFullLeadSyncAt: string | null;
   lastFullLeadSyncNextStart: number | null;
@@ -106,6 +108,7 @@ const defaultValidationLimit = 15;
 const maxValidationLimit = 50;
 const pipedriveWebhookSyncTypes = [
   "contact-import-webhook",
+  "deal-import-webhook",
   "lead-import-webhook",
   "webhook",
   "webhook-receiver-test",
@@ -273,6 +276,9 @@ async function safeWebhookRegistrationSummary() {
 }
 
 function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
+  const lastFullDealSyncNextCursor = stringValue(
+    value.lastFullDealSyncNextCursor,
+  );
   const lastFullPersonSyncNextCursor = stringValue(
     value.lastFullPersonSyncNextCursor,
   );
@@ -283,9 +289,12 @@ function sanitizeReadiness(value: ReadinessPayload): SanitizedReadiness {
     defaultLeadSource: stringValue(value.defaultLeadSource),
     hasContinuationCursor:
       value.hasContinuationCursor === true ||
+      Boolean(lastFullDealSyncNextCursor) ||
       typeof value.lastFullLeadSyncNextStart === "number" ||
       Boolean(lastFullPersonSyncNextCursor),
     lastContactSyncAt: stringValue(value.lastContactSyncAt),
+    lastFullDealSyncAt: stringValue(value.lastFullDealSyncAt),
+    lastFullDealSyncNextCursor,
     lastFullLeadSyncAt: stringValue(value.lastFullLeadSyncAt),
     lastFullLeadSyncNextStart:
       typeof value.lastFullLeadSyncNextStart === "number"

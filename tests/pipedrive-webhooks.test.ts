@@ -30,9 +30,12 @@ let completedJobs: Array<{
     summary: Record<string, unknown>;
   };
 }>;
+let dealImportArgs: unknown;
+let dealImportCalls: number;
 let leadImportCalls: number;
 let personImportCalls: number;
 let readClientCalls: number;
+let readClient: unknown | null;
 let syncLogWrites: SyncLogWrite[];
 
 before(async () => {
@@ -52,7 +55,7 @@ before(async () => {
       return {
         getPipedriveReadOnlyClient: async () => {
           readClientCalls += 1;
-          return null;
+          return readClient;
         },
         pipedriveProvider: "pipedrive",
       };
@@ -60,6 +63,29 @@ before(async () => {
 
     if (request === "@/lib/integrations/pipedrive-import") {
       return {
+        importPipedriveDealIds: async (args: unknown) => {
+          dealImportArgs = args;
+          dealImportCalls += 1;
+          return {
+            created: 1,
+            linkedExisting: 0,
+            requested: 1,
+            results: [
+              {
+                created: {
+                  company: true,
+                  contact: true,
+                  opportunity: true,
+                },
+                externalDealId: "13059",
+                status: "created",
+                warnings: [],
+              },
+            ],
+            skipped: 0,
+            status: "ok",
+          };
+        },
         importPipedriveLeadIds: async () => {
           leadImportCalls += 1;
           return { skipped: 0, status: "ok" };
@@ -68,6 +94,14 @@ before(async () => {
           personImportCalls += 1;
           return { skipped: 0, status: "ok" };
         },
+        pipedriveDealImportMetadataRows: () => [
+          {
+            externalDealId: "13059",
+            status: "created",
+            warningCount: 0,
+            warnings: [],
+          },
+        ],
         pipedriveLeadImportMetadataRows: () => [],
         pipedrivePersonImportMetadataRows: () => [],
       };
@@ -128,9 +162,12 @@ before(async () => {
 
 beforeEach(() => {
   completedJobs = [];
+  dealImportArgs = null;
+  dealImportCalls = 0;
   leadImportCalls = 0;
   personImportCalls = 0;
   readClientCalls = 0;
+  readClient = null;
   syncLogWrites = [];
 });
 
@@ -170,6 +207,52 @@ describe("Pipedrive webhook receiver self-test", () => {
       entity: "receiver",
       entityId: null,
       syncType: "webhook-receiver-test",
+      warningCount: 0,
+    });
+  });
+
+  it("imports supported deal webhook events through pull-only reads", async () => {
+    readClient = { defaultLeadSource: "Pipedrive" };
+
+    const result = await pipedriveWebhooks.processPipedriveWebhook({
+      event: "create.deal",
+      meta: {
+        action: "create",
+        entity: "deal",
+        entity_id: 13059,
+        event_id: "deal-event-1",
+        timestamp: "2026-08-24T12:00:00.000Z",
+        version: "2.0",
+      },
+    });
+
+    assert.equal(result.status, "SUCCESS");
+    assert.equal(result.syncType, "deal-import-webhook");
+    assert.equal(result.recordsRead, 1);
+    assert.equal(result.recordsWritten, 1);
+    assert.equal(readClientCalls, 1);
+    assert.equal(dealImportCalls, 1);
+    assert.equal(leadImportCalls, 0);
+    assert.equal(personImportCalls, 0);
+    assert.deepEqual((dealImportArgs as { dealIds?: unknown }).dealIds, [
+      13059,
+    ]);
+    assert.equal(syncLogWrites.length, 1);
+    assert.equal(syncLogWrites[0]!.data.syncType, "deal-import-webhook");
+    assert.equal(syncLogWrites[0]!.data.metadata.entity, "deal");
+    assert.deepEqual(syncLogWrites[0]!.data.metadata.imports, [
+      {
+        externalDealId: "13059",
+        status: "created",
+        warningCount: 0,
+        warnings: [],
+      },
+    ]);
+    assert.deepEqual(completedJobs[0]!.result.summary, {
+      action: "create",
+      entity: "deal",
+      entityId: "13059",
+      syncType: "deal-import-webhook",
       warningCount: 0,
     });
   });

@@ -79,6 +79,11 @@ before(async () => {
           externalRecordLink: {
             groupBy: async () => [
               {
+                _count: { _all: 2 },
+                externalType: "deal",
+                internalType: "salesOpportunity",
+              },
+              {
                 _count: { _all: 10 },
                 externalType: "person",
                 internalType: "contact",
@@ -183,6 +188,8 @@ beforeEach(() => {
     connected: true,
     credentialSource: "database",
     defaultLeadSource: "Pipedrive",
+    lastFullDealSyncAt: "2026-08-20T14:36:41.525Z",
+    lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T14:36:41.525Z",
     lastFullLeadSyncNextStart: null,
     lastLeadSyncAt: "2026-08-20T14:36:41.525Z",
@@ -228,6 +235,11 @@ describe("Pipedrive validation summary", () => {
       "create.lead",
     ]);
     assert.deepEqual(result.externalRecordLinks, [
+      {
+        count: 2,
+        externalType: "deal",
+        internalType: "salesOpportunity",
+      },
       {
         count: 3,
         externalType: "lead",

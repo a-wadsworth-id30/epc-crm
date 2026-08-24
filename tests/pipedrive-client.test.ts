@@ -154,6 +154,47 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.nextCursor, "cursor-2");
   });
 
+  it("uses the v2 deals endpoint with cursor pagination", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          next_cursor: "deal-cursor-2",
+        },
+        data: [{ id: 13059, title: "Fake deal" }],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient({
+      apiBaseUrl: "https://example.pipedrive.com/api/v1/",
+    }).listDeals({
+      cursor: "deal-cursor-1",
+      limit: 999,
+      organizationId: 42,
+      sortBy: "update_time",
+      sortDirection: "desc",
+      status: "open",
+      updatedSince: "2026-08-20T10:20:00Z",
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/api/v2/deals");
+    assert.equal(url.searchParams.get("cursor"), "deal-cursor-1");
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("org_id"), "42");
+    assert.equal(url.searchParams.get("sort_by"), "update_time");
+    assert.equal(url.searchParams.get("sort_direction"), "desc");
+    assert.equal(url.searchParams.get("status"), "open");
+    assert.equal(
+      url.searchParams.get("updated_since"),
+      "2026-08-20T10:20:00Z",
+    );
+    assert.equal(result.data[0]?.title, "Fake deal");
+    assert.equal(result.pagination.nextCursor, "deal-cursor-2");
+  });
+
   it("uses the global API v2 path for the default persons endpoint", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {
@@ -170,6 +211,25 @@ describe("Pipedrive read-only client", () => {
     assert.equal(
       requests[0]?.url,
       "https://api.pipedrive.com/api/v2/persons?limit=50",
+    );
+  });
+
+  it("reads a single deal through the global API v2 path", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        data: { id: 13059, title: "Fake deal" },
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const deal = await createClient().getDeal(13059);
+
+    assert.equal(deal.title, "Fake deal");
+    assert.equal(
+      requests[0]?.url,
+      "https://api.pipedrive.com/api/v2/deals/13059",
     );
   });
 
@@ -244,6 +304,8 @@ function createClient(
       apiToken: "token",
       defaultLeadSource: "Pipedrive",
       lastContactSyncAt: null,
+      lastFullDealSyncAt: null,
+      lastFullDealSyncNextCursor: null,
       lastFullLeadSyncAt: null,
       lastFullLeadSyncNextStart: null,
       lastFullPersonSyncAt: null,

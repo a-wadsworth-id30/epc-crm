@@ -6,8 +6,10 @@ import {
   pipedriveProvider,
 } from "@/lib/integrations/pipedrive";
 import {
+  importPipedriveDealIds,
   importPipedriveLeadIds,
   importPipedrivePersonIds,
+  pipedriveDealImportMetadataRows,
   pipedriveLeadImportMetadataRows,
   pipedrivePersonImportMetadataRows,
 } from "@/lib/integrations/pipedrive-import";
@@ -27,6 +29,7 @@ type PipedriveWebhookAction =
   | "test"
   | "unknown";
 type PipedriveWebhookEntity =
+  | "deal"
   | "lead"
   | "organization"
   | "person"
@@ -307,6 +310,74 @@ async function writePipedriveWebhookResult(
     });
   }
 
+  if (event.entity === "deal") {
+    const dealId = Number(event.entityId);
+
+    if (!Number.isInteger(dealId) || dealId <= 0) {
+      return writeWebhookLog({
+        connectionId: connection.id,
+        finishedAt: new Date(),
+        message:
+          "Pipedrive deal webhook ignored because the deal ID was invalid.",
+        metadata: {
+          ...metadata,
+          reason: "invalid-deal-id",
+        },
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "WARNING",
+        syncType: "deal-import-webhook",
+        warningCount: 1,
+      });
+    }
+
+    const result = await importPipedriveDealIds({
+      client,
+      dealIds: [dealId],
+    });
+    const recordsRead = result.status === "ok" ? result.requested : 0;
+    const recordsWritten = result.status === "ok" ? result.created : 0;
+    const linkedExisting =
+      result.status === "ok" ? result.linkedExisting : 0;
+    const skipped = result.skipped;
+    const warningCount =
+      result.status === "ok"
+        ? result.results.reduce(
+            (count, importResult) => count + importResult.warnings.length,
+            0,
+          )
+        : 1;
+    const status =
+      warningCount > 0 || skipped > 0 || recordsRead === 0
+        ? "WARNING"
+        : "SUCCESS";
+    const message = `Pipedrive webhook deal import: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} deal${recordsRead === 1 ? "" : "s"}.`;
+
+    return writeWebhookLog({
+      connectionId: connection.id,
+      finishedAt: new Date(),
+      message,
+      metadata: {
+        ...metadata,
+        created: recordsWritten,
+        imports:
+          result.status === "ok"
+            ? pipedriveDealImportMetadataRows(result.results)
+            : [],
+        linkedExisting,
+        skipped,
+        warningCount,
+      },
+      recordsRead,
+      recordsWritten,
+      startedAt,
+      status,
+      syncType: "deal-import-webhook",
+      warningCount,
+    });
+  }
+
   const personId = Number(event.entityId);
 
   if (!Number.isInteger(personId) || personId <= 0) {
@@ -472,6 +543,7 @@ function normalizeWebhookAction(value: string): PipedriveWebhookAction {
 function normalizeWebhookEntity(value: string): PipedriveWebhookEntity {
   const normalized = value.trim().toLowerCase();
 
+  if (["deal", "deals"].includes(normalized)) return "deal";
   if (["lead", "leads"].includes(normalized)) return "lead";
   if (["organization", "organizations", "org"].includes(normalized)) {
     return "organization";

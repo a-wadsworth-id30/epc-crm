@@ -119,7 +119,7 @@ describe("Pipedrive webhook registration", () => {
       await pipedriveWebhookRegistration.planPipedriveWebhookRegistration();
 
     assert.equal(result.status, "READY");
-    assert.equal(result.missingWebhooks.length, 2);
+    assert.equal(result.missingWebhooks.length, 4);
     assert.equal(result.pipedriveWritesPerformed, 0);
     assert.deepEqual(
       requests.map((request) => request.method),
@@ -145,14 +145,14 @@ describe("Pipedrive webhook registration", () => {
 
     assert.equal(result.status, "WARNING");
     assert.equal(result.pipedriveWritesPerformed, 0);
-    assert.equal(result.pipedriveWritesRequired, 4);
+    assert.equal(result.pipedriveWritesRequired, 6);
     assert.deepEqual(
       requests.map((request) => request.method),
       ["GET"],
     );
   });
 
-  it("creates only missing lead and person webhooks when explicitly approved", async () => {
+  it("creates only missing deal, lead and person webhooks when explicitly approved", async () => {
     globalThis.fetch = (async (input, init) => {
       const body = init?.body ? JSON.parse(String(init.body)) : null;
       requests.push({
@@ -205,11 +205,17 @@ describe("Pipedrive webhook registration", () => {
       .map((request) => request.body as Record<string, unknown>);
 
     assert.equal(result.status, "SUCCESS");
-    assert.equal(result.createdWebhooks.length, 3);
-    assert.equal(result.pipedriveWritesPerformed, 3);
+    assert.equal(result.createdWebhooks.length, 5);
+    assert.equal(result.pipedriveWritesPerformed, 5);
     assert.deepEqual(
       postBodies.map((body) => `${body.event_action}.${body.event_object}`),
-      ["change.lead", "create.person", "change.person"],
+      [
+        "create.deal",
+        "change.deal",
+        "change.lead",
+        "create.person",
+        "change.person",
+      ],
     );
     assert.ok(
       postBodies.every(

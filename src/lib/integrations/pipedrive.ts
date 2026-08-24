@@ -45,6 +45,8 @@ const pipedriveStoredCredentialsSchema = z.object({
 export const pipedriveStoredConfigSchema = pipedriveConfigSchema.extend({
   credentials: pipedriveStoredCredentialsSchema.optional(),
   lastContactSyncAt: z.string().datetime().optional(),
+  lastFullDealSyncAt: z.string().datetime().optional(),
+  lastFullDealSyncNextCursor: z.string().nullable().optional(),
   lastFullLeadSyncAt: z.string().datetime().optional(),
   lastFullLeadSyncNextStart: z.number().int().nonnegative().nullable().optional(),
   lastFullPersonSyncAt: z.string().datetime().optional(),
@@ -130,6 +132,21 @@ export type PipedriveLead = Record<string, unknown> & {
   update_time?: string;
 };
 
+export type PipedriveDeal = Record<string, unknown> & {
+  id?: number;
+  title?: string;
+  person_id?: unknown;
+  person?: unknown;
+  org_id?: unknown;
+  organization_id?: unknown;
+  organization?: unknown;
+  value?: unknown;
+  currency?: string | null;
+  expected_close_date?: string | null;
+  add_time?: string;
+  update_time?: string;
+};
+
 export type PipedrivePerson = Record<string, unknown> & {
   id?: number;
   name?: string;
@@ -159,6 +176,21 @@ export type PipedriveListLeadsParams = {
   sort?: string | null;
   start?: number | null;
   updatedSince?: string | null;
+};
+
+export type PipedriveListDealsParams = {
+  cursor?: string | null;
+  filterId?: number | null;
+  ids?: string[] | null;
+  limit?: number | null;
+  organizationId?: number | null;
+  ownerId?: number | null;
+  personId?: number | null;
+  sortBy?: "add_time" | "id" | "update_time" | null;
+  sortDirection?: "asc" | "desc" | null;
+  status?: "all_not_deleted" | "deleted" | "lost" | "open" | "won" | null;
+  updatedSince?: string | null;
+  updatedUntil?: string | null;
 };
 
 export type PipedriveListPersonsParams = {
@@ -236,6 +268,12 @@ export async function getPipedriveRuntimeConfig() {
     defaultLeadSource:
       config?.defaultLeadSource || defaultPipedriveLeadSource,
     lastContactSyncAt: config?.lastContactSyncAt ?? null,
+    lastFullDealSyncAt: config?.lastFullDealSyncAt ?? null,
+    lastFullDealSyncNextCursor:
+      typeof config?.lastFullDealSyncNextCursor === "string" &&
+      config.lastFullDealSyncNextCursor.trim()
+        ? config.lastFullDealSyncNextCursor
+        : null,
     lastFullLeadSyncAt: config?.lastFullLeadSyncAt ?? null,
     lastFullLeadSyncNextStart:
       typeof config?.lastFullLeadSyncNextStart === "number"
@@ -265,6 +303,8 @@ export class PipedriveReadOnlyClient {
   private readonly apiToken: string;
   readonly defaultLeadSource: string;
   readonly lastContactSyncAt: string | null;
+  readonly lastFullDealSyncAt: string | null;
+  readonly lastFullDealSyncNextCursor: string | null;
   readonly lastFullLeadSyncAt: string | null;
   readonly lastFullLeadSyncNextStart: number | null;
   readonly lastFullPersonSyncAt: string | null;
@@ -280,6 +320,8 @@ export class PipedriveReadOnlyClient {
     this.apiToken = config.apiToken;
     this.defaultLeadSource = config.defaultLeadSource;
     this.lastContactSyncAt = config.lastContactSyncAt;
+    this.lastFullDealSyncAt = config.lastFullDealSyncAt;
+    this.lastFullDealSyncNextCursor = config.lastFullDealSyncNextCursor;
     this.lastFullLeadSyncAt = config.lastFullLeadSyncAt;
     this.lastFullLeadSyncNextStart = config.lastFullLeadSyncNextStart;
     this.lastFullPersonSyncAt = config.lastFullPersonSyncAt;
@@ -312,6 +354,27 @@ export class PipedriveReadOnlyClient {
     });
   }
 
+  async listDeals(params: PipedriveListDealsParams = {}) {
+    return this.getList<PipedriveDeal>(
+      "deals",
+      {
+        cursor: params.cursor || undefined,
+        filter_id: integerParam(params.filterId),
+        ids: textIdsParam(params.ids),
+        limit: integerParam(params.limit, { max: 500 }),
+        org_id: integerParam(params.organizationId),
+        owner_id: integerParam(params.ownerId),
+        person_id: integerParam(params.personId),
+        sort_by: params.sortBy || undefined,
+        sort_direction: params.sortDirection || undefined,
+        status: params.status || "open",
+        updated_since: params.updatedSince || undefined,
+        updated_until: params.updatedUntil || undefined,
+      },
+      { apiVersion: "v2" },
+    );
+  }
+
   async listPersons(params: PipedriveListPersonsParams = {}) {
     return this.getList<PipedrivePerson>(
       "persons",
@@ -335,6 +398,14 @@ export class PipedriveReadOnlyClient {
     return this.getSingle<PipedriveLead>(`leads/${pipedriveTextId(id, "lead")}`);
   }
 
+  async getDeal(id: number) {
+    return this.getSingle<PipedriveDeal>(
+      `deals/${pipedriveNumericId(id, "deal")}`,
+      {},
+      { apiVersion: "v2" },
+    );
+  }
+
   async getPerson(id: number) {
     return this.getSingle<PipedrivePerson>(
       `persons/${pipedriveNumericId(id, "person")}`,
@@ -350,8 +421,9 @@ export class PipedriveReadOnlyClient {
   private async getSingle<T>(
     path: string,
     params: PipedriveQueryParams = {},
+    options: { apiVersion?: string } = {},
   ) {
-    const envelope = await this.getEnvelope<T>(path, params);
+    const envelope = await this.getEnvelope<T>(path, params, options);
 
     if (envelope.data === undefined || envelope.data === null) {
       throw new PipedriveApiError({
@@ -573,6 +645,17 @@ function personIdsParam(value: string[] | null | undefined) {
     .map((id) => id.trim())
     .filter(Boolean)
     .slice(0, 100);
+
+  return ids.length ? ids.join(",") : undefined;
+}
+
+function textIdsParam(value: string[] | null | undefined) {
+  if (!Array.isArray(value) || !value.length) return undefined;
+
+  const ids = value
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 50);
 
   return ids.length ? ids.join(",") : undefined;
 }

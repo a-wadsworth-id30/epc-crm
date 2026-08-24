@@ -371,6 +371,15 @@ export async function updatePipedriveIntegrationAction(
         ...(existingConfig.data.lastContactSyncAt
           ? { lastContactSyncAt: existingConfig.data.lastContactSyncAt }
           : {}),
+        ...(existingConfig.data.lastFullDealSyncAt
+          ? { lastFullDealSyncAt: existingConfig.data.lastFullDealSyncAt }
+          : {}),
+        ...(existingConfig.data.lastFullDealSyncNextCursor
+          ? {
+              lastFullDealSyncNextCursor:
+                existingConfig.data.lastFullDealSyncNextCursor,
+            }
+          : {}),
         ...(existingConfig.data.lastFullLeadSyncAt
           ? { lastFullLeadSyncAt: existingConfig.data.lastFullLeadSyncAt }
           : {}),
@@ -445,6 +454,9 @@ export async function updatePipedriveIntegrationAction(
     metadata: {
       apiBaseUrl: config.apiBaseUrl,
       defaultLeadSource: config.defaultLeadSource,
+      fullDealSyncContinuationPreserved:
+        "lastFullDealSyncNextCursor" in config,
+      fullDealSyncStatePreserved: "lastFullDealSyncAt" in config,
       fullLeadSyncContinuationPreserved:
         "lastFullLeadSyncNextStart" in config,
       fullLeadSyncStatePreserved: "lastFullLeadSyncAt" in config,

@@ -17,7 +17,9 @@ import {
   defaultPipedriveLeadSource,
   getPipedriveReadOnlyClient,
   pipedriveProvider,
+  type PipedriveDeal,
   type PipedriveLead,
+  type PipedriveListDealsParams,
   type PipedriveListLeadsParams,
   type PipedriveListPersonsParams,
   type PipedriveListResult,
@@ -28,6 +30,7 @@ import {
 
 const pipedriveImportSource = "pipedrive-import";
 const pipedriveExternalTypes = {
+  deal: "deal",
   lead: "lead",
   organization: "organization",
   person: "person",
@@ -51,8 +54,14 @@ type PipedriveRelatedRecordClient = Pick<
 export type PipedriveImportClient = PipedriveRelatedRecordClient &
   Pick<PipedriveReadOnlyClient, "listLeads">;
 
+export type PipedriveDealImportClient = PipedriveRelatedRecordClient &
+  Pick<PipedriveReadOnlyClient, "listDeals">;
+
 export type PipedriveSelectedImportClient = PipedriveRelatedRecordClient &
   Pick<PipedriveReadOnlyClient, "getLead">;
+
+export type PipedriveSelectedDealImportClient = PipedriveRelatedRecordClient &
+  Pick<PipedriveReadOnlyClient, "getDeal">;
 
 export type PipedrivePersonImportClient = PipedriveRelatedRecordClient &
   Pick<PipedriveReadOnlyClient, "listPersons">;
@@ -76,6 +85,7 @@ export type PipedriveLeadImportMapping = {
     role: string | null;
   } | null;
   externalIds: {
+    deal: string | null;
     lead: string | null;
     organization: string | null;
     person: string | null;
@@ -166,6 +176,20 @@ export type PipedriveLeadImportMetadataRow = {
   warnings: string[];
 };
 
+export type PipedriveDealImportResult = Omit<
+  PipedriveLeadImportResult,
+  "externalLeadId"
+> & {
+  externalDealId: string | null;
+};
+
+export type PipedriveDealImportMetadataRow = Omit<
+  PipedriveLeadImportMetadataRow,
+  "externalLeadId"
+> & {
+  externalDealId: string | null;
+};
+
 export type PipedrivePersonImportResult = {
   companyId: string | null;
   contactId: string | null;
@@ -208,12 +232,27 @@ type ImportLeadRecordOptions = {
   now?: Date;
 };
 
+type ImportDealRecordOptions = {
+  client: PipedriveRelatedRecordClient;
+  deal: PipedriveDeal;
+  now?: Date;
+};
+
 type ImportLeadPageOptions = {
   client?: PipedriveImportClient | null;
   params?: PipedriveListLeadsParams;
 };
 
+type ImportDealPageOptions = {
+  client?: PipedriveDealImportClient | null;
+  params?: PipedriveListDealsParams;
+};
+
 type ImportLeadPagesOptions = ImportLeadPageOptions & {
+  maxPages?: number;
+};
+
+type ImportDealPagesOptions = ImportDealPageOptions & {
   maxPages?: number;
 };
 
@@ -230,6 +269,12 @@ type PreviewLeadPageOptions = {
 type ImportLeadIdsOptions = {
   client?: PipedriveSelectedImportClient | null;
   leadIds: string[];
+  now?: Date;
+};
+
+type ImportDealIdsOptions = {
+  client?: PipedriveSelectedDealImportClient | null;
+  dealIds: Array<number | string>;
   now?: Date;
 };
 
@@ -365,6 +410,103 @@ export async function importPipedriveLeadPages({
     maxPages: pageLimit,
     moreAvailable,
     nextStart,
+    pagesRead,
+    recordsRead,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedriveDealPage({
+  client,
+  params = {},
+}: ImportDealPageOptions = {}) {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      results: [],
+      skipped: 0,
+      status: "not_configured" as const,
+    };
+  }
+
+  const page = await readClient.listDeals(latestDealListParams(params));
+  const results: PipedriveDealImportResult[] = [];
+
+  for (const deal of page.data) {
+    results.push(await importPipedriveDealRecord({ client: readClient, deal }));
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    page: page as PipedriveListResult<PipedriveDeal>,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedriveDealPages({
+  client,
+  maxPages,
+  params = {},
+}: ImportDealPagesOptions = {}) {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+  const pageLimit = boundedFullPullMaxPages(maxPages);
+
+  if (!readClient) {
+    return {
+      maxPages: pageLimit,
+      moreAvailable: false,
+      nextCursor: null,
+      pagesRead: 0,
+      recordsRead: 0,
+      results: [],
+      skipped: 0,
+      status: "not_configured" as const,
+    };
+  }
+
+  const results: PipedriveDealImportResult[] = [];
+  let cursor = params.cursor ?? null;
+  let nextCursor: string | null = null;
+  let pagesRead = 0;
+  let recordsRead = 0;
+
+  while (pagesRead < pageLimit) {
+    const pageParams: PipedriveListDealsParams = { ...params };
+    if (cursor) pageParams.cursor = cursor;
+
+    const page = await readClient.listDeals(latestDealListParams(pageParams));
+    pagesRead += 1;
+    recordsRead += page.data.length;
+
+    for (const deal of page.data) {
+      results.push(
+        await importPipedriveDealRecord({ client: readClient, deal }),
+      );
+    }
+
+    nextCursor = page.pagination.nextCursor ?? null;
+
+    if (!nextCursor) break;
+
+    cursor = nextCursor;
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    maxPages: pageLimit,
+    moreAvailable: Boolean(nextCursor),
+    nextCursor,
     pagesRead,
     recordsRead,
     results,
@@ -666,6 +808,26 @@ export function pipedriveLeadImportMetadataRows(
   }));
 }
 
+export function pipedriveDealImportMetadataRows(
+  results: PipedriveDealImportResult[],
+): PipedriveDealImportMetadataRow[] {
+  return results.map((result) => ({
+    companyId: previewMetadataText(result.companyId),
+    contactId: previewMetadataText(result.contactId),
+    createdCompany: result.created.company,
+    createdContact: result.created.contact,
+    createdOpportunity: result.created.opportunity,
+    externalDealId: previewMetadataText(result.externalDealId),
+    opportunityId: previewMetadataText(result.opportunityId),
+    status: result.status,
+    title: previewMetadataText(result.title),
+    warningCount: result.warnings.length,
+    warnings: result.warnings
+      .slice(0, 3)
+      .map((warning) => truncateText(warning, 240)),
+  }));
+}
+
 export function pipedrivePersonImportMetadataRows(
   results: PipedrivePersonImportResult[],
 ): PipedrivePersonImportMetadataRow[] {
@@ -729,6 +891,57 @@ export async function importPipedriveLeadIds({
       (result) => result.status === "linked_existing",
     ).length,
     requested: selectedLeadIds.length,
+    results,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    status: "ok" as const,
+  };
+}
+
+export async function importPipedriveDealIds({
+  client,
+  dealIds,
+  now = new Date(),
+}: ImportDealIdsOptions) {
+  const selectedDealIds = normalizedSelectedDealIds(dealIds);
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      requested: selectedDealIds.length,
+      results: [],
+      skipped: selectedDealIds.length,
+      status: "not_configured" as const,
+    };
+  }
+
+  const results: PipedriveDealImportResult[] = [];
+
+  for (const dealId of selectedDealIds) {
+    try {
+      const deal = await readClient.getDeal(dealId);
+      results.push(
+        await importPipedriveDealRecord({
+          client: readClient,
+          deal,
+          now,
+        }),
+      );
+    } catch (error) {
+      results.push(
+        skippedDealResult({
+          externalDealId: String(dealId),
+          warning: pipedriveReadWarning("deal", dealId, error),
+        }),
+      );
+    }
+  }
+
+  return {
+    created: results.filter((result) => result.status === "created").length,
+    linkedExisting: results.filter(
+      (result) => result.status === "linked_existing",
+    ).length,
+    requested: selectedDealIds.length,
     results,
     skipped: results.filter((result) => result.status === "skipped").length,
     status: "ok" as const,
@@ -854,6 +1067,195 @@ export async function importPipedrivePersonRecord({
       externalPersonId: personId,
       name: `${contactMapping.firstName} ${contactMapping.lastName}`.trim(),
       status: contact.created ? "created" : ("linked_existing" as const),
+      warnings: relatedRecords.warnings,
+    };
+  });
+}
+
+export async function importPipedriveDealRecord({
+  client,
+  deal,
+  now = new Date(),
+}: ImportDealRecordOptions): Promise<PipedriveDealImportResult> {
+  const dealId = externalId(deal.id);
+
+  if (!dealId) {
+    return skippedDealResult({
+      title: cleanText(deal.title),
+      warning: "Pipedrive deal was missing an ID.",
+    });
+  }
+
+  const [integration, relatedRecords, settings] = await Promise.all([
+    prisma.integrationConnection.findUnique({
+      where: { provider: pipedriveProvider },
+      select: { id: true },
+    }),
+    fetchDealRelatedRecords(client, deal),
+    getCrmSettings(),
+  ]);
+  const integrationId = integration?.id ?? null;
+  const workspaceDefaults = parseWorkspaceDefaults(settings.workspaceDefaults);
+  const salesDefaults = parseSalesDefaults(settings.salesDefaults);
+  const mapping = mapPipedriveDealToCrm({
+    deal,
+    defaultLeadSource: client.defaultLeadSource,
+    organization: relatedRecords.organization,
+    person: relatedRecords.person,
+    workspaceCurrency: workspaceDefaults.currency,
+  });
+
+  const externalDealId = mapping.externalIds.deal;
+
+  if (!externalDealId) {
+    return skippedDealResult({
+      title: mapping.opportunity.title,
+      warning: "Pipedrive deal was missing an ID.",
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const existingDealLink = await tx.externalRecordLink.findUnique({
+      where: {
+        provider_externalType_externalId: {
+          externalId: externalDealId,
+          externalType: pipedriveExternalTypes.deal,
+          provider: pipedriveProvider,
+        },
+      },
+      select: { internalId: true, internalType: true },
+    });
+
+    if (
+      existingDealLink?.internalType ===
+      pipedriveInternalTypes.deletedOpportunity
+    ) {
+      await upsertExternalRecordLink(tx, {
+        externalId: externalDealId,
+        externalType: pipedriveExternalTypes.deal,
+        integrationId,
+        internalId: existingDealLink.internalId,
+        internalType: pipedriveInternalTypes.deletedOpportunity,
+        metadata: {
+          ...mapping.communication.metadata,
+          deletedFromCrm: true,
+          source: pipedriveImportSource,
+        },
+        now,
+      });
+
+      return skippedDealResult({
+        externalDealId,
+        title: mapping.opportunity.title,
+        warning: "Pipedrive deal was previously deleted from CRM.",
+      });
+    }
+
+    if (
+      existingDealLink?.internalType === pipedriveInternalTypes.opportunity
+    ) {
+      await upsertExternalRecordLink(tx, {
+        externalId: externalDealId,
+        externalType: pipedriveExternalTypes.deal,
+        integrationId,
+        internalId: existingDealLink.internalId,
+        internalType: pipedriveInternalTypes.opportunity,
+        metadata: mapping.communication.metadata,
+        now,
+      });
+
+      return {
+        companyId: null,
+        contactId: null,
+        created: { company: false, contact: false, opportunity: false },
+        externalDealId,
+        opportunityId: existingDealLink.internalId,
+        status: "linked_existing" as const,
+        title: mapping.opportunity.title,
+        warnings: relatedRecords.warnings,
+      };
+    }
+
+    const company = await resolvePipedriveCompany(tx, {
+      integrationId,
+      mapping,
+      now,
+    });
+    const contact = await resolvePipedriveContact(tx, {
+      company,
+      integrationId,
+      mapping,
+      now,
+    });
+    const occurredAt = now;
+    const lifecycleData = await lifecycleOpportunityDataForPipelineStage(
+      tx,
+      salesDefaults.defaultSalesPipelineStageId,
+      "LEAD",
+      occurredAt,
+    );
+    const opportunity = await tx.salesOpportunity.create({
+      data: {
+        title: mapping.opportunity.title,
+        ...lifecycleData,
+        attribution: mapping.opportunity.attribution,
+        companyId: company.id,
+        contactId: contact.id,
+        currency: mapping.opportunity.currency,
+        expectedCloseDate: mapping.opportunity.expectedCloseDate,
+        nextStep: mapping.opportunity.nextStep,
+        ownerId: resolveSalesDefaultOwnerId({ salesDefaults }),
+        source: mapping.opportunity.source,
+        valueCents: mapping.opportunity.valueCents,
+      },
+      select: { id: true },
+    });
+
+    await recordSalesOpportunityCreated(tx, {
+      opportunityId: opportunity.id,
+      occurredAt,
+      salesPipelineStageId: lifecycleData.salesPipelineStageId,
+      source: pipedriveImportSource,
+      stage: lifecycleData.stage,
+    });
+
+    await tx.salesCommunication.create({
+      data: {
+        opportunityId: opportunity.id,
+        body: mapping.communication.body,
+        channel: "SYSTEM",
+        contactId: contact.id,
+        direction: "INTERNAL",
+        fromAddress: mapping.communication.fromAddress,
+        metadata: mapping.communication.metadata,
+        subject: mapping.communication.subject,
+        summary: mapping.communication.summary,
+      },
+      select: { id: true },
+    });
+
+    await upsertExternalRecordLink(tx, {
+      externalId: externalDealId,
+      externalType: pipedriveExternalTypes.deal,
+      integrationId,
+      internalId: opportunity.id,
+      internalType: pipedriveInternalTypes.opportunity,
+      metadata: mapping.communication.metadata,
+      now,
+    });
+
+    return {
+      companyId: company.id,
+      contactId: contact.id,
+      created: {
+        company: company.created,
+        contact: contact.created,
+        opportunity: true,
+      },
+      externalDealId,
+      opportunityId: opportunity.id,
+      status: "created" as const,
+      title: mapping.opportunity.title,
       warnings: relatedRecords.warnings,
     };
   });
@@ -1100,6 +1502,7 @@ export function mapPipedriveLeadToCrm({
   const value = opportunityValue(leadRecord.value, workspaceCurrency);
   const expectedCloseDate = parsePipedriveDate(lead.expected_close_date);
   const externalIds = {
+    deal: null,
     lead: externalId(lead.id),
     organization:
       externalId(resolvedOrganization.id) ??
@@ -1168,6 +1571,152 @@ export function mapPipedriveLeadToCrm({
       currency: value.currency,
       expectedCloseDate,
       nextStep: "Review Pipedrive lead and follow up.",
+      source,
+      title,
+      valueCents: value.valueCents,
+    },
+  };
+}
+
+export function mapPipedriveDealToCrm({
+  deal,
+  defaultLeadSource,
+  organization,
+  person,
+  workspaceCurrency,
+}: {
+  deal: PipedriveDeal;
+  defaultLeadSource?: string | null;
+  organization?: PipedriveOrganization | null;
+  person?: PipedrivePerson | null;
+  workspaceCurrency: string;
+}): PipedriveLeadImportMapping {
+  const dealRecord = objectValue(deal);
+  const embeddedPerson = objectValue(
+    dealRecord.person ?? dealRecord.person_id,
+  ) as PipedrivePerson;
+  const embeddedOrganization = objectValue(
+    dealRecord.organization ?? dealRecord.org_id ?? dealRecord.organization_id,
+  ) as PipedriveOrganization;
+  const personRecord = objectValue(person) as PipedrivePerson;
+  const organizationRecord = objectValue(
+    organization,
+  ) as PipedriveOrganization;
+  const resolvedPerson = Object.keys(personRecord).length
+    ? personRecord
+    : embeddedPerson;
+  const resolvedOrganization = Object.keys(organizationRecord).length
+    ? organizationRecord
+    : embeddedOrganization;
+  const source = cleanText(defaultLeadSource) ?? defaultPipedriveLeadSource;
+  const title =
+    cleanText(deal.title) ??
+    cleanText(dealRecord.name) ??
+    `Pipedrive deal ${externalId(deal.id) ?? "import"}`;
+  const companyName = cleanText(resolvedOrganization.name);
+  const personName =
+    cleanText(resolvedPerson.name) ??
+    [cleanText(resolvedPerson.first_name), cleanText(resolvedPerson.last_name)]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  const embeddedPersonRecord = objectValue(dealRecord.person);
+  const email = firstContactValue(
+    resolvedPerson.email ?? embeddedPersonRecord.email,
+  );
+  const phone = firstContactValue(
+    resolvedPerson.phone ?? embeddedPersonRecord.phone,
+  );
+  const contactName = contactNameParts({
+    email,
+    fallbackTitle: title,
+    name: personName,
+  });
+  const dealValueRecord = objectValue(dealRecord.value);
+  const value = opportunityValue(
+    Object.keys(dealValueRecord).length
+      ? dealRecord.value
+      : {
+          amount: dealRecord.value,
+          currency: deal.currency ?? dealRecord.currency,
+        },
+    workspaceCurrency,
+  );
+  const expectedCloseDate = parsePipedriveDate(
+    deal.expected_close_date ??
+      dealRecord.expected_close_date ??
+      dealRecord.close_time,
+  );
+  const externalIds = {
+    deal: externalId(deal.id),
+    lead: null,
+    organization:
+      externalId(resolvedOrganization.id) ??
+      externalId(dealRecord.organization_id) ??
+      externalId(dealRecord.org_id),
+    person:
+      externalId(resolvedPerson.id) ??
+      externalId(dealRecord.person_id) ??
+      externalId(dealRecord.person),
+  };
+  const attribution = {
+    externalDealId: externalIds.deal,
+    externalOrganizationId: externalIds.organization,
+    externalPersonId: externalIds.person,
+    provider: pipedriveProvider,
+    source,
+  } satisfies Prisma.InputJsonObject;
+  const metadata = {
+    ...attribution,
+    importedFrom: "pipedrive",
+    pipedriveAddTime: cleanText(deal.add_time),
+    pipedriveUpdateTime: cleanText(deal.update_time),
+    source: pipedriveImportSource,
+  } satisfies Prisma.InputJsonObject;
+  const company = companyName
+    ? {
+        addressLine1: cleanText(resolvedOrganization.address),
+        name: companyName,
+      }
+    : null;
+  const hasContactIdentity = Boolean(externalIds.person || email || phone);
+  const contact = hasContactIdentity
+    ? {
+        companyName,
+        email,
+        firstName: contactName.firstName,
+        lastName: contactName.lastName,
+        leadSource: source,
+        phone,
+        phoneNormalized: normalizedContactPhone(phone),
+        role: "Pipedrive deal contact",
+      }
+    : null;
+
+  return {
+    communication: {
+      body: pipedriveImportBody({
+        companyName,
+        email,
+        expectedCloseDate,
+        externalIds,
+        phone,
+        title,
+        value,
+      }),
+      fromAddress: email,
+      metadata,
+      subject: `Pipedrive deal imported: ${title}`,
+      summary: `Imported Pipedrive deal${companyName ? ` for ${companyName}` : ""}.`,
+    },
+    company,
+    contact,
+    externalIds,
+    opportunity: {
+      attribution,
+      currency: value.currency,
+      expectedCloseDate,
+      nextStep: "Review Pipedrive deal and follow up.",
       source,
       title,
       valueCents: value.valueCents,
@@ -1259,6 +1808,7 @@ export function mapPipedrivePersonToCrm({
         }
       : null,
     externalIds: {
+      deal: null,
       lead: null,
       organization: externalOrganizationId,
       person: externalPersonId,
@@ -1285,6 +1835,34 @@ async function fetchRelatedRecords(
     numericId(leadRecord.person_id) ?? numericId(leadRecord.person);
   const organizationId =
     numericId(leadRecord.organization_id) ?? numericId(leadRecord.org_id);
+  const [person, organization] = await Promise.all([
+    personId ? readPipedrivePerson(client, personId, warnings) : null,
+    organizationId
+      ? readPipedriveOrganization(client, organizationId, warnings)
+      : null,
+  ]);
+
+  return { organization, person, warnings };
+}
+
+async function fetchDealRelatedRecords(
+  client: PipedriveRelatedRecordClient,
+  deal: PipedriveDeal,
+): Promise<ImportedRelatedRecords> {
+  const warnings: string[] = [];
+  const dealRecord = objectValue(deal);
+  const personId =
+    numericId(dealRecord.person_id) ??
+    numericId(dealRecord.person) ??
+    numericId(objectValue(dealRecord.person_id).value) ??
+    numericId(objectValue(dealRecord.person).value);
+  const organizationId =
+    numericId(dealRecord.organization_id) ??
+    numericId(dealRecord.organization) ??
+    numericId(dealRecord.org_id) ??
+    numericId(objectValue(dealRecord.organization_id).value) ??
+    numericId(objectValue(dealRecord.organization).value) ??
+    numericId(objectValue(dealRecord.org_id).value);
   const [person, organization] = await Promise.all([
     personId ? readPipedrivePerson(client, personId, warnings) : null,
     organizationId
@@ -1325,6 +1903,32 @@ function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   }
 
   return leadParams;
+}
+
+function latestDealListParams(params: PipedriveListDealsParams = {}) {
+  const dealParams: PipedriveListDealsParams = {
+    limit: params.limit ?? 50,
+    sortBy: params.sortBy ?? "update_time",
+    sortDirection: params.sortDirection ?? "desc",
+    status: params.status ?? "open",
+  };
+
+  if (params.cursor) dealParams.cursor = params.cursor;
+  if (params.filterId !== undefined) dealParams.filterId = params.filterId;
+  if (params.ids !== undefined) dealParams.ids = params.ids;
+  if (params.organizationId !== undefined) {
+    dealParams.organizationId = params.organizationId;
+  }
+  if (params.ownerId !== undefined) dealParams.ownerId = params.ownerId;
+  if (params.personId !== undefined) dealParams.personId = params.personId;
+  if (params.updatedSince !== undefined) {
+    dealParams.updatedSince = params.updatedSince;
+  }
+  if (params.updatedUntil !== undefined) {
+    dealParams.updatedUntil = params.updatedUntil;
+  }
+
+  return dealParams;
 }
 
 function latestPersonListParams(params: PipedriveListPersonsParams = {}) {
@@ -1855,6 +2459,27 @@ function skippedLeadResult({
   };
 }
 
+function skippedDealResult({
+  externalDealId = null,
+  title = null,
+  warning,
+}: {
+  externalDealId?: string | null;
+  title?: string | null;
+  warning: string;
+}): PipedriveDealImportResult {
+  return {
+    companyId: null,
+    contactId: null,
+    created: { company: false, contact: false, opportunity: false },
+    externalDealId,
+    opportunityId: null,
+    status: "skipped",
+    title,
+    warnings: [warning],
+  };
+}
+
 function skippedPersonResult({
   externalPersonId = null,
   name = null,
@@ -1916,6 +2541,18 @@ function normalizedSelectedLeadIds(leadIds: string[]) {
   return [...selectedLeadIds];
 }
 
+function normalizedSelectedDealIds(dealIds: Array<number | string>) {
+  const selectedDealIds = new Set<number>();
+
+  for (const dealId of dealIds) {
+    const numeric = numericId(dealId);
+    if (numeric) selectedDealIds.add(numeric);
+    if (selectedDealIds.size >= 50) break;
+  }
+
+  return [...selectedDealIds];
+}
+
 function normalizedSelectedPersonIds(personIds: Array<number | string>) {
   const selectedPersonIds = new Set<number>();
 
@@ -1960,8 +2597,12 @@ function pipedriveImportBody({
   title: string;
   value: { currency: string; valueCents: number };
 }) {
+  const recordLabel = externalIds.deal
+    ? `deal ${externalIds.deal}`
+    : `lead ${externalIds.lead ?? "unknown"}`;
+
   return [
-    `Imported from Pipedrive lead ${externalIds.lead ?? "unknown"}.`,
+    `Imported from Pipedrive ${recordLabel}.`,
     `Title: ${title}`,
     companyName ? `Organisation: ${companyName}` : null,
     email ? `Email: ${email}` : null,

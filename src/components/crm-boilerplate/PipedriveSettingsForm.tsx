@@ -78,8 +78,8 @@ export default function PipedriveSettingsForm({
               Credential storage
             </p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Used for importing Pipedrive leads into CRM contacts, companies
-              and opportunities.
+              Used for importing Pipedrive leads and deals into CRM contacts,
+              companies and opportunities.
             </p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               This integration is pull-only. The CRM will not write back to

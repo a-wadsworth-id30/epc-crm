@@ -587,6 +587,11 @@ export default async function IntegrationSettingsPage({
     const pipedrivePullState = storedConfig.success
       ? {
           lastContactSyncAt: storedConfig.data.lastContactSyncAt ?? null,
+          lastFullDealSyncAt: storedConfig.data.lastFullDealSyncAt ?? null,
+          lastFullDealSyncNextCursor:
+            typeof storedConfig.data.lastFullDealSyncNextCursor === "string"
+              ? storedConfig.data.lastFullDealSyncNextCursor
+              : null,
           lastFullLeadSyncAt: storedConfig.data.lastFullLeadSyncAt ?? null,
           lastFullLeadSyncNextStart:
             typeof storedConfig.data.lastFullLeadSyncNextStart === "number"
@@ -600,6 +605,8 @@ export default async function IntegrationSettingsPage({
         }
       : {
           lastContactSyncAt: null,
+          lastFullDealSyncAt: null,
+          lastFullDealSyncNextCursor: null,
           lastFullLeadSyncAt: null,
           lastFullLeadSyncNextStart: null,
           lastFullPersonSyncAt: null,
@@ -611,7 +618,7 @@ export default async function IntegrationSettingsPage({
       <>
         <PageHeader
           title="Connect Pipedrive"
-          description="Connection credentials for pull-only Pipedrive lead, person and organisation imports."
+          description="Connection credentials for pull-only Pipedrive lead, deal, person and organisation imports."
         />
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <PipedriveSettingsForm
@@ -628,14 +635,14 @@ export default async function IntegrationSettingsPage({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
-                  Lead import
+                  Lead and deal import
                 </h2>
-                <LazyHelpTooltip content="Preview reads Pipedrive and CRM links without changing lead records. Pull imports a bounded batch into CRM only, resumes capped runs, uses the last full-pull timestamp after completion, and never writes back to Pipedrive." />
+                <LazyHelpTooltip content="Preview reads Pipedrive and CRM links without changing lead records. Pull imports bounded lead and deal batches into CRM only, resumes capped runs, uses full-pull timestamps after completion, and never writes back to Pipedrive." />
               </div>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Preview the latest Pipedrive leads, then pull new or updated
-                leads into CRM contacts, companies and opportunities when
-                ready.
+                leads and deals into CRM contacts, companies and opportunities
+                when ready.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -656,7 +663,7 @@ export default async function IntegrationSettingsPage({
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
-                  Pull latest leads
+                  Pull latest leads and deals
                 </button>
               </form>
               <StatusBadge>
@@ -681,6 +688,8 @@ export default async function IntegrationSettingsPage({
             continuationDetail={
               pipedrivePullState.lastFullLeadSyncNextStart !== null
                 ? `Continuation start ${pipedrivePullState.lastFullLeadSyncNextStart}`
+                : pipedrivePullState.lastFullDealSyncNextCursor
+                  ? "Deal continuation cursor saved"
                 : "No saved continuation"
             }
             lastFullSyncAt={pipedrivePullState.lastFullLeadSyncAt}
@@ -779,6 +788,11 @@ export default async function IntegrationSettingsPage({
               label="Lead events"
               value="Supported"
               detail="Create/change imports matching lead"
+            />
+            <PipedrivePullStateItem
+              label="Deal events"
+              value="Supported"
+              detail="Create/change imports matching deal"
             />
             <PipedrivePullStateItem
               label="Person events"
@@ -3199,11 +3213,17 @@ function PipedriveValidationSummaryPanel({
     internalType: "company",
     summary,
   });
-  const opportunityLinkCount = pipedriveExternalLinkCount({
-    externalType: "lead",
-    internalType: "salesOpportunity",
-    summary,
-  });
+  const opportunityLinkCount =
+    pipedriveExternalLinkCount({
+      externalType: "lead",
+      internalType: "salesOpportunity",
+      summary,
+    }) +
+    pipedriveExternalLinkCount({
+      externalType: "deal",
+      internalType: "salesOpportunity",
+      summary,
+    });
   const latestSyncLog = summary.syncLogs[0] ?? null;
   const latestBackgroundJob = summary.backgroundJobs[0] ?? null;
 
@@ -3242,7 +3262,7 @@ function PipedriveValidationSummaryPanel({
         <PipedrivePullStateItem
           label="Opportunities linked"
           value={formatPipedriveValidationCount(opportunityLinkCount)}
-          detail="Pipedrive lead to CRM opportunity"
+          detail="Pipedrive lead/deal to CRM opportunity"
         />
         <PipedrivePullStateItem
           label="Lead full pull"
@@ -3251,6 +3271,14 @@ function PipedriveValidationSummaryPanel({
             "Not completed"
           }
           detail={pipedriveLeadCursorDetail(summary)}
+        />
+        <PipedrivePullStateItem
+          label="Deal full pull"
+          value={
+            formattedDateTime(summary.leadReadiness.lastFullDealSyncAt) ??
+            "Not completed"
+          }
+          detail={pipedriveDealCursorDetail(summary)}
         />
         <PipedrivePullStateItem
           label="Contact full pull"
@@ -3310,7 +3338,7 @@ function PipedriveWebhookActivityPanel({
                   formattedDateTime(latestProviderEvent.startedAt) ?? "unknown"
                 }.`
               : activity.selfTestCount
-                ? "Receiver self-test has reached CRM, but no real Pipedrive lead/person webhook delivery has arrived yet."
+                ? "Receiver self-test has reached CRM, but no real Pipedrive lead/deal/person webhook delivery has arrived yet."
                 : "No Pipedrive webhook delivery has reached CRM yet."}
           </p>
         </div>
@@ -3926,6 +3954,16 @@ function pipedriveLeadCursorDetail(summary: PipedriveValidationSummary) {
     : "Credential check failed";
 }
 
+function pipedriveDealCursorDetail(summary: PipedriveValidationSummary) {
+  if (summary.leadReadiness.lastFullDealSyncNextCursor) {
+    return "Continuation cursor saved";
+  }
+
+  return summary.leadReadiness.connected
+    ? "No saved continuation"
+    : "Credential check failed";
+}
+
 function pipedriveContactCursorDetail(summary: PipedriveValidationSummary) {
   if (summary.contactReadiness.hasContinuationCursor) {
     return "Continuation cursor saved";
@@ -3942,7 +3980,7 @@ function pipedriveWebhookRegistrationValue(
   if (!webhookRegistration) return "Not checked";
   if (webhookRegistration.status === "ERROR") return "Check failed";
 
-  const desiredCount = webhookRegistration.desiredCount ?? 4;
+  const desiredCount = webhookRegistration.desiredCount ?? 6;
   const existingTargetCount = webhookRegistration.existingTargetCount ?? 0;
 
   return `${existingTargetCount}/${desiredCount} registered`;

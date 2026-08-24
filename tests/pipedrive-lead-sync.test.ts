@@ -14,10 +14,14 @@ const moduleWithLoad = Module as ModuleWithLoad;
 let pipedriveLeadSync: PipedriveLeadSyncModule;
 let client: {
   defaultLeadSource: string;
+  lastFullDealSyncAt: string | null;
+  lastFullDealSyncNextCursor: string | null;
   lastFullLeadSyncAt: string | null;
   lastFullLeadSyncNextStart: number | null;
 } | null;
 let connectionConfig: Record<string, unknown>;
+let importDealPagesArgs: unknown;
+let importDealPagesResult: Record<string, unknown>;
 let importLeadIdsArgs: unknown;
 let importLeadIdsResult: Record<string, unknown>;
 let importPagesArgs: unknown;
@@ -72,6 +76,10 @@ before(async () => {
 
     if (request === "@/lib/integrations/pipedrive-import") {
       return {
+        importPipedriveDealPages: async (args: unknown) => {
+          importDealPagesArgs = args;
+          return importDealPagesResult;
+        },
         importPipedriveLeadIds: async (args: unknown) => {
           importLeadIdsArgs = args;
           return importLeadIdsResult;
@@ -80,6 +88,14 @@ before(async () => {
           importPagesArgs = args;
           return importPagesResult;
         },
+        pipedriveDealImportMetadataRows: () => [
+          {
+            externalDealId: "deal-1",
+            status: "created",
+            warningCount: 0,
+            warnings: [],
+          },
+        ],
         pipedriveLeadImportMetadataRows: () => [
           {
             externalLeadId: "lead-1",
@@ -167,14 +183,31 @@ before(async () => {
 beforeEach(() => {
   client = {
     defaultLeadSource: "Pipedrive",
+    lastFullDealSyncAt: null,
+    lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastFullLeadSyncNextStart: null,
   };
   connectionConfig = {
     apiBaseUrl: "https://api.pipedrive.com/v1",
     defaultLeadSource: "Pipedrive",
+    lastFullDealSyncAt: null,
+    lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastLeadSyncAt: "2026-08-20T08:05:00.000Z",
+  };
+  importDealPagesArgs = null;
+  importDealPagesResult = {
+    created: 0,
+    linkedExisting: 0,
+    maxPages: 5,
+    moreAvailable: false,
+    nextCursor: null,
+    pagesRead: 1,
+    recordsRead: 0,
+    results: [],
+    skipped: 0,
+    status: "ok",
   };
   importLeadIdsArgs = null;
   importLeadIdsResult = {
@@ -294,6 +327,67 @@ describe("Pipedrive scheduled lead sync", () => {
     assert.equal(typeof updateWrite.args.data.config.lastLeadSyncAt, "string");
   });
 
+  it("saves a deal pagination continuation without advancing the deal cursor", async () => {
+    connectionConfig = {
+      ...connectionConfig,
+      lastFullDealSyncAt: "2026-08-19T08:00:00.000Z",
+    };
+    client = {
+      defaultLeadSource: "Pipedrive",
+      lastFullDealSyncAt: "2026-08-19T08:00:00.000Z",
+      lastFullDealSyncNextCursor: null,
+      lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
+      lastFullLeadSyncNextStart: null,
+    };
+    importPagesResult = {
+      ...importPagesResult,
+      created: 0,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 1,
+      recordsRead: 0,
+      results: [],
+    };
+    importDealPagesResult = {
+      created: 1,
+      linkedExisting: 0,
+      maxPages: 5,
+      moreAvailable: true,
+      nextCursor: "deal-cursor-2",
+      pagesRead: 5,
+      recordsRead: 2,
+      results: [{ warnings: [] }],
+      skipped: 0,
+      status: "ok",
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveLeadPull({
+      actorId: "user-1",
+      trigger: "manual",
+    });
+
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.moreAvailable, true);
+    assert.deepEqual((importDealPagesArgs as { params?: unknown }).params, {
+      cursor: null,
+      limit: 50,
+      updatedSince: "2026-08-19T08:00:00.000Z",
+    });
+
+    const updateWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "integration.update",
+    ) as { args: { data: { config: Record<string, unknown> } } };
+
+    assert.equal(
+      updateWrite.args.data.config.lastFullDealSyncAt,
+      "2026-08-19T08:00:00.000Z",
+    );
+    assert.equal(
+      updateWrite.args.data.config.lastFullDealSyncNextCursor,
+      "deal-cursor-2",
+    );
+  });
+
   it("skips a pull when another non-stale Pipedrive pull is running", async () => {
     runningJobRun = {
       id: "job-active",
@@ -332,6 +426,8 @@ describe("Pipedrive scheduled lead sync", () => {
     };
     client = {
       defaultLeadSource: "Pipedrive",
+      lastFullDealSyncAt: null,
+      lastFullDealSyncNextCursor: null,
       lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
       lastFullLeadSyncNextStart: 50,
     };

@@ -10,8 +10,10 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
+  importPipedriveDealPages,
   importPipedriveLeadIds,
   importPipedriveLeadPages,
+  pipedriveDealImportMetadataRows,
   pipedriveLeadImportMetadataRows,
   previewPipedriveLeadPage,
 } from "@/lib/integrations/pipedrive-import";
@@ -328,6 +330,15 @@ export async function readPipedriveLeadPullReadiness() {
   return {
     connected: Boolean(client),
     connectionId: connection?.id ?? null,
+    hasContinuationCursor: Boolean(
+      storedConfig?.lastFullDealSyncNextCursor ||
+        typeof storedConfig?.lastFullLeadSyncNextStart === "number",
+    ),
+    lastFullDealSyncAt: storedConfig?.lastFullDealSyncAt ?? null,
+    lastFullDealSyncNextCursor:
+      typeof storedConfig?.lastFullDealSyncNextCursor === "string"
+        ? storedConfig.lastFullDealSyncNextCursor
+        : null,
     lastFullLeadSyncAt: storedConfig?.lastFullLeadSyncAt ?? null,
     lastFullLeadSyncNextStart:
       typeof storedConfig?.lastFullLeadSyncNextStart === "number"
@@ -517,32 +528,68 @@ async function writePipedriveLeadPull({
   try {
     const start = client.lastFullLeadSyncNextStart;
     const updatedSince = client.lastFullLeadSyncAt;
+    const dealCursor = client.lastFullDealSyncNextCursor;
+    const dealUpdatedSince = client.lastFullDealSyncAt;
     const result = await importPipedriveLeadPages({
       client,
       params: { limit: 50, start, updatedSince },
     });
+    const dealResult = await importPipedriveDealPages({
+      client,
+      params: {
+        cursor: dealCursor,
+        limit: 50,
+        updatedSince: dealUpdatedSince,
+      },
+    });
     const finishedAt = new Date();
-    const recordsRead = result.status === "ok" ? result.recordsRead : 0;
-    const recordsWritten = result.status === "ok" ? result.created : 0;
-    const linkedExisting = result.status === "ok" ? result.linkedExisting : 0;
-    const skipped = result.skipped;
-    const moreAvailable = result.status === "ok" ? result.moreAvailable : false;
-    const pagesRead = result.status === "ok" ? result.pagesRead : 0;
+    const leadRecordsRead = result.status === "ok" ? result.recordsRead : 0;
+    const leadRecordsWritten = result.status === "ok" ? result.created : 0;
+    const leadLinkedExisting =
+      result.status === "ok" ? result.linkedExisting : 0;
+    const leadSkipped = result.skipped;
+    const leadMoreAvailable =
+      result.status === "ok" ? result.moreAvailable : false;
+    const leadPagesRead = result.status === "ok" ? result.pagesRead : 0;
+    const dealRecordsRead =
+      dealResult.status === "ok" ? dealResult.recordsRead : 0;
+    const dealRecordsWritten =
+      dealResult.status === "ok" ? dealResult.created : 0;
+    const dealLinkedExisting =
+      dealResult.status === "ok" ? dealResult.linkedExisting : 0;
+    const dealSkipped = dealResult.skipped;
+    const dealMoreAvailable =
+      dealResult.status === "ok" ? dealResult.moreAvailable : false;
+    const dealPagesRead =
+      dealResult.status === "ok" ? dealResult.pagesRead : 0;
+    const recordsRead = leadRecordsRead + dealRecordsRead;
+    const recordsWritten = leadRecordsWritten + dealRecordsWritten;
+    const linkedExisting = leadLinkedExisting + dealLinkedExisting;
+    const skipped = leadSkipped + dealSkipped;
+    const moreAvailable = leadMoreAvailable || dealMoreAvailable;
+    const pagesRead = leadPagesRead + dealPagesRead;
     const warningCount =
-      result.status === "ok"
+      (result.status === "ok"
         ? result.results.reduce(
             (count, leadResult) => count + leadResult.warnings.length,
             0,
           )
-        : 1;
+        : 1) +
+      (dealResult.status === "ok"
+        ? dealResult.results.reduce(
+            (count, dealImportResult) =>
+              count + dealImportResult.warnings.length,
+            0,
+          )
+        : 1);
     const status: PipedriveLeadPullStatus =
       warningCount > 0 || skipped > 0 || recordsRead === 0 || moreAvailable
         ? "WARNING"
         : "SUCCESS";
     const mode =
-      start !== null
+      start !== null || dealCursor
         ? "continuation"
-        : updatedSince
+        : updatedSince || dealUpdatedSince
           ? "incremental"
           : "initial";
     const importMode =
@@ -553,15 +600,19 @@ async function writePipedriveLeadPull({
           : "Initial pull";
     const pageSummary = pagesRead > 1 ? ` across ${pagesRead} pages` : "";
     const moreAvailableSummary = moreAvailable
-      ? " More Pipedrive pages are available, so a continuation was saved and the full-pull cursor was not advanced."
+      ? " More Pipedrive pages are available, so a continuation was saved and the relevant full-pull cursor was not advanced."
       : "";
     const message =
       recordsRead === 0
-        ? `${importMode}: no Pipedrive leads were available to import.`
-        : `${importMode}: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} Pipedrive lead${recordsRead === 1 ? "" : "s"}${pageSummary}.${moreAvailableSummary}`;
+        ? `${importMode}: no Pipedrive leads or deals were available to import.`
+        : `${importMode}: leads ${leadRecordsWritten} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}; deals ${dealRecordsWritten} created, ${dealLinkedExisting} already linked, ${dealSkipped} skipped from ${dealRecordsRead}${pageSummary}.${moreAvailableSummary}`;
     const importRows =
       result.status === "ok"
         ? pipedriveLeadImportMetadataRows(result.results)
+        : [];
+    const dealImportRows =
+      dealResult.status === "ok"
+        ? pipedriveDealImportMetadataRows(dealResult.results)
         : [];
     const existingConfig = pipedriveStoredConfigSchema.safeParse(
       connection.config ?? {},
@@ -569,12 +620,29 @@ async function writePipedriveLeadPull({
     const metadata: Prisma.InputJsonObject = {
       actorId,
       created: recordsWritten,
+      dealCreated: dealRecordsWritten,
+      dealImports: dealImportRows,
+      dealLinkedExisting,
+      dealMaxPages: dealResult.status === "ok" ? dealResult.maxPages : null,
+      dealMoreAvailable,
+      dealNextCursor:
+        dealResult.status === "ok" ? dealResult.nextCursor : null,
+      dealPagesRead,
+      dealRecordsRead,
+      dealSkipped,
+      dealUpdatedSince,
       imports: importRows,
+      leadCreated: leadRecordsWritten,
+      leadLinkedExisting,
+      leadMaxPages: result.status === "ok" ? result.maxPages : null,
+      leadMoreAvailable,
+      leadNextStart: result.status === "ok" ? result.nextStart : null,
+      leadPagesRead,
+      leadRecordsRead,
+      leadSkipped,
       linkedExisting,
-      maxPages: result.status === "ok" ? result.maxPages : null,
       mode,
       moreAvailable,
-      nextStart: result.status === "ok" ? result.nextStart : null,
       pagesRead,
       pullOnly: true,
       skipped,
@@ -601,19 +669,29 @@ async function writePipedriveLeadPull({
     ];
 
     if (existingConfig.success) {
-      const nextConfig =
-        moreAvailable && result.status === "ok" && result.nextStart !== null
-          ? {
-              ...existingConfig.data,
-              lastFullLeadSyncNextStart: result.nextStart,
-              lastLeadSyncAt: finishedAt.toISOString(),
-            }
-          : {
-              ...existingConfig.data,
-              lastFullLeadSyncAt: finishedAt.toISOString(),
-              lastFullLeadSyncNextStart: null,
-              lastLeadSyncAt: finishedAt.toISOString(),
-            };
+      const finishedAtIso = finishedAt.toISOString();
+      const nextConfig = {
+        ...existingConfig.data,
+        lastLeadSyncAt: finishedAtIso,
+      };
+
+      if (result.status === "ok") {
+        if (result.moreAvailable && result.nextStart !== null) {
+          nextConfig.lastFullLeadSyncNextStart = result.nextStart;
+        } else {
+          nextConfig.lastFullLeadSyncAt = finishedAtIso;
+          nextConfig.lastFullLeadSyncNextStart = null;
+        }
+      }
+
+      if (dealResult.status === "ok") {
+        if (dealResult.moreAvailable && dealResult.nextCursor) {
+          nextConfig.lastFullDealSyncNextCursor = dealResult.nextCursor;
+        } else {
+          nextConfig.lastFullDealSyncAt = finishedAtIso;
+          nextConfig.lastFullDealSyncNextCursor = null;
+        }
+      }
 
       writes.push(
         prisma.integrationConnection.update({

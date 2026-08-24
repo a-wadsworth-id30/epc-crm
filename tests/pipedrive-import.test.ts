@@ -134,8 +134,14 @@ before(async () => {
         salesCommunication: {
           create: recordCrmWriteFor("salesCommunication.create"),
         },
+        salesLifecycleEvent: {
+          create: recordCrmWriteFor("salesLifecycleEvent.create"),
+        },
         salesOpportunity: {
           create: recordCrmWriteFor("salesOpportunity.create"),
+        },
+        salesPipelineStage: {
+          findFirst: async () => null,
         },
       };
 
@@ -372,6 +378,100 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(result.pagesRead, 1);
     assert.equal(result.moreAvailable, true);
     assert.equal(result.nextStart, 50);
+  });
+
+  it("requests latest updated open deals when importing a deal page", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedriveDealPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listDeals: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextCursor: null,
+              nextStart: null,
+              start: null,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.deepEqual(listCalls, [
+      {
+        limit: 50,
+        sortBy: "update_time",
+        sortDirection: "desc",
+        status: "open",
+      },
+    ]);
+  });
+
+  it("follows cursor pagination for bounded Pipedrive deal pulls", async () => {
+    const listCalls: unknown[] = [];
+    const result = await pipedriveImport.importPipedriveDealPages({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listDeals: async (params) => {
+          listCalls.push(params);
+          return {
+            data: [],
+            pagination:
+              listCalls.length === 1
+                ? {
+                    limit: 2,
+                    moreItemsInCollection: false,
+                    nextCursor: "deal-cursor-2",
+                    nextStart: null,
+                    start: null,
+                  }
+                : {
+                    limit: 2,
+                    moreItemsInCollection: false,
+                    nextCursor: null,
+                    nextStart: null,
+                    start: null,
+                  },
+            relatedObjects: null,
+          };
+        },
+      },
+      maxPages: 3,
+      params: { limit: 2, updatedSince: "2026-08-20T10:00:00.000Z" },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.pagesRead, 2);
+    assert.equal(result.recordsRead, 0);
+    assert.equal(result.moreAvailable, false);
+    assert.equal(result.nextCursor, null);
+    assert.deepEqual(listCalls, [
+      {
+        limit: 2,
+        sortBy: "update_time",
+        sortDirection: "desc",
+        status: "open",
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+      {
+        cursor: "deal-cursor-2",
+        limit: 2,
+        sortBy: "update_time",
+        sortDirection: "desc",
+        status: "open",
+        updatedSince: "2026-08-20T10:00:00.000Z",
+      },
+    ]);
   });
 
   it("follows cursor pagination for bounded Pipedrive person pulls", async () => {
@@ -867,6 +967,69 @@ describe("Pipedrive lead import mapping", () => {
     ]);
   });
 
+  it("imports selected deal IDs as CRM opportunities", async () => {
+    const getDealCalls: number[] = [];
+    const result = await pipedriveImport.importPipedriveDealIds({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getDeal: async (id) => {
+          getDealCalls.push(id);
+          return {
+            currency: "GBP",
+            expected_close_date: "2026-09-01",
+            id,
+            org_id: 25,
+            person_id: 45,
+            title: `Selected deal ${id}`,
+            value: 2500,
+          };
+        },
+        getOrganization: async (id) => ({
+          id,
+          name: "Deal Homes",
+        }),
+        getPerson: async (id) => ({
+          email: [{ primary: true, value: "deal@example.com" }],
+          id,
+          name: "Dana Deal",
+          phone: [{ primary: true, value: "07700 900456" }],
+        }),
+      },
+      dealIds: ["13059", "13059", "bad"],
+    });
+
+    assert.equal(result.status, "ok");
+    if (result.status !== "ok") throw new Error("Expected selected import");
+    assert.deepEqual(getDealCalls, [13059]);
+    assert.equal(result.requested, 1);
+    assert.equal(result.created, 1);
+    assert.equal(result.linkedExisting, 0);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.results[0]?.externalDealId, "13059");
+    assert.equal(result.results[0]?.title, "Selected deal 13059");
+    assert.equal(crmWriteLabels.includes("salesOpportunity.create"), true);
+    assert.equal(crmWriteLabels.includes("salesCommunication.create"), true);
+    assert.equal(crmWriteLabels.includes("externalRecordLink.upsert"), true);
+    assert.deepEqual(
+      pipedriveImport.pipedriveDealImportMetadataRows(result.results),
+      [
+        {
+          companyId: "stub-id",
+          contactId: "stub-id",
+          createdCompany: true,
+          createdContact: true,
+          createdOpportunity: true,
+          externalDealId: "13059",
+          opportunityId: "stub-id",
+          status: "created",
+          title: "Selected deal 13059",
+          warningCount: 0,
+          warnings: [],
+        },
+      ],
+    );
+  });
+
   it("maps Pipedrive lead, person and organisation fields into CRM records", () => {
     const mapping = pipedriveImport.mapPipedriveLeadToCrm({
       defaultLeadSource: "Pipedrive Import",
@@ -899,6 +1062,7 @@ describe("Pipedrive lead import mapping", () => {
     });
 
     assert.deepEqual(mapping.externalIds, {
+      deal: null,
       lead: "lead-1",
       organization: "123",
       person: "456",
@@ -922,6 +1086,54 @@ describe("Pipedrive lead import mapping", () => {
       "lead-1",
     );
     assert.match(mapping.communication.body, /Imported from Pipedrive lead lead-1/);
+  });
+
+  it("maps Pipedrive deal fields into CRM records", () => {
+    const mapping = pipedriveImport.mapPipedriveDealToCrm({
+      deal: {
+        add_time: "2026-08-18T09:00:00Z",
+        currency: "GBP",
+        expected_close_date: "2026-09-01",
+        id: 13059,
+        org_id: { id: 25, name: "Deal Homes" },
+        person_id: {
+          email: "dana@example.com",
+          id: 45,
+          name: "Dana Deal",
+          phone: "07700 900456",
+        },
+        title: "Pipedrive fake deal",
+        update_time: "2026-08-19T10:00:00Z",
+        value: 2500,
+      },
+      defaultLeadSource: "Pipedrive Import",
+      workspaceCurrency: "GBP",
+    });
+
+    assert.deepEqual(mapping.externalIds, {
+      deal: "13059",
+      lead: null,
+      organization: "25",
+      person: "45",
+    });
+    assert.equal(mapping.company?.name, "Deal Homes");
+    assert.equal(mapping.contact?.firstName, "Dana");
+    assert.equal(mapping.contact?.lastName, "Deal");
+    assert.equal(mapping.contact?.email, "dana@example.com");
+    assert.equal(mapping.contact?.phoneNormalized, "+447700900456");
+    assert.equal(mapping.contact?.leadSource, "Pipedrive Import");
+    assert.equal(mapping.opportunity.title, "Pipedrive fake deal");
+    assert.equal(mapping.opportunity.currency, "GBP");
+    assert.equal(mapping.opportunity.valueCents, 250000);
+    assert.equal(
+      mapping.opportunity.expectedCloseDate?.toISOString(),
+      "2026-09-01T00:00:00.000Z",
+    );
+    assert.equal(
+      mapping.communication.metadata.externalDealId,
+      "13059",
+    );
+    assert.match(mapping.communication.body, /Imported from Pipedrive deal 13059/);
   });
 
   it("uses embedded related objects when separate reads are unavailable", () => {
