@@ -97,7 +97,7 @@ describe("Pipedrive read-only client", () => {
       ownerId: 42,
       sort: "update_time DESC",
       start: -10,
-      updatedSince: "2026-08-19T10:20:00Z",
+      updatedSince: "2026-08-19T10:20:00.123Z",
     });
     const url = new URL(requests[0]!.url);
 
@@ -136,7 +136,8 @@ describe("Pipedrive read-only client", () => {
       organizationId: 42,
       sortBy: "update_time",
       sortDirection: "desc",
-      updatedSince: "2026-08-20T10:20:00Z",
+      updatedSince: "2026-08-20T10:20:00.456Z",
+      updatedUntil: "2026-08-21T11:30:40.789Z",
     });
     const url = new URL(requests[0]!.url);
 
@@ -149,6 +150,10 @@ describe("Pipedrive read-only client", () => {
     assert.equal(
       url.searchParams.get("updated_since"),
       "2026-08-20T10:20:00Z",
+    );
+    assert.equal(
+      url.searchParams.get("updated_until"),
+      "2026-08-21T11:30:40Z",
     );
     assert.equal(result.data[0]?.name, "Casey Contact");
     assert.equal(result.pagination.nextCursor, "cursor-2");
@@ -176,7 +181,8 @@ describe("Pipedrive read-only client", () => {
       sortBy: "update_time",
       sortDirection: "desc",
       status: "open",
-      updatedSince: "2026-08-20T10:20:00Z",
+      updatedSince: "2026-08-20T10:20:00.456Z",
+      updatedUntil: "2026-08-21T11:30:40.789Z",
     });
     const url = new URL(requests[0]!.url);
 
@@ -190,6 +196,10 @@ describe("Pipedrive read-only client", () => {
     assert.equal(
       url.searchParams.get("updated_since"),
       "2026-08-20T10:20:00Z",
+    );
+    assert.equal(
+      url.searchParams.get("updated_until"),
+      "2026-08-21T11:30:40Z",
     );
     assert.equal(result.data[0]?.title, "Fake deal");
     assert.equal(result.pagination.nextCursor, "deal-cursor-2");

@@ -350,7 +350,7 @@ export class PipedriveReadOnlyClient {
       person_id: integerParam(params.personId),
       sort: params.sort || undefined,
       start: integerParam(params.start, { min: 0 }),
-      updated_since: params.updatedSince || undefined,
+      updated_since: pipedriveDateTimeParam(params.updatedSince),
     });
   }
 
@@ -368,8 +368,8 @@ export class PipedriveReadOnlyClient {
         sort_by: params.sortBy || undefined,
         sort_direction: params.sortDirection || undefined,
         status: params.status || "open",
-        updated_since: params.updatedSince || undefined,
-        updated_until: params.updatedUntil || undefined,
+        updated_since: pipedriveDateTimeParam(params.updatedSince),
+        updated_until: pipedriveDateTimeParam(params.updatedUntil),
       },
       { apiVersion: "v2" },
     );
@@ -387,8 +387,8 @@ export class PipedriveReadOnlyClient {
         owner_id: integerParam(params.ownerId),
         sort_by: params.sortBy || undefined,
         sort_direction: params.sortDirection || undefined,
-        updated_since: params.updatedSince || undefined,
-        updated_until: params.updatedUntil || undefined,
+        updated_since: pipedriveDateTimeParam(params.updatedSince),
+        updated_until: pipedriveDateTimeParam(params.updatedUntil),
       },
       { apiVersion: "v2" },
     );
@@ -514,6 +514,16 @@ function integerParam(
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
 
   return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+function pipedriveDateTimeParam(value: string | null | undefined) {
+  const text = textValue(value);
+  if (!text) return undefined;
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return undefined;
+
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function appendQueryParams(url: URL, params: PipedriveQueryParams) {
