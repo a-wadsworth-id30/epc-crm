@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { SaleDeleteModalProps } from "@/components/crm-boilerplate/SaleDeleteModal";
 
 function SalesPanelLoading() {
   return (
@@ -43,6 +44,11 @@ export const SaleCallButton = dynamic(
 export const SaleDetailAIWorkspace = dynamic(
   () => import("@/components/crm-boilerplate/SaleDetailAIWorkspace"),
   { loading: SalesWorkspaceLoading, ssr: false },
+);
+
+export const SaleDeleteModal = dynamic<SaleDeleteModalProps>(
+  () => import("@/components/crm-boilerplate/SaleDeleteModal"),
+  { loading: () => null, ssr: false },
 );
 
 export const SaleDiscoveryPanel = dynamic(

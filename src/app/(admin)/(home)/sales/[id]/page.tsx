@@ -7,6 +7,7 @@ import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLi
 import {
   SaleAutomationActivity,
   SaleCallButton,
+  SaleDeleteModal,
   SaleDetailAIWorkspace,
   SaleDiscoveryPanel,
   SaleStageControl,
@@ -2345,6 +2346,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               >
                 Visitor evidence
               </Link>
+            ) : null}
+            {user.role === "ADMIN" ? (
+              <SaleDeleteModal saleId={sale.id} saleTitle={sale.title} />
             ) : null}
           </div>
         </div>
