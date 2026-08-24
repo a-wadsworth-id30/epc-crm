@@ -11,7 +11,9 @@ import {
   useState,
 } from "react";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
+import { Modal } from "@/components/ui/modal";
 import TrashBinIcon from "@/icons/trash.svg";
+import { useModal } from "@/hooks/useModal";
 import { bulkUpdateSalesAction } from "@/lib/actions/sales";
 
 type Option = {
@@ -42,8 +44,8 @@ export default function SalesTableFrame({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const frameRef = useRef<HTMLDivElement>(null);
+  const deleteModal = useModal();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [deleteArmed, setDeleteArmed] = useState(false);
   const [activeBulkAction, setActiveBulkAction] = useState<
     "delete" | "owner" | "stage" | null
   >(null);
@@ -124,7 +126,7 @@ export default function SalesTableFrame({
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
 
-    setDeleteArmed(false);
+    deleteModal.closeModal();
 
     if (target.dataset.salesSelectAll !== undefined) {
       const pageIds = Array.from(
@@ -169,6 +171,9 @@ export default function SalesTableFrame({
     "inline-flex h-8 items-center justify-center rounded-md border border-gray-300 px-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]";
   const dangerButtonClassName =
     "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-error-300 px-2 text-xs font-semibold text-error-700 transition hover:bg-error-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-error-800 dark:text-error-300 dark:hover:bg-error-500/10";
+  const selectedSalesLabel = `${selectedIds.length} selected sale${
+    selectedIds.length === 1 ? "" : "s"
+  }`;
 
   return (
     <div ref={frameRef} onChange={onSelectionChange}>
@@ -229,62 +234,77 @@ export default function SalesTableFrame({
             </form>
 
             {canDeleteSales ? (
-              <div className="flex flex-col gap-1">
-                <form
-                  action={deleteAction}
-                  className="flex items-center gap-2"
-                  onSubmit={() => {
-                    setActiveBulkAction("delete");
-                    setDeleteArmed(false);
-                    setSelectedIds([]);
-                  }}
-                >
-                  <input type="hidden" name="ids" value={selectedValue} />
-                  <input type="hidden" name="bulkAction" value="delete-crm" />
-                  <input type="hidden" name="confirmDelete" value="crm-only" />
-                  {deleteArmed ? (
-                    <>
-                      <button
-                        type="submit"
-                        disabled={!canBulkUpdate}
-                        className={dangerButtonClassName}
-                      >
-                        <TrashBinIcon className="size-3.5" />
-                        Confirm delete
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isDeletePending}
-                        className={compactButtonClassName}
-                        onClick={() => setDeleteArmed(false)}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!canBulkUpdate}
-                      className={dangerButtonClassName}
-                      onClick={() => {
-                        setActiveBulkAction("delete");
-                        setDeleteArmed(true);
-                      }}
-                    >
-                      <TrashBinIcon className="size-3.5" />
-                      Delete from CRM
-                    </button>
-                  )}
-                </form>
-                {deleteArmed ? (
-                  <p className="max-w-72 text-[11px] leading-4 text-error-600 dark:text-error-300">
-                    CRM only. Pipedrive is not changed.
-                  </p>
-                ) : null}
-              </div>
+              <button
+                type="button"
+                disabled={!canBulkUpdate}
+                className={dangerButtonClassName}
+                onClick={() => {
+                  setActiveBulkAction("delete");
+                  deleteModal.openModal();
+                }}
+              >
+                <TrashBinIcon className="size-3.5" />
+                Delete from CRM
+              </button>
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {canDeleteSales ? (
+        <Modal
+          isOpen={deleteModal.isOpen}
+          onClose={deleteModal.closeModal}
+          className="relative m-5 w-full max-w-[500px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        >
+          <div>
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-300">
+              <TrashBinIcon className="size-5" />
+            </div>
+            <h2 className="mb-2 text-title-xs font-semibold text-gray-800 dark:text-white/90">
+              Delete selected sales
+            </h2>
+            <p className="text-sm leading-6 text-gray-500 dark:text-gray-400">
+              Remove {selectedSalesLabel} from the CRM? This cannot be undone.
+              Pipedrive will not be changed.
+            </p>
+            <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
+              CRM deletion will be blocked if the selected sales still have
+              linked documents, customer links, signature requests, marketing
+              uploads or open tasks.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={isDeletePending}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+                onClick={deleteModal.closeModal}
+              >
+                Cancel
+              </button>
+              <form
+                action={deleteAction}
+                onSubmit={() => {
+                  setActiveBulkAction("delete");
+                  deleteModal.closeModal();
+                  setSelectedIds([]);
+                }}
+              >
+                <input type="hidden" name="ids" value={selectedValue} />
+                <input type="hidden" name="bulkAction" value="delete-crm" />
+                <input type="hidden" name="confirmDelete" value="crm-only" />
+                <button
+                  type="submit"
+                  disabled={!canBulkUpdate}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-error-500 px-5 text-sm font-medium text-white transition hover:bg-error-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <TrashBinIcon className="size-4" />
+                  {isDeletePending ? "Deleting..." : "Delete from CRM"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </Modal>
       ) : null}
 
       {activeState?.message ? (

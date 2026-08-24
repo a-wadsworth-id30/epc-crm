@@ -517,7 +517,7 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   help uses the lazy tooltip wrapper so attribution and conversation guidance
   does not pull tooltip positioning code into first load.
 - Desktop Sales bulk selection includes an admin-only `Delete from CRM` action
-  with a confirmation step. It deletes local CRM sales only, blocks deletion
+  with a confirmation modal. It deletes local CRM sales only, blocks deletion
   while linked CRM documents/customer links/signature requests/marketing
   uploads/open tasks exist, detaches local attribution records, and converts
   Pipedrive lead links into `salesOpportunityDeleted` tombstones so future
