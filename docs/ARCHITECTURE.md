@@ -310,7 +310,10 @@ state. Standalone Pipedrive person/contact pulls use
 `netlify/functions/pull-pipedrive-contacts.mjs` scheduled function. Contact
 pulls use a separate `pipedrive.contact_import` background job,
 `lastFullPersonSyncAt` timestamp and `lastFullPersonSyncNextCursor` cursor so
-they cannot move or skip the lead full-pull cursor. The authenticated
+they cannot move or skip the lead full-pull cursor. Scheduled Pipedrive
+functions resolve the first valid HTTPS CRM base URL from app/Netlify URL
+environment variables and emit aggregate-only import logs for operational
+verification without exposing provider payload data. The authenticated
 `/api/webhooks/pipedrive` receiver supports Pipedrive v1/v2 lead and person
 create/change payloads by reading the current record back from Pipedrive using
 GET requests before importing into CRM. Delete and organization webhook events

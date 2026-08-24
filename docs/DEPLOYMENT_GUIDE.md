@@ -301,6 +301,10 @@ non-stale `pipedrive.lead_import` job is already running, the newer run is
 skipped and logged as a warning instead of reading Pipedrive or moving the CRM
 cursor. `BACKGROUND_JOB_STALE_MINUTES` controls when old running jobs are
 ignored by the guard. This does not write back to Pipedrive.
+Scheduled Pipedrive functions choose the first valid HTTPS CRM base URL from
+`APP_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Netlify `URL` or `DEPLOY_URL`, and log
+aggregate-only status/count summaries so Netlify function logs can confirm that
+the schedule ran without exposing Pipedrive payloads or contact details.
 For live verification before the first CRM import, call the protected
 maintenance route with `preview=1&limit=10`; the route performs Pipedrive
 GET-only reads and CRM matching, then returns aggregate counts only with

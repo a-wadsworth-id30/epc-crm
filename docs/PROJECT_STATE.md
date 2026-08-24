@@ -191,7 +191,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `CRON_SECRET` are configured. Manual and scheduled pulls start compact
   `pipedrive.lead_import` or `pipedrive.contact_import` background jobs before
   importing; if another non-stale pull of the same type is already running, the
-  newer pull is skipped and logged as a warning without reading Pipedrive. The
+  newer pull is skipped and logged as a warning without reading Pipedrive.
+  Scheduled Pipedrive functions use the first valid HTTPS CRM base URL from
+  `APP_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Netlify `URL` or `DEPLOY_URL`, and log
+  aggregate-only import summaries so scheduled activity can be verified without
+  exposing Pipedrive lead/contact details. The
   Pipedrive settings page shows lead and contact scheduled pull state,
   credential source, full-pull cursor, saved continuation and active overlap
   guard state for admins. The protected lead maintenance route also supports
