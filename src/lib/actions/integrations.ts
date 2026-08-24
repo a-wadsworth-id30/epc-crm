@@ -86,6 +86,12 @@ type IntegrationActionState = {
   connected: boolean;
 };
 
+export type PipedriveWebhookReceiverTestState = {
+  ok: boolean;
+  message: string;
+  savedAt: number | null;
+};
+
 type TwilioImportState = IntegrationActionState & {
   imported?: {
     addresses: number;
@@ -476,7 +482,13 @@ export async function pullPipedriveContactsAction() {
   revalidatePipedriveImportPaths();
 }
 
-export async function testPipedriveWebhookReceiverAction() {
+export async function testPipedriveWebhookReceiverAction(
+  previousState: PipedriveWebhookReceiverTestState,
+  formData: FormData,
+): Promise<PipedriveWebhookReceiverTestState> {
+  void previousState;
+  void formData;
+
   const user = await requireAdmin();
   const startedAt = new Date();
   const secret = pipedriveWebhookSecret();
@@ -491,7 +503,12 @@ export async function testPipedriveWebhookReceiverAction() {
       status: "WARNING",
     });
     revalidatePipedriveSettingsPaths();
-    return;
+    return {
+      ok: false,
+      message:
+        "Receiver self-test could not run because the webhook secret is missing.",
+      savedAt: Date.now(),
+    };
   }
 
   const baseUrl = await appBaseUrlFromHeaders();
@@ -518,28 +535,85 @@ export async function testPipedriveWebhookReceiverAction() {
     });
 
     if (!response.ok) {
+      const message = `Receiver self-test reached the CRM webhook route but failed with HTTP ${response.status}.`;
+
       await writePipedriveWebhookReceiverTestFailure({
         actorId: user.id,
-        message: `Pipedrive webhook receiver self-test failed with HTTP ${response.status}.`,
+        message,
         reason: "receiver-http-error",
         startedAt,
         status: "ERROR",
       });
+      revalidatePipedriveSettingsPaths();
+      return {
+        ok: false,
+        message,
+        savedAt: Date.now(),
+      };
     }
+
+    const body = await response.json().catch(() => null);
+    const result =
+      body && typeof body === "object" && "result" in body
+        ? (body.result as {
+            recordsRead?: unknown;
+            recordsWritten?: unknown;
+            status?: unknown;
+            syncType?: unknown;
+          })
+        : null;
+
+    if (
+      result?.status !== "SUCCESS" ||
+      result.syncType !== "webhook-receiver-test" ||
+      result.recordsRead !== 0 ||
+      result.recordsWritten !== 0
+    ) {
+      const message =
+        "Receiver self-test completed but did not return the expected CRM receiver-test result.";
+
+      await writePipedriveWebhookReceiverTestFailure({
+        actorId: user.id,
+        message,
+        reason: "unexpected-receiver-result",
+        startedAt,
+        status: "WARNING",
+      });
+      revalidatePipedriveSettingsPaths();
+      return {
+        ok: false,
+        message,
+        savedAt: Date.now(),
+      };
+    }
+
+    revalidatePipedriveSettingsPaths();
+    return {
+      ok: true,
+      message:
+        "Receiver self-test completed. CRM logged webhook-receiver-test with 0 Pipedrive records read or written.",
+      savedAt: Date.now(),
+    };
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Pipedrive webhook receiver self-test failed.";
+
     await writePipedriveWebhookReceiverTestFailure({
       actorId: user.id,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Pipedrive webhook receiver self-test failed.",
+      message,
       reason: "receiver-request-failed",
       startedAt,
       status: "ERROR",
     });
+    revalidatePipedriveSettingsPaths();
+    return {
+      ok: false,
+      message,
+      savedAt: Date.now(),
+    };
   }
-
-  revalidatePipedriveSettingsPaths();
 }
 
 export async function previewPipedriveLeadsAction() {

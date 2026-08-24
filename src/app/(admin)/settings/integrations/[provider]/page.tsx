@@ -21,6 +21,7 @@ import {
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
+import PipedriveWebhookReceiverTestForm from "@/components/crm-boilerplate/PipedriveWebhookReceiverTestForm";
 import ProviderAuthResetForm from "@/components/crm-boilerplate/ProviderAuthResetForm";
 import ProviderConnectionTestForm from "@/components/crm-boilerplate/ProviderConnectionTestForm";
 import ProviderSelectorRefreshForm from "@/components/crm-boilerplate/LazyProviderSelectorRefreshForm";
@@ -115,7 +116,6 @@ import {
   previewPipedriveLeadsAction,
   pullPipedriveContactsAction,
   pullPipedriveLeadsAction,
-  testPipedriveWebhookReceiverAction,
 } from "@/lib/actions/integrations";
 import { backgroundJobStaleCutoff } from "@/lib/maintenance/background-jobs";
 
@@ -756,16 +756,9 @@ export default async function IntegrationSettingsPage({
                 </code>
               </p>
             </div>
-            <form action={testPipedriveWebhookReceiverAction}>
-              <button
-                type="submit"
-                disabled={!pipedriveWebhookSecretConfigured}
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
-              >
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Test receiver
-              </button>
-            </form>
+            <PipedriveWebhookReceiverTestForm
+              disabled={!pipedriveWebhookSecretConfigured}
+            />
           </div>
           <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <PipedrivePullStateItem
