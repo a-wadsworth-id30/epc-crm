@@ -351,7 +351,10 @@ activity once Pipedrive has sent lead or person events. The Pipedrive settings
 page can also run a receiver self-test that posts a no-op authenticated payload
 through the CRM webhook route and records `webhook-receiver-test`; this checks
 CRM receiver routing/auth only and does not prove Pipedrive has delivered a
-real event.
+real event. The validation summary separates real Pipedrive deliveries from
+receiver self-tests, so production verification should look for provider
+delivery count and latest provider delivery time after a lead/person is changed
+in Pipedrive.
 
 ## Current Dev-Phase Rule
 

@@ -328,7 +328,9 @@ recent background jobs, webhook activity and webhook-registration status
 without exposing raw provider payloads or secrets. Settings > Integrations >
 Pipedrive can run a CRM-only receiver self-test through the authenticated
 webhook route; it records `webhook-receiver-test` without reading or writing
-Pipedrive data.
+Pipedrive data. Validation reports real provider deliveries separately from
+receiver self-tests so admins can see whether Pipedrive itself has sent a
+lead/person webhook event.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

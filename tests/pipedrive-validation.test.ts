@@ -99,6 +99,22 @@ before(async () => {
               if (syncTypes.includes("contact-import-webhook")) {
                 return [
                   {
+                    finishedAt: new Date("2026-08-21T10:32:00.000Z"),
+                    message:
+                      "Receiver self-test completed. CRM logged webhook-receiver-test with 0 Pipedrive records read or written.",
+                    metadata: {
+                      action: "receiver",
+                      entity: "test",
+                      eventId: "do-not-return-self-test",
+                      reason: "self-test",
+                    },
+                    recordsRead: 0,
+                    recordsWritten: 0,
+                    startedAt: new Date("2026-08-21T10:31:00.000Z"),
+                    status: "SUCCESS",
+                    syncType: "webhook-receiver-test",
+                  },
+                  {
                     finishedAt: new Date("2026-08-21T10:22:00.000Z"),
                     message: "Pipedrive webhook contact import completed.",
                     metadata: {
@@ -232,10 +248,27 @@ describe("Pipedrive validation summary", () => {
       "status",
       "syncType",
     ]);
-    assert.equal(result.webhookActivity.recentCount, 2);
-    assert.equal(result.webhookActivity.successCount, 1);
+    assert.equal(result.webhookActivity.deliveryStatus, "RECEIVED");
+    assert.equal(result.webhookActivity.lastProviderReceivedAt, "2026-08-21T10:21:00.000Z");
+    assert.equal(result.webhookActivity.providerEventCount, 2);
+    assert.equal(result.webhookActivity.selfTestCount, 1);
+    assert.equal(result.webhookActivity.recentCount, 3);
+    assert.equal(result.webhookActivity.successCount, 2);
     assert.equal(result.webhookActivity.warningCount, 1);
     assert.deepEqual(result.webhookActivity.recent[0], {
+      action: "receiver",
+      entity: "test",
+      finishedAt: "2026-08-21T10:32:00.000Z",
+      message:
+        "Receiver self-test completed. CRM logged webhook-receiver-test with 0 Pipedrive records read or written.",
+      reason: "self-test",
+      recordsRead: 0,
+      recordsWritten: 0,
+      startedAt: "2026-08-21T10:31:00.000Z",
+      status: "SUCCESS",
+      syncType: "webhook-receiver-test",
+    });
+    assert.deepEqual(result.webhookActivity.recent[1], {
       action: "change",
       entity: "person",
       finishedAt: "2026-08-21T10:22:00.000Z",

@@ -3289,7 +3289,8 @@ function PipedriveWebhookActivityPanel({
 }: {
   activity: PipedriveValidationSummary["webhookActivity"];
 }) {
-  const latest = activity.recent[0] ?? null;
+  const latestProviderEvent =
+    activity.recent.find(isPipedriveProviderWebhookEvent) ?? null;
 
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -3302,30 +3303,38 @@ function PipedriveWebhookActivityPanel({
             <LazyHelpTooltip content="Shows sanitized CRM-side logs created when Pipedrive webhook events reach the receiver." />
           </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {latest
-              ? `Latest ${pipedriveWebhookEventLabel(latest)} at ${
-                  formattedDateTime(latest.startedAt) ?? "unknown"
+            {latestProviderEvent
+              ? `Latest Pipedrive delivery ${pipedriveWebhookEventLabel(
+                  latestProviderEvent,
+                )} at ${
+                  formattedDateTime(latestProviderEvent.startedAt) ?? "unknown"
                 }.`
-              : "No Pipedrive webhook event has reached CRM yet."}
+              : activity.selfTestCount
+                ? "Receiver self-test has reached CRM, but no real Pipedrive lead/person webhook delivery has arrived yet."
+                : "No Pipedrive webhook delivery has reached CRM yet."}
           </p>
         </div>
-        <StatusBadge>{pipedriveWebhookActivityStatus(activity)}</StatusBadge>
+        <StatusBadge>{pipedriveWebhookDeliveryStatus(activity)}</StatusBadge>
       </div>
       <dl className="mb-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <PipedrivePullStateItem
-          label="Recent events"
-          value={formatPipedriveValidationCount(activity.recentCount)}
-          detail="Webhook sync logs retained in summary"
+          label="Provider deliveries"
+          value={formatPipedriveValidationCount(activity.providerEventCount)}
+          detail={
+            activity.lastProviderReceivedAt
+              ? `Latest ${formattedDateTime(activity.lastProviderReceivedAt) ?? "unknown"}`
+              : "Awaiting real Pipedrive event"
+          }
         />
         <PipedrivePullStateItem
-          label="Success"
-          value={formatPipedriveValidationCount(activity.successCount)}
-          detail="Recent successful webhook imports"
+          label="Receiver tests"
+          value={formatPipedriveValidationCount(activity.selfTestCount)}
+          detail="CRM-side self-test logs"
         />
         <PipedrivePullStateItem
           label="Warnings"
           value={formatPipedriveValidationCount(activity.warningCount)}
-          detail="Ignored or partial webhook events"
+          detail="Ignored or partial webhook logs"
         />
         <PipedrivePullStateItem
           label="Errors"
@@ -3976,14 +3985,25 @@ function pipedriveLatestActivityDetail({
   return "No Pipedrive sync history";
 }
 
-function pipedriveWebhookActivityStatus(
+function pipedriveWebhookDeliveryStatus(
   activity: PipedriveValidationSummary["webhookActivity"],
 ) {
-  if (activity.errorCount > 0) return "ERROR";
-  if (activity.warningCount > 0) return "WARNING";
-  if (activity.successCount > 0) return "SUCCESS";
+  const providerEvents = activity.recent.filter(isPipedriveProviderWebhookEvent);
+
+  if (activity.deliveryStatus === "ERROR") return "ERROR";
+  if (activity.deliveryStatus === "RECEIVED") {
+    return providerEvents.some((event) => event.status === "WARNING")
+      ? "WARNING"
+      : "SUCCESS";
+  }
 
   return "Planned";
+}
+
+function isPipedriveProviderWebhookEvent(
+  event: PipedriveValidationSummary["webhookActivity"]["recent"][number],
+) {
+  return event.syncType !== "webhook-receiver-test";
 }
 
 function pipedriveWebhookEventLabel(

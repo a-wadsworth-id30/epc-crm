@@ -46,8 +46,11 @@ export type PipedriveValidationSummary = {
     syncType: string;
   }>;
   webhookActivity: {
+    deliveryStatus: "ERROR" | "RECEIVED" | "AWAITING";
     errorCount: number;
     lastReceivedAt: string | null;
+    lastProviderReceivedAt: string | null;
+    providerEventCount: number;
     recent: Array<{
       action: string | null;
       entity: string | null;
@@ -61,6 +64,7 @@ export type PipedriveValidationSummary = {
       syncType: string;
     }>;
     recentCount: number;
+    selfTestCount: number;
     successCount: number;
     warningCount: number;
   };
@@ -325,12 +329,29 @@ function sanitizedWebhookActivity(
       syncType: log.syncType,
     };
   });
+  const providerEvents = recent.filter(
+    (log) => log.syncType !== "webhook-receiver-test",
+  );
+  const selfTests = recent.filter(
+    (log) => log.syncType === "webhook-receiver-test",
+  );
+  const providerErrorCount = providerEvents.filter(
+    (log) => log.status === "ERROR",
+  ).length;
 
   return {
+    deliveryStatus: providerErrorCount
+      ? "ERROR"
+      : providerEvents.length
+        ? "RECEIVED"
+        : "AWAITING",
     errorCount: recent.filter((log) => log.status === "ERROR").length,
     lastReceivedAt: recent[0]?.startedAt ?? null,
+    lastProviderReceivedAt: providerEvents[0]?.startedAt ?? null,
+    providerEventCount: providerEvents.length,
     recent,
     recentCount: recent.length,
+    selfTestCount: selfTests.length,
     successCount: recent.filter((log) => log.status === "SUCCESS").length,
     warningCount: recent.filter((log) => log.status === "WARNING").length,
   };
