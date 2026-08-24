@@ -13,6 +13,7 @@ import {
   salesOpportunityWhereWithAccess,
 } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
+import { syncPipedriveLeadNotesForOpportunity } from "@/lib/integrations/pipedrive-import";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
@@ -1645,6 +1646,69 @@ export async function createSaleNoteAction(
     ]
       .filter(Boolean)
       .join(" "),
+  };
+}
+
+export async function syncPipedriveLeadNotesAction(
+  _: SalesActionState,
+  formData: FormData,
+): Promise<SalesActionState> {
+  const user = await requireUser();
+
+  if (user.role !== "ADMIN") {
+    return {
+      ok: false,
+      message: "Only admins can pull Pipedrive notes.",
+    };
+  }
+
+  const saleId = String(formData.get("saleId") ?? "").trim();
+
+  if (!saleId) {
+    return { ok: false, message: "Sale is required." };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityWhereWithAccess(user, { id: saleId }),
+    select: { contactId: true, id: true, title: true },
+  });
+
+  if (!sale) {
+    return { ok: false, message: "Sale not found." };
+  }
+
+  const result = await syncPipedriveLeadNotesForOpportunity({
+    opportunityId: sale.id,
+  });
+
+  if (result.status === "not_configured") {
+    return { ok: false, message: "Pipedrive is not configured." };
+  }
+
+  if (result.status === "not_linked") {
+    return {
+      ok: false,
+      message: "This sale is not linked to a Pipedrive lead.",
+    };
+  }
+
+  await bumpRealtimeTopics([
+    realtimeTopics.saleConversation(sale.id),
+    sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+  ]);
+  revalidatePath(`/sales/${sale.id}`);
+  revalidatePath("/notes");
+  if (sale.contactId) {
+    revalidatePath(`/contacts/${sale.contactId}`);
+  }
+
+  const warningMessage = result.warnings.length
+    ? ` ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"} recorded.`
+    : "";
+
+  return {
+    ok: true,
+    message: `Pulled ${result.notesRead} Pipedrive note${result.notesRead === 1 ? "" : "s"}. Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}.${warningMessage}`,
   };
 }
 

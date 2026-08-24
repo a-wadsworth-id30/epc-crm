@@ -167,6 +167,17 @@ export type PipedriveOrganization = Record<string, unknown> & {
   address?: string | null;
 };
 
+export type PipedriveNote = Record<string, unknown> & {
+  id?: number;
+  active_flag?: boolean;
+  add_time?: string;
+  content?: string;
+  lead_id?: string | null;
+  update_time?: string;
+  user?: unknown;
+  user_id?: unknown;
+};
+
 export type PipedriveListLeadsParams = {
   filterId?: number | null;
   limit?: number | null;
@@ -204,6 +215,19 @@ export type PipedriveListPersonsParams = {
   sortDirection?: "asc" | "desc" | null;
   updatedSince?: string | null;
   updatedUntil?: string | null;
+};
+
+export type PipedriveListNotesParams = {
+  dealId?: number | null;
+  leadId?: string | null;
+  limit?: number | null;
+  organizationId?: number | null;
+  personId?: number | null;
+  sort?: string | null;
+  start?: number | null;
+  updatedSince?: string | null;
+  updatedUntil?: string | null;
+  userId?: number | null;
 };
 
 export class PipedriveApiError extends Error {
@@ -392,6 +416,21 @@ export class PipedriveReadOnlyClient {
       },
       { apiVersion: "v2" },
     );
+  }
+
+  async listNotes(params: PipedriveListNotesParams = {}) {
+    return this.getList<PipedriveNote>("notes", {
+      deal_id: integerParam(params.dealId),
+      lead_id: textParam(params.leadId),
+      limit: integerParam(params.limit, { max: 500 }),
+      org_id: integerParam(params.organizationId),
+      person_id: integerParam(params.personId),
+      sort: params.sort || undefined,
+      start: integerParam(params.start, { min: 0 }),
+      updated_since: pipedriveDateTimeParam(params.updatedSince),
+      updated_until: pipedriveDateTimeParam(params.updatedUntil),
+      user_id: integerParam(params.userId),
+    });
   }
 
   async getLead(id: string) {
@@ -668,6 +707,10 @@ function textIdsParam(value: string[] | null | undefined) {
     .slice(0, 50);
 
   return ids.length ? ids.join(",") : undefined;
+}
+
+function textParam(value: string | null | undefined) {
+  return textValue(value) ?? undefined;
 }
 
 function numberValue(value: unknown) {

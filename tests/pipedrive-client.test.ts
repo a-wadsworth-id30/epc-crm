@@ -159,6 +159,54 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.nextCursor, "cursor-2");
   });
 
+  it("lists lead notes through the v1 notes endpoint", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          pagination: {
+            limit: 100,
+            more_items_in_collection: false,
+            next_start: null,
+            start: 0,
+          },
+        },
+        data: [{ content: "<p>Survey booked</p>", id: 88 }],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient().listNotes({
+      leadId: "3f214f00-9f9f-11f1-982e-6d2d290071c8",
+      limit: 999,
+      sort: "update_time DESC",
+      start: -5,
+      updatedSince: "2026-08-20T10:20:00.456Z",
+      updatedUntil: "2026-08-21T11:30:40.789Z",
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/v1/notes");
+    assert.equal(
+      url.searchParams.get("lead_id"),
+      "3f214f00-9f9f-11f1-982e-6d2d290071c8",
+    );
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("sort"), "update_time DESC");
+    assert.equal(url.searchParams.get("start"), "0");
+    assert.equal(
+      url.searchParams.get("updated_since"),
+      "2026-08-20T10:20:00Z",
+    );
+    assert.equal(
+      url.searchParams.get("updated_until"),
+      "2026-08-21T11:30:40Z",
+    );
+    assert.equal(result.data[0]?.id, 88);
+    assert.equal(result.pagination.moreItemsInCollection, false);
+  });
+
   it("uses the v2 deals endpoint with cursor pagination", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {

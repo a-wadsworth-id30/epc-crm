@@ -263,18 +263,24 @@ and create or link CRM contacts, companies and sales opportunities only. The
 lead sync service supports preview-page import, bounded full pulls, webhook
 read-back imports and direct single-lead imports from a Lead Inbox URL/UUID;
 incremental lead pulls also sweep the latest one lead page before using the
-saved cursor. None of these paths write back to Pipedrive.
+saved cursor. Lead imports and the sale detail admin action can also pull
+Pipedrive Lead Inbox notes with GET requests and store them as CRM
+`SalesCommunication` note rows. None of these paths write back to Pipedrive.
 
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
 also exposes a server-side read-only client that uses Pipedrive's `x-api-token`
-header for GET-only current-user, user, lead, deal, person and organisation
-requests, plus cursor-paginated Pipedrive v2 deal and person listing.
+header for GET-only current-user, user, lead, note, deal, person and
+organisation requests, plus cursor-paginated Pipedrive v2 deal and person
+listing.
 `src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/person/
 organisation records into CRM company, contact, sales opportunity,
-communication and external-link rows. The same import module also maps
-standalone Pipedrive persons into CRM contacts and companies without creating
-sales opportunities. The Pipedrive settings page can manually preview and
+communication and external-link rows. It converts Pipedrive lead note HTML to
+plain text and uses stable Pipedrive note IDs in `SalesCommunication.externalId`
+so repeated imports update existing CRM notes instead of duplicating them. The
+same import module also maps standalone Pipedrive persons into CRM contacts and
+companies without creating sales opportunities. The Pipedrive settings page can
+manually preview and
 selected-import Pipedrive leads, can manually or automatically pull bounded
 Pipedrive lead batches, and can separately pull Pipedrive persons
 into CRM contacts. These actions write sync-history rows with

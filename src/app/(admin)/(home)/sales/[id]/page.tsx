@@ -5,6 +5,7 @@ import { AttributionSourceIconSlot } from "@/components/crm-boilerplate/Attribut
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import {
+  PipedriveLeadNotesSyncButton,
   SaleAutomationActivity,
   SaleCallButton,
   SaleDeleteModal,
@@ -76,6 +77,7 @@ type SalesSignatureRequestSummary = Awaited<
 
 const initialConversationLimit = 40;
 const pipedriveDealExternalType = "deal";
+const pipedriveLeadExternalType = "lead";
 const salesOpportunityExternalType = "salesOpportunity";
 
 async function isPipedriveDealOpportunity(internalId: string) {
@@ -1737,6 +1739,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     opportunitySignatureRequests,
     linkedNotes,
     mentionMembers,
+    pipedriveLeadLink,
     r2Integration,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
@@ -1880,6 +1883,15 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         lastName: true,
         name: true,
       },
+    }),
+    prisma.externalRecordLink.findFirst({
+      where: {
+        externalType: pipedriveLeadExternalType,
+        internalId: id,
+        internalType: salesOpportunityExternalType,
+        provider: pipedriveProvider,
+      },
+      select: { externalId: true },
     }),
     prisma.integrationConnection.findUnique({
       where: { provider: cloudflareR2Provider },
@@ -2372,6 +2384,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               >
                 Visitor evidence
               </Link>
+            ) : null}
+            {user.role === "ADMIN" && pipedriveLeadLink ? (
+              <PipedriveLeadNotesSyncButton saleId={sale.id} />
             ) : null}
             {user.role === "ADMIN" ? (
               <SaleDeleteModal saleId={sale.id} saleTitle={sale.title} />

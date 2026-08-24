@@ -30,6 +30,15 @@ let externalRecordLinkRows: Array<{
   internalType: string;
   provider: string;
 }> = [];
+let salesCommunicationRows: Array<{
+  body?: string | null;
+  contactId?: string | null;
+  externalId?: string | null;
+  id: string;
+  metadata?: unknown;
+  opportunityId?: string | null;
+  summary?: string | null;
+}> = [];
 
 async function findExternalRecordLink(args: unknown) {
   const key = (
@@ -99,6 +108,61 @@ function recordCrmWriteFor(label: string) {
   };
 }
 
+async function createSalesCommunication(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("salesCommunication.create");
+  const data = (args as { data?: Record<string, unknown> }).data ?? {};
+  const row = {
+    body: typeof data.body === "string" ? data.body : null,
+    contactId: typeof data.contactId === "string" ? data.contactId : null,
+    externalId: typeof data.externalId === "string" ? data.externalId : null,
+    id: `sales-communication-${salesCommunicationRows.length + 1}`,
+    metadata: data.metadata,
+    opportunityId:
+      typeof data.opportunityId === "string" ? data.opportunityId : null,
+    summary: typeof data.summary === "string" ? data.summary : null,
+  };
+  salesCommunicationRows.push(row);
+  return { id: row.id };
+}
+
+async function findSalesCommunication(args: unknown) {
+  const where = (args as {
+    where?: { externalId?: string; opportunityId?: string };
+  }).where;
+
+  return (
+    salesCommunicationRows.find(
+      (row) =>
+        row.externalId === where?.externalId &&
+        row.opportunityId === where?.opportunityId,
+    ) ?? null
+  );
+}
+
+async function updateSalesCommunication(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("salesCommunication.update");
+  const id = (args as { where?: { id?: string } }).where?.id;
+  const data = (args as { data?: Record<string, unknown> }).data ?? {};
+  const row = salesCommunicationRows.find((candidate) => candidate.id === id);
+
+  if (!row) return { id: id ?? "missing" };
+
+  if (typeof data.body === "string") row.body = data.body;
+  if (typeof data.contactId === "string" || data.contactId === null) {
+    row.contactId = data.contactId;
+  }
+  if (typeof data.externalId === "string") row.externalId = data.externalId;
+  if (data.metadata !== undefined) row.metadata = data.metadata;
+  if (typeof data.opportunityId === "string") {
+    row.opportunityId = data.opportunityId;
+  }
+  if (typeof data.summary === "string") row.summary = data.summary;
+
+  return { id: row.id };
+}
+
 before(async () => {
   moduleWithLoad._load = function loadWithPipedriveImportStubs(
     this: unknown,
@@ -132,13 +196,19 @@ before(async () => {
           upsert: recordCrmWriteFor("externalRecordLink.upsert"),
         },
         salesCommunication: {
-          create: recordCrmWriteFor("salesCommunication.create"),
+          create: createSalesCommunication,
+          findFirst: findSalesCommunication,
+          update: updateSalesCommunication,
         },
         salesLifecycleEvent: {
           create: recordCrmWriteFor("salesLifecycleEvent.create"),
         },
         salesOpportunity: {
           create: recordCrmWriteFor("salesOpportunity.create"),
+          findUnique: async (args: unknown) => ({
+            contactId: "contact-existing",
+            id: (args as { where?: { id?: string } }).where?.id ?? "opportunity-existing",
+          }),
         },
         salesPipelineStage: {
           findFirst: async () => null,
@@ -195,6 +265,7 @@ beforeEach(() => {
   companyRows = [];
   contactRows = [];
   externalRecordLinkRows = [];
+  salesCommunicationRows = [];
 });
 
 describe("Pipedrive lead import mapping", () => {
@@ -900,6 +971,130 @@ describe("Pipedrive lead import mapping", () => {
       ],
     );
     assert.equal(crmWriteCalls, 2);
+  });
+
+  it("imports Pipedrive lead notes into linked CRM sale notes", async () => {
+    const listNoteCalls: unknown[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-notes",
+        externalType: "lead",
+        internalId: "opportunity-notes",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedriveLeadRecord({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listNotes: async (params) => {
+          listNoteCalls.push(params);
+          return {
+            data: [
+              {
+                add_time: "2026-08-22T09:30:00Z",
+                content: "<p>Survey booked</p><p>Customer wants Tuesday.</p>",
+                id: 88,
+                lead_id: "lead-notes",
+                update_time: "2026-08-22T10:00:00Z",
+                user: { id: 7, name: "Pipedrive User" },
+              },
+            ],
+            pagination: {
+              limit: 100,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      lead: { id: "lead-notes", title: "Lead with note" },
+      now: new Date("2026-08-24T12:00:00Z"),
+    });
+
+    assert.equal(result.status, "linked_existing");
+    assert.deepEqual(listNoteCalls, [
+      { leadId: "lead-notes", limit: 100, sort: "update_time DESC" },
+    ]);
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(
+      salesCommunicationRows[0]?.externalId,
+      "pipedrive:note:88",
+    );
+    assert.equal(
+      salesCommunicationRows[0]?.body,
+      "Survey booked\n\nCustomer wants Tuesday.",
+    );
+    assert.equal(salesCommunicationRows[0]?.contactId, "contact-existing");
+    assert.equal(salesCommunicationRows[0]?.opportunityId, "opportunity-notes");
+  });
+
+  it("updates existing Pipedrive lead notes instead of creating duplicates", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-notes",
+        externalType: "lead",
+        internalId: "opportunity-notes",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+    salesCommunicationRows = [
+      {
+        body: "Old note",
+        externalId: "pipedrive:note:88",
+        id: "sales-communication-existing",
+        opportunityId: "opportunity-notes",
+        summary: "Old note",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedriveLeadRecord({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listNotes: async () => ({
+          data: [
+            {
+              content: "<p>Updated survey note</p>",
+              id: 88,
+              lead_id: "lead-notes",
+              update_time: "2026-08-23T10:00:00Z",
+            },
+          ],
+          pagination: {
+            limit: 100,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+      lead: { id: "lead-notes", title: "Lead with updated note" },
+      now: new Date("2026-08-24T12:00:00Z"),
+    });
+
+    assert.equal(result.status, "linked_existing");
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(salesCommunicationRows[0]?.body, "Updated survey note");
+    assert.equal(salesCommunicationRows[0]?.summary, "Updated survey note");
+    assert.equal(
+      crmWriteLabels.filter((label) => label === "salesCommunication.create")
+        .length,
+      0,
+    );
+    assert.equal(
+      crmWriteLabels.filter((label) => label === "salesCommunication.update")
+        .length,
+      1,
+    );
   });
 
   it("extracts Pipedrive Lead Inbox UUIDs from URLs or raw IDs", () => {
