@@ -277,7 +277,10 @@ listing.
 organisation records into CRM company, contact, sales opportunity,
 communication and external-link rows. It converts Pipedrive lead note HTML to
 plain text and uses stable Pipedrive note IDs in `SalesCommunication.externalId`
-so repeated imports update existing CRM notes instead of duplicating them. The
+so repeated imports update existing CRM notes instead of duplicating them. Sale
+detail pages for Pipedrive-linked leads run a throttled post-load note refresh
+action that uses the same pull-only importer and refreshes the route only when
+CRM notes changed. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and

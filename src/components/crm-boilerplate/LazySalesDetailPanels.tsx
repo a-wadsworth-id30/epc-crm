@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { PipedriveLeadNotesAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadNotesAutoSync";
 import type { PipedriveLeadNotesSyncButtonProps } from "@/components/crm-boilerplate/PipedriveLeadNotesSyncButton";
 import type { SaleDeleteModalProps } from "@/components/crm-boilerplate/SaleDeleteModal";
 
@@ -45,6 +46,12 @@ export const SaleCallButton = dynamic(
 export const PipedriveLeadNotesSyncButton =
   dynamic<PipedriveLeadNotesSyncButtonProps>(
     () => import("@/components/crm-boilerplate/PipedriveLeadNotesSyncButton"),
+    { loading: () => null, ssr: false },
+  );
+
+export const PipedriveLeadNotesAutoSync =
+  dynamic<PipedriveLeadNotesAutoSyncProps>(
+    () => import("@/components/crm-boilerplate/PipedriveLeadNotesAutoSync"),
     { loading: () => null, ssr: false },
   );
 

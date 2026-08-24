@@ -74,6 +74,8 @@ export type SalesNoteActionState = {
   message: string;
 };
 
+const pipedriveSaleViewNoteSyncThrottleMs = 30_000;
+
 const saleSchema = z.object({
   title: z.string().trim().min(2, "Sale name is required."),
   stage: z.enum(salesStages).default("LEAD"),
@@ -381,6 +383,19 @@ function jsonObject(value: unknown) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isRecentTimestamp(
+  value: string | null,
+  now: Date,
+  thresholdMs: number,
+) {
+  if (!value) return false;
+
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+
+  return now.getTime() - timestamp < thresholdMs;
 }
 
 function parseValueCents(value: string | undefined) {
@@ -1710,6 +1725,105 @@ export async function syncPipedriveLeadNotesAction(
     ok: true,
     message: `Pulled ${result.notesRead} Pipedrive note${result.notesRead === 1 ? "" : "s"}. Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}.${warningMessage}`,
   };
+}
+
+export async function syncPipedriveLeadNotesOnSaleViewAction(
+  saleId: string,
+): Promise<{
+  ok: boolean;
+  reason:
+    | "missing-sale"
+    | "not-configured"
+    | "not-linked"
+    | "synced"
+    | "throttled";
+  refreshed: boolean;
+}> {
+  const user = await requireUser();
+  const normalizedSaleId = String(saleId ?? "").trim();
+
+  if (!normalizedSaleId) {
+    return { ok: false, reason: "missing-sale", refreshed: false };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityWhereWithAccess(user, { id: normalizedSaleId }),
+    select: { contactId: true, id: true },
+  });
+
+  if (!sale) {
+    return { ok: false, reason: "missing-sale", refreshed: false };
+  }
+
+  const leadLink = await prisma.externalRecordLink.findFirst({
+    where: {
+      externalType: "lead",
+      internalId: sale.id,
+      internalType: "salesOpportunity",
+      provider: "pipedrive",
+    },
+    select: { id: true, metadata: true },
+  });
+
+  if (!leadLink) {
+    return { ok: true, reason: "not-linked", refreshed: false };
+  }
+
+  const now = new Date();
+  const metadata = jsonObject(leadLink.metadata);
+  const lastAutoSyncAt = stringValue(
+    metadata.lastSaleViewPipedriveNoteSyncAt,
+  );
+
+  if (
+    isRecentTimestamp(lastAutoSyncAt, now, pipedriveSaleViewNoteSyncThrottleMs)
+  ) {
+    return { ok: true, reason: "throttled", refreshed: false };
+  }
+
+  const result = await syncPipedriveLeadNotesForOpportunity({
+    now,
+    opportunityId: sale.id,
+  });
+
+  await prisma.externalRecordLink.update({
+    where: { id: leadLink.id },
+    data: {
+      metadata: {
+        ...metadata,
+        lastSaleViewPipedriveNoteSyncAt: now.toISOString(),
+        lastSaleViewPipedriveNoteSyncChangedCount:
+          result.created + result.updated,
+        lastSaleViewPipedriveNoteSyncReadCount: result.notesRead,
+        lastSaleViewPipedriveNoteSyncStatus: result.status,
+        lastSaleViewPipedriveNoteSyncWarningCount: result.warnings.length,
+      } as Prisma.InputJsonObject,
+    },
+  });
+
+  if (result.status === "not_configured") {
+    return { ok: true, reason: "not-configured", refreshed: false };
+  }
+
+  if (result.status === "not_linked") {
+    return { ok: true, reason: "not-linked", refreshed: false };
+  }
+
+  const refreshed = result.created > 0 || result.updated > 0;
+
+  if (refreshed) {
+    await bumpRealtimeTopics([
+      realtimeTopics.saleConversation(sale.id),
+      sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+    ]);
+    revalidatePath(`/sales/${sale.id}`);
+    revalidatePath("/notes");
+    if (sale.contactId) {
+      revalidatePath(`/contacts/${sale.contactId}`);
+    }
+  }
+
+  return { ok: true, reason: "synced", refreshed };
 }
 
 export async function updateSaleLeadScopeAction(

@@ -158,7 +158,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   when the sale is linked to a Pipedrive lead. Scheduled/manual lead pulls also
   sweep updated Pipedrive notes through a separate
   `lastLeadNoteSyncAt` / `lastLeadNoteSyncNextStart` cursor so note changes
-  can auto-import even when the lead itself has not changed. The Pipedrive
+  can auto-import even when the lead itself has not changed. Linked sale detail
+  pages also trigger a throttled post-load CRM action that refreshes Pipedrive
+  lead notes and reloads the page only when CRM notes were created or updated,
+  providing a fallback when scheduled jobs or note webhooks are delayed. The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies
