@@ -21,6 +21,7 @@ import {
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
+import PipedriveLeadPullForm from "@/components/crm-boilerplate/PipedriveLeadPullForm";
 import PipedriveWebhookReceiverTestForm from "@/components/crm-boilerplate/PipedriveWebhookReceiverTestForm";
 import ProviderAuthResetForm from "@/components/crm-boilerplate/ProviderAuthResetForm";
 import ProviderConnectionTestForm from "@/components/crm-boilerplate/ProviderConnectionTestForm";
@@ -116,7 +117,6 @@ import {
   importSelectedPipedriveLeadsAction,
   previewPipedriveLeadsAction,
   pullPipedriveContactsAction,
-  pullPipedriveLeadsAction,
 } from "@/lib/actions/integrations";
 import { backgroundJobStaleCutoff } from "@/lib/maintenance/background-jobs";
 
@@ -655,16 +655,9 @@ export default async function IntegrationSettingsPage({
                   Preview latest leads
                 </button>
               </form>
-              <form action={pullPipedriveLeadsAction}>
-                <button
-                  type="submit"
-                  disabled={pipedriveCredentialSource === "missing"}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.05]"
-                >
-                  <Download className="h-4 w-4" aria-hidden="true" />
-                  Pull latest leads and deals
-                </button>
-              </form>
+              <PipedriveLeadPullForm
+                disabled={pipedriveCredentialSource === "missing"}
+              />
               <StatusBadge>
                 {recentPipedriveSyncLogs.length
                   ? recentPipedriveSyncLogs[0].status

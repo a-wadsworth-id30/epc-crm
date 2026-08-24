@@ -93,6 +93,15 @@ export type PipedriveWebhookReceiverTestState = {
   savedAt: number | null;
 };
 
+export type PipedriveLeadPullActionState = {
+  ok: boolean;
+  message: string;
+  recordsRead: number | null;
+  recordsWritten: number | null;
+  savedAt: number | null;
+  status: string | null;
+};
+
 type TwilioImportState = IntegrationActionState & {
   imported?: {
     addresses: number;
@@ -481,10 +490,48 @@ export async function updatePipedriveIntegrationAction(
   };
 }
 
-export async function pullPipedriveLeadsAction() {
+export async function pullPipedriveLeadsAction(
+  previousState: PipedriveLeadPullActionState,
+  formData: FormData,
+): Promise<PipedriveLeadPullActionState> {
+  void previousState;
+  void formData;
+
   const user = await requireAdmin();
-  await runPipedriveLeadPull({ actorId: user.id, trigger: "manual" });
-  revalidatePipedriveImportPaths();
+
+  try {
+    const result = await runPipedriveLeadPull({
+      actorId: user.id,
+      trigger: "manual",
+    });
+
+    revalidatePipedriveImportPaths();
+
+    return {
+      ok: result.status !== "ERROR",
+      message: result.message,
+      recordsRead: result.recordsRead,
+      recordsWritten: result.recordsWritten,
+      savedAt: Date.now(),
+      status: result.status,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Pipedrive lead and deal pull failed.";
+
+    revalidatePipedriveImportPaths();
+
+    return {
+      ok: false,
+      message,
+      recordsRead: null,
+      recordsWritten: null,
+      savedAt: Date.now(),
+      status: "ERROR",
+    };
+  }
 }
 
 export async function importPipedriveLeadByUrlAction(formData: FormData) {
