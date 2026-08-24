@@ -251,6 +251,13 @@ function formValue(formData: FormData, key: string) {
 
 class SalesActionError extends Error {}
 
+const salesOpportunityExternalLinkTypes = [
+  "salesOpportunity",
+  "SalesOpportunity",
+] as const;
+const deletedSalesOpportunityExternalLinkType = "salesOpportunityDeleted";
+const protectedSalesEntityType = "SalesOpportunity";
+
 function parseInlineSaleContact(formData: FormData) {
   const rawContactMode = formValue(formData, "contactMode");
 
@@ -708,6 +715,162 @@ export async function bulkUpdateSalesAction(
 
   if (!uniqueIds.length) {
     return { ok: false, message: "Select at least one sale." };
+  }
+
+  if (bulkAction === "delete-crm") {
+    if (user.role !== "ADMIN") {
+      return {
+        ok: false,
+        message: "Only admins can delete sales records.",
+      };
+    }
+
+    if (String(formData.get("confirmDelete") ?? "") !== "crm-only") {
+      return {
+        ok: false,
+        message: "Confirm this is a CRM-only delete.",
+      };
+    }
+
+    const opportunities = await prisma.salesOpportunity.findMany({
+      where: salesOpportunityWhereWithAccess(user, { id: { in: uniqueIds } }),
+      select: { companyId: true, contactId: true, id: true },
+    });
+
+    if (opportunities.length !== uniqueIds.length) {
+      return {
+        ok: false,
+        message: "Some selected sales were not found or are not available to you.",
+      };
+    }
+
+    const opportunityIds = opportunities.map((opportunity) => opportunity.id);
+    const protectedEntityWhere = {
+      entityId: { in: opportunityIds },
+      entityType: protectedSalesEntityType,
+    };
+    const [
+      fileAssetCount,
+      uploadRequestCount,
+      documentShareCount,
+      documentPortalCount,
+      signatureRequestCount,
+      conversionUploadCount,
+      openTaskCount,
+    ] = await Promise.all([
+      prisma.fileAsset.count({ where: protectedEntityWhere }),
+      prisma.customerUploadRequest.count({ where: protectedEntityWhere }),
+      prisma.customerDocumentShare.count({ where: protectedEntityWhere }),
+      prisma.customerDocumentPortal.count({ where: protectedEntityWhere }),
+      prisma.signatureRequest.count({ where: protectedEntityWhere }),
+      prisma.marketingConversionUpload.count({ where: protectedEntityWhere }),
+      prisma.task.count({
+        where: {
+          OR: opportunityIds.map((id) => ({
+            metadata: { equals: id, path: ["opportunityId"] },
+          })),
+          status: { not: "DONE" },
+        },
+      }),
+    ]);
+    const protectedRecordCount =
+      fileAssetCount +
+      uploadRequestCount +
+      documentShareCount +
+      documentPortalCount +
+      signatureRequestCount +
+      conversionUploadCount +
+      openTaskCount;
+
+    if (protectedRecordCount > 0) {
+      return {
+        ok: false,
+        message:
+          "Selected sales have linked CRM documents, customer links, signature requests, marketing uploads or open tasks. Remove those links before deleting.",
+      };
+    }
+
+    const pipedriveLeadLinks = await prisma.externalRecordLink.findMany({
+      where: {
+        externalType: "lead",
+        internalId: { in: opportunityIds },
+        internalType: { in: [...salesOpportunityExternalLinkTypes] },
+        provider: "pipedrive",
+      },
+      select: {
+        id: true,
+        internalId: true,
+        internalType: true,
+        metadata: true,
+      },
+    });
+    const tombstonedLinkIds = pipedriveLeadLinks.map((link) => link.id);
+    const deletedAt = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+      for (const link of pipedriveLeadLinks) {
+        await tx.externalRecordLink.update({
+          where: { id: link.id },
+          data: {
+            internalType: deletedSalesOpportunityExternalLinkType,
+            lastSeenAt: deletedAt,
+            metadata: {
+              ...jsonObject(link.metadata),
+              deletedFromCrm: true,
+              deletedFromCrmAt: deletedAt.toISOString(),
+              deletedFromCrmByUserId: user.id,
+              deletedInternalId: link.internalId,
+              deletedInternalType: link.internalType,
+            },
+          },
+        });
+      }
+
+      await tx.externalRecordLink.deleteMany({
+        where: {
+          ...(tombstonedLinkIds.length
+            ? { id: { notIn: tombstonedLinkIds } }
+            : {}),
+          internalId: { in: opportunityIds },
+          internalType: { in: [...salesOpportunityExternalLinkTypes] },
+        },
+      });
+
+      await tx.attributionRecord.updateMany({
+        where: { opportunityId: { in: opportunityIds } },
+        data: { opportunityId: null },
+      });
+
+      return tx.salesOpportunity.deleteMany({
+        where: salesOpportunityWhereWithAccess(user, { id: { in: opportunityIds } }),
+      });
+    });
+
+    revalidatePath("/sales");
+    revalidatePath("/marketing");
+    revalidatePath("/tasks");
+    revalidateHeaderNotifications();
+    const linkedContactIds = new Set(
+      opportunities
+        .map((opportunity) => opportunity.contactId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const linkedCompanyIds = new Set(
+      opportunities
+        .map((opportunity) => opportunity.companyId)
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    for (const contactId of linkedContactIds) {
+      revalidatePath(`/contacts/${contactId}`);
+    }
+    for (const companyId of linkedCompanyIds) {
+      revalidatePath(`/clients/${companyId}`);
+    }
+
+    return {
+      ok: true,
+      message: `Deleted ${result.count} CRM sale${result.count === 1 ? "" : "s"}. Pipedrive was not changed.`,
+    };
   }
 
   if (bulkAction === "stage") {

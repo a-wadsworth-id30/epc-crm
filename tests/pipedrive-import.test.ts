@@ -707,6 +707,47 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(crmWriteCalls, 0);
   });
 
+  it("skips CRM-deleted Pipedrive leads in preview", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-deleted",
+        externalType: "lead",
+        internalId: "opportunity-deleted",
+        internalType: "salesOpportunityDeleted",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.previewPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listLeads: async () => ({
+          data: [{ id: "lead-deleted", title: "Deleted lead" }],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.wouldCreate, 0);
+    assert.equal(result.linkedExisting, 0);
+    assert.equal(result.skipped, 1);
+    assert.equal(result.previews[0]?.status, "skipped");
+    assert.equal(result.previews[0]?.linkedOpportunityId, null);
+    assert.deepEqual(result.previews[0]?.warnings, [
+      "Pipedrive lead was previously deleted from CRM.",
+    ]);
+    assert.equal(crmWriteCalls, 0);
+  });
+
   it("imports selected lead IDs after reading each Pipedrive lead once", async () => {
     const getLeadCalls: string[] = [];
     externalRecordLinkRows = [
@@ -779,6 +820,51 @@ describe("Pipedrive lead import mapping", () => {
       },
     ]);
     assert.equal(crmWriteCalls, 2);
+  });
+
+  it("does not recreate CRM-deleted Pipedrive leads during selected import", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-deleted",
+        externalType: "lead",
+        internalId: "opportunity-deleted",
+        internalType: "salesOpportunityDeleted",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedriveLeadIds({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getLead: async (id) => ({ id, title: `Selected ${id}` }),
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+      },
+      leadIds: ["lead-deleted"],
+    });
+
+    assert.equal(result.status, "ok");
+    if (result.status !== "ok") throw new Error("Expected selected import");
+    assert.equal(result.requested, 1);
+    assert.equal(result.created, 0);
+    assert.equal(result.linkedExisting, 0);
+    assert.equal(result.skipped, 1);
+    assert.deepEqual(crmWriteLabels, ["externalRecordLink.upsert"]);
+    assert.deepEqual(pipedriveImport.pipedriveLeadImportMetadataRows(result.results), [
+      {
+        companyId: null,
+        contactId: null,
+        createdCompany: false,
+        createdContact: false,
+        createdOpportunity: false,
+        externalLeadId: "lead-deleted",
+        opportunityId: null,
+        status: "skipped",
+        title: "Selected lead-deleted",
+        warningCount: 1,
+        warnings: ["Pipedrive lead was previously deleted from CRM."],
+      },
+    ]);
   });
 
   it("maps Pipedrive lead, person and organisation fields into CRM records", () => {

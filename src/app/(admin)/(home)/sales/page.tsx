@@ -1370,6 +1370,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                         <div className="hidden xl:block">
                           <LazySalesTableFrame
                             key={`${currentPage}:${pageSize}:${activeStage}:${activeOwner}:${activeSort}:${queryInput}`}
+                            canDeleteSales={currentUser.role === "ADMIN"}
                             ownerOptions={saleOwnerOptions}
                             page={currentPage}
                             pageSize={pageSize}

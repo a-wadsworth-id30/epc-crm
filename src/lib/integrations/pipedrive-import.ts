@@ -37,6 +37,7 @@ const defaultPipedriveFullPersonPullMaxPages = 5;
 const pipedriveInternalTypes = {
   company: "company",
   contact: "contact",
+  deletedOpportunity: "salesOpportunityDeleted",
   opportunity: "salesOpportunity",
 } as const;
 
@@ -560,6 +561,22 @@ export async function previewPipedriveLeadRecord({
   const preview = previewFieldsFromMapping(mapping, crmMatches);
 
   if (
+    existingLeadLink?.internalType ===
+    pipedriveInternalTypes.deletedOpportunity
+  ) {
+    return {
+      ...preview,
+      externalLeadId,
+      linkedOpportunityId: null,
+      status: "skipped",
+      warnings: [
+        ...relatedRecords.warnings,
+        "Pipedrive lead was previously deleted from CRM.",
+      ],
+    };
+  }
+
+  if (
     existingLeadLink?.internalType === pipedriveInternalTypes.opportunity
   ) {
     return {
@@ -895,6 +912,31 @@ export async function importPipedriveLeadRecord({
       },
       select: { internalId: true, internalType: true },
     });
+
+    if (
+      existingLeadLink?.internalType ===
+      pipedriveInternalTypes.deletedOpportunity
+    ) {
+      await upsertExternalRecordLink(tx, {
+        externalId: externalLeadId,
+        externalType: pipedriveExternalTypes.lead,
+        integrationId,
+        internalId: existingLeadLink.internalId,
+        internalType: pipedriveInternalTypes.deletedOpportunity,
+        metadata: {
+          ...mapping.communication.metadata,
+          deletedFromCrm: true,
+          source: pipedriveImportSource,
+        },
+        now,
+      });
+
+      return skippedLeadResult({
+        externalLeadId,
+        title: mapping.opportunity.title,
+        warning: "Pipedrive lead was previously deleted from CRM.",
+      });
+    }
 
     if (
       existingLeadLink?.internalType === pipedriveInternalTypes.opportunity

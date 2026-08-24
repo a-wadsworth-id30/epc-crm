@@ -516,6 +516,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   cheaper search/sort updates. Sales detail workspace
   help uses the lazy tooltip wrapper so attribution and conversation guidance
   does not pull tooltip positioning code into first load.
+- Desktop Sales bulk selection includes an admin-only `Delete from CRM` action
+  with a confirmation step. It deletes local CRM sales only, blocks deletion
+  while linked CRM documents/customer links/signature requests/marketing
+  uploads/open tasks exist, detaches local attribution records, and converts
+  Pipedrive lead links into `salesOpportunityDeleted` tombstones so future
+  Pipedrive pull/webhook imports skip CRM-deleted leads. It must not write to
+  Pipedrive.
 - Settings > Users also keeps the page header and bulk-import entry point
   immediate while lazy-loading the interactive permissions table behind a
   route-local skeleton. Its add-user and import triggers avoid the shared

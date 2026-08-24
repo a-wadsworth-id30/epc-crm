@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
+import TrashBinIcon from "@/icons/trash.svg";
 import { bulkUpdateSalesAction } from "@/lib/actions/sales";
 
 type Option = {
@@ -19,6 +20,7 @@ type Option = {
 };
 
 export type SalesTableFrameProps = {
+  canDeleteSales: boolean;
   children: ReactNode;
   ownerOptions: Option[];
   page: number;
@@ -28,6 +30,7 @@ export type SalesTableFrameProps = {
 };
 
 export default function SalesTableFrame({
+  canDeleteSales,
   children,
   ownerOptions,
   page,
@@ -40,11 +43,19 @@ export default function SalesTableFrame({
   const searchParams = useSearchParams();
   const frameRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [activeBulkAction, setActiveBulkAction] = useState<
+    "delete" | "owner" | "stage" | null
+  >(null);
   const [stageState, stageAction, isStagePending] = useActionState(
     bulkUpdateSalesAction,
     { ok: false, message: "" },
   );
   const [ownerState, ownerAction, isOwnerPending] = useActionState(
+    bulkUpdateSalesAction,
+    { ok: false, message: "" },
+  );
+  const [deleteState, deleteAction, isDeletePending] = useActionState(
     bulkUpdateSalesAction,
     { ok: false, message: "" },
   );
@@ -97,15 +108,23 @@ export default function SalesTableFrame({
   }, [selectedIds]);
 
   useEffect(() => {
-    const latestState = stageState.ok ? stageState : ownerState.ok ? ownerState : null;
+    const latestState = stageState.ok
+      ? stageState
+      : ownerState.ok
+        ? ownerState
+        : deleteState.ok
+          ? deleteState
+          : null;
     if (!latestState) return;
 
     router.refresh();
-  }, [ownerState, router, stageState]);
+  }, [deleteState, ownerState, router, stageState]);
 
   const onSelectionChange = (event: ChangeEvent<HTMLDivElement>) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
+
+    setDeleteArmed(false);
 
     if (target.dataset.salesSelectAll !== undefined) {
       const pageIds = Array.from(
@@ -131,11 +150,25 @@ export default function SalesTableFrame({
     }
   };
 
-  const canBulkUpdate = selectedIds.length > 0 && !isStagePending && !isOwnerPending;
+  const canBulkUpdate =
+    selectedIds.length > 0 &&
+    !isStagePending &&
+    !isOwnerPending &&
+    !isDeletePending;
+  const activeState =
+    activeBulkAction === "stage"
+      ? stageState
+      : activeBulkAction === "owner"
+        ? ownerState
+        : activeBulkAction === "delete"
+          ? deleteState
+          : null;
   const compactSelectClassName =
     "h-8 min-w-28 rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300";
   const compactButtonClassName =
     "inline-flex h-8 items-center justify-center rounded-md border border-gray-300 px-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]";
+  const dangerButtonClassName =
+    "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-error-300 px-2 text-xs font-semibold text-error-700 transition hover:bg-error-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-error-800 dark:text-error-300 dark:hover:bg-error-500/10";
 
   return (
     <div ref={frameRef} onChange={onSelectionChange}>
@@ -148,7 +181,11 @@ export default function SalesTableFrame({
           </div>
 
           <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            <form action={stageAction} className="flex items-center gap-2">
+            <form
+              action={stageAction}
+              className="flex items-center gap-2"
+              onSubmit={() => setActiveBulkAction("stage")}
+            >
               <input type="hidden" name="ids" value={selectedValue} />
               <input type="hidden" name="bulkAction" value="stage" />
               <select name="salesPipelineStageId" className={compactSelectClassName}>
@@ -167,7 +204,11 @@ export default function SalesTableFrame({
               </button>
             </form>
 
-            <form action={ownerAction} className="flex items-center gap-2">
+            <form
+              action={ownerAction}
+              className="flex items-center gap-2"
+              onSubmit={() => setActiveBulkAction("owner")}
+            >
               <input type="hidden" name="ids" value={selectedValue} />
               <input type="hidden" name="bulkAction" value="owner" />
               <select name="ownerId" className={compactSelectClassName}>
@@ -186,13 +227,69 @@ export default function SalesTableFrame({
                 Assign
               </button>
             </form>
+
+            {canDeleteSales ? (
+              <div className="flex flex-col gap-1">
+                <form
+                  action={deleteAction}
+                  className="flex items-center gap-2"
+                  onSubmit={() => {
+                    setActiveBulkAction("delete");
+                    setDeleteArmed(false);
+                    setSelectedIds([]);
+                  }}
+                >
+                  <input type="hidden" name="ids" value={selectedValue} />
+                  <input type="hidden" name="bulkAction" value="delete-crm" />
+                  <input type="hidden" name="confirmDelete" value="crm-only" />
+                  {deleteArmed ? (
+                    <>
+                      <button
+                        type="submit"
+                        disabled={!canBulkUpdate}
+                        className={dangerButtonClassName}
+                      >
+                        <TrashBinIcon className="size-3.5" />
+                        Confirm delete
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDeletePending}
+                        className={compactButtonClassName}
+                        onClick={() => setDeleteArmed(false)}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!canBulkUpdate}
+                      className={dangerButtonClassName}
+                      onClick={() => {
+                        setActiveBulkAction("delete");
+                        setDeleteArmed(true);
+                      }}
+                    >
+                      <TrashBinIcon className="size-3.5" />
+                      Delete from CRM
+                    </button>
+                  )}
+                </form>
+                {deleteArmed ? (
+                  <p className="max-w-72 text-[11px] leading-4 text-error-600 dark:text-error-300">
+                    CRM only. Pipedrive is not changed.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
 
-      {stageState.message || ownerState.message ? (
+      {activeState?.message ? (
         <div className="border-b border-gray-100 px-4 py-2 dark:border-gray-800">
-          <ActionStateMessage state={stageState.message ? stageState : ownerState} />
+          <ActionStateMessage state={activeState} />
         </div>
       ) : null}
 
