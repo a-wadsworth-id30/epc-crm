@@ -37,6 +37,8 @@ const pipedriveExternalTypes = {
 } as const;
 const defaultPipedriveFullPullMaxPages = 5;
 const defaultPipedriveFullPersonPullMaxPages = 5;
+const pipedriveLeadUuidPattern =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 const pipedriveInternalTypes = {
   company: "company",
   contact: "contact",
@@ -584,7 +586,9 @@ export async function importPipedrivePersonPages({
     const pageParams: PipedriveListPersonsParams = { ...params };
     if (cursor) pageParams.cursor = cursor;
 
-    const page = await readClient.listPersons(latestPersonListParams(pageParams));
+    const page = await readClient.listPersons(
+      latestPersonListParams(pageParams),
+    );
     pagesRead += 1;
     recordsRead += page.data.length;
 
@@ -649,9 +653,8 @@ export async function previewPipedriveLeadPage({
     previews,
     skipped: previews.filter((preview) => preview.status === "skipped").length,
     status: "ok" as const,
-    wouldCreate: previews.filter(
-      (preview) => preview.status === "would_create",
-    ).length,
+    wouldCreate: previews.filter((preview) => preview.status === "would_create")
+      .length,
   };
 }
 
@@ -703,8 +706,7 @@ export async function previewPipedriveLeadRecord({
   const preview = previewFieldsFromMapping(mapping, crmMatches);
 
   if (
-    existingLeadLink?.internalType ===
-    pipedriveInternalTypes.deletedOpportunity
+    existingLeadLink?.internalType === pipedriveInternalTypes.deletedOpportunity
   ) {
     return {
       ...preview,
@@ -718,9 +720,7 @@ export async function previewPipedriveLeadRecord({
     };
   }
 
-  if (
-    existingLeadLink?.internalType === pipedriveInternalTypes.opportunity
-  ) {
+  if (existingLeadLink?.internalType === pipedriveInternalTypes.opportunity) {
     return {
       ...preview,
       externalLeadId,
@@ -806,6 +806,15 @@ export function pipedriveLeadImportMetadataRows(
       .slice(0, 3)
       .map((warning) => truncateText(warning, 240)),
   }));
+}
+
+export function pipedriveLeadIdFromInput(value: unknown) {
+  const input = cleanText(value);
+  if (!input) return null;
+
+  const match = input.match(pipedriveLeadUuidPattern);
+
+  return match?.[0].toLowerCase() ?? null;
 }
 
 export function pipedriveDealImportMetadataRows(
@@ -1151,9 +1160,7 @@ export async function importPipedriveDealRecord({
       });
     }
 
-    if (
-      existingDealLink?.internalType === pipedriveInternalTypes.opportunity
-    ) {
+    if (existingDealLink?.internalType === pipedriveInternalTypes.opportunity) {
       await upsertExternalRecordLink(tx, {
         externalId: externalDealId,
         externalType: pipedriveExternalTypes.deal,
@@ -1340,9 +1347,7 @@ export async function importPipedriveLeadRecord({
       });
     }
 
-    if (
-      existingLeadLink?.internalType === pipedriveInternalTypes.opportunity
-    ) {
+    if (existingLeadLink?.internalType === pipedriveInternalTypes.opportunity) {
       await upsertExternalRecordLink(tx, {
         externalId: externalLeadId,
         externalType: pipedriveExternalTypes.lead,
@@ -1471,9 +1476,7 @@ export function mapPipedriveLeadToCrm({
     leadRecord.organization ?? leadRecord.org_id ?? leadRecord.organization_id,
   ) as PipedriveOrganization;
   const personRecord = objectValue(person) as PipedrivePerson;
-  const organizationRecord = objectValue(
-    organization,
-  ) as PipedriveOrganization;
+  const organizationRecord = objectValue(organization) as PipedriveOrganization;
   const resolvedPerson = Object.keys(personRecord).length
     ? personRecord
     : embeddedPerson;
@@ -1599,9 +1602,7 @@ export function mapPipedriveDealToCrm({
     dealRecord.organization ?? dealRecord.org_id ?? dealRecord.organization_id,
   ) as PipedriveOrganization;
   const personRecord = objectValue(person) as PipedrivePerson;
-  const organizationRecord = objectValue(
-    organization,
-  ) as PipedriveOrganization;
+  const organizationRecord = objectValue(organization) as PipedriveOrganization;
   const resolvedPerson = Object.keys(personRecord).length
     ? personRecord
     : embeddedPerson;
@@ -1735,11 +1736,11 @@ export function mapPipedrivePersonToCrm({
 }): PipedriveLeadImportMapping {
   const personRecord = objectValue(person);
   const embeddedOrganization = objectValue(
-    personRecord.organization ?? personRecord.org_id ?? personRecord.organization_id,
+    personRecord.organization ??
+      personRecord.org_id ??
+      personRecord.organization_id,
   ) as PipedriveOrganization;
-  const organizationRecord = objectValue(
-    organization,
-  ) as PipedriveOrganization;
+  const organizationRecord = objectValue(organization) as PipedriveOrganization;
   const resolvedOrganization = Object.keys(organizationRecord).length
     ? organizationRecord
     : embeddedOrganization;
@@ -1795,18 +1796,19 @@ export function mapPipedrivePersonToCrm({
           name: companyName,
         }
       : null,
-    contact: externalPersonId || email || phone
-      ? {
-          companyName,
-          email,
-          firstName: contactName.firstName,
-          lastName: contactName.lastName,
-          leadSource: source,
-          phone,
-          phoneNormalized: normalizedContactPhone(phone),
-          role: "Pipedrive contact",
-        }
-      : null,
+    contact:
+      externalPersonId || email || phone
+        ? {
+            companyName,
+            email,
+            firstName: contactName.firstName,
+            lastName: contactName.lastName,
+            leadSource: source,
+            phone,
+            phoneNormalized: normalizedContactPhone(phone),
+            role: "Pipedrive contact",
+          }
+        : null,
     externalIds: {
       deal: null,
       lead: null,
@@ -2321,7 +2323,11 @@ function contactIdentityMatches(
   if (contact.phoneNormalized) {
     matches.push(
       { phoneNormalized: contact.phoneNormalized },
-      { additionalPhones: { some: { phoneNormalized: contact.phoneNormalized } } },
+      {
+        additionalPhones: {
+          some: { phoneNormalized: contact.phoneNormalized },
+        },
+      },
     );
   }
 
@@ -2575,8 +2581,7 @@ function opportunityValue(value: unknown, workspaceCurrency: string) {
 
   return {
     currency,
-    valueCents:
-      amount !== null && amount >= 0 ? Math.round(amount * 100) : 0,
+    valueCents: amount !== null && amount >= 0 ? Math.round(amount * 100) : 0,
   };
 }
 
@@ -2639,7 +2644,10 @@ function contactNameParts({
     };
   }
 
-  const emailName = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  const emailName = email
+    ?.split("@")[0]
+    ?.replace(/[._-]+/g, " ")
+    .trim();
   if (emailName) {
     return {
       firstName: truncateText(emailName.split(/\s+/)[0] || "Pipedrive", 160),

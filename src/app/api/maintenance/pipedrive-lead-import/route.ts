@@ -3,12 +3,16 @@ import {
   readPipedriveLeadPullPreview,
   readPipedriveLeadPullReadiness,
   runPipedriveApprovedLeadPageImport,
+  runPipedriveDirectLeadImport,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
 
 type PipedriveLeadPullResult = Awaited<ReturnType<typeof runPipedriveLeadPull>>;
 type PipedriveApprovedLeadPageImportResult = Awaited<
   ReturnType<typeof runPipedriveApprovedLeadPageImport>
+>;
+type PipedriveDirectLeadImportResult = Awaited<
+  ReturnType<typeof runPipedriveDirectLeadImport>
 >;
 
 export const dynamic = "force-dynamic";
@@ -53,6 +57,12 @@ function integerQuery(
   if (!Number.isFinite(value)) return null;
 
   return Math.min(Math.max(Math.trunc(value), min), max);
+}
+
+function textQuery(request: Request, key: string) {
+  const value = new URL(request.url).searchParams.get(key)?.trim() ?? "";
+
+  return value || null;
 }
 
 function jobTrigger(request: Request) {
@@ -125,6 +135,24 @@ async function pipedriveLeadImportResponse(request: Request, dryRun: boolean) {
     );
   }
 
+  if (booleanQuery(request, "directLeadImport")) {
+    const result = await runPipedriveDirectLeadImport({
+      leadInput:
+        textQuery(request, "leadId") ?? textQuery(request, "leadUrl") ?? null,
+      recordBackgroundJob: true,
+      trigger: jobTrigger(request),
+    });
+
+    return NextResponse.json(
+      {
+        directLeadImport: true,
+        ok: result.status !== "ERROR",
+        result: compactDirectLeadImportResult(result),
+      },
+      { status: result.status === "ERROR" ? 502 : 200 },
+    );
+  }
+
   const result = await runPipedriveLeadPull({
     recordBackgroundJob: true,
     trigger: jobTrigger(request),
@@ -174,6 +202,25 @@ function compactApprovedPageImportResult(
     pullOnly: true,
     recordsRead: result.recordsRead,
     recordsWritten: result.recordsWritten,
+    skipped: result.skipped,
+    status: result.status,
+    warningCount: result.warningCount,
+  };
+}
+
+function compactDirectLeadImportResult(
+  result: PipedriveDirectLeadImportResult,
+) {
+  return {
+    connectionId: result.connectionId,
+    created: result.created,
+    linkedExisting: result.linkedExisting,
+    message: result.message,
+    mode: result.mode,
+    pullOnly: true,
+    recordsRead: result.recordsRead,
+    recordsWritten: result.recordsWritten,
+    requestedLeadId: result.requestedLeadId,
     skipped: result.skipped,
     status: result.status,
     warningCount: result.warningCount,

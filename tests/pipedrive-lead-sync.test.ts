@@ -88,6 +88,13 @@ before(async () => {
           importPagesArgs = args;
           return importPagesResult;
         },
+        pipedriveLeadIdFromInput: (value: unknown) => {
+          const match = String(value ?? "").match(
+            /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
+          );
+
+          return match?.[0].toLowerCase() ?? null;
+        },
         pipedriveDealImportMetadataRows: () => [
           {
             externalDealId: "deal-1",
@@ -546,6 +553,93 @@ describe("Pipedrive scheduled lead sync", () => {
       "lead-2",
     ]);
     assert.equal(transactionWrites.length, 2);
+  });
+
+  it("imports a direct Pipedrive Lead Inbox URL by UUID", async () => {
+    const leadId = "3f214f00-9f9f-11f1-982e-6d2d290071c8";
+    importLeadIdsResult = {
+      created: 1,
+      linkedExisting: 0,
+      requested: 1,
+      results: [
+        {
+          created: {
+            company: true,
+            contact: true,
+            opportunity: true,
+          },
+          externalLeadId: leadId,
+          status: "created",
+          warnings: [],
+        },
+      ],
+      skipped: 0,
+      status: "ok",
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveDirectLeadImport({
+      actorId: "user-1",
+      leadInput: `https://epcimprovements.pipedrive.com/leads/inbox/${leadId}`,
+      recordBackgroundJob: false,
+    });
+
+    assert.equal(result.status, "SUCCESS");
+    assert.equal(result.mode, "direct");
+    assert.equal(result.requestedLeadId, leadId);
+    assert.equal(result.recordsRead, 1);
+    assert.equal(result.recordsWritten, 1);
+    assert.deepEqual((importLeadIdsArgs as { leadIds?: unknown }).leadIds, [
+      leadId,
+    ]);
+
+    const syncWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "sync.create",
+    ) as {
+      args: {
+        data: {
+          metadata: Record<string, unknown>;
+          syncType: string;
+        };
+      };
+    };
+    assert.equal(syncWrite.args.data.syncType, "lead-import-direct");
+    assert.equal(syncWrite.args.data.metadata.requestedLeadId, leadId);
+
+    const updateWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "integration.update",
+    ) as { args: { data: { config: Record<string, unknown> } } };
+    assert.equal(
+      updateWrite.args.data.config.lastFullLeadSyncAt,
+      "2026-08-20T08:00:00.000Z",
+    );
+    assert.equal(typeof updateWrite.args.data.config.lastLeadSyncAt, "string");
+  });
+
+  it("does not read Pipedrive when direct import input has no lead UUID", async () => {
+    const result = await pipedriveLeadSync.runPipedriveDirectLeadImport({
+      actorId: "user-1",
+      leadInput: "https://epcimprovements.pipedrive.com/deal/13059",
+      recordBackgroundJob: false,
+    });
+
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.requestedLeadId, null);
+    assert.equal(importLeadIdsArgs, null);
+    assert.equal(transactionWrites.length, 0);
+    assert.equal(syncCreates.length, 1);
+    assert.equal(
+      (syncCreates[0] as { args: { data: { syncType: string } } }).args.data
+        .syncType,
+      "lead-import-direct",
+    );
+    assert.equal(
+      (
+        syncCreates[0] as {
+          args: { data: { metadata: Record<string, unknown> } };
+        }
+      ).args.data.metadata.reason,
+      "invalid-lead-id",
+    );
   });
 });
 

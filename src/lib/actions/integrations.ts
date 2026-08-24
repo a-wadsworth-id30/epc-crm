@@ -40,6 +40,7 @@ import {
 } from "@/lib/integrations/pipedrive-import";
 import {
   ensurePipedriveIntegrationConnection,
+  runPipedriveDirectLeadImport,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
 import { runPipedriveContactPull } from "@/lib/integrations/pipedrive-contact-sync";
@@ -454,11 +455,9 @@ export async function updatePipedriveIntegrationAction(
     metadata: {
       apiBaseUrl: config.apiBaseUrl,
       defaultLeadSource: config.defaultLeadSource,
-      fullDealSyncContinuationPreserved:
-        "lastFullDealSyncNextCursor" in config,
+      fullDealSyncContinuationPreserved: "lastFullDealSyncNextCursor" in config,
       fullDealSyncStatePreserved: "lastFullDealSyncAt" in config,
-      fullLeadSyncContinuationPreserved:
-        "lastFullLeadSyncNextStart" in config,
+      fullLeadSyncContinuationPreserved: "lastFullLeadSyncNextStart" in config,
       fullLeadSyncStatePreserved: "lastFullLeadSyncAt" in config,
       fullPersonSyncContinuationPreserved:
         "lastFullPersonSyncNextCursor" in config,
@@ -485,6 +484,18 @@ export async function updatePipedriveIntegrationAction(
 export async function pullPipedriveLeadsAction() {
   const user = await requireAdmin();
   await runPipedriveLeadPull({ actorId: user.id, trigger: "manual" });
+  revalidatePipedriveImportPaths();
+}
+
+export async function importPipedriveLeadByUrlAction(formData: FormData) {
+  const user = await requireAdmin();
+  const leadInput = formData.get("pipedriveLeadInput");
+
+  await runPipedriveDirectLeadImport({
+    actorId: user.id,
+    leadInput: typeof leadInput === "string" ? leadInput : null,
+    trigger: "manual-direct",
+  });
   revalidatePipedriveImportPaths();
 }
 
@@ -667,8 +678,7 @@ export async function previewPipedriveLeadsAction() {
     const finishedAt = new Date();
     const recordsRead = result.status === "ok" ? result.page.data.length : 0;
     const wouldCreate = result.status === "ok" ? result.wouldCreate : 0;
-    const linkedExisting =
-      result.status === "ok" ? result.linkedExisting : 0;
+    const linkedExisting = result.status === "ok" ? result.linkedExisting : 0;
     const skipped = result.skipped;
     const warningCount =
       result.status === "ok"
@@ -785,9 +795,7 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
     },
   });
   const importablePreviewLeadIds =
-    pipedriveImportablePreviewLeadIdsFromMetadata(
-      latestPreviewLog?.metadata,
-    );
+    pipedriveImportablePreviewLeadIdsFromMetadata(latestPreviewLog?.metadata);
   const importablePreviewLeadIdSet = new Set(importablePreviewLeadIds);
   const approvedLeadIds = selectedLeadIds.filter((leadId) =>
     importablePreviewLeadIdSet.has(leadId),
@@ -866,8 +874,7 @@ export async function importSelectedPipedriveLeadsAction(formData: FormData) {
     const finishedAt = new Date();
     const recordsRead = result.status === "ok" ? result.requested : 0;
     const recordsWritten = result.status === "ok" ? result.created : 0;
-    const linkedExisting =
-      result.status === "ok" ? result.linkedExisting : 0;
+    const linkedExisting = result.status === "ok" ? result.linkedExisting : 0;
     const skipped = result.skipped;
     const warningCount =
       result.status === "ok"

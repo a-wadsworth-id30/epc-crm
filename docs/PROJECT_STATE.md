@@ -163,7 +163,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   preview lead IDs from Pipedrive with GET requests and imports only those CRM
   records after the server confirms the imported IDs were marked would-create
   in the latest preview; submitted IDs outside that latest would-create set are
-  rejected and logged. Full pull imports a bounded batch of up to five
+  rejected and logged. Admins can also paste a Pipedrive Lead Inbox URL or UUID
+  into the settings page to import that one lead directly by Pipedrive GET
+  request when a known lead did not appear in the preview/list cursor path; this
+  direct import writes CRM records and sync history only, does not advance the
+  full-pull cursor and never writes back to Pipedrive. Full pull imports a
+  bounded batch of up to five
   Pipedrive lead pages and five open-deal pages per manual or scheduled run.
   The first full pull reads latest leads and open deals; later full pulls use
   dedicated `lastFullLeadSyncAt` and `lastFullDealSyncAt` cursors as Pipedrive
@@ -209,7 +214,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `approvedImport=1` on `POST` only; it re-previews the requested page, requires
   the caller's `expectedWouldCreate` count to still match, caps the batch at 10
   would-create leads, aborts on preview warnings/skips, and imports only those
-  exact lead IDs into CRM. The CRM also exposes an authenticated pull-only
+  exact lead IDs into CRM. The protected lead route also supports
+  `directLeadImport=1` on `POST` with `leadId` or `leadUrl` so operations can
+  recover a specific Lead Inbox UUID through the same pull-only CRM importer.
+  The CRM also exposes an authenticated pull-only
   Pipedrive webhook receiver at `/api/webhooks/pipedrive`. It supports
   Pipedrive v1/v2 lead, deal and person create/change webhook payloads by
   reading the current lead/deal/person back from Pipedrive with GET requests

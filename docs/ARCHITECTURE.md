@@ -258,6 +258,12 @@ Main files:
 - `/api/webhooks/pipedrive`
 - `/settings/integrations/pipedrive`
 
+Pipedrive is intentionally pull-only. Lead imports use Pipedrive GET requests
+and create or link CRM contacts, companies and sales opportunities only. The
+lead sync service supports preview-page import, bounded full pulls, webhook
+read-back imports and direct single-lead imports from a Lead Inbox URL/UUID;
+none of these paths write back to Pipedrive.
+
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
 also exposes a server-side read-only client that uses Pipedrive's `x-api-token`

@@ -14,6 +14,7 @@ import {
   importPipedriveLeadIds,
   importPipedriveLeadPages,
   pipedriveDealImportMetadataRows,
+  pipedriveLeadIdFromInput,
   pipedriveLeadImportMetadataRows,
   previewPipedriveLeadPage,
 } from "@/lib/integrations/pipedrive-import";
@@ -38,6 +39,7 @@ export type PipedriveLeadPullResult = {
   mode:
     | "already_running"
     | "continuation"
+    | "direct"
     | "incremental"
     | "initial"
     | "not_configured"
@@ -71,6 +73,13 @@ type PipedriveApprovedLeadPageImportOptions = {
   trigger?: string;
 };
 
+type PipedriveDirectLeadImportOptions = {
+  actorId?: string | null;
+  leadInput?: string | null;
+  recordBackgroundJob?: boolean;
+  trigger?: string;
+};
+
 export type PipedriveLeadPullPreviewResult = {
   connected: boolean;
   connectionId: string | null;
@@ -96,6 +105,10 @@ export type PipedriveApprovedLeadPageImportResult = PipedriveLeadPullResult & {
   expectedWouldCreate: number | null;
   pageLimit: number;
   pageStart: number | null;
+};
+
+export type PipedriveDirectLeadImportResult = PipedriveLeadPullResult & {
+  requestedLeadId: string | null;
 };
 
 export async function runPipedriveLeadPull({
@@ -309,6 +322,113 @@ export async function runPipedriveApprovedLeadPageImport({
   }
 }
 
+export async function runPipedriveDirectLeadImport({
+  actorId = null,
+  leadInput = null,
+  recordBackgroundJob = true,
+  trigger = "manual-direct",
+}: PipedriveDirectLeadImportOptions = {}): Promise<PipedriveDirectLeadImportResult> {
+  const normalizedTrigger = syncTrigger(trigger);
+  const requestedLeadId = pipedriveLeadIdFromInput(leadInput);
+  const jobRun = recordBackgroundJob
+    ? await startBackgroundJobRun({
+        actorId,
+        dryRun: false,
+        jobName: pipedriveLeadImportJobName,
+        jobType: "integration-sync",
+        metadata: {
+          mode: "direct-lead",
+          provider: pipedriveProvider,
+          pullOnly: true,
+          requestedLeadId,
+        },
+        trigger: normalizedTrigger,
+      })
+    : null;
+
+  try {
+    const activeRun = await currentPipedriveLeadPullRun(jobRun);
+
+    if (activeRun) {
+      const result = await skipPipedriveDirectLeadImport({
+        activeRun,
+        actorId,
+        requestedLeadId,
+        trigger: normalizedTrigger,
+      });
+
+      await completeBackgroundJobRun(jobRun, {
+        message: result.message,
+        metadata: {
+          mode: "direct-lead",
+          provider: pipedriveProvider,
+          pullOnly: true,
+          reason: "already-running",
+          requestedLeadId,
+          trigger: normalizedTrigger,
+        },
+        recordsRead: 0,
+        recordsWritten: 0,
+        status: BackgroundJobRunStatus.WARNING,
+        summary: {
+          activeRunId: activeRun.id,
+          activeRunStartedAt: activeRun.startedAt.toISOString(),
+          activeRunTrigger: activeRun.trigger,
+          mode: result.mode,
+          requestedLeadId,
+        },
+      });
+
+      return result;
+    }
+
+    const result = await writePipedriveDirectLeadImport({
+      actorId,
+      requestedLeadId,
+      trigger: normalizedTrigger,
+    });
+
+    await completeBackgroundJobRun(jobRun, {
+      message: result.message,
+      metadata: {
+        mode: "direct-lead",
+        provider: pipedriveProvider,
+        pullOnly: true,
+        requestedLeadId,
+        trigger: normalizedTrigger,
+      },
+      recordsRead: result.recordsRead,
+      recordsWritten: result.recordsWritten,
+      status: backgroundStatus(result.status),
+      summary: {
+        created: result.created,
+        linkedExisting: result.linkedExisting,
+        mode: result.mode,
+        requestedLeadId,
+        skipped: result.skipped,
+        warningCount: result.warningCount,
+      },
+    });
+
+    return result;
+  } catch (error) {
+    await failBackgroundJobRun(jobRun, {
+      error,
+      message:
+        "Pipedrive direct lead import failed before sync history could be written.",
+      metadata: {
+        mode: "direct-lead",
+        provider: pipedriveProvider,
+        pullOnly: true,
+        requestedLeadId,
+        trigger: normalizedTrigger,
+      },
+    });
+
+    throw error;
+  }
+}
+
 export async function readPipedriveLeadPullReadiness() {
   const [connection, client] = await Promise.all([
     prisma.integrationConnection.findUnique({
@@ -332,7 +452,7 @@ export async function readPipedriveLeadPullReadiness() {
     connectionId: connection?.id ?? null,
     hasContinuationCursor: Boolean(
       storedConfig?.lastFullDealSyncNextCursor ||
-        typeof storedConfig?.lastFullLeadSyncNextStart === "number",
+      typeof storedConfig?.lastFullLeadSyncNextStart === "number",
     ),
     lastFullDealSyncAt: storedConfig?.lastFullDealSyncAt ?? null,
     lastFullDealSyncNextCursor:
@@ -560,8 +680,7 @@ async function writePipedriveLeadPull({
     const dealSkipped = dealResult.skipped;
     const dealMoreAvailable =
       dealResult.status === "ok" ? dealResult.moreAvailable : false;
-    const dealPagesRead =
-      dealResult.status === "ok" ? dealResult.pagesRead : 0;
+    const dealPagesRead = dealResult.status === "ok" ? dealResult.pagesRead : 0;
     const recordsRead = leadRecordsRead + dealRecordsRead;
     const recordsWritten = leadRecordsWritten + dealRecordsWritten;
     const linkedExisting = leadLinkedExisting + dealLinkedExisting;
@@ -625,8 +744,7 @@ async function writePipedriveLeadPull({
       dealLinkedExisting,
       dealMaxPages: dealResult.status === "ok" ? dealResult.maxPages : null,
       dealMoreAvailable,
-      dealNextCursor:
-        dealResult.status === "ok" ? dealResult.nextCursor : null,
+      dealNextCursor: dealResult.status === "ok" ? dealResult.nextCursor : null,
       dealPagesRead,
       dealRecordsRead,
       dealSkipped,
@@ -1092,6 +1210,256 @@ async function writePipedriveApprovedLeadPageImport({
   }
 }
 
+async function writePipedriveDirectLeadImport({
+  actorId,
+  requestedLeadId,
+  trigger,
+}: {
+  actorId: string | null;
+  requestedLeadId: string | null;
+  trigger: string;
+}): Promise<PipedriveDirectLeadImportResult> {
+  const startedAt = new Date();
+  const connection = await ensurePipedriveIntegrationConnection();
+
+  if (!requestedLeadId) {
+    const finishedAt = new Date();
+    const message =
+      "Direct Pipedrive lead import did not run because the submitted value did not contain a valid Lead Inbox UUID.";
+    const metadata: Prisma.InputJsonObject = {
+      actorId,
+      mode: "direct-lead",
+      pullOnly: true,
+      reason: "invalid-lead-id",
+      requestedLeadId,
+      trigger,
+    };
+
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt,
+        integrationId: connection.id,
+        message,
+        metadata,
+        provider: pipedriveProvider,
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "WARNING",
+        syncType: "lead-import-direct",
+      },
+    });
+
+    return {
+      connectionId: connection.id,
+      created: 0,
+      linkedExisting: 0,
+      message,
+      metadata,
+      mode: "direct",
+      moreAvailable: false,
+      pagesRead: 0,
+      recordsRead: 0,
+      recordsWritten: 0,
+      requestedLeadId,
+      skipped: 0,
+      status: "WARNING",
+      warningCount: 1,
+    };
+  }
+
+  const client = await getPipedriveReadOnlyClient();
+
+  if (!client) {
+    const finishedAt = new Date();
+    const message =
+      "Pipedrive API credentials are missing, so direct lead import could not run.";
+    const metadata: Prisma.InputJsonObject = {
+      actorId,
+      mode: "direct-lead",
+      pullOnly: true,
+      reason: "missing-credentials",
+      requestedLeadId,
+      trigger,
+    };
+
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt,
+        integrationId: connection.id,
+        message,
+        metadata,
+        provider: pipedriveProvider,
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "WARNING",
+        syncType: "lead-import-direct",
+      },
+    });
+
+    return {
+      connectionId: connection.id,
+      created: 0,
+      linkedExisting: 0,
+      message,
+      metadata,
+      mode: "not_configured",
+      moreAvailable: false,
+      pagesRead: 0,
+      recordsRead: 0,
+      recordsWritten: 0,
+      requestedLeadId,
+      skipped: 1,
+      status: "WARNING",
+      warningCount: 1,
+    };
+  }
+
+  try {
+    const importResult = await importPipedriveLeadIds({
+      client,
+      leadIds: [requestedLeadId],
+    });
+    const finishedAt = new Date();
+    const recordsRead =
+      importResult.status === "ok" ? importResult.requested : 0;
+    const recordsWritten =
+      importResult.status === "ok" ? importResult.created : 0;
+    const linkedExisting =
+      importResult.status === "ok" ? importResult.linkedExisting : 0;
+    const skipped = importResult.skipped;
+    const warningCount =
+      importResult.status === "ok"
+        ? importResult.results.reduce(
+            (count, leadResult) => count + leadResult.warnings.length,
+            0,
+          )
+        : 1;
+    const status: PipedriveLeadPullStatus =
+      warningCount > 0 || skipped > 0 || recordsRead === 0
+        ? "WARNING"
+        : "SUCCESS";
+    const message =
+      recordsRead === 0
+        ? "Direct lead import found no Pipedrive lead to import."
+        : `Direct lead import: ${recordsWritten} created, ${linkedExisting} already linked, ${skipped} skipped from ${recordsRead} requested Pipedrive lead.`;
+    const importRows =
+      importResult.status === "ok"
+        ? pipedriveLeadImportMetadataRows(importResult.results)
+        : [];
+    const existingConfig = pipedriveStoredConfigSchema.safeParse(
+      connection.config ?? {},
+    );
+    const metadata: Prisma.InputJsonObject = {
+      actorId,
+      created: recordsWritten,
+      imports: importRows,
+      linkedExisting,
+      mode: "direct-lead",
+      pullOnly: true,
+      requestedLeadId,
+      skipped,
+      trigger,
+      warningCount,
+    };
+    const writes: Prisma.PrismaPromise<unknown>[] = [
+      prisma.marketingIntegrationSyncLog.create({
+        data: {
+          finishedAt,
+          integrationId: connection.id,
+          message,
+          metadata,
+          provider: pipedriveProvider,
+          recordsRead,
+          recordsWritten,
+          startedAt,
+          status,
+          syncType: "lead-import-direct",
+        },
+      }),
+    ];
+
+    if (existingConfig.success) {
+      writes.push(
+        prisma.integrationConnection.update({
+          where: { provider: pipedriveProvider },
+          data: {
+            config: {
+              ...existingConfig.data,
+              lastLeadSyncAt: finishedAt.toISOString(),
+            },
+          },
+        }),
+      );
+    }
+
+    await prisma.$transaction(writes);
+
+    return {
+      connectionId: connection.id,
+      created: recordsWritten,
+      linkedExisting,
+      message,
+      metadata,
+      mode: "direct",
+      moreAvailable: false,
+      pagesRead: recordsRead ? 1 : 0,
+      recordsRead,
+      recordsWritten,
+      requestedLeadId,
+      skipped,
+      status,
+      warningCount,
+    };
+  } catch (error) {
+    const finishedAt = new Date();
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Pipedrive direct lead import failed.";
+    const metadata: Prisma.InputJsonObject = {
+      actorId,
+      mode: "direct-lead",
+      pullOnly: true,
+      requestedLeadId,
+      trigger,
+    };
+
+    await prisma.marketingIntegrationSyncLog.create({
+      data: {
+        finishedAt,
+        integrationId: connection.id,
+        message,
+        metadata,
+        provider: pipedriveProvider,
+        recordsRead: 0,
+        recordsWritten: 0,
+        startedAt,
+        status: "ERROR",
+        syncType: "lead-import-direct",
+      },
+    });
+
+    return {
+      connectionId: connection.id,
+      created: 0,
+      linkedExisting: 0,
+      message,
+      metadata,
+      mode: "direct",
+      moreAvailable: false,
+      pagesRead: 0,
+      recordsRead: 0,
+      recordsWritten: 0,
+      requestedLeadId,
+      skipped: 0,
+      status: "ERROR",
+      warningCount: 1,
+    };
+  }
+}
+
 async function currentPipedriveLeadPullRun(
   jobRun: { id: string; startedAt: Date } | null,
 ): Promise<ActivePipedriveLeadPullRun | null> {
@@ -1246,6 +1614,67 @@ async function skipPipedriveApprovedLeadPageImport({
     status: "WARNING",
     warningCount: 1,
   } satisfies PipedriveApprovedLeadPageImportResult;
+}
+
+async function skipPipedriveDirectLeadImport({
+  actorId,
+  activeRun,
+  requestedLeadId,
+  trigger,
+}: {
+  actorId: string | null;
+  activeRun: ActivePipedriveLeadPullRun;
+  requestedLeadId: string | null;
+  trigger: string;
+}) {
+  const startedAt = new Date();
+  const connection = await ensurePipedriveIntegrationConnection();
+  const finishedAt = new Date();
+  const message =
+    "Pipedrive direct lead import skipped because another pull is already running.";
+  const metadata: Prisma.InputJsonObject = {
+    actorId,
+    activeRunId: activeRun.id,
+    activeRunStartedAt: activeRun.startedAt.toISOString(),
+    activeRunTrigger: activeRun.trigger,
+    mode: "direct-lead",
+    pullOnly: true,
+    reason: "already-running",
+    requestedLeadId,
+    trigger,
+  };
+
+  await prisma.marketingIntegrationSyncLog.create({
+    data: {
+      finishedAt,
+      integrationId: connection.id,
+      message,
+      metadata,
+      provider: pipedriveProvider,
+      recordsRead: 0,
+      recordsWritten: 0,
+      startedAt,
+      status: "WARNING",
+      syncType: "lead-import-direct",
+    },
+  });
+
+  return {
+    connectionId: connection.id,
+    created: 0,
+    linkedExisting: 0,
+    message,
+    metadata,
+    mode: "already_running",
+    moreAvailable: false,
+    pagesRead: 0,
+    recordsRead: 0,
+    recordsWritten: 0,
+    requestedLeadId,
+    skipped: 0,
+    status: "WARNING",
+    warningCount: 1,
+  } satisfies PipedriveDirectLeadImportResult;
 }
 
 function backgroundStatus(status: PipedriveLeadPullStatus) {
