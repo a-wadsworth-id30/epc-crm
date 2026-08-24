@@ -148,11 +148,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   server-side read-only Pipedrive client for current-user, user, lead, deal,
   person and organisation GET requests, plus cursor-paginated Pipedrive v2 deal
   and person listing. `src/lib/integrations/pipedrive-import.ts` maps Pipedrive
-  leads and deals into CRM contacts, companies, opportunities, communications
+  leads into CRM contacts, companies, opportunities, communications
   and `ExternalRecordLink` rows, and also maps standalone Pipedrive persons into
   CRM contacts and companies without creating opportunities. The Pipedrive
   settings page has admin-only preview and selected import actions for
-  Pipedrive leads, a manual pull that imports bounded lead and open-deal batches,
+  Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies
   would-create, already-linked and skipped leads and
   records sync-history feedback with sanitized table rows for the latest
@@ -169,20 +169,19 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   direct import writes CRM records and sync history only, does not advance the
   full-pull cursor and never writes back to Pipedrive. Full pull imports a
   bounded batch of up to five
-  Pipedrive lead pages and five open-deal pages per manual or scheduled run.
-  The first full pull reads latest leads and open deals; later full pulls use
-  dedicated `lastFullLeadSyncAt` and `lastFullDealSyncAt` cursors as Pipedrive
+  Pipedrive lead pages per manual or scheduled run.
+  The first full pull reads latest leads; later full pulls use
+  the dedicated `lastFullLeadSyncAt` cursor as Pipedrive
   `updated_since`, and lead pulls also sweep the latest one lead page without a
   cursor before incremental reads so very recent Lead Inbox records are retried
   even if a previous cursor/list pass missed them. If a run hits the five-page
   cap while Pipedrive still has
-  more pages, CRM stores `lastFullLeadSyncNextStart` for leads or
-  `lastFullDealSyncNextCursor` for deals and the next full pull resumes from
-  that provider continuation. CRM advances each full-pull cursor and clears its
+  more pages, CRM stores `lastFullLeadSyncNextStart` and the next full pull resumes from
+  that provider continuation. CRM advances the full-pull cursor and clears its
   continuation only when Pipedrive reports no more pages are available, so
-  capped runs cannot skip unprocessed leads or deals. Selected import updates
+  capped runs cannot skip unprocessed leads. Selected import updates
   the general `lastLeadSyncAt` timestamp but does not advance the full-pull
-  cursor. Lead and deal import paths record the result in sync history with
+  cursor. Lead import paths record the result in sync history with
   sanitized per-record import detail rows showing created, already-linked and
   skipped outcomes. Separate contact pulls use `lastFullPersonSyncAt` and
   `lastFullPersonSyncNextCursor` so standalone person imports cannot disturb
@@ -206,8 +205,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Scheduled Pipedrive functions use the first valid HTTPS CRM base URL from
   `APP_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Netlify `URL` or `DEPLOY_URL`, and log
   aggregate-only import summaries so scheduled activity can be verified without
-  exposing Pipedrive lead/deal/contact details. The
-  Pipedrive settings page shows lead/deal and contact scheduled pull state,
+  exposing Pipedrive lead/contact details. The
+  Pipedrive settings page shows lead and contact scheduled pull state,
   credential source, full-pull cursor, saved continuation and active overlap
   guard state for admins. The protected lead maintenance route also supports
   `preview=1`, which
@@ -222,13 +221,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   recover a specific Lead Inbox UUID through the same pull-only CRM importer.
   The CRM also exposes an authenticated pull-only
   Pipedrive webhook receiver at `/api/webhooks/pipedrive`. It supports
-  Pipedrive v1/v2 lead, deal and person create/change webhook payloads by
-  reading the current lead/deal/person back from Pipedrive with GET requests
-  and importing it into CRM; delete and organisation webhooks are recorded but
-  do not delete or mutate Pipedrive data. A protected
+  Pipedrive v1/v2 lead and person create/change webhook payloads by
+  reading the current lead/person back from Pipedrive with GET requests
+  and importing it into CRM. Deal, delete and organisation webhooks are recorded
+  but do not import, delete or mutate CRM records and do not mutate Pipedrive
+  data. A protected
   `/api/maintenance/pipedrive-webhook-registration` route can preview required
   Pipedrive webhook subscriptions with GET-only provider checks. It only
-  creates missing Pipedrive v2 deal/lead/person create/change webhooks when
+  creates missing Pipedrive v2 lead/person create/change webhooks when
   called with `POST`, `apply=1` and the explicit provider-write approval token
   `pipedrive-webhook-registration`. Creating provider webhooks is a Pipedrive
   write operation. A protected `/api/maintenance/pipedrive-validation` route
@@ -238,7 +238,7 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Settings > Integrations > Pipedrive also renders the same sanitized
   operational validation summary for admins, including recent webhook activity
   from CRM sync logs so delivery can be confirmed after Pipedrive sends a real
-  event. Webhook activity separates real Pipedrive lead/deal/person deliveries
+  event. Webhook activity separates real Pipedrive lead/person deliveries
   from CRM receiver self-tests so a successful receiver test cannot be mistaken
   for provider delivery. The Pipedrive settings page includes a receiver self-test
   that posts a no-op authenticated payload through `/api/webhooks/pipedrive`,

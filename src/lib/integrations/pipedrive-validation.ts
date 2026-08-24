@@ -108,7 +108,6 @@ const defaultValidationLimit = 15;
 const maxValidationLimit = 50;
 const pipedriveWebhookSyncTypes = [
   "contact-import-webhook",
-  "deal-import-webhook",
   "lead-import-webhook",
   "webhook",
   "webhook-receiver-test",

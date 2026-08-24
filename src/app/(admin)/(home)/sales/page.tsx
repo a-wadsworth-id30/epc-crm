@@ -26,10 +26,7 @@ import {
   calculateAttributionConfidence,
   type AttributionConfidenceResult,
 } from "@/lib/marketing/attribution-confidence";
-import {
-  salesOpportunityAccessWhere,
-  salesOpportunityWhereWithAccess,
-} from "@/lib/crm-resource-access";
+import { salesOpportunityWhereWithAccess } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
 import {
   parseSalesDefaults,
@@ -75,6 +72,7 @@ import {
 } from "@/lib/navigation/pagination";
 import { getCrmSettings } from "@/lib/settings";
 import { parseWorkspaceDefaults } from "@/lib/workspace-defaults";
+import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 
 export const metadata: Metadata = {
   title: "Sales Pipeline | iD30 CRM",
@@ -88,6 +86,8 @@ const salesPageSizes = [10, 20, 25, 50, 100] as const;
 const defaultSalesPageSize = 20;
 const kanbanOpportunityLimit = 240;
 const openKanbanTaskStatuses = ["TODO", "IN_PROGRESS", "BLOCKED"] as const;
+const pipedriveDealExternalType = "deal";
+const salesOpportunityExternalType = "salesOpportunity";
 
 function formatMoney(
   valueCents: number,
@@ -429,6 +429,25 @@ function contains(term: string) {
   return { contains: term, mode: "insensitive" as const };
 }
 
+function combineSalesOpportunityWhere(
+  ...filters: Array<Prisma.SalesOpportunityWhereInput | undefined>
+): Prisma.SalesOpportunityWhereInput | undefined {
+  const activeFilters = filters.filter(
+    (filter) => filter && Object.keys(filter).length > 0,
+  ) as Prisma.SalesOpportunityWhereInput[];
+
+  if (!activeFilters.length) return undefined;
+  if (activeFilters.length === 1) return activeFilters[0];
+
+  return { AND: activeFilters };
+}
+
+function excludeOpportunityIdsWhere(
+  ids: string[],
+): Prisma.SalesOpportunityWhereInput | undefined {
+  return ids.length ? { id: { notIn: ids } } : undefined;
+}
+
 function salesSearchWhere(query: string): Prisma.SalesOpportunityWhereInput | undefined {
   const terms = query.split(/\s+/).map((term) => term.trim()).filter(Boolean);
 
@@ -568,11 +587,6 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const activeView = parseSalesPipelineView(params.view);
   const ownerFilterInput = singleParam(params.owner) ?? "all";
   const requestedPage = parsePositiveInteger(params.page, 1);
-  const opportunityAccessWhere = salesOpportunityAccessWhere(currentUser);
-  const communicationAccessWhere: Prisma.SalesCommunicationWhereInput =
-    currentUser.role === "ADMIN"
-      ? {}
-      : { opportunity: opportunityAccessWhere };
   const pageSize = parsePageSize({
     fallback: resolveInterfacePageSizeFallback(
       interfaceDefaults,
@@ -582,6 +596,37 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     options: salesPageSizes,
     value: params.pageSize,
   });
+  const pipedriveDealOpportunityLinks =
+    await prisma.externalRecordLink.findMany({
+      where: {
+        externalType: pipedriveDealExternalType,
+        internalType: salesOpportunityExternalType,
+        provider: pipedriveProvider,
+      },
+      select: { internalId: true },
+    });
+  const pipedriveDealOpportunityIds = Array.from(
+    new Set(
+      pipedriveDealOpportunityLinks
+        .map((link) => link.internalId.trim())
+        .filter(Boolean),
+    ),
+  );
+  const pipedriveDealExclusionWhere = excludeOpportunityIdsWhere(
+    pipedriveDealOpportunityIds,
+  );
+  const visibleOpportunityWhere = (
+    where?: Prisma.SalesOpportunityWhereInput,
+  ) =>
+    salesOpportunityWhereWithAccess(
+      currentUser,
+      combineSalesOpportunityWhere(pipedriveDealExclusionWhere, where),
+    );
+  const visibleAccessWhere = visibleOpportunityWhere();
+  const communicationAccessWhere: Prisma.SalesCommunicationWhereInput =
+    pipedriveDealExclusionWhere || currentUser.role !== "ADMIN"
+      ? { opportunity: visibleAccessWhere }
+      : {};
   const [
     activeUsers,
     pipelineStages,
@@ -611,39 +656,39 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       },
     }),
     prisma.salesOpportunity.count({
-      where: salesOpportunityWhereWithAccess(currentUser),
+      where: visibleAccessWhere,
     }),
     prisma.salesOpportunity.count({
-      where: salesOpportunityWhereWithAccess(currentUser, { ownerId: null }),
+      where: visibleOpportunityWhere({ ownerId: null }),
     }),
     prisma.salesOpportunity.groupBy({
       by: ["stage"],
-      where: salesOpportunityWhereWithAccess(currentUser, {
+      where: visibleOpportunityWhere({
         salesPipelineStageId: null,
       }),
       _count: { _all: true },
     }),
     prisma.salesOpportunity.groupBy({
       by: ["salesPipelineStageId"],
-      where: salesOpportunityWhereWithAccess(currentUser),
+      where: visibleAccessWhere,
       _count: { _all: true },
     }),
     prisma.salesOpportunity.groupBy({
       by: ["currency", "probability"],
-      where: salesOpportunityWhereWithAccess(currentUser, {
+      where: visibleOpportunityWhere({
         stage: { in: openStages as SalesStage[] },
       }),
       _count: { _all: true },
       _sum: { valueCents: true },
     }),
     prisma.salesOpportunity.aggregate({
-      where: salesOpportunityWhereWithAccess(currentUser, { stage: "WON" }),
+      where: visibleOpportunityWhere({ stage: "WON" }),
       _count: { _all: true },
       _sum: { valueCents: true },
     }),
     prisma.salesCommunication.count({ where: communicationAccessWhere }),
     prisma.salesOpportunity.findFirst({
-      where: salesOpportunityWhereWithAccess(currentUser),
+      where: visibleAccessWhere,
       orderBy: { createdAt: "desc" },
       select: { currency: true },
     }),
@@ -771,7 +816,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   });
   const opportunityWhere = salesOpportunityWhereWithAccess(
     currentUser,
-    activeSalesWhere,
+    combineSalesOpportunityWhere(pipedriveDealExclusionWhere, activeSalesWhere),
   );
   const filteredOpportunityCount = activeSalesWhere
     ? await prisma.salesOpportunity.count({ where: opportunityWhere })

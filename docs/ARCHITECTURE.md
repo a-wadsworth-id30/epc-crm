@@ -114,8 +114,8 @@ Core Prisma models are in `prisma/schema.prisma`.
   `FileAsset` rows, not OAuth tokens or raw provider payloads.
 - `IntegrationConnection`: provider config and encrypted credentials.
 - `ExternalRecordLink`: provider-neutral mapping from external records to CRM
-  record IDs. Pipedrive import will use it to make lead/deal/person/organisation
-  sync retries idempotent without trusting names or email addresses as primary
+  record IDs. Pipedrive import uses it to make lead/person/organisation sync
+  retries idempotent without trusting names or email addresses as primary
   provider identity.
 - `BackgroundJobRun`: compact operational job history for maintenance,
   marketing rollup refreshes, conversion uploads and ad spend imports. It
@@ -270,13 +270,13 @@ The first Pipedrive phase covers connection storage, readiness display and the
 also exposes a server-side read-only client that uses Pipedrive's `x-api-token`
 header for GET-only current-user, user, lead, deal, person and organisation
 requests, plus cursor-paginated Pipedrive v2 deal and person listing.
-`src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/deal/person/
+`src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/person/
 organisation records into CRM company, contact, sales opportunity,
 communication and external-link rows. The same import module also maps
 standalone Pipedrive persons into CRM contacts and companies without creating
 sales opportunities. The Pipedrive settings page can manually preview and
 selected-import Pipedrive leads, can manually or automatically pull bounded
-Pipedrive lead and open-deal batches, and can separately pull Pipedrive persons
+Pipedrive lead batches, and can separately pull Pipedrive persons
 into CRM contacts. These actions write sync-history rows with
 read/write counts. Preview classifies would-create, already-linked and skipped
 leads without creating CRM records and stores sanitized preview rows for the
@@ -287,16 +287,15 @@ Selected import fetches checked preview lead IDs by GET and imports only those
 CRM records after validating server-side that imported IDs were marked
 would-create in the latest preview; submitted IDs outside that latest
 would-create set are rejected and logged. Full pull creates CRM records and
-external-link rows for bounded batches of up to five Pipedrive lead pages and
-five open-deal pages per manual or scheduled run. After the first full pull,
-CRM stores `lastFullLeadSyncAt` and `lastFullDealSyncAt` separately from the
-general `lastLeadSyncAt` timestamp and sends them to Pipedrive as
-`updated_since` on later full pulls so selected imports cannot move full-pull
-cursors past unselected leads or deals. Cursors advance only when Pipedrive
-reports no more pages are available; capped runs store
-`lastFullLeadSyncNextStart` for leads or `lastFullDealSyncNextCursor` for deals
-and the next full pull resumes from that provider continuation before the
-cursor advances. Import runs store sanitized per-record outcome rows in
+external-link rows for bounded batches of up to five Pipedrive lead pages per
+manual or scheduled run. After the first full pull, CRM stores
+`lastFullLeadSyncAt` separately from the general `lastLeadSyncAt` timestamp and
+sends it to Pipedrive as `updated_since` on later full pulls so selected
+imports cannot move the full-pull cursor past unselected leads. Cursors advance
+only when Pipedrive reports no more pages are available; capped runs store
+`lastFullLeadSyncNextStart` and the next full pull resumes from that provider
+continuation before the cursor advances. Import runs store sanitized
+per-record outcome rows in
 sync-history metadata so admins can review created, already-linked and skipped
 records without storing raw Pipedrive payloads. The
 manual pull action and protected `/api/maintenance/pipedrive-lead-import`
@@ -324,13 +323,13 @@ they cannot move or skip the lead full-pull cursor. Scheduled Pipedrive
 functions resolve the first valid HTTPS CRM base URL from app/Netlify URL
 environment variables and emit aggregate-only import logs for operational
 verification without exposing provider payload data. The authenticated
-`/api/webhooks/pipedrive` receiver supports Pipedrive v1/v2 lead, deal and
-person create/change payloads by reading the current record back from Pipedrive
-using GET requests before importing into CRM. Delete and organization webhook
-events are recorded in sync history but do not delete CRM records and do not
-write to Pipedrive. The protected
+`/api/webhooks/pipedrive` receiver supports Pipedrive v1/v2 lead and person
+create/change payloads by reading the current record back from Pipedrive using
+GET requests before importing into CRM. Deal, delete and organization webhook
+events are recorded in sync history but do not import, delete or mutate CRM
+records and do not write to Pipedrive. The protected
 `/api/maintenance/pipedrive-webhook-registration` route previews required
-Pipedrive v2 deal/lead/person create/change webhook subscriptions with GET-only
+Pipedrive v2 lead/person create/change webhook subscriptions with GET-only
 provider checks. It only creates missing provider webhooks when called with
 `POST`, `apply=1` and the explicit provider-write approval token
 `pipedrive-webhook-registration`; creating Pipedrive webhooks is still a
@@ -343,7 +342,7 @@ Pipedrive can run a CRM-only receiver self-test through the authenticated
 webhook route; it records `webhook-receiver-test` without reading or writing
 Pipedrive data. Validation reports real provider deliveries separately from
 receiver self-tests so admins can see whether Pipedrive itself has sent a
-lead/deal/person webhook event.
+lead/person webhook event.
 Pipedrive integration work is pull-only by default. Do not push, update,
 delete, create, merge or otherwise mutate Pipedrive data unless Adam explicitly
 approves that specific write-back operation.

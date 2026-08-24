@@ -10,10 +10,8 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
-  importPipedriveDealPages,
   importPipedriveLeadIds,
   importPipedriveLeadPages,
-  pipedriveDealImportMetadataRows,
   pipedriveLeadIdFromInput,
   pipedriveLeadImportMetadataRows,
   previewPipedriveLeadPage,
@@ -450,15 +448,10 @@ export async function readPipedriveLeadPullReadiness() {
   return {
     connected: Boolean(client),
     connectionId: connection?.id ?? null,
-    hasContinuationCursor: Boolean(
-      storedConfig?.lastFullDealSyncNextCursor ||
+    hasContinuationCursor:
       typeof storedConfig?.lastFullLeadSyncNextStart === "number",
-    ),
-    lastFullDealSyncAt: storedConfig?.lastFullDealSyncAt ?? null,
-    lastFullDealSyncNextCursor:
-      typeof storedConfig?.lastFullDealSyncNextCursor === "string"
-        ? storedConfig.lastFullDealSyncNextCursor
-        : null,
+    lastFullDealSyncAt: null,
+    lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: storedConfig?.lastFullLeadSyncAt ?? null,
     lastFullLeadSyncNextStart:
       typeof storedConfig?.lastFullLeadSyncNextStart === "number"
@@ -648,8 +641,6 @@ async function writePipedriveLeadPull({
   try {
     const start = client.lastFullLeadSyncNextStart;
     const updatedSince = client.lastFullLeadSyncAt;
-    const dealCursor = client.lastFullDealSyncNextCursor;
-    const dealUpdatedSince = client.lastFullDealSyncAt;
     const leadSweepResult =
       start === null && updatedSince
         ? await importPipedriveLeadPages({
@@ -661,14 +652,6 @@ async function writePipedriveLeadPull({
     const result = await importPipedriveLeadPages({
       client,
       params: { limit: 50, start, updatedSince },
-    });
-    const dealResult = await importPipedriveDealPages({
-      client,
-      params: {
-        cursor: dealCursor,
-        limit: 50,
-        updatedSince: dealUpdatedSince,
-      },
     });
     const finishedAt = new Date();
     const leadSweepRecordsRead =
@@ -698,22 +681,12 @@ async function writePipedriveLeadPull({
       leadSweepResult?.status === "ok" ? leadSweepResult.pagesRead : 0;
     const leadCursorPagesRead = result.status === "ok" ? result.pagesRead : 0;
     const leadPagesRead = leadSweepPagesRead + leadCursorPagesRead;
-    const dealRecordsRead =
-      dealResult.status === "ok" ? dealResult.recordsRead : 0;
-    const dealRecordsWritten =
-      dealResult.status === "ok" ? dealResult.created : 0;
-    const dealLinkedExisting =
-      dealResult.status === "ok" ? dealResult.linkedExisting : 0;
-    const dealSkipped = dealResult.skipped;
-    const dealMoreAvailable =
-      dealResult.status === "ok" ? dealResult.moreAvailable : false;
-    const dealPagesRead = dealResult.status === "ok" ? dealResult.pagesRead : 0;
-    const recordsRead = leadRecordsRead + dealRecordsRead;
-    const recordsWritten = leadRecordsWritten + dealRecordsWritten;
-    const linkedExisting = leadLinkedExisting + dealLinkedExisting;
-    const skipped = leadSkipped + dealSkipped;
-    const moreAvailable = leadMoreAvailable || dealMoreAvailable;
-    const pagesRead = leadPagesRead + dealPagesRead;
+    const recordsRead = leadRecordsRead;
+    const recordsWritten = leadRecordsWritten;
+    const linkedExisting = leadLinkedExisting;
+    const skipped = leadSkipped;
+    const moreAvailable = leadMoreAvailable;
+    const pagesRead = leadPagesRead;
     const warningCount =
       (leadSweepResult
         ? leadSweepResult.status === "ok"
@@ -728,22 +701,15 @@ async function writePipedriveLeadPull({
             (count, leadResult) => count + leadResult.warnings.length,
             0,
           )
-        : 1) +
-      (dealResult.status === "ok"
-        ? dealResult.results.reduce(
-            (count, dealImportResult) =>
-              count + dealImportResult.warnings.length,
-            0,
-          )
         : 1);
     const status: PipedriveLeadPullStatus =
       warningCount > 0 || skipped > 0 || recordsRead === 0 || moreAvailable
         ? "WARNING"
         : "SUCCESS";
     const mode =
-      start !== null || dealCursor
+      start !== null
         ? "continuation"
-        : updatedSince || dealUpdatedSince
+        : updatedSince
           ? "incremental"
           : "initial";
     const importMode =
@@ -760,8 +726,8 @@ async function writePipedriveLeadPull({
       : "";
     const message =
       recordsRead === 0
-        ? `${importMode}: no Pipedrive leads or deals were available to import.`
-        : `${importMode}: leads ${leadRecordsWritten} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}; deals ${dealRecordsWritten} created, ${dealLinkedExisting} already linked, ${dealSkipped} skipped from ${dealRecordsRead}${pageSummary}.${moreAvailableSummary}`;
+        ? `${importMode}: no Pipedrive leads were available to import.`
+        : `${importMode}: ${leadRecordsWritten} lead${leadRecordsWritten === 1 ? "" : "s"} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}${pageSummary}.${moreAvailableSummary}`;
     const importRows = [
       ...(leadSweepResult?.status === "ok"
         ? pipedriveLeadImportMetadataRows(leadSweepResult.results)
@@ -770,26 +736,13 @@ async function writePipedriveLeadPull({
         ? pipedriveLeadImportMetadataRows(result.results)
         : []),
     ];
-    const dealImportRows =
-      dealResult.status === "ok"
-        ? pipedriveDealImportMetadataRows(dealResult.results)
-        : [];
     const existingConfig = pipedriveStoredConfigSchema.safeParse(
       connection.config ?? {},
     );
     const metadata: Prisma.InputJsonObject = {
       actorId,
       created: recordsWritten,
-      dealCreated: dealRecordsWritten,
-      dealImports: dealImportRows,
-      dealLinkedExisting,
-      dealMaxPages: dealResult.status === "ok" ? dealResult.maxPages : null,
-      dealMoreAvailable,
-      dealNextCursor: dealResult.status === "ok" ? dealResult.nextCursor : null,
-      dealPagesRead,
-      dealRecordsRead,
-      dealSkipped,
-      dealUpdatedSince,
+      dealImportEnabled: false,
       imports: importRows,
       leadCreated: leadRecordsWritten,
       leadCursorCreated: leadCursorRecordsWritten,
@@ -851,15 +804,6 @@ async function writePipedriveLeadPull({
         } else {
           nextConfig.lastFullLeadSyncAt = finishedAtIso;
           nextConfig.lastFullLeadSyncNextStart = null;
-        }
-      }
-
-      if (dealResult.status === "ok") {
-        if (dealResult.moreAvailable && dealResult.nextCursor) {
-          nextConfig.lastFullDealSyncNextCursor = dealResult.nextCursor;
-        } else {
-          nextConfig.lastFullDealSyncAt = finishedAtIso;
-          nextConfig.lastFullDealSyncNextCursor = null;
         }
       }
 

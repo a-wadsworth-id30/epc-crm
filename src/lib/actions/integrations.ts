@@ -519,7 +519,7 @@ export async function pullPipedriveLeadsAction(
     const message =
       error instanceof Error
         ? error.message
-        : "Pipedrive lead and deal pull failed.";
+        : "Pipedrive lead pull failed.";
 
     revalidatePipedriveImportPaths();
 

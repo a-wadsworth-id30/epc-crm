@@ -127,7 +127,7 @@ Optional:
 - `PIPEDRIVE_LEAD_IMPORT_SECRET`: shared secret for
   `/api/maintenance/pipedrive-lead-import`; `CRON_SECRET` can be used instead.
 - `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED`: set to `true` to let the scheduled
-  Netlify function pull Pipedrive leads and open deals into CRM.
+  Netlify function pull Pipedrive leads into CRM.
 - `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN`: set to `true` to let the scheduled
   function verify readiness without importing CRM lead records.
 - `PIPEDRIVE_CONTACT_IMPORT_SECRET`: shared secret for
@@ -292,9 +292,9 @@ The repository also includes
 disabled unless `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` is set. When enabled,
 it calls `/api/maintenance/pipedrive-lead-import` with
 `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` and runs the same pull-only,
-bounded Pipedrive lead and open-deal import helper as the manual settings
+bounded Pipedrive lead import helper as the manual settings
 action. Start with `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
-credentials/readiness before allowing CRM lead/deal records to be imported. API
+credentials/readiness before allowing CRM lead records to be imported. API
 and scheduled runs write compact
 background job history visible in Settings > System. Manual and scheduled
 Pipedrive pulls use that background job state as an overlap guard: if a
@@ -305,7 +305,7 @@ ignored by the guard. This does not write back to Pipedrive.
 Scheduled Pipedrive functions choose the first valid HTTPS CRM base URL from
 `APP_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Netlify `URL` or `DEPLOY_URL`, and log
 aggregate-only status/count summaries so Netlify function logs can confirm that
-the schedule ran without exposing Pipedrive lead/deal/contact details.
+the schedule ran without exposing Pipedrive lead/contact details.
 For live verification before the first CRM import, call the protected
 maintenance route with `preview=1&limit=10`; the route performs Pipedrive
 GET-only reads and CRM matching, then returns aggregate counts only with
@@ -314,7 +314,7 @@ For the first controlled CRM import, use `POST` with
 `approvedImport=1&start=<previewNextStart>&limit=10&expectedWouldCreate=<count>`.
 The route re-previews the page, aborts if the expected count changed or if
 warnings/skips appear, and imports only those would-create lead IDs into CRM.
-Settings > Integrations > Pipedrive shows lead/deal schedule, dry-run, cursor,
+Settings > Integrations > Pipedrive shows lead schedule, dry-run, cursor,
 continuation and active guard state for production verification.
 
 The repository also includes
@@ -331,17 +331,17 @@ use a separate `pipedrive.contact_import` background job and separate
 This does not write back to Pipedrive.
 
 `/api/webhooks/pipedrive` accepts authenticated Pipedrive v1/v2 webhook
-payloads for lead, deal and person create/change events. Configure Pipedrive
+payloads for lead and person create/change events. Configure Pipedrive
 webhook HTTP Basic Auth with `PIPEDRIVE_WEBHOOK_BASIC_USER` and
 `PIPEDRIVE_WEBHOOK_SECRET`, or use the lead import/cron secret fallback. The
-CRM receiver reads the current lead/deal/person from Pipedrive with GET
-requests before importing into CRM. Delete and organisation webhooks are
-recorded but do not delete CRM records and do not write to Pipedrive.
+CRM receiver reads the current lead/person from Pipedrive with GET
+requests before importing into CRM. Deal, delete and organisation webhooks are
+recorded but do not import, delete or mutate CRM records and do not write to
+Pipedrive.
 
 Use `/api/maintenance/pipedrive-webhook-registration` with `GET` to preview the
-six required Pipedrive v2 webhook subscriptions without performing provider
-writes: deal create, deal change, lead create, lead change, person create and
-person change. To create missing webhooks, call `POST` with `apply=1` and
+four required Pipedrive v2 webhook subscriptions without performing provider
+writes: lead create, lead change, person create and person change. To create missing webhooks, call `POST` with `apply=1` and
 `providerWriteApproval=pipedrive-webhook-registration`. Registering or changing
 webhooks inside Pipedrive is a provider write operation and must be approved by
 Adam before it is performed.

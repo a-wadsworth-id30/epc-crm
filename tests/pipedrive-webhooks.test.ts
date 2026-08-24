@@ -211,7 +211,7 @@ describe("Pipedrive webhook receiver self-test", () => {
     });
   });
 
-  it("imports supported deal webhook events through pull-only reads", async () => {
+  it("records deal webhook events without importing them into CRM sales", async () => {
     readClient = { defaultLeadSource: "Pipedrive" };
 
     const result = await pipedriveWebhooks.processPipedriveWebhook({
@@ -226,34 +226,28 @@ describe("Pipedrive webhook receiver self-test", () => {
       },
     });
 
-    assert.equal(result.status, "SUCCESS");
-    assert.equal(result.syncType, "deal-import-webhook");
-    assert.equal(result.recordsRead, 1);
-    assert.equal(result.recordsWritten, 1);
-    assert.equal(readClientCalls, 1);
-    assert.equal(dealImportCalls, 1);
+    assert.equal(result.status, "WARNING");
+    assert.equal(result.syncType, "webhook");
+    assert.equal(result.recordsRead, 0);
+    assert.equal(result.recordsWritten, 0);
+    assert.equal(readClientCalls, 0);
+    assert.equal(dealImportCalls, 0);
     assert.equal(leadImportCalls, 0);
     assert.equal(personImportCalls, 0);
-    assert.deepEqual((dealImportArgs as { dealIds?: unknown }).dealIds, [
-      13059,
-    ]);
+    assert.equal(dealImportArgs, null);
     assert.equal(syncLogWrites.length, 1);
-    assert.equal(syncLogWrites[0]!.data.syncType, "deal-import-webhook");
+    assert.equal(syncLogWrites[0]!.data.syncType, "webhook");
     assert.equal(syncLogWrites[0]!.data.metadata.entity, "deal");
-    assert.deepEqual(syncLogWrites[0]!.data.metadata.imports, [
-      {
-        externalDealId: "13059",
-        status: "created",
-        warningCount: 0,
-        warnings: [],
-      },
-    ]);
+    assert.equal(
+      syncLogWrites[0]!.data.metadata.reason,
+      "deal-import-disabled",
+    );
     assert.deepEqual(completedJobs[0]!.result.summary, {
       action: "create",
       entity: "deal",
       entityId: "13059",
-      syncType: "deal-import-webhook",
-      warningCount: 0,
+      syncType: "webhook",
+      warningCount: 1,
     });
   });
 });

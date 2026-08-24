@@ -383,7 +383,7 @@ describe("Pipedrive scheduled lead sync", () => {
     assert.equal(syncWrite.args.data.metadata.leadCursorRecordsRead, 1);
   });
 
-  it("saves a deal pagination continuation without advancing the deal cursor", async () => {
+  it("does not import Pipedrive deals during lead pulls", async () => {
     connectionConfig = {
       ...connectionConfig,
       lastFullDealSyncAt: "2026-08-19T08:00:00.000Z",
@@ -423,12 +423,8 @@ describe("Pipedrive scheduled lead sync", () => {
     });
 
     assert.equal(result.status, "WARNING");
-    assert.equal(result.moreAvailable, true);
-    assert.deepEqual((importDealPagesArgs as { params?: unknown }).params, {
-      cursor: null,
-      limit: 50,
-      updatedSince: "2026-08-19T08:00:00.000Z",
-    });
+    assert.equal(result.moreAvailable, false);
+    assert.equal(importDealPagesArgs, null);
 
     const updateWrite = transactionWrites.find(
       (write) => (write as { type?: string }).type === "integration.update",
@@ -440,7 +436,7 @@ describe("Pipedrive scheduled lead sync", () => {
     );
     assert.equal(
       updateWrite.args.data.config.lastFullDealSyncNextCursor,
-      "deal-cursor-2",
+      null,
     );
   });
 

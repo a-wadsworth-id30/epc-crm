@@ -78,16 +78,6 @@ const desiredWebhookEvents: Array<{
 }> = [
   {
     action: "create",
-    name: "EPC CRM Pipedrive deal created import",
-    object: "deal",
-  },
-  {
-    action: "change",
-    name: "EPC CRM Pipedrive deal changed import",
-    object: "deal",
-  },
-  {
-    action: "create",
     name: "EPC CRM Pipedrive lead created import",
     object: "lead",
   },

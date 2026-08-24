@@ -29,6 +29,8 @@ import {
 } from "@/lib/integrations/pipedrive";
 
 const pipedriveImportSource = "pipedrive-import";
+const pipedriveDealImportDisabledWarning =
+  "Pipedrive deal imports are disabled. CRM imports Pipedrive Lead Inbox records only.";
 const pipedriveExternalTypes = {
   deal: "deal",
   lead: "lead",
@@ -434,21 +436,14 @@ export async function importPipedriveDealPage({
     };
   }
 
-  const page = await readClient.listDeals(latestDealListParams(params));
-  const results: PipedriveDealImportResult[] = [];
-
-  for (const deal of page.data) {
-    results.push(await importPipedriveDealRecord({ client: readClient, deal }));
-  }
+  void params;
 
   return {
-    created: results.filter((result) => result.status === "created").length,
-    linkedExisting: results.filter(
-      (result) => result.status === "linked_existing",
-    ).length,
-    page: page as PipedriveListResult<PipedriveDeal>,
-    results,
-    skipped: results.filter((result) => result.status === "skipped").length,
+    created: 0,
+    linkedExisting: 0,
+    page: emptyPipedriveDealPage(),
+    results: [],
+    skipped: 0,
     status: "ok" as const,
   };
 }
@@ -474,45 +469,18 @@ export async function importPipedriveDealPages({
     };
   }
 
-  const results: PipedriveDealImportResult[] = [];
-  let cursor = params.cursor ?? null;
-  let nextCursor: string | null = null;
-  let pagesRead = 0;
-  let recordsRead = 0;
-
-  while (pagesRead < pageLimit) {
-    const pageParams: PipedriveListDealsParams = { ...params };
-    if (cursor) pageParams.cursor = cursor;
-
-    const page = await readClient.listDeals(latestDealListParams(pageParams));
-    pagesRead += 1;
-    recordsRead += page.data.length;
-
-    for (const deal of page.data) {
-      results.push(
-        await importPipedriveDealRecord({ client: readClient, deal }),
-      );
-    }
-
-    nextCursor = page.pagination.nextCursor ?? null;
-
-    if (!nextCursor) break;
-
-    cursor = nextCursor;
-  }
+  void params;
 
   return {
-    created: results.filter((result) => result.status === "created").length,
-    linkedExisting: results.filter(
-      (result) => result.status === "linked_existing",
-    ).length,
+    created: 0,
+    linkedExisting: 0,
     maxPages: pageLimit,
-    moreAvailable: Boolean(nextCursor),
-    nextCursor,
-    pagesRead,
-    recordsRead,
-    results,
-    skipped: results.filter((result) => result.status === "skipped").length,
+    moreAvailable: false,
+    nextCursor: null,
+    pagesRead: 0,
+    recordsRead: 0,
+    results: [],
+    skipped: 0,
     status: "ok" as const,
   };
 }
@@ -923,27 +891,13 @@ export async function importPipedriveDealIds({
     };
   }
 
-  const results: PipedriveDealImportResult[] = [];
-
-  for (const dealId of selectedDealIds) {
-    try {
-      const deal = await readClient.getDeal(dealId);
-      results.push(
-        await importPipedriveDealRecord({
-          client: readClient,
-          deal,
-          now,
-        }),
-      );
-    } catch (error) {
-      results.push(
-        skippedDealResult({
-          externalDealId: String(dealId),
-          warning: pipedriveReadWarning("deal", dealId, error),
-        }),
-      );
-    }
-  }
+  void now;
+  const results = selectedDealIds.map((dealId) =>
+    skippedDealResult({
+      externalDealId: String(dealId),
+      warning: pipedriveDealImportDisabledWarning,
+    }),
+  );
 
   return {
     created: results.filter((result) => result.status === "created").length,
@@ -1086,6 +1040,14 @@ export async function importPipedriveDealRecord({
   deal,
   now = new Date(),
 }: ImportDealRecordOptions): Promise<PipedriveDealImportResult> {
+  if (pipedriveDealImportsDisabled()) {
+    return skippedDealResult({
+      externalDealId: externalId(deal.id),
+      title: cleanText(deal.title),
+      warning: pipedriveDealImportDisabledWarning,
+    });
+  }
+
   const dealId = externalId(deal.id);
 
   if (!dealId) {
@@ -1907,30 +1869,22 @@ function latestLeadListParams(params: PipedriveListLeadsParams = {}) {
   return leadParams;
 }
 
-function latestDealListParams(params: PipedriveListDealsParams = {}) {
-  const dealParams: PipedriveListDealsParams = {
-    limit: params.limit ?? 50,
-    sortBy: params.sortBy ?? "update_time",
-    sortDirection: params.sortDirection ?? "desc",
-    status: params.status ?? "open",
+function emptyPipedriveDealPage(): PipedriveListResult<PipedriveDeal> {
+  return {
+    data: [],
+    pagination: {
+      limit: null,
+      moreItemsInCollection: false,
+      nextCursor: null,
+      nextStart: null,
+      start: null,
+    },
+    relatedObjects: null,
   };
+}
 
-  if (params.cursor) dealParams.cursor = params.cursor;
-  if (params.filterId !== undefined) dealParams.filterId = params.filterId;
-  if (params.ids !== undefined) dealParams.ids = params.ids;
-  if (params.organizationId !== undefined) {
-    dealParams.organizationId = params.organizationId;
-  }
-  if (params.ownerId !== undefined) dealParams.ownerId = params.ownerId;
-  if (params.personId !== undefined) dealParams.personId = params.personId;
-  if (params.updatedSince !== undefined) {
-    dealParams.updatedSince = params.updatedSince;
-  }
-  if (params.updatedUntil !== undefined) {
-    dealParams.updatedUntil = params.updatedUntil;
-  }
-
-  return dealParams;
+function pipedriveDealImportsDisabled() {
+  return true;
 }
 
 function latestPersonListParams(params: PipedriveListPersonsParams = {}) {

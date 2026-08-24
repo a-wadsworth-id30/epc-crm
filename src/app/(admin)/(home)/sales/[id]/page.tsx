@@ -48,6 +48,7 @@ import {
 } from "@/lib/display-defaults";
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { prisma } from "@/lib/prisma";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
 import { getCrmSettings } from "@/lib/settings";
@@ -74,6 +75,22 @@ type SalesSignatureRequestSummary = Awaited<
 >[number];
 
 const initialConversationLimit = 40;
+const pipedriveDealExternalType = "deal";
+const salesOpportunityExternalType = "salesOpportunity";
+
+async function isPipedriveDealOpportunity(internalId: string) {
+  const link = await prisma.externalRecordLink.findFirst({
+    where: {
+      externalType: pipedriveDealExternalType,
+      internalId,
+      internalType: salesOpportunityExternalType,
+      provider: pipedriveProvider,
+    },
+    select: { id: true },
+  });
+
+  return Boolean(link);
+}
 
 export async function generateMetadata({
   params,
@@ -82,6 +99,10 @@ export async function generateMetadata({
   const user = await getCurrentUser();
 
   if (!user) {
+    return { title: "Opportunity | Sales" };
+  }
+
+  if (await isPipedriveDealOpportunity(id)) {
     return { title: "Opportunity | Sales" };
   }
 
@@ -1513,6 +1534,11 @@ function LeadAttributionCard({
 export default async function SaleDetailPage({ params }: SalePageProps) {
   const { id } = await params;
   const user = await requireUser();
+
+  if (await isPipedriveDealOpportunity(id)) {
+    notFound();
+  }
+
   const sale = await prisma.salesOpportunity.findFirst({
     where: salesOpportunityIdAccessWhere(id, user),
     select: {
