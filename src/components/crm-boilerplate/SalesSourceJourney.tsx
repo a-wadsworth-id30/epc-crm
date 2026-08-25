@@ -3,6 +3,7 @@ import {
   attributionFallbackKindFromText,
   type AttributionFallbackKind,
 } from "@/components/crm-boilerplate/AttributionSourceIcon";
+import Tooltip from "@/components/ui/tooltip/Tooltip";
 
 export type SourceJourneyKind =
   | AttributionFallbackKind;
@@ -47,21 +48,6 @@ function SourceIconSlot({
 
 function sourceTooltipText(item: SourceJourneyItem) {
   return item.detail ? `${item.label} · ${item.detail}` : item.label;
-}
-
-function SourceIconTooltip({ item }: { item: SourceJourneyItem }) {
-  return (
-    <span
-      role="tooltip"
-      className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 hidden max-w-72 -translate-x-1/2 whitespace-normal rounded-lg bg-gray-950 px-2.5 py-1.5 text-center text-xs leading-5 font-semibold text-white shadow-lg group-hover/source:block dark:bg-gray-800"
-    >
-      <span
-        aria-hidden="true"
-        className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-950 dark:bg-gray-800"
-      />
-      {sourceTooltipText(item)}
-    </span>
-  );
 }
 
 export function sourceJourneyKindFromText(value: string | null | undefined) {
@@ -137,16 +123,22 @@ export function SalesSourceJourney({
                 className="mr-1 h-px w-2 bg-gray-200 dark:bg-gray-800"
               />
             ) : null}
-            <span className="group/source relative inline-flex">
+            <Tooltip
+              content={
+                <span className="block max-w-72 whitespace-normal text-center leading-5">
+                  {sourceTooltipText(item)}
+                </span>
+              }
+              placement="top"
+              variant="dark"
+            >
               <span
-                title={sourceTooltipText(item)}
                 className={`grid shrink-0 place-items-center rounded-full bg-white text-gray-600 ring-1 ring-inset ring-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:ring-gray-800 ${iconSizeClassName}`}
               >
                 <SourceIconSlot item={item} />
                 <span className="sr-only">{sourceTooltipText(item)}</span>
               </span>
-              <SourceIconTooltip item={item} />
-            </span>
+            </Tooltip>
           </div>
         ))}
         {extraCount ? (
