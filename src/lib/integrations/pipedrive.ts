@@ -203,6 +203,21 @@ export type PipedriveFile = Record<string, unknown> & {
   url?: string;
 };
 
+export type PipedriveMailMessage = Record<string, unknown> & {
+  id?: number;
+  add_time?: string;
+  body?: string | null;
+  body_plain?: string | null;
+  from?: unknown;
+  mail_thread_id?: unknown;
+  message_time?: string | null;
+  subject?: string | null;
+  snippet?: string | null;
+  timestamp?: string | null;
+  to?: unknown;
+  update_time?: string;
+};
+
 export type PipedriveListLeadsParams = {
   filterId?: number | null;
   limit?: number | null;
@@ -258,6 +273,12 @@ export type PipedriveListNotesParams = {
 export type PipedriveListFilesParams = {
   limit?: number | null;
   sort?: string | null;
+  start?: number | null;
+};
+
+export type PipedriveListPersonMailMessagesParams = {
+  includeBody?: boolean | null;
+  limit?: number | null;
   start?: number | null;
 };
 
@@ -488,6 +509,20 @@ export class PipedriveReadOnlyClient {
     });
   }
 
+  async listPersonMailMessages(
+    personId: number,
+    params: PipedriveListPersonMailMessagesParams = {},
+  ) {
+    return this.getList<PipedriveMailMessage>(
+      `persons/${pipedriveNumericId(personId, "person")}/mailMessages`,
+      {
+        include_body: booleanParam(params.includeBody),
+        limit: integerParam(params.limit, { max: 500 }),
+        start: integerParam(params.start, { min: 0 }),
+      },
+    );
+  }
+
   async downloadFile(id: number) {
     return this.getBinary(`files/${pipedriveNumericId(id, "file")}/download`);
   }
@@ -663,6 +698,10 @@ function integerParam(
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
 
   return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+function booleanParam(value: boolean | null | undefined) {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function pipedriveDateTimeParam(value: string | null | undefined) {

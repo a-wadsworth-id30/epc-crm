@@ -5,6 +5,8 @@ import { AttributionSourceIconSlot } from "@/components/crm-boilerplate/Attribut
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import {
+  PipedriveLeadEmailsAutoSync,
+  PipedriveLeadEmailsSyncButton,
   PipedriveLeadFilesAutoSync,
   PipedriveLeadFilesPanel,
   PipedriveLeadNotesAutoSync,
@@ -2400,7 +2402,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   return (
     <>
       {pipedriveLeadLink ? (
-        <PipedriveLeadNotesAutoSync saleId={sale.id} />
+        <>
+          <PipedriveLeadNotesAutoSync saleId={sale.id} />
+          <PipedriveLeadEmailsAutoSync saleId={sale.id} />
+        </>
       ) : null}
       <section className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
@@ -2460,7 +2465,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               </Link>
             ) : null}
             {user.role === "ADMIN" && pipedriveLeadLink ? (
-              <PipedriveLeadNotesSyncButton saleId={sale.id} />
+              <>
+                <PipedriveLeadNotesSyncButton saleId={sale.id} />
+                <PipedriveLeadEmailsSyncButton saleId={sale.id} />
+              </>
             ) : null}
             {user.role === "ADMIN" ? (
               <SaleDeleteModal saleId={sale.id} saleTitle={sale.title} />

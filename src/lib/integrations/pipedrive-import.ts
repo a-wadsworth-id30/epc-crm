@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
-import { toEmailPlainText } from "@/lib/email/plain-text";
+import { emailTextSummary, toEmailPlainText } from "@/lib/email/plain-text";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
 import {
@@ -25,8 +25,10 @@ import {
   type PipedriveListFilesParams,
   type PipedriveListLeadsParams,
   type PipedriveListNotesParams,
+  type PipedriveListPersonMailMessagesParams,
   type PipedriveListPersonsParams,
   type PipedriveListResult,
+  type PipedriveMailMessage,
   type PipedriveNote,
   type PipedriveOrganization,
   type PipedrivePerson,
@@ -54,9 +56,12 @@ const pipedriveInternalTypes = {
   opportunity: "salesOpportunity",
 } as const;
 const pipedriveFileImportSource = "pipedrive-file-import";
+const pipedriveMailImportSource = "pipedrive-mail-import";
+const pipedriveMailExternalIdPrefix = "pipedrive:mail:";
 const pipedriveNoteImportSource = "pipedrive-note-import";
 const pipedriveNoteExternalIdPrefix = "pipedrive:note:";
 const defaultPipedriveLeadFileMaxPages = 3;
+const defaultPipedriveLeadEmailMaxPages = 3;
 const defaultPipedriveLeadNoteMaxPages = 3;
 
 type JsonObject = Record<string, unknown>;
@@ -65,7 +70,9 @@ type PipedriveRelatedRecordClient = Pick<
   PipedriveReadOnlyClient,
   "defaultLeadSource" | "getOrganization" | "getPerson"
 > & {
+  getLead?: PipedriveReadOnlyClient["getLead"];
   listFiles?: PipedriveReadOnlyClient["listFiles"];
+  listPersonMailMessages?: PipedriveReadOnlyClient["listPersonMailMessages"];
   listNotes?: PipedriveReadOnlyClient["listNotes"];
 };
 
@@ -285,6 +292,30 @@ export type PipedriveLeadFilesSyncResult =
       opportunityId: string;
       skipped: 0;
       status: "not_configured" | "not_linked";
+      updated: 0;
+      warnings: string[];
+    };
+
+export type PipedriveLeadEmailsSyncResult =
+  | {
+      created: number;
+      emailsRead: number;
+      externalLeadId: string;
+      externalPersonId: string;
+      opportunityId: string;
+      skipped: number;
+      status: "ok";
+      updated: number;
+      warnings: string[];
+    }
+  | {
+      created: 0;
+      emailsRead: 0;
+      externalLeadId: string | null;
+      externalPersonId: string | null;
+      opportunityId: string;
+      skipped: 0;
+      status: "not_configured" | "not_linked" | "not_supported";
       updated: 0;
       warnings: string[];
     };
@@ -510,6 +541,18 @@ type PipedriveLeadFilesReadResult = {
 };
 
 type PipedriveLeadFilesWriteResult = {
+  created: number;
+  skipped: number;
+  updated: number;
+};
+
+type PipedriveLeadEmailsReadResult = {
+  emails: PipedriveMailMessage[];
+  emailsRead: number;
+  warnings: string[];
+};
+
+type PipedriveLeadEmailsWriteResult = {
   created: number;
   skipped: number;
   updated: number;
@@ -798,6 +841,143 @@ export async function syncPipedriveLeadNotesForOpportunity({
     status: "ok",
     updated: writeResult.updated,
     warnings: noteRead.warnings,
+  };
+}
+
+export async function syncPipedriveLeadEmailsForOpportunity({
+  client,
+  maxPages,
+  now = new Date(),
+  opportunityId,
+}: {
+  client?: PipedriveRelatedRecordClient | null;
+  maxPages?: number;
+  now?: Date;
+  opportunityId: string;
+}): Promise<PipedriveLeadEmailsSyncResult> {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      created: 0,
+      emailsRead: 0,
+      externalLeadId: null,
+      externalPersonId: null,
+      opportunityId,
+      skipped: 0,
+      status: "not_configured",
+      updated: 0,
+      warnings: ["Pipedrive is not configured."],
+    };
+  }
+
+  if (typeof readClient.listPersonMailMessages !== "function") {
+    return {
+      created: 0,
+      emailsRead: 0,
+      externalLeadId: null,
+      externalPersonId: null,
+      opportunityId,
+      skipped: 0,
+      status: "not_supported",
+      updated: 0,
+      warnings: ["Pipedrive mail message reads are not supported."],
+    };
+  }
+
+  const [leadLink, opportunity] = await Promise.all([
+    prisma.externalRecordLink.findFirst({
+      where: {
+        externalType: pipedriveExternalTypes.lead,
+        internalId: opportunityId,
+        internalType: pipedriveInternalTypes.opportunity,
+        provider: pipedriveProvider,
+      },
+      select: { externalId: true, metadata: true },
+    }),
+    prisma.salesOpportunity.findUnique({
+      where: { id: opportunityId },
+      select: {
+        contactId: true,
+        id: true,
+        contact: {
+          select: {
+            email: true,
+            additionalEmails: { select: { email: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  if (!leadLink || !opportunity) {
+    return {
+      created: 0,
+      emailsRead: 0,
+      externalLeadId: null,
+      externalPersonId: null,
+      opportunityId,
+      skipped: 0,
+      status: "not_linked",
+      updated: 0,
+      warnings: ["Sale is not linked to a Pipedrive lead."],
+    };
+  }
+
+  const warnings: string[] = [];
+  const personId = await resolvePipedrivePersonIdForLeadEmailSync({
+    client: readClient,
+    contactId: opportunity.contactId,
+    externalLeadId: leadLink.externalId,
+    leadMetadata: leadLink.metadata,
+    warnings,
+  });
+
+  if (!personId) {
+    return {
+      created: 0,
+      emailsRead: 0,
+      externalLeadId: leadLink.externalId,
+      externalPersonId: null,
+      opportunityId,
+      skipped: 0,
+      status: "not_linked",
+      updated: 0,
+      warnings: [
+        ...warnings,
+        "Linked Pipedrive lead does not have a readable Pipedrive person.",
+      ],
+    };
+  }
+
+  const emailRead = await readPipedriveLeadEmails(
+    readClient,
+    leadLink.externalId,
+    personId,
+    maxPages,
+  );
+  const writeResult = await prisma.$transaction((tx) =>
+    syncPipedriveLeadEmailRecords(tx, {
+      contactEmails: contactEmailValues(opportunity.contact),
+      contactId: opportunity.contactId,
+      emails: emailRead.emails,
+      externalLeadId: leadLink.externalId,
+      externalPersonId: String(personId),
+      now,
+      opportunityId: opportunity.id,
+    }),
+  );
+
+  return {
+    created: writeResult.created,
+    emailsRead: emailRead.emailsRead,
+    externalLeadId: leadLink.externalId,
+    externalPersonId: String(personId),
+    opportunityId,
+    skipped: writeResult.skipped,
+    status: "ok",
+    updated: writeResult.updated,
+    warnings: [...warnings, ...emailRead.warnings],
   };
 }
 
@@ -2704,6 +2884,331 @@ async function readPipedriveLeadFilesForLeadIds(
   };
 }
 
+async function resolvePipedrivePersonIdForLeadEmailSync({
+  client,
+  contactId,
+  externalLeadId,
+  leadMetadata,
+  warnings,
+}: {
+  client: PipedriveRelatedRecordClient;
+  contactId: string | null;
+  externalLeadId: string;
+  leadMetadata: unknown;
+  warnings: string[];
+}) {
+  const metadataPersonId = numericId(objectValue(leadMetadata).externalPersonId);
+  if (metadataPersonId) return metadataPersonId;
+
+  if (contactId) {
+    const contactPersonLink = await prisma.externalRecordLink.findFirst({
+      where: {
+        externalType: pipedriveExternalTypes.person,
+        internalId: contactId,
+        internalType: pipedriveInternalTypes.contact,
+        provider: pipedriveProvider,
+      },
+      select: { externalId: true },
+    });
+    const linkedPersonId = numericId(contactPersonLink?.externalId);
+    if (linkedPersonId) return linkedPersonId;
+  }
+
+  if (typeof client.getLead !== "function") return null;
+
+  try {
+    return pipedrivePersonIdFromLead(await client.getLead(externalLeadId));
+  } catch (error) {
+    warnings.push(pipedriveReadWarning("lead", externalLeadId, error));
+    return null;
+  }
+}
+
+async function readPipedriveLeadEmails(
+  client: PipedriveRelatedRecordClient,
+  externalLeadId: string,
+  personId: number,
+  maxPages = defaultPipedriveLeadEmailMaxPages,
+): Promise<PipedriveLeadEmailsReadResult> {
+  if (typeof client.listPersonMailMessages !== "function") {
+    return { emails: [], emailsRead: 0, warnings: [] };
+  }
+
+  const emails: PipedriveMailMessage[] = [];
+  const warnings: string[] = [];
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveLeadEmailMaxPages,
+  );
+  let emailsRead = 0;
+  let pagesRead = 0;
+  let start: number | null = null;
+
+  try {
+    while (pagesRead < pageLimit) {
+      const params: PipedriveListPersonMailMessagesParams = {
+        includeBody: true,
+        limit: 50,
+      };
+      if (start !== null) params.start = start;
+
+      const page = await client.listPersonMailMessages(personId, params);
+      pagesRead += 1;
+      emailsRead += page.data.length;
+      emails.push(
+        ...page.data.filter((message) =>
+          shouldImportPipedriveMailMessageForLead(message, externalLeadId),
+        ),
+      );
+
+      if (
+        !page.pagination.moreItemsInCollection ||
+        page.pagination.nextStart === null
+      ) {
+        break;
+      }
+
+      start = page.pagination.nextStart;
+    }
+  } catch (error) {
+    warnings.push(
+      pipedriveReadWarning("lead emails", `${externalLeadId}/${personId}`, error),
+    );
+  }
+
+  return { emails, emailsRead, warnings };
+}
+
+async function syncPipedriveLeadEmailRecords(
+  tx: Prisma.TransactionClient,
+  {
+    contactEmails,
+    contactId,
+    emails,
+    externalLeadId,
+    externalPersonId,
+    now,
+    opportunityId,
+  }: {
+    contactEmails: string[];
+    contactId: string | null;
+    emails: PipedriveMailMessage[];
+    externalLeadId: string;
+    externalPersonId: string;
+    now: Date;
+    opportunityId: string;
+  },
+): Promise<PipedriveLeadEmailsWriteResult> {
+  let created = 0;
+  let skipped = 0;
+  let updated = 0;
+
+  for (const email of emails) {
+    const mapped = mapPipedriveMailMessageToSalesEmail({
+      contactEmails,
+      contactId,
+      email,
+      externalLeadId,
+      externalPersonId,
+      now,
+      opportunityId,
+    });
+
+    if (!mapped) {
+      skipped += 1;
+      continue;
+    }
+
+    const existingCommunication = await tx.salesCommunication.findFirst({
+      where: {
+        externalId: mapped.externalId,
+        opportunityId,
+      },
+      select: { id: true },
+    });
+    const communication = existingCommunication
+      ? await tx.salesCommunication.update({
+          where: { id: existingCommunication.id },
+          data: mapped.communicationData,
+          select: { id: true },
+        })
+      : await tx.salesCommunication.create({
+          data: mapped.communicationData,
+          select: { id: true },
+        });
+
+    if (existingCommunication) {
+      updated += 1;
+    } else {
+      created += 1;
+    }
+
+    const existingEmail = await tx.emailMessage.findUnique({
+      where: { providerMessageId: mapped.providerMessageId },
+      select: {
+        id: true,
+        opportunityId: true,
+        salesCommunicationId: true,
+      },
+    });
+
+    if (!existingEmail) {
+      await tx.emailMessage.create({
+        data: {
+          ...mapped.emailData,
+          salesCommunicationId: communication.id,
+        },
+        select: { id: true },
+      });
+      continue;
+    }
+
+    if (
+      existingEmail.opportunityId === opportunityId ||
+      existingEmail.salesCommunicationId === communication.id ||
+      !existingEmail.salesCommunicationId
+    ) {
+      await tx.emailMessage.update({
+        where: { id: existingEmail.id },
+        data: {
+          ...mapped.emailData,
+          salesCommunicationId: communication.id,
+        },
+        select: { id: true },
+      });
+    }
+  }
+
+  return { created, skipped, updated };
+}
+
+function mapPipedriveMailMessageToSalesEmail({
+  contactEmails,
+  contactId,
+  email,
+  externalLeadId,
+  externalPersonId,
+  now,
+  opportunityId,
+}: {
+  contactEmails: string[];
+  contactId: string | null;
+  email: PipedriveMailMessage;
+  externalLeadId: string;
+  externalPersonId: string;
+  now: Date;
+  opportunityId: string;
+}) {
+  const emailRecord = objectValue(email);
+  const externalMailId =
+    externalId(email.id) ??
+    externalId(emailRecord.mail_message_id) ??
+    externalId(emailRecord.message_id);
+
+  if (!externalMailId) return null;
+
+  const externalThreadId =
+    externalId(email.mail_thread_id) ??
+    externalId(emailRecord.thread_id) ??
+    externalId(emailRecord.mail_thread);
+  const fromAddress = firstEmailAddress(
+    email.from ??
+      emailRecord.from_address ??
+      emailRecord.from_email ??
+      emailRecord.sender,
+  );
+  const toAddress = firstEmailAddress(
+    email.to ?? emailRecord.to_address ?? emailRecord.to_email,
+  );
+  const fromName = firstEmailName(
+    email.from ??
+      emailRecord.from_address ??
+      emailRecord.from_email ??
+      emailRecord.sender,
+  );
+  const subject = cleanText(email.subject) ?? "Pipedrive email";
+  const bodySource =
+    cleanText(email.body_plain) ??
+    cleanText(emailRecord.body_text) ??
+    cleanText(emailRecord.text) ??
+    cleanText(email.body) ??
+    cleanText(emailRecord.content) ??
+    cleanText(email.snippet);
+  const plainBody = toEmailPlainText(bodySource) || cleanText(email.snippet) || subject;
+  const htmlBody =
+    bodySource && /<\/?[a-z][\s\S]*>/i.test(bodySource) ? bodySource : null;
+  const occurredAt =
+    parsePipedriveDate(email.message_time) ??
+    parsePipedriveDate(email.timestamp) ??
+    parsePipedriveDate(email.add_time) ??
+    parsePipedriveDate(email.update_time) ??
+    now;
+  const normalizedContactEmails = new Set(
+    contactEmails.map((value) => value.toLowerCase()),
+  );
+  const direction =
+    fromAddress && normalizedContactEmails.has(fromAddress)
+      ? ("INBOUND" as const)
+      : ("OUTBOUND" as const);
+  const providerMessageId = `${pipedriveMailExternalIdPrefix}${externalMailId}`;
+  const matchedLeadId = pipedriveLeadIdFromMailMessage(email);
+  const matchedDealId = pipedriveDealIdFromMailMessage(email);
+  const metadata = {
+    externalLeadId,
+    externalMailId,
+    externalPersonId,
+    externalThreadId: externalThreadId ?? null,
+    importedFrom: "pipedrive",
+    matchedDealId,
+    matchedLeadId,
+    pipedriveAddTime: cleanText(email.add_time),
+    pipedriveMessageTime: cleanText(email.message_time ?? email.timestamp),
+    pipedriveUpdateTime: cleanText(email.update_time),
+    provider: pipedriveProvider,
+    source: pipedriveMailImportSource,
+  } satisfies Prisma.InputJsonObject;
+  const summary = emailTextSummary(plainBody, "Pipedrive email");
+
+  return {
+    communicationData: {
+      body: plainBody || null,
+      channel: "EMAIL" as const,
+      contactId,
+      direction,
+      externalId: providerMessageId,
+      fromAddress,
+      metadata,
+      occurredAt,
+      opportunityId,
+      subject,
+      summary,
+      toAddress,
+    },
+    emailData: {
+      attachments: jsonValue(emailRecord.attachments),
+      ccAddresses: jsonValue(emailRecord.cc),
+      contactId,
+      direction,
+      fromAddress,
+      fromName,
+      headers: jsonValue(emailRecord.headers),
+      htmlBody,
+      metadata,
+      opportunityId,
+      provider: pipedriveProvider,
+      providerMessageId,
+      receivedAt: occurredAt,
+      status: "READ" as const,
+      subject,
+      summary,
+      textBody: plainBody || null,
+      toAddress,
+    },
+    externalId: providerMessageId,
+    providerMessageId,
+  };
+}
+
 async function syncPipedriveLeadFileRecords(
   tx: Prisma.TransactionClient,
   {
@@ -3089,6 +3594,123 @@ function pipedriveLeadIdFromFile(file: PipedriveFile) {
     externalId(leadIdRecord.id) ??
     externalId(leadIdRecord.value)
   );
+}
+
+function pipedrivePersonIdFromLead(lead: PipedriveLead) {
+  const leadRecord = objectValue(lead);
+  const personRecord = objectValue(leadRecord.person);
+  const personIdRecord = objectValue(leadRecord.person_id);
+
+  return (
+    numericId(leadRecord.person_id) ??
+    numericId(personRecord.id) ??
+    numericId(personIdRecord.id) ??
+    numericId(personIdRecord.value) ??
+    numericId(leadRecord.person)
+  );
+}
+
+function shouldImportPipedriveMailMessageForLead(
+  email: PipedriveMailMessage,
+  externalLeadId: string,
+) {
+  const matchedLeadId = pipedriveLeadIdFromMailMessage(email);
+
+  if (matchedLeadId) return matchedLeadId === externalLeadId;
+
+  return !pipedriveDealIdFromMailMessage(email);
+}
+
+function pipedriveLeadIdFromMailMessage(email: PipedriveMailMessage) {
+  const emailRecord = objectValue(email);
+  const leadRecord = objectValue(emailRecord.lead);
+  const leadIdRecord = objectValue(emailRecord.lead_id);
+
+  return (
+    externalId(emailRecord.lead_id) ??
+    externalId(leadRecord.id) ??
+    externalId(leadIdRecord.id) ??
+    externalId(leadIdRecord.value)
+  );
+}
+
+function pipedriveDealIdFromMailMessage(email: PipedriveMailMessage) {
+  const emailRecord = objectValue(email);
+  const dealRecord = objectValue(emailRecord.deal);
+  const dealIdRecord = objectValue(emailRecord.deal_id);
+
+  return (
+    externalId(emailRecord.deal_id) ??
+    externalId(dealRecord.id) ??
+    externalId(dealIdRecord.id) ??
+    externalId(dealIdRecord.value)
+  );
+}
+
+function contactEmailValues(
+  contact:
+    | {
+        additionalEmails: Array<{ email: string }>;
+        email: string | null;
+      }
+    | null,
+) {
+  return [
+    contact?.email,
+    ...(contact?.additionalEmails.map((item) => item.email) ?? []),
+  ]
+    .map((value) => cleanText(value)?.toLowerCase())
+    .filter((value): value is string => Boolean(value));
+}
+
+function firstEmailAddress(value: unknown) {
+  return emailAddressCandidates(value)[0] ?? null;
+}
+
+function firstEmailName(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const name = firstEmailName(item);
+      if (name) return name;
+    }
+
+    return null;
+  }
+
+  const record = objectValue(value);
+  return cleanText(record.name ?? record.label ?? record.display_name);
+}
+
+function emailAddressCandidates(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap(emailAddressCandidates);
+  }
+
+  if (typeof value === "string") {
+    const matches = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi);
+
+    return matches
+      ? matches.map((email) => email.trim().toLowerCase()).filter(Boolean)
+      : [];
+  }
+
+  const record = objectValue(value);
+  if (!Object.keys(record).length) return [];
+
+  const directValues = [
+    record.email,
+    record.address,
+    record.mail,
+    record.value,
+    record.raw,
+  ];
+
+  return [
+    ...directValues.flatMap(emailAddressCandidates),
+    ...emailAddressCandidates(record.data),
+  ];
 }
 
 function deduplicateLeadFileBatchItems(items: PipedriveLeadFileBatchSyncItem[]) {
@@ -3974,6 +4596,10 @@ function objectValue(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonObject)
     : {};
+}
+
+function jsonValue(value: unknown): Prisma.InputJsonValue | undefined {
+  return value === undefined ? undefined : (value as Prisma.InputJsonValue);
 }
 
 function cleanText(value: unknown) {

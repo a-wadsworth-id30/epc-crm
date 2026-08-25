@@ -119,7 +119,7 @@ export default function PipedriveLinkedSaleBackfillForm({
           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
-          {isPending ? "Pulling" : "Pull notes & files"}
+          {isPending ? "Pulling" : "Pull notes, emails & files"}
         </button>
       </div>
 

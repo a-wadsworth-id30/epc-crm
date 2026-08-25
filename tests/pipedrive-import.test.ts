@@ -34,14 +34,27 @@ let externalRecordLinkRows: Array<{
   metadata?: unknown;
   provider: string;
 }> = [];
+let emailMessageRows: Array<{
+  body?: string | null;
+  id: string;
+  opportunityId?: string | null;
+  providerMessageId?: string | null;
+  salesCommunicationId?: string | null;
+  textBody?: string | null;
+}> = [];
 let salesCommunicationRows: Array<{
   body?: string | null;
+  channel?: string | null;
   contactId?: string | null;
+  direction?: string | null;
   externalId?: string | null;
+  fromAddress?: string | null;
   id: string;
   metadata?: unknown;
   opportunityId?: string | null;
+  subject?: string | null;
   summary?: string | null;
+  toAddress?: string | null;
 }> = [];
 
 async function findExternalRecordLink(args: unknown) {
@@ -170,13 +183,19 @@ async function createSalesCommunication(args: unknown) {
   const data = (args as { data?: Record<string, unknown> }).data ?? {};
   const row = {
     body: typeof data.body === "string" ? data.body : null,
+    channel: typeof data.channel === "string" ? data.channel : null,
     contactId: typeof data.contactId === "string" ? data.contactId : null,
+    direction: typeof data.direction === "string" ? data.direction : null,
     externalId: typeof data.externalId === "string" ? data.externalId : null,
+    fromAddress:
+      typeof data.fromAddress === "string" ? data.fromAddress : null,
     id: `sales-communication-${salesCommunicationRows.length + 1}`,
     metadata: data.metadata,
     opportunityId:
       typeof data.opportunityId === "string" ? data.opportunityId : null,
+    subject: typeof data.subject === "string" ? data.subject : null,
     summary: typeof data.summary === "string" ? data.summary : null,
+    toAddress: typeof data.toAddress === "string" ? data.toAddress : null,
   };
   salesCommunicationRows.push(row);
   return { id: row.id };
@@ -206,15 +225,89 @@ async function updateSalesCommunication(args: unknown) {
   if (!row) return { id: id ?? "missing" };
 
   if (typeof data.body === "string") row.body = data.body;
+  if (typeof data.channel === "string") row.channel = data.channel;
   if (typeof data.contactId === "string" || data.contactId === null) {
     row.contactId = data.contactId;
   }
+  if (typeof data.direction === "string") row.direction = data.direction;
   if (typeof data.externalId === "string") row.externalId = data.externalId;
+  if (typeof data.fromAddress === "string" || data.fromAddress === null) {
+    row.fromAddress = data.fromAddress;
+  }
   if (data.metadata !== undefined) row.metadata = data.metadata;
   if (typeof data.opportunityId === "string") {
     row.opportunityId = data.opportunityId;
   }
+  if (typeof data.subject === "string") row.subject = data.subject;
   if (typeof data.summary === "string") row.summary = data.summary;
+  if (typeof data.toAddress === "string" || data.toAddress === null) {
+    row.toAddress = data.toAddress;
+  }
+
+  return { id: row.id };
+}
+
+async function findEmailMessage(args: unknown) {
+  const providerMessageId = (
+    args as { where?: { providerMessageId?: string | null } }
+  ).where?.providerMessageId;
+
+  return (
+    emailMessageRows.find(
+      (row) => row.providerMessageId === providerMessageId,
+    ) ?? null
+  );
+}
+
+async function createEmailMessage(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("emailMessage.create");
+  const data = (args as { data?: Record<string, unknown> }).data ?? {};
+  const row = {
+    id: `email-message-${emailMessageRows.length + 1}`,
+    opportunityId:
+      typeof data.opportunityId === "string" ? data.opportunityId : null,
+    providerMessageId:
+      typeof data.providerMessageId === "string"
+        ? data.providerMessageId
+        : null,
+    salesCommunicationId:
+      typeof data.salesCommunicationId === "string"
+        ? data.salesCommunicationId
+        : null,
+    textBody: typeof data.textBody === "string" ? data.textBody : null,
+  };
+  emailMessageRows.push(row);
+  return { id: row.id };
+}
+
+async function updateEmailMessage(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("emailMessage.update");
+  const id = (args as { where?: { id?: string } }).where?.id;
+  const data = (args as { data?: Record<string, unknown> }).data ?? {};
+  const row = emailMessageRows.find((candidate) => candidate.id === id);
+
+  if (!row) return { id: id ?? "missing" };
+
+  if (typeof data.opportunityId === "string" || data.opportunityId === null) {
+    row.opportunityId = data.opportunityId;
+  }
+  if (
+    typeof data.providerMessageId === "string" ||
+    data.providerMessageId === null
+  ) {
+    row.providerMessageId = data.providerMessageId;
+  }
+  if (
+    typeof data.salesCommunicationId === "string" ||
+    data.salesCommunicationId === null
+  ) {
+    row.salesCommunicationId = data.salesCommunicationId;
+  }
+  if (typeof data.textBody === "string" || data.textBody === null) {
+    row.textBody = data.textBody;
+  }
 
   return { id: row.id };
 }
@@ -251,6 +344,11 @@ before(async () => {
           findUnique: findExternalRecordLink,
           upsert: upsertExternalRecordLink,
         },
+        emailMessage: {
+          create: createEmailMessage,
+          findUnique: findEmailMessage,
+          update: updateEmailMessage,
+        },
         salesCommunication: {
           create: createSalesCommunication,
           findFirst: findSalesCommunication,
@@ -262,6 +360,10 @@ before(async () => {
         salesOpportunity: {
           create: recordCrmWriteFor("salesOpportunity.create"),
           findUnique: async (args: unknown) => ({
+            contact: {
+              additionalEmails: [],
+              email: "customer@example.com",
+            },
             contactId: "contact-existing",
             id: (args as { where?: { id?: string } }).where?.id ?? "opportunity-existing",
           }),
@@ -325,6 +427,11 @@ before(async () => {
           integrationConnection: {
             findUnique: async () => null,
           },
+          emailMessage: {
+            create: createEmailMessage,
+            findUnique: findEmailMessage,
+            update: updateEmailMessage,
+          },
           company: {
             findFirst: findCompanyByName,
             findUnique: findCompanyById,
@@ -335,6 +442,10 @@ before(async () => {
           },
           salesOpportunity: {
             findUnique: async (args: unknown) => ({
+              contact: {
+                additionalEmails: [],
+                email: "customer@example.com",
+              },
               contactId: "contact-existing",
               id:
                 (args as { where?: { id?: string } }).where?.id ??
@@ -369,6 +480,7 @@ beforeEach(() => {
   crmWriteLabels = [];
   companyRows = [];
   contactRows = [];
+  emailMessageRows = [];
   externalRecordLinkRows = [];
   salesCommunicationRows = [];
 });
@@ -1362,6 +1474,174 @@ describe("Pipedrive lead import mapping", () => {
       externalRecordLinkRows.find((row) => row.externalId === "602")
         ?.internalId,
       "opportunity-batch-2",
+    );
+  });
+
+  it("imports Pipedrive person emails into linked sale conversations", async () => {
+    const listMailCalls: unknown[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-emails",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-emails",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+      {
+        externalId: "123",
+        externalType: "person",
+        id: "person-link",
+        internalId: "contact-existing",
+        internalType: "contact",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.syncPipedriveLeadEmailsForOpportunity({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listPersonMailMessages: async (personId, params) => {
+          listMailCalls.push({ params, personId });
+          return {
+            data: [
+              {
+                body: "<p>Hello<br>Customer reply</p>",
+                from: { email: "customer@example.com", name: "Customer" },
+                id: 701,
+                lead_id: "lead-emails",
+                message_time: "2026-08-24T11:00:00Z",
+                subject: "Survey booking",
+                to: [{ email: "sales@example.com" }],
+              },
+            ],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      now: new Date("2026-08-24T12:00:00Z"),
+      opportunityId: "opportunity-emails",
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.emailsRead, 1);
+    assert.equal(result.created, 1);
+    assert.deepEqual(listMailCalls, [
+      {
+        params: { includeBody: true, limit: 50 },
+        personId: 123,
+      },
+    ]);
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(salesCommunicationRows[0]?.channel, "EMAIL");
+    assert.equal(salesCommunicationRows[0]?.direction, "INBOUND");
+    assert.equal(
+      salesCommunicationRows[0]?.externalId,
+      "pipedrive:mail:701",
+    );
+    assert.equal(
+      salesCommunicationRows[0]?.body,
+      "Hello\nCustomer reply",
+    );
+    assert.equal(emailMessageRows.length, 1);
+    assert.equal(emailMessageRows[0]?.providerMessageId, "pipedrive:mail:701");
+    assert.equal(
+      emailMessageRows[0]?.salesCommunicationId,
+      salesCommunicationRows[0]?.id,
+    );
+  });
+
+  it("updates existing Pipedrive emails instead of duplicating them", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-emails",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-emails",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+      {
+        externalId: "123",
+        externalType: "person",
+        id: "person-link",
+        internalId: "contact-existing",
+        internalType: "contact",
+        provider: "pipedrive",
+      },
+    ];
+    salesCommunicationRows = [
+      {
+        body: "Old email",
+        externalId: "pipedrive:mail:701",
+        id: "sales-communication-existing",
+        opportunityId: "opportunity-emails",
+        summary: "Old email",
+      },
+    ];
+    emailMessageRows = [
+      {
+        id: "email-message-existing",
+        opportunityId: "opportunity-emails",
+        providerMessageId: "pipedrive:mail:701",
+        salesCommunicationId: "sales-communication-existing",
+        textBody: "Old email",
+      },
+    ];
+
+    const result = await pipedriveImport.syncPipedriveLeadEmailsForOpportunity({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listPersonMailMessages: async () => ({
+          data: [
+            {
+              body_plain: "Updated email body",
+              from: { email: "sales@example.com" },
+              id: 701,
+              lead_id: "lead-emails",
+              subject: "Updated survey booking",
+              to: [{ email: "customer@example.com" }],
+            },
+          ],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+      now: new Date("2026-08-24T12:00:00Z"),
+      opportunityId: "opportunity-emails",
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.created, 0);
+    assert.equal(result.updated, 1);
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(salesCommunicationRows[0]?.body, "Updated email body");
+    assert.equal(emailMessageRows.length, 1);
+    assert.equal(emailMessageRows[0]?.textBody, "Updated email body");
+    assert.equal(
+      crmWriteLabels.filter((label) => label === "salesCommunication.create")
+        .length,
+      0,
+    );
+    assert.equal(
+      crmWriteLabels.filter((label) => label === "salesCommunication.update")
+        .length,
+      1,
     );
   });
 

@@ -214,6 +214,10 @@ function compactLinkedSaleBackfillResult(
 ) {
   return {
     batchLimit: result.batchLimit,
+    emailCreated: result.emailCreated,
+    emailRead: result.emailRead,
+    emailSkipped: result.emailSkipped,
+    emailUpdated: result.emailUpdated,
     fileCreated: result.fileCreated,
     fileRead: result.fileRead,
     fileUpdated: result.fileUpdated,

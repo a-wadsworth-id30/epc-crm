@@ -264,6 +264,39 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.moreItemsInCollection, false);
   });
 
+  it("lists person mail messages with body content through the v1 endpoint", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          pagination: {
+            limit: 50,
+            more_items_in_collection: false,
+            next_start: null,
+            start: 0,
+          },
+        },
+        data: [{ body: "<p>Hello</p>", id: 701, subject: "Survey" }],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient().listPersonMailMessages(123, {
+      includeBody: true,
+      limit: 999,
+      start: -5,
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/v1/persons/123/mailMessages");
+    assert.equal(url.searchParams.get("include_body"), "1");
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("start"), "0");
+    assert.equal(result.data[0]?.id, 701);
+    assert.equal(result.data[0]?.body, "<p>Hello</p>");
+  });
+
   it("downloads files with GET and the stored token header", async () => {
     const requests: Array<{ init?: RequestInit; url: string }> = [];
     globalThis.fetch = (async (input, init) => {

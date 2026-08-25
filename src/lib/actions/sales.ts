@@ -14,6 +14,7 @@ import {
 } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import {
+  syncPipedriveLeadEmailsForOpportunity,
   syncPipedriveLeadFilesForOpportunity,
   syncPipedriveLeadNotesForOpportunity,
 } from "@/lib/integrations/pipedrive-import";
@@ -78,6 +79,7 @@ export type SalesNoteActionState = {
 };
 
 const pipedriveSaleViewFileSyncThrottleMs = 30_000;
+const pipedriveSaleViewEmailSyncThrottleMs = 30_000;
 const pipedriveSaleViewNoteSyncThrottleMs = 30_000;
 
 const saleSchema = z.object({
@@ -1786,6 +1788,73 @@ export async function syncPipedriveLeadNotesAction(
   };
 }
 
+export async function syncPipedriveLeadEmailsAction(
+  _: SalesActionState,
+  formData: FormData,
+): Promise<SalesActionState> {
+  const user = await requireUser();
+
+  if (user.role !== "ADMIN") {
+    return {
+      ok: false,
+      message: "Only admins can pull Pipedrive emails.",
+    };
+  }
+
+  const saleId = String(formData.get("saleId") ?? "").trim();
+
+  if (!saleId) {
+    return { ok: false, message: "Sale is required." };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityWhereWithAccess(user, { id: saleId }),
+    select: { contactId: true, id: true, title: true },
+  });
+
+  if (!sale) {
+    return { ok: false, message: "Sale not found." };
+  }
+
+  const result = await syncPipedriveLeadEmailsForOpportunity({
+    opportunityId: sale.id,
+  });
+
+  if (result.status === "not_configured") {
+    return { ok: false, message: "Pipedrive is not configured." };
+  }
+
+  if (result.status === "not_supported") {
+    return { ok: false, message: "Pipedrive email reads are not supported." };
+  }
+
+  if (result.status === "not_linked") {
+    return {
+      ok: false,
+      message: "This sale is not linked to a Pipedrive lead with a readable person.",
+    };
+  }
+
+  await bumpRealtimeTopics([
+    realtimeTopics.saleConversation(sale.id),
+    sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+    realtimeTopics.inbox,
+  ]);
+  revalidatePath(`/sales/${sale.id}`);
+  if (sale.contactId) {
+    revalidatePath(`/contacts/${sale.contactId}`);
+  }
+
+  const warningMessage = result.warnings.length
+    ? ` ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"} recorded.`
+    : "";
+
+  return {
+    ok: true,
+    message: `Pulled ${result.emailsRead} Pipedrive email${result.emailsRead === 1 ? "" : "s"}. Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}.${warningMessage}`,
+  };
+}
+
 export async function syncPipedriveLeadFilesOnSaleViewAction(
   saleId: string,
 ): Promise<{
@@ -1967,6 +2036,110 @@ export async function syncPipedriveLeadNotesOnSaleViewAction(
     ]);
     revalidatePath(`/sales/${sale.id}`);
     revalidatePath("/notes");
+    if (sale.contactId) {
+      revalidatePath(`/contacts/${sale.contactId}`);
+    }
+  }
+
+  return { ok: true, reason: "synced", refreshed };
+}
+
+export async function syncPipedriveLeadEmailsOnSaleViewAction(
+  saleId: string,
+): Promise<{
+  ok: boolean;
+  reason:
+    | "missing-sale"
+    | "not-configured"
+    | "not-linked"
+    | "not-supported"
+    | "synced"
+    | "throttled";
+  refreshed: boolean;
+}> {
+  const user = await requireUser();
+  const normalizedSaleId = String(saleId ?? "").trim();
+
+  if (!normalizedSaleId) {
+    return { ok: false, reason: "missing-sale", refreshed: false };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityWhereWithAccess(user, { id: normalizedSaleId }),
+    select: { contactId: true, id: true },
+  });
+
+  if (!sale) {
+    return { ok: false, reason: "missing-sale", refreshed: false };
+  }
+
+  const leadLink = await prisma.externalRecordLink.findFirst({
+    where: {
+      externalType: "lead",
+      internalId: sale.id,
+      internalType: "salesOpportunity",
+      provider: "pipedrive",
+    },
+    select: { id: true, metadata: true },
+  });
+
+  if (!leadLink) {
+    return { ok: true, reason: "not-linked", refreshed: false };
+  }
+
+  const now = new Date();
+  const metadata = jsonObject(leadLink.metadata);
+  const lastAutoSyncAt = stringValue(
+    metadata.lastSaleViewPipedriveEmailSyncAt,
+  );
+
+  if (
+    isRecentTimestamp(lastAutoSyncAt, now, pipedriveSaleViewEmailSyncThrottleMs)
+  ) {
+    return { ok: true, reason: "throttled", refreshed: false };
+  }
+
+  const result = await syncPipedriveLeadEmailsForOpportunity({
+    now,
+    opportunityId: sale.id,
+  });
+
+  await prisma.externalRecordLink.update({
+    where: { id: leadLink.id },
+    data: {
+      metadata: {
+        ...metadata,
+        lastSaleViewPipedriveEmailSyncAt: now.toISOString(),
+        lastSaleViewPipedriveEmailSyncChangedCount:
+          result.created + result.updated,
+        lastSaleViewPipedriveEmailSyncReadCount: result.emailsRead,
+        lastSaleViewPipedriveEmailSyncStatus: result.status,
+        lastSaleViewPipedriveEmailSyncWarningCount: result.warnings.length,
+      } as Prisma.InputJsonObject,
+    },
+  });
+
+  if (result.status === "not_configured") {
+    return { ok: true, reason: "not-configured", refreshed: false };
+  }
+
+  if (result.status === "not_supported") {
+    return { ok: true, reason: "not-supported", refreshed: false };
+  }
+
+  if (result.status === "not_linked") {
+    return { ok: true, reason: "not-linked", refreshed: false };
+  }
+
+  const refreshed = result.created > 0 || result.updated > 0;
+
+  if (refreshed) {
+    await bumpRealtimeTopics([
+      realtimeTopics.saleConversation(sale.id),
+      sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+      realtimeTopics.inbox,
+    ]);
+    revalidatePath(`/sales/${sale.id}`);
     if (sale.contactId) {
       revalidatePath(`/contacts/${sale.contactId}`);
     }

@@ -6,6 +6,7 @@ import {
   pipedriveProvider,
 } from "@/lib/integrations/pipedrive";
 import {
+  syncPipedriveLeadEmailsForOpportunity,
   syncPipedriveLeadFilesForOpportunityBatch,
   syncPipedriveLeadNotesForOpportunity,
 } from "@/lib/integrations/pipedrive-import";
@@ -27,6 +28,7 @@ const pipedriveLinkedSaleBackfillSyncType = "linked-sale-backfill";
 const pipedriveLeadExternalType = "lead";
 const pipedriveFileExternalType = "file";
 const crmSalesOpportunityInternalType = "salesOpportunity";
+const pipedriveMailExternalIdPrefix = "pipedrive:mail:";
 const pipedriveNoteExternalIdPrefix = "pipedrive:note:";
 
 export type PipedriveLinkedSaleBackfillMode = "import" | "preview";
@@ -37,7 +39,12 @@ export type PipedriveLinkedSaleBackfillStatus =
   | "WARNING";
 
 export type PipedriveLinkedSaleBackfillRow = {
+  emailCreated: number;
+  emailRead: number;
+  emailSkipped: number;
+  emailUpdated: number;
   existingPipedriveFiles: number | null;
+  existingPipedriveEmails: number | null;
   existingPipedriveNotes: number | null;
   externalLeadId: string | null;
   fileCreated: number;
@@ -60,6 +67,10 @@ export type PipedriveLinkedSaleBackfillResult = {
   batchLimit: number;
   connectionId: string;
   cursor: string | null;
+  emailCreated: number;
+  emailRead: number;
+  emailSkipped: number;
+  emailUpdated: number;
   fileMaxPages: number;
   fileCreated: number;
   fileMatched: number;
@@ -229,6 +240,9 @@ export async function runPipedriveLinkedSaleBackfill({
       recordsWritten: result.recordsWritten,
       status: backgroundStatus(result.status),
       summary: {
+        emailCreated: result.emailCreated,
+        emailRead: result.emailRead,
+        emailUpdated: result.emailUpdated,
         fileCreated: result.fileCreated,
         fileRead: result.fileRead,
         fileUpdated: result.fileUpdated,
@@ -321,6 +335,10 @@ async function writePipedriveLinkedSaleBackfillPreview({
     fileMaxPages,
     mode: "preview",
     result: {
+      emailCreated: 0,
+      emailRead: 0,
+      emailSkipped: 0,
+      emailUpdated: 0,
       fileCreated: 0,
       fileMatched: 0,
       fileRead: 0,
@@ -345,6 +363,10 @@ async function writePipedriveLinkedSaleBackfillPreview({
     batchLimit,
     connectionId,
     cursor,
+    emailCreated: 0,
+    emailRead: 0,
+    emailSkipped: 0,
+    emailUpdated: 0,
     fileCreated: 0,
     fileMatched: 0,
     fileMaxPages,
@@ -442,6 +464,10 @@ async function writePipedriveLinkedSaleBackfill({
       fileMaxPages,
       mode: "import",
       result: {
+        emailCreated: 0,
+        emailRead: 0,
+        emailSkipped: 0,
+        emailUpdated: 0,
         fileCreated: 0,
         fileMatched: 0,
         fileRead: 0,
@@ -466,6 +492,10 @@ async function writePipedriveLinkedSaleBackfill({
       batchLimit,
       connectionId,
       cursor,
+      emailCreated: 0,
+      emailRead: 0,
+      emailSkipped: 0,
+      emailUpdated: 0,
       fileCreated: 0,
       fileMatched: 0,
       fileMaxPages,
@@ -518,6 +548,10 @@ async function writePipedriveLinkedSaleBackfill({
   let noteRead = 0;
   let noteSkipped = 0;
   let noteUpdated = 0;
+  let emailCreated = 0;
+  let emailRead = 0;
+  let emailSkipped = 0;
+  let emailUpdated = 0;
 
   for (const item of batch.items) {
     const row = rowByOpportunityId.get(item.opportunityId);
@@ -542,6 +576,35 @@ async function writePipedriveLinkedSaleBackfill({
       noteUpdated += noteResult.updated;
 
       if (noteResult.status === "not_configured") {
+        row.status = "not-configured";
+      }
+    } catch (error) {
+      row.status = "error";
+      row.warnings.push(errorMessage(error));
+    }
+
+    try {
+      const emailResult = await syncPipedriveLeadEmailsForOpportunity({
+        client,
+        maxPages: fileMaxPages,
+        now,
+        opportunityId: item.opportunityId,
+      });
+
+      row.emailCreated = emailResult.created;
+      row.emailRead = emailResult.emailsRead;
+      row.emailSkipped = emailResult.skipped;
+      row.emailUpdated = emailResult.updated;
+      row.warnings.push(...emailResult.warnings);
+      emailCreated += emailResult.created;
+      emailRead += emailResult.emailsRead;
+      emailSkipped += emailResult.skipped;
+      emailUpdated += emailResult.updated;
+
+      if (
+        emailResult.status === "not_configured" ||
+        emailResult.status === "not_supported"
+      ) {
         row.status = "not-configured";
       }
     } catch (error) {
@@ -592,8 +655,14 @@ async function writePipedriveLinkedSaleBackfill({
 
   const processed = rows.filter((row) => row.status === "synced").length;
   const warningCount = rows.reduce((count, row) => count + row.warningCount, 0);
-  const recordsRead = noteRead + fileResult.filesRead;
-  const recordsWritten = noteCreated + noteUpdated + fileCreated + fileUpdated;
+  const recordsRead = noteRead + emailRead + fileResult.filesRead;
+  const recordsWritten =
+    noteCreated +
+    noteUpdated +
+    emailCreated +
+    emailUpdated +
+    fileCreated +
+    fileUpdated;
   const status: PipedriveLinkedSaleBackfillStatus =
     warningCount > 0 ||
     processed === 0 ||
@@ -606,6 +675,8 @@ async function writePipedriveLinkedSaleBackfill({
       ? "Linked-sale backfill found no CRM sales to update in this batch."
       : `Linked-sale backfill pulled ${noteCreated} new and ${noteUpdated} updated Pipedrive note${
           noteCreated + noteUpdated === 1 ? "" : "s"
+        }, ${emailCreated} new and ${emailUpdated} updated email${
+          emailCreated + emailUpdated === 1 ? "" : "s"
         }, plus ${fileCreated} new and ${fileUpdated} updated file reference${
           fileCreated + fileUpdated === 1 ? "" : "s"
         }, for ${processed} CRM sale${processed === 1 ? "" : "s"}.${
@@ -618,6 +689,10 @@ async function writePipedriveLinkedSaleBackfill({
     fileMaxPages,
     mode: "import",
     result: {
+      emailCreated,
+      emailRead,
+      emailSkipped,
+      emailUpdated,
       fileCreated,
       fileMatched,
       fileRead: fileResult.filesRead,
@@ -642,6 +717,10 @@ async function writePipedriveLinkedSaleBackfill({
     batchLimit,
     connectionId,
     cursor,
+    emailCreated,
+    emailRead,
+    emailSkipped,
+    emailUpdated,
     fileCreated,
     fileMatched,
     fileMaxPages,
@@ -738,7 +817,12 @@ async function readLinkedSaleBatch({
     if (!sale) {
       skippedMissingSale += 1;
       rows.push({
+        emailCreated: 0,
+        emailRead: 0,
+        emailSkipped: 0,
+        emailUpdated: 0,
         existingPipedriveFiles: null,
+        existingPipedriveEmails: null,
         existingPipedriveNotes: null,
         externalLeadId: link.externalId,
         fileCreated: 0,
@@ -760,7 +844,12 @@ async function readLinkedSaleBatch({
     }
 
     const row = {
+      emailCreated: 0,
+      emailRead: 0,
+      emailSkipped: 0,
+      emailUpdated: 0,
       existingPipedriveFiles: null,
+      existingPipedriveEmails: null,
       existingPipedriveNotes: null,
       externalLeadId: link.externalId,
       fileCreated: 0,
@@ -821,7 +910,14 @@ async function readPreviewRows(batch: LinkedSaleBatch) {
             },
           }),
         ]);
+      const existingPipedriveEmails = await prisma.salesCommunication.count({
+        where: {
+          externalId: { startsWith: pipedriveMailExternalIdPrefix },
+          opportunityId: row.opportunityId,
+        },
+      });
 
+      row.existingPipedriveEmails = existingPipedriveEmails;
       row.existingPipedriveFiles = existingPipedriveFiles;
       row.existingPipedriveNotes = existingPipedriveNotes;
     }),
@@ -862,6 +958,10 @@ async function writeAlreadyRunningBackfill({
       activeRunId: activeRun.id,
       activeRunStartedAt: activeRun.startedAt.toISOString(),
       activeRunTrigger: activeRun.trigger,
+      emailCreated: 0,
+      emailRead: 0,
+      emailSkipped: 0,
+      emailUpdated: 0,
       fileCreated: 0,
       fileMatched: 0,
       fileRead: 0,
@@ -903,6 +1003,10 @@ async function writeAlreadyRunningBackfill({
     batchLimit,
     connectionId,
     cursor,
+    emailCreated: 0,
+    emailRead: 0,
+    emailSkipped: 0,
+    emailUpdated: 0,
     fileCreated: 0,
     fileMatched: 0,
     fileMaxPages,
@@ -1028,7 +1132,12 @@ function metadataRows(
   rows: PipedriveLinkedSaleBackfillRow[],
 ): Prisma.InputJsonArray {
   return rows.slice(0, 50).map((row) => ({
+    emailCreated: row.emailCreated,
+    emailRead: row.emailRead,
+    emailSkipped: row.emailSkipped,
+    emailUpdated: row.emailUpdated,
     existingPipedriveFiles: row.existingPipedriveFiles,
+    existingPipedriveEmails: row.existingPipedriveEmails,
     existingPipedriveNotes: row.existingPipedriveNotes,
     externalLeadId: row.externalLeadId,
     fileCreated: row.fileCreated,

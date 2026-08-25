@@ -64,6 +64,18 @@ function compactImportResult(body) {
       ? record.warningCount
       : null,
     linkedSaleBackfill: {
+      emailCreated: Number.isFinite(linkedSaleBackfill.emailCreated)
+        ? linkedSaleBackfill.emailCreated
+        : null,
+      emailRead: Number.isFinite(linkedSaleBackfill.emailRead)
+        ? linkedSaleBackfill.emailRead
+        : null,
+      emailSkipped: Number.isFinite(linkedSaleBackfill.emailSkipped)
+        ? linkedSaleBackfill.emailSkipped
+        : null,
+      emailUpdated: Number.isFinite(linkedSaleBackfill.emailUpdated)
+        ? linkedSaleBackfill.emailUpdated
+        : null,
       fileCreated: Number.isFinite(linkedSaleBackfill.fileCreated)
         ? linkedSaleBackfill.fileCreated
         : null,
