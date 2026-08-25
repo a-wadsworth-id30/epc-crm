@@ -24,10 +24,14 @@ let contactRows: Array<{
   phoneNormalized?: string | null;
 }> = [];
 let externalRecordLinkRows: Array<{
+  id?: string;
   externalId: string;
   externalType: string;
+  integrationId?: string | null;
   internalId: string;
   internalType: string;
+  lastSeenAt?: Date | null;
+  metadata?: unknown;
   provider: string;
 }> = [];
 let salesCommunicationRows: Array<{
@@ -106,6 +110,58 @@ function recordCrmWriteFor(label: string) {
     crmWriteLabels.push(label);
     return { id: "stub-id", name: "Stub record" };
   };
+}
+
+async function upsertExternalRecordLink(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("externalRecordLink.upsert");
+  const where = (
+    args as {
+      where?: {
+        provider_externalType_externalId?: {
+          externalId?: string;
+          externalType?: string;
+          provider?: string;
+        };
+      };
+    }
+  ).where?.provider_externalType_externalId;
+  const create = (args as { create?: Record<string, unknown> }).create ?? {};
+  const update = (args as { update?: Record<string, unknown> }).update ?? {};
+
+  if (!where?.externalId || !where.externalType || !where.provider) {
+    return { id: "external-link-missing" };
+  }
+
+  const existing = externalRecordLinkRows.find(
+    (row) =>
+      row.externalId === where.externalId &&
+      row.externalType === where.externalType &&
+      row.provider === where.provider,
+  );
+  const data = existing ? update : create;
+  const row = existing ?? {
+    externalId: where.externalId,
+    externalType: where.externalType,
+    id: `external-link-${externalRecordLinkRows.length + 1}`,
+    internalId: "",
+    internalType: "",
+    provider: where.provider,
+  };
+
+  if (typeof data.internalId === "string") row.internalId = data.internalId;
+  if (typeof data.internalType === "string") {
+    row.internalType = data.internalType;
+  }
+  if (typeof data.integrationId === "string" || data.integrationId === null) {
+    row.integrationId = data.integrationId;
+  }
+  if (data.lastSeenAt instanceof Date) row.lastSeenAt = data.lastSeenAt;
+  if (data.metadata !== undefined) row.metadata = data.metadata;
+
+  if (!existing) externalRecordLinkRows.push(row);
+
+  return { id: row.id ?? "external-link-existing" };
 }
 
 async function createSalesCommunication(args: unknown) {
@@ -193,7 +249,7 @@ before(async () => {
         },
         externalRecordLink: {
           findUnique: findExternalRecordLink,
-          upsert: recordCrmWriteFor("externalRecordLink.upsert"),
+          upsert: upsertExternalRecordLink,
         },
         salesCommunication: {
           create: createSalesCommunication,
@@ -224,26 +280,47 @@ before(async () => {
           },
           externalRecordLink: {
             findFirst: async (args: unknown) => {
-              const where = (args as {
-                where?: {
-                  externalId?: string;
-                  externalType?: string;
-                  internalType?: string;
-                  provider?: string;
-                };
-              }).where;
+              const where = (
+                args as {
+                  where?: {
+                    externalId?: string;
+                    externalType?: string;
+                    internalId?: string;
+                    internalType?: string;
+                    provider?: string;
+                  };
+                }
+              ).where;
 
               return (
                 externalRecordLinkRows.find(
                   (row) =>
-                    row.externalId === where?.externalId &&
-                    row.externalType === where?.externalType &&
-                    row.internalType === where?.internalType &&
-                    row.provider === where?.provider,
+                    (where?.externalId === undefined ||
+                      row.externalId === where.externalId) &&
+                    (where?.externalType === undefined ||
+                      row.externalType === where.externalType) &&
+                    (where?.internalId === undefined ||
+                      row.internalId === where.internalId) &&
+                    (where?.internalType === undefined ||
+                      row.internalType === where.internalType) &&
+                    (where?.provider === undefined ||
+                      row.provider === where.provider),
                 ) ?? null
               );
             },
             findUnique: findExternalRecordLink,
+            update: async (args: unknown) => {
+              const id = (args as { where?: { id?: string } }).where?.id;
+              const data =
+                (args as { data?: Record<string, unknown> }).data ?? {};
+              const row = externalRecordLinkRows.find(
+                (candidate) => candidate.id === id,
+              );
+              if (row && data.metadata !== undefined)
+                row.metadata = data.metadata;
+
+              return { id: id ?? "missing" };
+            },
           },
           integrationConnection: {
             findUnique: async () => null,
@@ -1120,6 +1197,99 @@ describe("Pipedrive lead import mapping", () => {
     );
     assert.equal(
       crmWriteLabels.filter((label) => label === "salesCommunication.update")
+        .length,
+      1,
+    );
+  });
+
+  it("syncs Pipedrive lead files as external CRM sale references", async () => {
+    const listFileCalls: unknown[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-files",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-files",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+    const client = {
+      defaultLeadSource: "Pipedrive",
+      getOrganization: async () => ({}),
+      getPerson: async () => ({}),
+      listFiles: async (params: unknown) => {
+        listFileCalls.push(params);
+        return {
+          data: [
+            {
+              file_name: "survey-photo.jpg",
+              file_size: 2048,
+              file_type: "image/jpeg",
+              id: 501,
+              lead_id: "lead-files",
+              update_time: "2026-08-24T10:20:00Z",
+              url: "https://files.pipedrive.com/file/501",
+            },
+            {
+              file_name: "other-lead.pdf",
+              id: 502,
+              lead_id: "lead-other",
+            },
+          ],
+          pagination: {
+            limit: 100,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        };
+      },
+    };
+
+    const result = await pipedriveImport.syncPipedriveLeadFilesForOpportunity({
+      client,
+      now: new Date("2026-08-24T12:00:00Z"),
+      opportunityId: "opportunity-files",
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.filesRead, 2);
+    assert.equal(result.filesMatched, 1);
+    assert.equal(result.created, 1);
+    assert.equal(result.updated, 0);
+    assert.deepEqual(listFileCalls, [{ limit: 100, sort: "update_time DESC" }]);
+
+    const fileLink = externalRecordLinkRows.find(
+      (row) => row.externalId === "501" && row.externalType === "file",
+    );
+    const metadata = fileLink?.metadata as Record<string, unknown> | undefined;
+
+    assert.equal(fileLink?.internalId, "opportunity-files");
+    assert.equal(fileLink?.internalType, "salesOpportunity");
+    assert.equal(metadata?.name, "survey-photo.jpg");
+    assert.equal(metadata?.externalLeadId, "lead-files");
+    assert.equal(metadata?.pipedriveFileType, "image/jpeg");
+    assert.equal(
+      metadata?.pipedriveUrl,
+      "https://files.pipedrive.com/file/501",
+    );
+    assert.equal(metadata?.sizeBytes, 2048);
+    assert.equal(metadata?.source, "pipedrive-file-import");
+
+    const secondResult =
+      await pipedriveImport.syncPipedriveLeadFilesForOpportunity({
+        client,
+        now: new Date("2026-08-24T12:05:00Z"),
+        opportunityId: "opportunity-files",
+      });
+
+    assert.equal(secondResult.status, "ok");
+    assert.equal(secondResult.created, 0);
+    assert.equal(secondResult.updated, 1);
+    assert.equal(
+      externalRecordLinkRows.filter((row) => row.externalType === "file")
         .length,
       1,
     );

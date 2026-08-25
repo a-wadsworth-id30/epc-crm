@@ -224,6 +224,46 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.id, 88);
   });
 
+  it("lists files through the v1 files endpoint", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          pagination: {
+            limit: 100,
+            more_items_in_collection: false,
+            next_start: null,
+            start: 0,
+          },
+        },
+        data: [
+          {
+            file_name: "survey-photo.jpg",
+            id: 501,
+            lead_id: "lead-files",
+            url: "https://files.pipedrive.com/file/501",
+          },
+        ],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient().listFiles({
+      limit: 999,
+      sort: "update_time DESC",
+      start: -5,
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/v1/files");
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("sort"), "update_time DESC");
+    assert.equal(url.searchParams.get("start"), "0");
+    assert.equal(result.data[0]?.id, 501);
+    assert.equal(result.pagination.moreItemsInCollection, false);
+  });
+
   it("uses the v2 deals endpoint with cursor pagination", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {

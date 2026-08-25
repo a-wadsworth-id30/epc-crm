@@ -5,6 +5,8 @@ import { AttributionSourceIconSlot } from "@/components/crm-boilerplate/Attribut
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import {
+  PipedriveLeadFilesAutoSync,
+  PipedriveLeadFilesPanel,
   PipedriveLeadNotesAutoSync,
   PipedriveLeadNotesSyncButton,
   SaleAutomationActivity,
@@ -78,6 +80,7 @@ type SalesSignatureRequestSummary = Awaited<
 
 const initialConversationLimit = 40;
 const pipedriveDealExternalType = "deal";
+const pipedriveFileExternalType = "file";
 const pipedriveLeadExternalType = "lead";
 const salesOpportunityExternalType = "salesOpportunity";
 
@@ -184,6 +187,14 @@ function fileTypeLabel(mimeType: string) {
   return "File";
 }
 
+function externalFileTypeLabel(value: string | null) {
+  if (!value) return null;
+  if (value.includes("/")) return fileTypeLabel(value);
+  if (value.length <= 8) return value.toUpperCase();
+
+  return value;
+}
+
 function contactName(contact: { firstName: string; lastName: string } | null) {
   if (!contact) return "";
 
@@ -198,6 +209,34 @@ function jsonObject(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function numberValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const parsed = Number(value.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function dateValue(value: unknown) {
+  const text = stringValue(value);
+  if (!text) return null;
+
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function safeHttpsUrl(value: unknown) {
+  const text = stringValue(value);
+  if (!text) return null;
+
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function discoveryOptionValues(value: unknown) {
@@ -1741,6 +1780,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     linkedNotes,
     mentionMembers,
     pipedriveLeadLink,
+    pipedriveFileLinks,
     r2Integration,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
@@ -1893,6 +1933,23 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         provider: pipedriveProvider,
       },
       select: { externalId: true },
+    }),
+    prisma.externalRecordLink.findMany({
+      where: {
+        externalType: pipedriveFileExternalType,
+        internalId: id,
+        internalType: salesOpportunityExternalType,
+        provider: pipedriveProvider,
+      },
+      orderBy: [{ lastSeenAt: "desc" }, { updatedAt: "desc" }],
+      select: {
+        externalId: true,
+        id: true,
+        lastSeenAt: true,
+        metadata: true,
+        updatedAt: true,
+      },
+      take: 20,
     }),
     prisma.integrationConnection.findUnique({
       where: { provider: cloudflareR2Provider },
@@ -2161,6 +2218,28 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       document.uploadedBy?.name || document.uploadedBy?.email || "CRM user",
     url: mediaAssetUrl(document.id),
   }));
+  const pipedriveFileReferences = pipedriveFileLinks.map((link) => {
+    const metadata = jsonObject(link.metadata);
+    const pipedriveUpdatedAt = dateValue(metadata.pipedriveUpdateTime);
+    const sizeBytes = numberValue(metadata.sizeBytes);
+    const updatedAt =
+      formatDateTime(
+        pipedriveUpdatedAt ?? link.lastSeenAt ?? link.updatedAt,
+        displayFormatting,
+      ) || null;
+
+    return {
+      id: link.id,
+      name:
+        stringValue(metadata.name) ??
+        stringValue(metadata.pipedriveFileName) ??
+        `Pipedrive file ${link.externalId}`,
+      sizeLabel: sizeBytes !== null ? fileSizeLabel(sizeBytes) : null,
+      typeLabel: externalFileTypeLabel(stringValue(metadata.pipedriveFileType)),
+      updatedAt,
+      url: safeHttpsUrl(metadata.pipedriveUrl),
+    };
+  });
   const notes = [
     ...sale.communications
       .filter((communication) => communication.channel === "NOTE")
@@ -2330,7 +2409,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   return (
     <>
       {pipedriveLeadLink ? (
-        <PipedriveLeadNotesAutoSync saleId={sale.id} />
+        <>
+          <PipedriveLeadFilesAutoSync saleId={sale.id} />
+          <PipedriveLeadNotesAutoSync saleId={sale.id} />
+        </>
       ) : null}
       <section className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
@@ -2476,6 +2558,13 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         mentionMembers={mentionMembers}
         documentsPanel={
           <div className="p-4 sm:p-5">
+            {pipedriveLeadLink ? (
+              <PipedriveLeadFilesPanel
+                canSync={user.role === "ADMIN"}
+                files={pipedriveFileReferences}
+                saleId={sale.id}
+              />
+            ) : null}
             <RecordDocumentLibrary
               documentPortals={opportunityDocumentPortals}
               documentShares={opportunityDocumentShares}

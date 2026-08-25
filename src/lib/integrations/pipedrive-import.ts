@@ -19,8 +19,10 @@ import {
   getPipedriveReadOnlyClient,
   pipedriveProvider,
   type PipedriveDeal,
+  type PipedriveFile,
   type PipedriveLead,
   type PipedriveListDealsParams,
+  type PipedriveListFilesParams,
   type PipedriveListLeadsParams,
   type PipedriveListNotesParams,
   type PipedriveListPersonsParams,
@@ -36,6 +38,7 @@ const pipedriveDealImportDisabledWarning =
   "Pipedrive deal imports are disabled. CRM imports Pipedrive Lead Inbox records only.";
 const pipedriveExternalTypes = {
   deal: "deal",
+  file: "file",
   lead: "lead",
   organization: "organization",
   person: "person",
@@ -50,8 +53,10 @@ const pipedriveInternalTypes = {
   deletedOpportunity: "salesOpportunityDeleted",
   opportunity: "salesOpportunity",
 } as const;
+const pipedriveFileImportSource = "pipedrive-file-import";
 const pipedriveNoteImportSource = "pipedrive-note-import";
 const pipedriveNoteExternalIdPrefix = "pipedrive:note:";
+const defaultPipedriveLeadFileMaxPages = 3;
 const defaultPipedriveLeadNoteMaxPages = 3;
 
 type JsonObject = Record<string, unknown>;
@@ -60,6 +65,7 @@ type PipedriveRelatedRecordClient = Pick<
   PipedriveReadOnlyClient,
   "defaultLeadSource" | "getOrganization" | "getPerson"
 > & {
+  listFiles?: PipedriveReadOnlyClient["listFiles"];
   listNotes?: PipedriveReadOnlyClient["listNotes"];
 };
 
@@ -252,6 +258,30 @@ export type PipedriveLeadNotesSyncResult =
       created: 0;
       externalLeadId: null;
       notesRead: 0;
+      opportunityId: string;
+      skipped: 0;
+      status: "not_configured" | "not_linked";
+      updated: 0;
+      warnings: string[];
+    };
+
+export type PipedriveLeadFilesSyncResult =
+  | {
+      created: number;
+      externalLeadId: string;
+      filesMatched: number;
+      filesRead: number;
+      opportunityId: string;
+      skipped: number;
+      status: "ok";
+      updated: number;
+      warnings: string[];
+    }
+  | {
+      created: 0;
+      externalLeadId: null;
+      filesMatched: 0;
+      filesRead: 0;
       opportunityId: string;
       skipped: 0;
       status: "not_configured" | "not_linked";
@@ -456,6 +486,19 @@ type PreviewCrmMatches = {
   contact: PreviewCrmMatch | null;
 };
 
+type PipedriveLeadFilesReadResult = {
+  files: PipedriveFile[];
+  filesMatched: number;
+  filesRead: number;
+  warnings: string[];
+};
+
+type PipedriveLeadFilesWriteResult = {
+  created: number;
+  skipped: number;
+  updated: number;
+};
+
 type PipedriveLeadNotesReadResult = {
   notes: PipedriveNote[];
   notesRead: number;
@@ -571,6 +614,95 @@ export async function importPipedriveLeadPages({
   };
 }
 
+export async function syncPipedriveLeadFilesForOpportunity({
+  client,
+  maxPages,
+  now = new Date(),
+  opportunityId,
+}: {
+  client?: PipedriveRelatedRecordClient | null;
+  maxPages?: number;
+  now?: Date;
+  opportunityId: string;
+}): Promise<PipedriveLeadFilesSyncResult> {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+
+  if (!readClient) {
+    return {
+      created: 0,
+      externalLeadId: null,
+      filesMatched: 0,
+      filesRead: 0,
+      opportunityId,
+      skipped: 0,
+      status: "not_configured",
+      updated: 0,
+      warnings: ["Pipedrive is not configured."],
+    };
+  }
+
+  const [leadLink, opportunity, integration] = await Promise.all([
+    prisma.externalRecordLink.findFirst({
+      where: {
+        externalType: pipedriveExternalTypes.lead,
+        internalId: opportunityId,
+        internalType: pipedriveInternalTypes.opportunity,
+        provider: pipedriveProvider,
+      },
+      select: { externalId: true },
+    }),
+    prisma.salesOpportunity.findUnique({
+      where: { id: opportunityId },
+      select: { id: true },
+    }),
+    prisma.integrationConnection.findUnique({
+      where: { provider: pipedriveProvider },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!leadLink || !opportunity) {
+    return {
+      created: 0,
+      externalLeadId: null,
+      filesMatched: 0,
+      filesRead: 0,
+      opportunityId,
+      skipped: 0,
+      status: "not_linked",
+      updated: 0,
+      warnings: ["Sale is not linked to a Pipedrive lead."],
+    };
+  }
+
+  const fileRead = await readPipedriveLeadFiles(
+    readClient,
+    leadLink.externalId,
+    maxPages,
+  );
+  const writeResult = await prisma.$transaction((tx) =>
+    syncPipedriveLeadFileRecords(tx, {
+      externalLeadId: leadLink.externalId,
+      files: fileRead.files,
+      integrationId: integration?.id ?? null,
+      now,
+      opportunityId: opportunity.id,
+    }),
+  );
+
+  return {
+    created: writeResult.created,
+    externalLeadId: leadLink.externalId,
+    filesMatched: fileRead.filesMatched,
+    filesRead: fileRead.filesRead,
+    opportunityId,
+    skipped: writeResult.skipped,
+    status: "ok",
+    updated: writeResult.updated,
+    warnings: fileRead.warnings,
+  };
+}
+
 export async function syncPipedriveLeadNotesForOpportunity({
   client,
   now = new Date(),
@@ -624,7 +756,10 @@ export async function syncPipedriveLeadNotesForOpportunity({
     };
   }
 
-  const noteRead = await readPipedriveLeadNotes(readClient, leadLink.externalId);
+  const noteRead = await readPipedriveLeadNotes(
+    readClient,
+    leadLink.externalId,
+  );
   const writeResult = await prisma.$transaction((tx) =>
     syncPipedriveLeadNoteRecords(tx, {
       contactId: opportunity.contactId,
@@ -2319,6 +2454,180 @@ async function readPipedriveLeadNotes(
   return { notes, notesRead, warnings };
 }
 
+async function readPipedriveLeadFiles(
+  client: PipedriveRelatedRecordClient,
+  externalLeadId: string,
+  maxPages = defaultPipedriveLeadFileMaxPages,
+): Promise<PipedriveLeadFilesReadResult> {
+  if (typeof client.listFiles !== "function") {
+    return { files: [], filesMatched: 0, filesRead: 0, warnings: [] };
+  }
+
+  const files: PipedriveFile[] = [];
+  const warnings: string[] = [];
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveLeadFileMaxPages,
+  );
+  let filesRead = 0;
+  let pagesRead = 0;
+  let start: number | null = null;
+
+  try {
+    while (pagesRead < pageLimit) {
+      const params: PipedriveListFilesParams = {
+        limit: 100,
+        sort: "update_time DESC",
+      };
+      if (start !== null) params.start = start;
+
+      const page = await client.listFiles(params);
+      pagesRead += 1;
+      filesRead += page.data.length;
+      files.push(
+        ...page.data.filter(
+          (file) => pipedriveLeadIdFromFile(file) === externalLeadId,
+        ),
+      );
+
+      if (
+        !page.pagination.moreItemsInCollection ||
+        page.pagination.nextStart === null
+      ) {
+        break;
+      }
+
+      start = page.pagination.nextStart;
+    }
+  } catch (error) {
+    warnings.push(pipedriveReadWarning("lead files", externalLeadId, error));
+  }
+
+  return {
+    files,
+    filesMatched: files.length,
+    filesRead,
+    warnings,
+  };
+}
+
+async function syncPipedriveLeadFileRecords(
+  tx: Prisma.TransactionClient,
+  {
+    externalLeadId,
+    files,
+    integrationId,
+    now,
+    opportunityId,
+  }: {
+    externalLeadId: string;
+    files: PipedriveFile[];
+    integrationId: string | null;
+    now: Date;
+    opportunityId: string;
+  },
+): Promise<PipedriveLeadFilesWriteResult> {
+  let created = 0;
+  let skipped = 0;
+  let updated = 0;
+
+  for (const file of files) {
+    const mapped = mapPipedriveFileToExternalLink({
+      externalLeadId,
+      file,
+      now,
+      opportunityId,
+    });
+
+    if (!mapped) {
+      skipped += 1;
+      continue;
+    }
+
+    const existingFileLink = await tx.externalRecordLink.findUnique({
+      where: {
+        provider_externalType_externalId: {
+          externalId: mapped.externalId,
+          externalType: mapped.externalType,
+          provider: pipedriveProvider,
+        },
+      },
+      select: { id: true },
+    });
+
+    await upsertExternalRecordLink(tx, {
+      externalId: mapped.externalId,
+      externalType: mapped.externalType,
+      integrationId,
+      internalId: mapped.internalId,
+      internalType: mapped.internalType,
+      metadata: mapped.metadata,
+      now,
+    });
+
+    if (existingFileLink) {
+      updated += 1;
+    } else {
+      created += 1;
+    }
+  }
+
+  return { created, skipped, updated };
+}
+
+function mapPipedriveFileToExternalLink({
+  externalLeadId,
+  file,
+  now,
+  opportunityId,
+}: {
+  externalLeadId: string;
+  file: PipedriveFile;
+  now: Date;
+  opportunityId: string;
+}) {
+  if (file.active_flag === false) return null;
+
+  const externalFileId = externalId(file.id);
+  if (!externalFileId) return null;
+
+  const linkedLeadId = pipedriveLeadIdFromFile(file);
+  if (linkedLeadId !== externalLeadId) return null;
+
+  const name =
+    cleanText(file.name) ??
+    cleanText(file.file_name) ??
+    `Pipedrive file ${externalFileId}`;
+  const pipedriveUrl =
+    httpsUrl(file.url) ?? httpsUrl(file.download_url) ?? null;
+  const sizeBytes =
+    nonNegativeInteger(file.file_size) ?? nonNegativeInteger(file.size);
+  const metadata = {
+    externalFileId,
+    externalLeadId,
+    importedFrom: "pipedrive",
+    name,
+    pipedriveAddTime: cleanText(file.add_time),
+    pipedriveFileName: cleanText(file.file_name),
+    pipedriveFileType:
+      cleanText(file.file_type) ?? cleanText(file.mime_type) ?? null,
+    pipedriveUpdateTime: cleanText(file.update_time),
+    pipedriveUrl,
+    provider: pipedriveProvider,
+    sizeBytes,
+    source: pipedriveFileImportSource,
+    syncedAt: now.toISOString(),
+  } satisfies Prisma.InputJsonObject;
+
+  return {
+    externalId: externalFileId,
+    externalType: pipedriveExternalTypes.file,
+    internalId: opportunityId,
+    internalType: pipedriveInternalTypes.opportunity,
+    metadata,
+  };
+}
+
 async function syncPipedriveLeadNoteRecord({
   note,
   now,
@@ -2574,6 +2883,38 @@ function pipedriveLeadIdFromNote(note: PipedriveNote) {
     externalId(leadIdRecord.id) ??
     externalId(leadIdRecord.value)
   );
+}
+
+function pipedriveLeadIdFromFile(file: PipedriveFile) {
+  const fileRecord = objectValue(file);
+  const leadRecord = objectValue(fileRecord.lead);
+  const leadIdRecord = objectValue(fileRecord.lead_id);
+
+  return (
+    externalId(file.lead_id) ??
+    externalId(leadRecord.id) ??
+    externalId(leadIdRecord.id) ??
+    externalId(leadIdRecord.value)
+  );
+}
+
+function httpsUrl(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function nonNegativeInteger(value: unknown) {
+  const number = numberValue(value);
+  if (number === null || number < 0) return null;
+
+  return Math.trunc(number);
 }
 
 function latestLeadListParams(params: PipedriveListLeadsParams = {}) {

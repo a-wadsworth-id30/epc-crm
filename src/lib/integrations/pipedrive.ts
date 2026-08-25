@@ -186,6 +186,23 @@ export type PipedriveNote = Record<string, unknown> & {
   user_id?: unknown;
 };
 
+export type PipedriveFile = Record<string, unknown> & {
+  id?: number;
+  active_flag?: boolean;
+  add_time?: string;
+  download_url?: string;
+  file_name?: string;
+  file_size?: unknown;
+  file_type?: string;
+  lead?: unknown;
+  lead_id?: unknown;
+  mime_type?: string;
+  name?: string;
+  size?: unknown;
+  update_time?: string;
+  url?: string;
+};
+
 export type PipedriveListLeadsParams = {
   filterId?: number | null;
   limit?: number | null;
@@ -236,6 +253,12 @@ export type PipedriveListNotesParams = {
   updatedSince?: string | null;
   updatedUntil?: string | null;
   userId?: number | null;
+};
+
+export type PipedriveListFilesParams = {
+  limit?: number | null;
+  sort?: string | null;
+  start?: number | null;
 };
 
 export class PipedriveApiError extends Error {
@@ -454,6 +477,14 @@ export class PipedriveReadOnlyClient {
       updated_since: pipedriveDateTimeParam(params.updatedSince),
       updated_until: pipedriveDateTimeParam(params.updatedUntil),
       user_id: integerParam(params.userId),
+    });
+  }
+
+  async listFiles(params: PipedriveListFilesParams = {}) {
+    return this.getList<PipedriveFile>("files", {
+      limit: integerParam(params.limit, { max: 500 }),
+      sort: params.sort || undefined,
+      start: integerParam(params.start, { min: 0 }),
     });
   }
 

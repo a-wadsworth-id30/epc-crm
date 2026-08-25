@@ -146,12 +146,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
   runtime fallback. `src/lib/integrations/pipedrive.ts` provides the
   server-side read-only Pipedrive client for current-user, user, lead, note,
-  deal, person and organisation GET requests, plus cursor-paginated Pipedrive
+  file, deal, person and organisation GET requests, plus cursor-paginated Pipedrive
   v2 deal and person listing. `src/lib/integrations/pipedrive-import.ts` maps
   Pipedrive leads into CRM contacts, companies, opportunities, communications
   and `ExternalRecordLink` rows, imports Pipedrive Lead Inbox notes as
-  idempotent CRM sale `NOTE` communications, and also maps standalone Pipedrive
-  persons into CRM contacts and companies without creating opportunities. Lead
+  idempotent CRM sale `NOTE` communications, stores Pipedrive lead file
+  metadata as CRM-only `ExternalRecordLink` references for linked sales, and
+  also maps standalone Pipedrive persons into CRM contacts and companies
+  without creating opportunities. Lead
   note import converts Pipedrive HTML note content to plain text, uses stable
   Pipedrive note IDs to update existing CRM notes instead of duplicating them,
   and can be run from an admin-only sale detail "Pull Pipedrive notes" action
@@ -161,7 +163,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   can auto-import even when the lead itself has not changed. Linked sale detail
   pages also trigger a throttled post-load CRM action that refreshes Pipedrive
   lead notes and reloads the page only when CRM notes were created or updated,
-  providing a fallback when scheduled jobs or note webhooks are delayed. The Pipedrive
+  providing a fallback when scheduled jobs or note webhooks are delayed.
+  Pipedrive-linked sale document panels also show provider file references and
+  can run a throttled/manual metadata refresh without downloading files,
+  creating CRM `FileAsset` rows or writing back to Pipedrive. The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies

@@ -250,6 +250,8 @@ Main files:
 - `src/lib/integrations/pipedrive-contact-sync.ts`
 - `src/lib/integrations/pipedrive-webhooks.ts`
 - `src/lib/integrations/pipedrive-webhook-registration.ts`
+- `src/components/crm-boilerplate/PipedriveLeadFilesAutoSync.tsx`
+- `src/components/crm-boilerplate/PipedriveLeadFilesPanel.tsx`
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
 - `/api/maintenance/pipedrive-lead-import`
 - `/api/maintenance/pipedrive-contact-import`
@@ -265,12 +267,17 @@ read-back imports and direct single-lead imports from a Lead Inbox URL/UUID;
 incremental lead pulls also sweep the latest one lead page before using the
 saved cursor. Lead imports and the sale detail admin action can also pull
 Pipedrive Lead Inbox notes with GET requests and store them as CRM
-`SalesCommunication` note rows. None of these paths write back to Pipedrive.
+`SalesCommunication` note rows. Pipedrive-linked sale detail pages can also
+pull Pipedrive file metadata with GET requests and store provider file
+references as CRM-only `ExternalRecordLink` rows. Those references are shown in
+the sale document panel separately from R2-backed CRM `FileAsset` rows; CRM
+does not download, reupload, delete or share the Pipedrive files. None of
+these paths write back to Pipedrive.
 
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
 also exposes a server-side read-only client that uses Pipedrive's `x-api-token`
-header for GET-only current-user, user, lead, note, deal, person and
+header for GET-only current-user, user, lead, note, file, deal, person and
 organisation requests, plus cursor-paginated Pipedrive v2 deal and person
 listing.
 `src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/person/
@@ -280,7 +287,11 @@ plain text and uses stable Pipedrive note IDs in `SalesCommunication.externalId`
 so repeated imports update existing CRM notes instead of duplicating them. Sale
 detail pages for Pipedrive-linked leads run a throttled post-load note refresh
 action that uses the same pull-only importer and refreshes the route only when
-CRM notes changed. The
+CRM notes changed. The same sale detail page runs a throttled post-load
+Pipedrive file metadata refresh and exposes an admin-only "Pull Pipedrive
+files" action. Pipedrive file IDs are stored under `ExternalRecordLink` with
+`externalType = "file"` so repeated refreshes update the existing CRM
+reference instead of creating duplicate rows. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and
