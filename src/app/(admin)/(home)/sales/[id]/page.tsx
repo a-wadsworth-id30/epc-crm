@@ -2217,6 +2217,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       ) || null;
 
     return {
+      downloadUrl: `/api/pipedrive/files/${encodeURIComponent(link.id)}?download=1`,
       id: link.id,
       mimeType:
         stringValue(metadata.pipedriveFileType) ?? "application/octet-stream",

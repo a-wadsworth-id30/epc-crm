@@ -12,7 +12,7 @@ const pipedriveFileExternalType = "file";
 const salesOpportunityInternalType = "salesOpportunity";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ linkId: string }> },
 ) {
   const user = await getCurrentUser();
@@ -88,13 +88,13 @@ export async function GET(
       stringValue(metadata.name) ??
       stringValue(metadata.pipedriveFileName) ??
       `pipedrive-file-${fileId}`;
+    const download = new URL(request.url).searchParams.get("download") === "1";
     const headers = new Headers();
-    const contentType =
-      response.headers.get("content-type") || "application/octet-stream";
+    const contentType = responseContentType(response, metadata);
     const contentLength = response.headers.get("content-length");
 
     headers.set("Cache-Control", "private, no-store");
-    headers.set("Content-Disposition", inlineContentDisposition(fileName));
+    headers.set("Content-Disposition", contentDisposition(fileName, download));
     headers.set("Content-Type", contentType);
     if (contentLength) headers.set("Content-Length", contentLength);
 
@@ -148,8 +148,31 @@ function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function inlineContentDisposition(fileName: string) {
-  return `inline; filename="${headerFileName(fileName)}"`;
+function contentDisposition(fileName: string, download: boolean) {
+  return `${download ? "attachment" : "inline"}; filename="${headerFileName(fileName)}"`;
+}
+
+function responseContentType(
+  response: Response,
+  metadata: Record<string, unknown>,
+) {
+  const providerContentType = response.headers.get("content-type");
+  const metadataContentType = stringValue(metadata.pipedriveFileType);
+
+  if (providerContentType && isSpecificContentType(providerContentType)) {
+    return providerContentType;
+  }
+  if (metadataContentType && isSpecificContentType(metadataContentType)) {
+    return metadataContentType;
+  }
+
+  return providerContentType || "application/octet-stream";
+}
+
+function isSpecificContentType(value: string) {
+  const normalized = value.toLowerCase().split(";")[0]?.trim() ?? "";
+
+  return normalized !== "" && normalized !== "application/octet-stream";
 }
 
 function headerFileName(value: string) {

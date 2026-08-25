@@ -172,7 +172,7 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   access, downloads the Pipedrive file server-side with the stored API token and
   streams it back to the user without exposing Pipedrive credentials or storing
   the file in CRM, with the sale document panel using the shared CRM file
-  preview modal for provider files before direct opening. The Pipedrive
+  preview modal and a separate download action for provider files. The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies

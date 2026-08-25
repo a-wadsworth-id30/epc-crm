@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, RefreshCw } from "lucide-react";
+import { Download, FileText, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
@@ -8,6 +8,7 @@ import FilePreviewButton from "@/components/crm-boilerplate/FilePreviewButton";
 import { syncPipedriveLeadFilesAction } from "@/lib/actions/sales";
 
 export type PipedriveLeadFileReference = {
+  downloadUrl: string;
   id: string;
   mimeType: string;
   name: string;
@@ -117,6 +118,14 @@ export default function PipedriveLeadFilesPanel({
                     }}
                     className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
                   />
+                  <a
+                    href={file.downloadUrl}
+                    download
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
+                    aria-label={`Download ${file.name}`}
+                  >
+                    <Download className="h-4 w-4" />
+                  </a>
                 </div>
               </div>
             );
