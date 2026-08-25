@@ -297,6 +297,74 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.data[0]?.body, "<p>Hello</p>");
   });
 
+  it("lists mailbox threads from bounded read-only folders", async () => {
+    const requests: Array<{ url: string }> = [];
+    globalThis.fetch = (async (input) => {
+      requests.push({ url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          pagination: {
+            limit: 50,
+            more_items_in_collection: false,
+            next_start: null,
+            start: 0,
+          },
+        },
+        data: [{ id: 801, lead_id: "lead-thread", subject: "Survey" }],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient().listMailThreads({
+      folder: "sent",
+      limit: 999,
+      start: -5,
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/v1/mailbox/mailThreads");
+    assert.equal(url.searchParams.get("folder"), "sent");
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("start"), "0");
+    assert.equal(result.data[0]?.id, 801);
+    assert.equal(result.data[0]?.lead_id, "lead-thread");
+  });
+
+  it("reads mailbox thread messages and full message body with GET requests", async () => {
+    const requests: Array<{ init?: RequestInit; url: string }> = [];
+    globalThis.fetch = (async (input, init) => {
+      requests.push({ init, url: String(input) });
+      if (String(input).includes("/mailMessages/701")) {
+        return jsonResponse({
+          data: { body: "<p>Full body</p>", id: 701, subject: "Survey" },
+          success: true,
+        });
+      }
+
+      return jsonResponse({
+        data: [{ id: 701, mail_thread_id: 801, subject: "Survey" }],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const client = createClient();
+    const messages = await client.listMailThreadMessages(801);
+    const message = await client.getMailMessage(701, { includeBody: true });
+    const threadMessagesUrl = new URL(requests[0]!.url);
+    const messageUrl = new URL(requests[1]!.url);
+
+    assert.equal(
+      threadMessagesUrl.pathname,
+      "/v1/mailbox/mailThreads/801/mailMessages",
+    );
+    assert.equal(requests[0]?.init?.method, "GET");
+    assert.equal(messageUrl.pathname, "/v1/mailbox/mailMessages/701");
+    assert.equal(messageUrl.searchParams.get("include_body"), "1");
+    assert.equal(requests[1]?.init?.method, "GET");
+    assert.equal(messages.data[0]?.id, 701);
+    assert.equal(message.body, "<p>Full body</p>");
+  });
+
   it("downloads files with GET and the stored token header", async () => {
     const requests: Array<{ init?: RequestInit; url: string }> = [];
     globalThis.fetch = (async (input, init) => {

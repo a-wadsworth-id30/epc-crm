@@ -269,8 +269,9 @@ incremental lead pulls also sweep the latest one lead page before using the
 saved cursor. Lead imports and the sale detail admin action can also pull
 Pipedrive Lead Inbox notes with GET requests and store them as CRM
 `SalesCommunication` note rows. Pipedrive-linked sale detail pages can also
-pull person mail messages associated with the linked Pipedrive lead contact
-through Pipedrive GET requests and store them as CRM-only `EMAIL`
+pull mailbox threads linked to the Lead Inbox UUID and person mail messages
+associated with the linked Pipedrive lead contact through Pipedrive GET
+requests and store them as CRM-only `EMAIL`
 `SalesCommunication`/`EmailMessage` rows using stable `pipedrive:mail:*`
 external IDs. Pipedrive-linked sale detail pages can also pull Pipedrive file
 metadata with GET requests and store provider file references as CRM-only
@@ -290,8 +291,8 @@ The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
 also exposes a server-side read-only client that uses Pipedrive's `x-api-token`
 header for GET-only current-user, user, lead, note, file, deal, person, person
-mail-message and organisation requests, plus cursor-paginated Pipedrive v2 deal
-and person listing.
+mail-message, mailbox thread/mail-message and organisation requests, plus
+cursor-paginated Pipedrive v2 deal and person listing.
 `src/lib/integrations/pipedrive-import.ts` maps Pipedrive lead/person/
 organisation records into CRM company, contact, sales opportunity,
 communication and external-link rows. It converts Pipedrive lead note HTML to
@@ -309,9 +310,10 @@ Pipedrive settings page also exposes a historical linked-sale backfill for CRM
 sales that already have Pipedrive Lead Inbox links. It supports preview and
 import modes, processes bounded cursor batches, writes
 `MarketingIntegrationSyncLog` and `BackgroundJobRun` summaries, pulls Pipedrive
-notes into idempotent CRM sale notes, pulls Pipedrive person mail messages into
-CRM sale email communications, and stores Pipedrive file metadata as CRM-only
-provider file references. The backfill reads a bounded set of Pipedrive file
+notes into idempotent CRM sale notes, pulls Pipedrive Lead Inbox mailbox thread
+messages plus person mail messages into CRM sale email communications, and
+stores Pipedrive file metadata as CRM-only provider file references. The
+backfill reads a bounded set of Pipedrive file
 pages once per batch and groups files by lead ID before writing CRM references,
 avoiding repeated per-sale file scans while remaining
 pull-only. Manual and scheduled Pipedrive lead pulls also run one bounded

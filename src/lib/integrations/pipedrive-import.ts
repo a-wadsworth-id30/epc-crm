@@ -24,11 +24,13 @@ import {
   type PipedriveListDealsParams,
   type PipedriveListFilesParams,
   type PipedriveListLeadsParams,
+  type PipedriveListMailThreadsParams,
   type PipedriveListNotesParams,
   type PipedriveListPersonMailMessagesParams,
   type PipedriveListPersonsParams,
   type PipedriveListResult,
   type PipedriveMailMessage,
+  type PipedriveMailThread,
   type PipedriveNote,
   type PipedriveOrganization,
   type PipedrivePerson,
@@ -63,6 +65,7 @@ const pipedriveNoteExternalIdPrefix = "pipedrive:note:";
 const defaultPipedriveLeadFileMaxPages = 3;
 const defaultPipedriveLeadEmailMaxPages = 3;
 const defaultPipedriveLeadNoteMaxPages = 3;
+const pipedriveLeadEmailThreadFolders = ["inbox", "sent", "archive"] as const;
 
 type JsonObject = Record<string, unknown>;
 
@@ -71,7 +74,10 @@ type PipedriveRelatedRecordClient = Pick<
   "defaultLeadSource" | "getOrganization" | "getPerson"
 > & {
   getLead?: PipedriveReadOnlyClient["getLead"];
+  getMailMessage?: PipedriveReadOnlyClient["getMailMessage"];
   listFiles?: PipedriveReadOnlyClient["listFiles"];
+  listMailThreadMessages?: PipedriveReadOnlyClient["listMailThreadMessages"];
+  listMailThreads?: PipedriveReadOnlyClient["listMailThreads"];
   listPersonMailMessages?: PipedriveReadOnlyClient["listPersonMailMessages"];
   listNotes?: PipedriveReadOnlyClient["listNotes"];
 };
@@ -301,7 +307,7 @@ export type PipedriveLeadEmailsSyncResult =
       created: number;
       emailsRead: number;
       externalLeadId: string;
-      externalPersonId: string;
+      externalPersonId: string | null;
       opportunityId: string;
       skipped: number;
       status: "ok";
@@ -871,7 +877,13 @@ export async function syncPipedriveLeadEmailsForOpportunity({
     };
   }
 
-  if (typeof readClient.listPersonMailMessages !== "function") {
+  const canReadLeadMailThreads =
+    typeof readClient.listMailThreads === "function" &&
+    typeof readClient.listMailThreadMessages === "function";
+  const canReadPersonMailMessages =
+    typeof readClient.listPersonMailMessages === "function";
+
+  if (!canReadLeadMailThreads && !canReadPersonMailMessages) {
     return {
       created: 0,
       emailsRead: 0,
@@ -933,7 +945,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
     warnings,
   });
 
-  if (!personId) {
+  if (!personId && !canReadLeadMailThreads) {
     return {
       created: 0,
       emailsRead: 0,
@@ -962,7 +974,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
       contactId: opportunity.contactId,
       emails: emailRead.emails,
       externalLeadId: leadLink.externalId,
-      externalPersonId: String(personId),
+      externalPersonId: personId ? String(personId) : null,
       now,
       opportunityId: opportunity.id,
     }),
@@ -972,7 +984,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
     created: writeResult.created,
     emailsRead: emailRead.emailsRead,
     externalLeadId: leadLink.externalId,
-    externalPersonId: String(personId),
+    externalPersonId: personId ? String(personId) : null,
     opportunityId,
     skipped: writeResult.skipped,
     status: "ok",
@@ -2927,6 +2939,139 @@ async function resolvePipedrivePersonIdForLeadEmailSync({
 async function readPipedriveLeadEmails(
   client: PipedriveRelatedRecordClient,
   externalLeadId: string,
+  personId: number | null,
+  maxPages = defaultPipedriveLeadEmailMaxPages,
+): Promise<PipedriveLeadEmailsReadResult> {
+  const emails: PipedriveMailMessage[] = [];
+  const warnings: string[] = [];
+  let emailsRead = 0;
+
+  const threadEmailRead = await readPipedriveLeadThreadEmails(
+    client,
+    externalLeadId,
+    maxPages,
+  );
+  emails.push(...threadEmailRead.emails);
+  emailsRead += threadEmailRead.emailsRead;
+  warnings.push(...threadEmailRead.warnings);
+
+  if (personId && typeof client.listPersonMailMessages === "function") {
+    const personEmailRead = await readPipedrivePersonEmailsForLead(
+      client,
+      externalLeadId,
+      personId,
+      maxPages,
+    );
+    emails.push(...personEmailRead.emails);
+    emailsRead += personEmailRead.emailsRead;
+    warnings.push(...personEmailRead.warnings);
+  }
+
+  return {
+    emails: deduplicatePipedriveMailMessages(emails),
+    emailsRead,
+    warnings,
+  };
+}
+
+async function readPipedriveLeadThreadEmails(
+  client: PipedriveRelatedRecordClient,
+  externalLeadId: string,
+  maxPages = defaultPipedriveLeadEmailMaxPages,
+): Promise<PipedriveLeadEmailsReadResult> {
+  if (
+    typeof client.listMailThreads !== "function" ||
+    typeof client.listMailThreadMessages !== "function"
+  ) {
+    return { emails: [], emailsRead: 0, warnings: [] };
+  }
+
+  const emails: PipedriveMailMessage[] = [];
+  const matchedThreads = new Map<number, PipedriveMailThread>();
+  const warnings: string[] = [];
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveLeadEmailMaxPages,
+  );
+  let emailsRead = 0;
+
+  try {
+    for (const folder of pipedriveLeadEmailThreadFolders) {
+      let pagesRead = 0;
+      let start: number | null = null;
+
+      while (pagesRead < pageLimit) {
+        const params: PipedriveListMailThreadsParams = {
+          folder,
+          limit: 50,
+        };
+        if (start !== null) params.start = start;
+
+        const page = await client.listMailThreads(params);
+        pagesRead += 1;
+
+        for (const thread of page.data) {
+          const threadLeadId = pipedriveLeadIdFromMailThread(thread);
+          if (threadLeadId !== externalLeadId) continue;
+
+          const threadId = pipedriveMailThreadId(thread);
+          if (!threadId) continue;
+
+          matchedThreads.set(threadId, thread);
+        }
+
+        if (
+          !page.pagination.moreItemsInCollection ||
+          page.pagination.nextStart === null
+        ) {
+          break;
+        }
+
+        start = page.pagination.nextStart;
+      }
+    }
+
+    for (const [threadId, thread] of matchedThreads) {
+      const page = await client.listMailThreadMessages(threadId);
+      emailsRead += page.data.length;
+
+      for (const message of page.data) {
+        const messageWithThreadContext = withPipedriveMailThreadContext({
+          externalLeadId,
+          message,
+          thread,
+          threadId,
+        });
+        if (
+          !shouldImportPipedriveMailMessageForLead(
+            messageWithThreadContext,
+            externalLeadId,
+          )
+        ) {
+          continue;
+        }
+
+        emails.push(
+          await readFullPipedriveMailMessageIfNeeded(
+            client,
+            messageWithThreadContext,
+            warnings,
+          ),
+        );
+      }
+    }
+  } catch (error) {
+    warnings.push(
+      pipedriveReadWarning("lead email threads", externalLeadId, error),
+    );
+  }
+
+  return { emails, emailsRead, warnings };
+}
+
+async function readPipedrivePersonEmailsForLead(
+  client: PipedriveRelatedRecordClient,
+  externalLeadId: string,
   personId: number,
   maxPages = defaultPipedriveLeadEmailMaxPages,
 ): Promise<PipedriveLeadEmailsReadResult> {
@@ -2979,6 +3124,103 @@ async function readPipedriveLeadEmails(
   return { emails, emailsRead, warnings };
 }
 
+function deduplicatePipedriveMailMessages(emails: PipedriveMailMessage[]) {
+  const uniqueEmails: PipedriveMailMessage[] = [];
+  const seen = new Set<string>();
+
+  for (const email of emails) {
+    const mailId = pipedriveMailMessageExternalId(email);
+    if (!mailId) {
+      uniqueEmails.push(email);
+      continue;
+    }
+    if (seen.has(mailId)) continue;
+
+    seen.add(mailId);
+    uniqueEmails.push(email);
+  }
+
+  return uniqueEmails;
+}
+
+async function readFullPipedriveMailMessageIfNeeded(
+  client: PipedriveRelatedRecordClient,
+  message: PipedriveMailMessage,
+  warnings: string[],
+) {
+  if (
+    pipedriveMailMessageHasBody(message) ||
+    typeof client.getMailMessage !== "function"
+  ) {
+    return message;
+  }
+
+  const mailId = numericId(pipedriveMailMessageExternalId(message));
+  if (!mailId) return message;
+
+  try {
+    const fullMessage = await client.getMailMessage(mailId, {
+      includeBody: true,
+    });
+
+    return {
+      ...message,
+      ...fullMessage,
+      deal_id:
+        fullMessage.deal_id ??
+        objectValue(fullMessage).deal_id ??
+        message.deal_id ??
+        objectValue(message).deal_id,
+      lead_id:
+        fullMessage.lead_id ??
+        objectValue(fullMessage).lead_id ??
+        message.lead_id ??
+        objectValue(message).lead_id,
+      mail_thread_id:
+        fullMessage.mail_thread_id ??
+        objectValue(fullMessage).mail_thread_id ??
+        message.mail_thread_id ??
+        objectValue(message).mail_thread_id,
+    } satisfies PipedriveMailMessage;
+  } catch (error) {
+    warnings.push(
+      pipedriveReadWarning(
+        "mail message body",
+        pipedriveMailMessageExternalId(message) ?? "unknown",
+        error,
+      ),
+    );
+    return message;
+  }
+}
+
+function withPipedriveMailThreadContext({
+  externalLeadId,
+  message,
+  thread,
+  threadId,
+}: {
+  externalLeadId: string;
+  message: PipedriveMailMessage;
+  thread: PipedriveMailThread;
+  threadId: number;
+}) {
+  const messageRecord = objectValue(message);
+  const messageLeadId = pipedriveLeadIdFromMailMessage(message);
+  const threadDealId = pipedriveDealIdFromMailThread(thread);
+
+  return {
+    ...message,
+    deal_id: messageRecord.deal_id ?? threadDealId,
+    lead_id: messageLeadId ?? externalLeadId,
+    mail_thread_id:
+      message.mail_thread_id ??
+      messageRecord.mail_thread_id ??
+      messageRecord.thread_id ??
+      threadId,
+  } satisfies PipedriveMailMessage;
+}
+
 async function syncPipedriveLeadEmailRecords(
   tx: Prisma.TransactionClient,
   {
@@ -2994,7 +3236,7 @@ async function syncPipedriveLeadEmailRecords(
     contactId: string | null;
     emails: PipedriveMailMessage[];
     externalLeadId: string;
-    externalPersonId: string;
+    externalPersonId: string | null;
     now: Date;
     opportunityId: string;
   },
@@ -3095,15 +3337,12 @@ function mapPipedriveMailMessageToSalesEmail({
   contactId: string | null;
   email: PipedriveMailMessage;
   externalLeadId: string;
-  externalPersonId: string;
+  externalPersonId: string | null;
   now: Date;
   opportunityId: string;
 }) {
   const emailRecord = objectValue(email);
-  const externalMailId =
-    externalId(email.id) ??
-    externalId(emailRecord.mail_message_id) ??
-    externalId(emailRecord.message_id);
+  const externalMailId = pipedriveMailMessageExternalId(email);
 
   if (!externalMailId) return null;
 
@@ -3156,7 +3395,7 @@ function mapPipedriveMailMessageToSalesEmail({
   const metadata = {
     externalLeadId,
     externalMailId,
-    externalPersonId,
+    externalPersonId: externalPersonId ?? null,
     externalThreadId: externalThreadId ?? null,
     importedFrom: "pipedrive",
     matchedDealId,
@@ -3621,6 +3860,28 @@ function shouldImportPipedriveMailMessageForLead(
   return !pipedriveDealIdFromMailMessage(email);
 }
 
+function pipedriveMailMessageExternalId(email: PipedriveMailMessage) {
+  const emailRecord = objectValue(email);
+
+  return (
+    externalId(email.id) ??
+    externalId(emailRecord.mail_message_id) ??
+    externalId(emailRecord.message_id)
+  );
+}
+
+function pipedriveMailMessageHasBody(email: PipedriveMailMessage) {
+  const emailRecord = objectValue(email);
+
+  return Boolean(
+    cleanText(email.body_plain) ??
+      cleanText(emailRecord.body_text) ??
+      cleanText(emailRecord.text) ??
+      cleanText(email.body) ??
+      cleanText(emailRecord.content),
+  );
+}
+
 function pipedriveLeadIdFromMailMessage(email: PipedriveMailMessage) {
   const emailRecord = objectValue(email);
   const leadRecord = objectValue(emailRecord.lead);
@@ -3628,6 +3889,19 @@ function pipedriveLeadIdFromMailMessage(email: PipedriveMailMessage) {
 
   return (
     externalId(emailRecord.lead_id) ??
+    externalId(leadRecord.id) ??
+    externalId(leadIdRecord.id) ??
+    externalId(leadIdRecord.value)
+  );
+}
+
+function pipedriveLeadIdFromMailThread(thread: PipedriveMailThread) {
+  const threadRecord = objectValue(thread);
+  const leadRecord = objectValue(threadRecord.lead);
+  const leadIdRecord = objectValue(threadRecord.lead_id);
+
+  return (
+    externalId(threadRecord.lead_id) ??
     externalId(leadRecord.id) ??
     externalId(leadIdRecord.id) ??
     externalId(leadIdRecord.value)
@@ -3644,6 +3918,29 @@ function pipedriveDealIdFromMailMessage(email: PipedriveMailMessage) {
     externalId(dealRecord.id) ??
     externalId(dealIdRecord.id) ??
     externalId(dealIdRecord.value)
+  );
+}
+
+function pipedriveDealIdFromMailThread(thread: PipedriveMailThread) {
+  const threadRecord = objectValue(thread);
+  const dealRecord = objectValue(threadRecord.deal);
+  const dealIdRecord = objectValue(threadRecord.deal_id);
+
+  return (
+    externalId(threadRecord.deal_id) ??
+    externalId(dealRecord.id) ??
+    externalId(dealIdRecord.id) ??
+    externalId(dealIdRecord.value)
+  );
+}
+
+function pipedriveMailThreadId(thread: PipedriveMailThread) {
+  const threadRecord = objectValue(thread);
+
+  return (
+    numericId(thread.id) ??
+    numericId(threadRecord.mail_thread_id) ??
+    numericId(threadRecord.thread_id)
   );
 }
 
