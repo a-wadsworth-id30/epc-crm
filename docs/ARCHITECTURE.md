@@ -287,9 +287,10 @@ plain text and uses stable Pipedrive note IDs in `SalesCommunication.externalId`
 so repeated imports update existing CRM notes instead of duplicating them. Sale
 detail pages for Pipedrive-linked leads run a throttled post-load note refresh
 action that uses the same pull-only importer and refreshes the route only when
-CRM notes changed. The same sale detail page runs a throttled post-load
-Pipedrive file metadata refresh and exposes an admin-only "Pull Pipedrive
-files" action. Pipedrive file IDs are stored under `ExternalRecordLink` with
+CRM notes changed. The sale document panel runs a throttled Pipedrive file
+metadata refresh when the Documents tab is opened and exposes an admin-only
+"Pull Pipedrive files" action. Pipedrive file IDs are stored under
+`ExternalRecordLink` with
 `externalType = "file"` so repeated refreshes update the existing CRM
 reference instead of creating duplicate rows. The
 same import module also maps standalone Pipedrive persons into CRM contacts and

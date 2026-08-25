@@ -165,8 +165,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   lead notes and reloads the page only when CRM notes were created or updated,
   providing a fallback when scheduled jobs or note webhooks are delayed.
   Pipedrive-linked sale document panels also show provider file references and
-  can run a throttled/manual metadata refresh without downloading files,
-  creating CRM `FileAsset` rows or writing back to Pipedrive. The Pipedrive
+  run a throttled metadata refresh when the Documents tab is opened, with an
+  admin-only manual refresh option, without downloading files, creating CRM
+  `FileAsset` rows or writing back to Pipedrive. The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies

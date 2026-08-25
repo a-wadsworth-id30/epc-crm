@@ -2409,10 +2409,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   return (
     <>
       {pipedriveLeadLink ? (
-        <>
-          <PipedriveLeadFilesAutoSync saleId={sale.id} />
-          <PipedriveLeadNotesAutoSync saleId={sale.id} />
-        </>
+        <PipedriveLeadNotesAutoSync saleId={sale.id} />
       ) : null}
       <section className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
@@ -2559,11 +2556,14 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         documentsPanel={
           <div className="p-4 sm:p-5">
             {pipedriveLeadLink ? (
-              <PipedriveLeadFilesPanel
-                canSync={user.role === "ADMIN"}
-                files={pipedriveFileReferences}
-                saleId={sale.id}
-              />
+              <>
+                <PipedriveLeadFilesAutoSync saleId={sale.id} />
+                <PipedriveLeadFilesPanel
+                  canSync={user.role === "ADMIN"}
+                  files={pipedriveFileReferences}
+                  saleId={sale.id}
+                />
+              </>
             ) : null}
             <RecordDocumentLibrary
               documentPortals={opportunityDocumentPortals}
