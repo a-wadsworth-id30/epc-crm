@@ -1616,6 +1616,75 @@ describe("Pipedrive lead import mapping", () => {
     );
   });
 
+  it("imports wrapped Pipedrive mail-message payloads with IDs under data", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-emails",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-emails",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+      {
+        externalId: "123",
+        externalType: "person",
+        id: "person-link",
+        internalId: "contact-existing",
+        internalType: "contact",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.syncPipedriveLeadEmailsForOpportunity({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listPersonMailMessages: async () => ({
+          data: [
+            {
+              data: {
+                body: "<p>Wrapped message body</p>",
+                from: { email: "customer@example.com", name: "Customer" },
+                id: 771,
+                lead_id: { value: "lead-emails" },
+                message_time: "2026-08-24T11:30:00Z",
+                subject: "Wrapped Pipedrive email",
+                to: [{ email: "sales@example.com" }],
+              },
+              object: "mailMessage",
+              timestamp: "2026-08-24T11:30:00Z",
+            },
+          ],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+      now: new Date("2026-08-24T12:00:00Z"),
+      opportunityId: "opportunity-emails",
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.emailsRead, 1);
+    assert.equal(result.created, 1);
+    assert.equal(result.skipped, 0);
+    assert.equal(salesCommunicationRows.length, 1);
+    assert.equal(
+      salesCommunicationRows[0]?.externalId,
+      "pipedrive:mail:771",
+    );
+    assert.equal(salesCommunicationRows[0]?.body, "Wrapped message body");
+    assert.equal(salesCommunicationRows[0]?.subject, "Wrapped Pipedrive email");
+    assert.equal(emailMessageRows.length, 1);
+    assert.equal(emailMessageRows[0]?.providerMessageId, "pipedrive:mail:771");
+  });
+
   it("imports Pipedrive lead-thread emails without requiring a person mail match", async () => {
     const listThreadCalls: unknown[] = [];
     const listThreadMessageCalls: number[] = [];

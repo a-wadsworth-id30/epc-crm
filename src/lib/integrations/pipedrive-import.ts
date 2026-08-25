@@ -3559,25 +3559,35 @@ async function readFullPipedriveMailMessageIfNeeded(
     const fullMessage = await client.getMailMessage(mailId, {
       includeBody: true,
     });
+    const fullRecord = objectValue(fullMessage);
+    const fullDataRecord = pipedriveMailMessageDataRecord(fullMessage);
+    const messageRecord = objectValue(message);
+    const messageDataRecord = pipedriveMailMessageDataRecord(message);
 
     return {
       ...message,
       ...fullMessage,
       deal_id:
         fullMessage.deal_id ??
-        objectValue(fullMessage).deal_id ??
+        fullRecord.deal_id ??
+        fullDataRecord.deal_id ??
         message.deal_id ??
-        objectValue(message).deal_id,
+        messageRecord.deal_id ??
+        messageDataRecord.deal_id,
       lead_id:
         fullMessage.lead_id ??
-        objectValue(fullMessage).lead_id ??
+        fullRecord.lead_id ??
+        fullDataRecord.lead_id ??
         message.lead_id ??
-        objectValue(message).lead_id,
+        messageRecord.lead_id ??
+        messageDataRecord.lead_id,
       mail_thread_id:
         fullMessage.mail_thread_id ??
-        objectValue(fullMessage).mail_thread_id ??
+        fullRecord.mail_thread_id ??
+        fullDataRecord.mail_thread_id ??
         message.mail_thread_id ??
-        objectValue(message).mail_thread_id,
+        messageRecord.mail_thread_id ??
+        messageDataRecord.mail_thread_id,
     } satisfies PipedriveMailMessage;
   } catch (error) {
     warnings.push(
@@ -3739,45 +3749,92 @@ function mapPipedriveMailMessageToSalesEmail({
   opportunityId: string;
 }) {
   const emailRecord = objectValue(email);
+  const emailDataRecord = pipedriveMailMessageDataRecord(email);
   const externalMailId = pipedriveMailMessageExternalId(email);
 
   if (!externalMailId) return null;
 
   const externalThreadId =
     externalId(email.mail_thread_id) ??
+    externalId(emailRecord.mail_thread_id) ??
+    externalId(emailDataRecord.mail_thread_id) ??
     externalId(emailRecord.thread_id) ??
-    externalId(emailRecord.mail_thread);
+    externalId(emailDataRecord.thread_id) ??
+    externalId(emailRecord.mail_thread) ??
+    externalId(emailDataRecord.mail_thread);
   const fromAddress = firstEmailAddress(
     email.from ??
+      emailRecord.from ??
+      emailDataRecord.from ??
       emailRecord.from_address ??
+      emailDataRecord.from_address ??
       emailRecord.from_email ??
-      emailRecord.sender,
+      emailDataRecord.from_email ??
+      emailRecord.sender ??
+      emailDataRecord.sender,
   );
   const toAddress = firstEmailAddress(
-    email.to ?? emailRecord.to_address ?? emailRecord.to_email,
+    email.to ??
+      emailRecord.to ??
+      emailDataRecord.to ??
+      emailRecord.to_address ??
+      emailDataRecord.to_address ??
+      emailRecord.to_email ??
+      emailDataRecord.to_email,
   );
   const fromName = firstEmailName(
     email.from ??
+      emailRecord.from ??
+      emailDataRecord.from ??
       emailRecord.from_address ??
+      emailDataRecord.from_address ??
       emailRecord.from_email ??
-      emailRecord.sender,
+      emailDataRecord.from_email ??
+      emailRecord.sender ??
+      emailDataRecord.sender,
   );
-  const subject = cleanText(email.subject) ?? "Pipedrive email";
+  const subject =
+    cleanText(email.subject) ??
+    cleanText(emailRecord.subject) ??
+    cleanText(emailDataRecord.subject) ??
+    "Pipedrive email";
   const bodySource =
     cleanText(email.body_plain) ??
+    cleanText(emailRecord.body_plain) ??
+    cleanText(emailDataRecord.body_plain) ??
     cleanText(emailRecord.body_text) ??
+    cleanText(emailDataRecord.body_text) ??
     cleanText(emailRecord.text) ??
+    cleanText(emailDataRecord.text) ??
     cleanText(email.body) ??
+    cleanText(emailRecord.body) ??
+    cleanText(emailDataRecord.body) ??
     cleanText(emailRecord.content) ??
-    cleanText(email.snippet);
-  const plainBody = toEmailPlainText(bodySource) || cleanText(email.snippet) || subject;
+    cleanText(emailDataRecord.content) ??
+    cleanText(email.snippet) ??
+    cleanText(emailRecord.snippet) ??
+    cleanText(emailDataRecord.snippet);
+  const plainBody =
+    toEmailPlainText(bodySource) ||
+    cleanText(email.snippet) ||
+    cleanText(emailRecord.snippet) ||
+    cleanText(emailDataRecord.snippet) ||
+    subject;
   const htmlBody =
     bodySource && /<\/?[a-z][\s\S]*>/i.test(bodySource) ? bodySource : null;
   const occurredAt =
     parsePipedriveDate(email.message_time) ??
+    parsePipedriveDate(emailRecord.message_time) ??
+    parsePipedriveDate(emailDataRecord.message_time) ??
     parsePipedriveDate(email.timestamp) ??
+    parsePipedriveDate(emailRecord.timestamp) ??
+    parsePipedriveDate(emailDataRecord.timestamp) ??
     parsePipedriveDate(email.add_time) ??
+    parsePipedriveDate(emailRecord.add_time) ??
+    parsePipedriveDate(emailDataRecord.add_time) ??
     parsePipedriveDate(email.update_time) ??
+    parsePipedriveDate(emailRecord.update_time) ??
+    parsePipedriveDate(emailDataRecord.update_time) ??
     now;
   const normalizedContactEmails = new Set(
     contactEmails.map((value) => value.toLowerCase()),
@@ -3797,9 +3854,18 @@ function mapPipedriveMailMessageToSalesEmail({
     importedFrom: "pipedrive",
     matchedDealId,
     matchedLeadId,
-    pipedriveAddTime: cleanText(email.add_time),
-    pipedriveMessageTime: cleanText(email.message_time ?? email.timestamp),
-    pipedriveUpdateTime: cleanText(email.update_time),
+    pipedriveAddTime:
+      cleanText(email.add_time) ??
+      cleanText(emailRecord.add_time) ??
+      cleanText(emailDataRecord.add_time),
+    pipedriveMessageTime:
+      cleanText(email.message_time ?? email.timestamp) ??
+      cleanText(emailRecord.message_time ?? emailRecord.timestamp) ??
+      cleanText(emailDataRecord.message_time ?? emailDataRecord.timestamp),
+    pipedriveUpdateTime:
+      cleanText(email.update_time) ??
+      cleanText(emailRecord.update_time) ??
+      cleanText(emailDataRecord.update_time),
     provider: pipedriveProvider,
     source: pipedriveMailImportSource,
   } satisfies Prisma.InputJsonObject;
@@ -3821,13 +3887,15 @@ function mapPipedriveMailMessageToSalesEmail({
       toAddress,
     },
     emailData: {
-      attachments: jsonValue(emailRecord.attachments),
-      ccAddresses: jsonValue(emailRecord.cc),
+      attachments: jsonValue(
+        emailRecord.attachments ?? emailDataRecord.attachments,
+      ),
+      ccAddresses: jsonValue(emailRecord.cc ?? emailDataRecord.cc),
       contactId,
       direction,
       fromAddress,
       fromName,
-      headers: jsonValue(emailRecord.headers),
+      headers: jsonValue(emailRecord.headers ?? emailDataRecord.headers),
       htmlBody,
       metadata,
       opportunityId,
@@ -4259,36 +4327,76 @@ function shouldImportPipedriveMailMessageForLead(
 
 function pipedriveMailMessageExternalId(email: PipedriveMailMessage) {
   const emailRecord = objectValue(email);
-
-  return (
-    externalId(email.id) ??
-    externalId(emailRecord.mail_message_id) ??
-    externalId(emailRecord.message_id)
+  const emailDataRecord = pipedriveMailMessageDataRecord(email);
+  const mailMessageIdRecord = objectValue(
+    emailRecord.mail_message_id ?? emailDataRecord.mail_message_id,
   );
+  const messageIdRecord = objectValue(
+    emailRecord.message_id ?? emailDataRecord.message_id,
+  );
+
+  return firstExternalId(
+    email.id,
+    emailRecord.id,
+    emailDataRecord.id,
+    emailRecord.mail_message_id,
+    emailDataRecord.mail_message_id,
+    mailMessageIdRecord.id,
+    mailMessageIdRecord.value,
+    emailRecord.mailMessageId,
+    emailDataRecord.mailMessageId,
+    emailRecord.mail_id,
+    emailDataRecord.mail_id,
+    emailRecord.mailId,
+    emailDataRecord.mailId,
+    emailRecord.message_id,
+    emailDataRecord.message_id,
+    messageIdRecord.id,
+    messageIdRecord.value,
+    emailRecord.messageId,
+    emailDataRecord.messageId,
+  );
+}
+
+function pipedriveMailMessageDataRecord(email: PipedriveMailMessage) {
+  return objectValue(objectValue(email).data);
 }
 
 function pipedriveMailMessageHasBody(email: PipedriveMailMessage) {
   const emailRecord = objectValue(email);
+  const emailDataRecord = pipedriveMailMessageDataRecord(email);
 
   return Boolean(
     cleanText(email.body_plain) ??
+      cleanText(emailRecord.body_plain) ??
+      cleanText(emailDataRecord.body_plain) ??
       cleanText(emailRecord.body_text) ??
+      cleanText(emailDataRecord.body_text) ??
       cleanText(emailRecord.text) ??
+      cleanText(emailDataRecord.text) ??
       cleanText(email.body) ??
-      cleanText(emailRecord.content),
+      cleanText(emailRecord.body) ??
+      cleanText(emailDataRecord.body) ??
+      cleanText(emailRecord.content) ??
+      cleanText(emailDataRecord.content),
   );
 }
 
 function pipedriveLeadIdFromMailMessage(email: PipedriveMailMessage) {
   const emailRecord = objectValue(email);
-  const leadRecord = objectValue(emailRecord.lead);
-  const leadIdRecord = objectValue(emailRecord.lead_id);
+  const emailDataRecord = pipedriveMailMessageDataRecord(email);
+  const leadRecord = objectValue(emailRecord.lead ?? emailDataRecord.lead);
+  const leadIdRecord = objectValue(
+    emailRecord.lead_id ?? emailDataRecord.lead_id,
+  );
 
-  return (
-    externalId(emailRecord.lead_id) ??
-    externalId(leadRecord.id) ??
-    externalId(leadIdRecord.id) ??
-    externalId(leadIdRecord.value)
+  return firstExternalId(
+    email.lead_id,
+    emailRecord.lead_id,
+    emailDataRecord.lead_id,
+    leadRecord.id,
+    leadIdRecord.id,
+    leadIdRecord.value,
   );
 }
 
@@ -4307,14 +4415,19 @@ function pipedriveLeadIdFromMailThread(thread: PipedriveMailThread) {
 
 function pipedriveDealIdFromMailMessage(email: PipedriveMailMessage) {
   const emailRecord = objectValue(email);
-  const dealRecord = objectValue(emailRecord.deal);
-  const dealIdRecord = objectValue(emailRecord.deal_id);
+  const emailDataRecord = pipedriveMailMessageDataRecord(email);
+  const dealRecord = objectValue(emailRecord.deal ?? emailDataRecord.deal);
+  const dealIdRecord = objectValue(
+    emailRecord.deal_id ?? emailDataRecord.deal_id,
+  );
 
-  return (
-    externalId(emailRecord.deal_id) ??
-    externalId(dealRecord.id) ??
-    externalId(dealIdRecord.id) ??
-    externalId(dealIdRecord.value)
+  return firstExternalId(
+    email.deal_id,
+    emailRecord.deal_id,
+    emailDataRecord.deal_id,
+    dealRecord.id,
+    dealIdRecord.id,
+    dealIdRecord.value,
   );
 }
 
@@ -5295,6 +5408,15 @@ function parsePipedriveDate(value: unknown) {
   );
 
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function firstExternalId(...values: unknown[]) {
+  for (const value of values) {
+    const id = externalId(value) ?? externalId(objectValue(value).value);
+    if (id) return id;
+  }
+
+  return null;
 }
 
 function externalId(value: unknown) {

@@ -216,6 +216,7 @@ export type PipedriveMailMessage = Record<string, unknown> & {
   add_time?: string;
   body?: string | null;
   body_plain?: string | null;
+  data?: unknown;
   deal_id?: unknown;
   from?: unknown;
   lead_id?: unknown;
