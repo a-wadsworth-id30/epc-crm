@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, FileText, RefreshCw } from "lucide-react";
+import { Download, FileText, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
@@ -39,22 +39,16 @@ export default function PipedriveLeadFilesPanel({
   }, [router, state.ok]);
 
   return (
-    <section className="mb-5 border-b border-gray-200 pb-5 dark:border-gray-800">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gray-50 text-gray-500 ring-1 ring-gray-100 dark:bg-white/[0.04] dark:text-gray-400 dark:ring-gray-800">
-              <FileText className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Pipedrive files
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {files.length} linked
-              </p>
-            </div>
-          </div>
+          <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+            Pipedrive files
+          </h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Pipedrive · {files.length} linked file
+            {files.length === 1 ? "" : "s"}
+          </p>
         </div>
 
         {canSync ? (
@@ -85,42 +79,46 @@ export default function PipedriveLeadFilesPanel({
       <div className="mt-4 space-y-2">
         {files.length ? (
           files.map((file) => {
-            const details = [file.typeLabel, file.sizeLabel, file.updatedAt]
+            const details = [
+              file.typeLabel,
+              file.sizeLabel,
+              file.updatedAt ? `updated ${file.updatedAt}` : null,
+            ]
               .filter(Boolean)
               .join(" · ");
 
             return (
               <div
                 key={file.id}
-                className="flex min-w-0 items-center gap-3 rounded-xl border border-gray-200 px-3 py-2.5 transition hover:border-brand-200 hover:bg-brand-50/40 dark:border-gray-800 dark:hover:border-brand-900/60 dark:hover:bg-brand-900/10"
+                className="rounded-lg border border-gray-100 px-3 py-2.5 dark:border-gray-800"
               >
-                <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gray-50 text-gray-500 ring-1 ring-gray-100 dark:bg-white/[0.04] dark:text-gray-400 dark:ring-gray-800">
-                  <FileText className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-gray-800 dark:text-white/90">
-                    {file.name}
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500 ring-1 ring-gray-100 dark:bg-white/[0.04] dark:text-gray-400 dark:ring-gray-800">
+                    <FileText className="h-4 w-4" />
                   </span>
-                  {details ? (
-                    <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
-                      {details}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-gray-800 dark:text-white/90">
+                      {file.name}
                     </span>
-                  ) : null}
-                </span>
-                <a
-                  href={file.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
-                  aria-label={`Open ${file.name}`}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
+                    <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
+                      {details || "Pipedrive file"}
+                    </span>
+                  </span>
+                  <a
+                    href={file.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
+                    aria-label={`Open ${file.name}`}
+                  >
+                    <Download className="h-4 w-4" />
+                  </a>
+                </div>
               </div>
             );
           })
         ) : (
-          <p className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-sm leading-6 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+          <p className="rounded-lg border border-dashed border-gray-200 px-3 py-3 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
             No Pipedrive files found for this linked lead.
           </p>
         )}
