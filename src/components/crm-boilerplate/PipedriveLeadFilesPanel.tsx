@@ -12,7 +12,7 @@ export type PipedriveLeadFileReference = {
   sizeLabel: string | null;
   typeLabel: string | null;
   updatedAt: string | null;
-  url: string | null;
+  url: string;
 };
 
 export type PipedriveLeadFilesPanelProps = {
@@ -107,17 +107,15 @@ export default function PipedriveLeadFilesPanel({
                     </span>
                   ) : null}
                 </span>
-                {file.url ? (
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
-                    aria-label={`Open ${file.name} in Pipedrive`}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                ) : null}
+                <a
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
+                  aria-label={`Open ${file.name}`}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               </div>
             );
           })

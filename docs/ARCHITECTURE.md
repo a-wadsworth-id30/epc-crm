@@ -253,6 +253,7 @@ Main files:
 - `src/components/crm-boilerplate/PipedriveLeadFilesAutoSync.tsx`
 - `src/components/crm-boilerplate/PipedriveLeadFilesPanel.tsx`
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
+- `/api/pipedrive/files/[linkId]`
 - `/api/maintenance/pipedrive-lead-import`
 - `/api/maintenance/pipedrive-contact-import`
 - `/api/maintenance/pipedrive-webhook-registration`
@@ -271,8 +272,11 @@ Pipedrive Lead Inbox notes with GET requests and store them as CRM
 pull Pipedrive file metadata with GET requests and store provider file
 references as CRM-only `ExternalRecordLink` rows. Those references are shown in
 the sale document panel separately from R2-backed CRM `FileAsset` rows; CRM
-does not download, reupload, delete or share the Pipedrive files. None of
-these paths write back to Pipedrive.
+does not download files during metadata refresh, reupload, delete or share the
+Pipedrive files. Opening a provider file uses an authenticated CRM route that
+checks sale access, downloads the file from Pipedrive server-side with the
+stored API token and streams it back to the user without exposing Pipedrive
+credentials. None of these paths write back to Pipedrive.
 
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`

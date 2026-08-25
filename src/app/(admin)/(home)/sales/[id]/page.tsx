@@ -227,18 +227,6 @@ function dateValue(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function safeHttpsUrl(value: unknown) {
-  const text = stringValue(value);
-  if (!text) return null;
-
-  try {
-    const url = new URL(text);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 function discoveryOptionValues(value: unknown) {
   const record = jsonObject(value);
   const rawOptions = Array.isArray(value)
@@ -2237,7 +2225,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       sizeLabel: sizeBytes !== null ? fileSizeLabel(sizeBytes) : null,
       typeLabel: externalFileTypeLabel(stringValue(metadata.pipedriveFileType)),
       updatedAt,
-      url: safeHttpsUrl(metadata.pipedriveUrl),
+      url: `/api/pipedrive/files/${encodeURIComponent(link.id)}`,
     };
   });
   const notes = [

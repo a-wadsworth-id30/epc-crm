@@ -488,6 +488,10 @@ export class PipedriveReadOnlyClient {
     });
   }
 
+  async downloadFile(id: number) {
+    return this.getBinary(`files/${pipedriveNumericId(id, "file")}/download`);
+  }
+
   async getLead(id: string) {
     return this.getSingle<PipedriveLead>(`leads/${pipedriveTextId(id, "lead")}`);
   }
@@ -576,6 +580,51 @@ export class PipedriveReadOnlyClient {
       }
 
       return payload;
+    } catch (error) {
+      if (error instanceof PipedriveApiError) throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new PipedriveApiError({
+          message: "Pipedrive request timed out.",
+          status: 504,
+        });
+      }
+
+      throw new PipedriveApiError({
+        details: error instanceof Error ? error.message : null,
+        message: "Pipedrive request failed.",
+        status: 502,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async getBinary(
+    path: string,
+    params: PipedriveQueryParams = {},
+    options: { apiVersion?: string } = {},
+  ) {
+    const url = pipedriveUrl(this.apiBaseUrl, path, options.apiVersion);
+    appendQueryParams(url, params);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: {
+          Accept: "*/*",
+          "x-api-token": this.apiToken,
+        },
+        method: "GET",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw await pipedriveBinaryErrorFromResponse(response);
+      }
+
+      return response;
     } catch (error) {
       if (error instanceof PipedriveApiError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
@@ -724,6 +773,24 @@ function pipedriveApiErrorFromResponse(
   const details = textValue(payload.error_info);
 
   return new PipedriveApiError({ details, message, status });
+}
+
+async function pipedriveBinaryErrorFromResponse(response: Response) {
+  const body = await response.text().catch(() => "");
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (contentType.includes("json")) {
+    return pipedriveApiErrorFromResponse(
+      response.status,
+      parsePipedrivePayload<unknown>(body),
+    );
+  }
+
+  return new PipedriveApiError({
+    details: textValue(body.slice(0, 500)),
+    message: "Pipedrive file download was rejected.",
+    status: response.status,
+  });
 }
 
 function normalizePipedrivePagination(

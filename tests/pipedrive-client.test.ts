@@ -264,6 +264,33 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.moreItemsInCollection, false);
   });
 
+  it("downloads files with GET and the stored token header", async () => {
+    const requests: Array<{ init?: RequestInit; url: string }> = [];
+    globalThis.fetch = (async (input, init) => {
+      requests.push({ init, url: String(input) });
+      return Promise.resolve(
+        new Response("file-body", {
+          headers: { "content-type": "text/plain" },
+          status: 200,
+        }),
+      );
+    }) as typeof fetch;
+
+    const result = await createClient().downloadFile(501);
+
+    assert.equal(
+      requests[0]?.url,
+      "https://api.pipedrive.com/v1/files/501/download",
+    );
+    assert.equal(requests[0]?.init?.method, "GET");
+    assert.equal(requests[0]?.init?.cache, "no-store");
+    assert.equal(
+      headerValue(requests[0]?.init?.headers, "x-api-token"),
+      "token",
+    );
+    assert.equal(await result.text(), "file-body");
+  });
+
   it("uses the v2 deals endpoint with cursor pagination", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {
