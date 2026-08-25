@@ -64,8 +64,16 @@ const pipedriveNoteImportSource = "pipedrive-note-import";
 const pipedriveNoteExternalIdPrefix = "pipedrive:note:";
 const defaultPipedriveLeadFileMaxPages = 3;
 const defaultPipedriveLeadEmailMaxPages = 3;
+export const manualPipedriveLeadEmailMaxPages = 25;
+export const defaultPipedriveLeadEmailThreadSweepMaxPages = 3;
 const defaultPipedriveLeadNoteMaxPages = 3;
-const pipedriveLeadEmailThreadFolders = ["inbox", "sent", "archive"] as const;
+export const pipedriveLeadEmailThreadFolders = [
+  "inbox",
+  "sent",
+  "archive",
+] as const;
+export type PipedriveLeadEmailThreadFolder =
+  (typeof pipedriveLeadEmailThreadFolders)[number];
 
 type JsonObject = Record<string, unknown>;
 
@@ -325,6 +333,38 @@ export type PipedriveLeadEmailsSyncResult =
       updated: 0;
       warnings: string[];
     };
+
+export type PipedriveLeadEmailThreadPageImportRow = {
+  created: number;
+  emailRead: number;
+  externalLeadId: string;
+  opportunityId: string;
+  skipped: number;
+  threadCount: number;
+  updated: number;
+  warningCount: number;
+};
+
+export type PipedriveLeadEmailThreadPageImportResult = {
+  completedCycle: boolean;
+  created: number;
+  emailsRead: number;
+  folder: PipedriveLeadEmailThreadFolder;
+  maxPages: number;
+  moreAvailable: boolean;
+  nextFolder: PipedriveLeadEmailThreadFolder;
+  nextStart: number | null;
+  pagesRead: number;
+  recordsWritten: number;
+  rows: PipedriveLeadEmailThreadPageImportRow[];
+  skipped: number;
+  start: number | null;
+  status: "not_configured" | "not_supported" | "ok";
+  threadsMatched: number;
+  threadsRead: number;
+  updated: number;
+  warnings: string[];
+};
 
 export type PipedriveLeadFileBatchSyncItem = {
   externalLeadId: string;
@@ -990,6 +1030,291 @@ export async function syncPipedriveLeadEmailsForOpportunity({
     status: "ok",
     updated: writeResult.updated,
     warnings: [...warnings, ...emailRead.warnings],
+  };
+}
+
+export async function importPipedriveLeadEmailThreadPages({
+  client,
+  folder,
+  maxPages = defaultPipedriveLeadEmailThreadSweepMaxPages,
+  now = new Date(),
+  start = null,
+}: {
+  client?: PipedriveRelatedRecordClient | null;
+  folder?: string | null;
+  maxPages?: number | null;
+  now?: Date;
+  start?: number | null;
+} = {}): Promise<PipedriveLeadEmailThreadPageImportResult> {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+  const sweepFolder = pipedriveLeadEmailThreadFolderValue(folder);
+  const sweepStart = boundedOptionalStart(start);
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveLeadEmailThreadSweepMaxPages,
+    manualPipedriveLeadEmailMaxPages,
+  );
+  const emptyResult = (
+    status: PipedriveLeadEmailThreadPageImportResult["status"],
+    warnings: string[],
+  ): PipedriveLeadEmailThreadPageImportResult => ({
+    completedCycle: false,
+    created: 0,
+    emailsRead: 0,
+    folder: sweepFolder,
+    maxPages: pageLimit,
+    moreAvailable: false,
+    nextFolder: sweepFolder,
+    nextStart: sweepStart,
+    pagesRead: 0,
+    recordsWritten: 0,
+    rows: [],
+    skipped: 0,
+    start: sweepStart,
+    status,
+    threadsMatched: 0,
+    threadsRead: 0,
+    updated: 0,
+    warnings,
+  });
+
+  if (!readClient) {
+    return emptyResult("not_configured", ["Pipedrive is not configured."]);
+  }
+
+  if (
+    typeof readClient.listMailThreads !== "function" ||
+    typeof readClient.listMailThreadMessages !== "function"
+  ) {
+    return emptyResult("not_supported", [
+      "Pipedrive mailbox thread reads are not supported.",
+    ]);
+  }
+
+  const threadRead = await readPipedriveLeadEmailThreadPagesForFolder(
+    readClient,
+    sweepFolder,
+    sweepStart,
+    pageLimit,
+  );
+  const nextFolder = threadRead.moreAvailable
+    ? sweepFolder
+    : nextPipedriveLeadEmailThreadFolder(sweepFolder);
+  const completedCycle =
+    !threadRead.moreAvailable && isLastPipedriveLeadEmailThreadFolder(sweepFolder);
+  const nextStart = threadRead.moreAvailable ? threadRead.nextStart : null;
+
+  if (!threadRead.threadsByLeadId.size) {
+    return {
+      completedCycle,
+      created: 0,
+      emailsRead: 0,
+      folder: sweepFolder,
+      maxPages: pageLimit,
+      moreAvailable: threadRead.moreAvailable || !completedCycle,
+      nextFolder,
+      nextStart,
+      pagesRead: threadRead.pagesRead,
+      recordsWritten: 0,
+      rows: [],
+      skipped: 0,
+      start: sweepStart,
+      status: "ok",
+      threadsMatched: 0,
+      threadsRead: threadRead.threadsRead,
+      updated: 0,
+      warnings: threadRead.warnings,
+    };
+  }
+
+  const leadIds = [...threadRead.threadsByLeadId.keys()];
+  const leadLinks = await prisma.externalRecordLink.findMany({
+    where: {
+      externalId: { in: leadIds },
+      externalType: pipedriveExternalTypes.lead,
+      internalType: pipedriveInternalTypes.opportunity,
+      provider: pipedriveProvider,
+    },
+    select: { externalId: true, internalId: true },
+  });
+  const linksByLeadId = new Map<
+    string,
+    Array<{ externalId: string; internalId: string }>
+  >();
+  for (const link of leadLinks) {
+    const links = linksByLeadId.get(link.externalId) ?? [];
+    links.push(link);
+    linksByLeadId.set(link.externalId, links);
+  }
+
+  const matchedLeadIds = new Set(linksByLeadId.keys());
+  const matchedThreadsByLeadId = new Map<string, PipedriveMailThread[]>();
+  let threadsMatched = 0;
+  for (const [leadId, threads] of threadRead.threadsByLeadId) {
+    if (!matchedLeadIds.has(leadId)) continue;
+    matchedThreadsByLeadId.set(leadId, threads);
+    threadsMatched += threads.length;
+  }
+
+  if (!matchedThreadsByLeadId.size) {
+    return {
+      completedCycle,
+      created: 0,
+      emailsRead: 0,
+      folder: sweepFolder,
+      maxPages: pageLimit,
+      moreAvailable: threadRead.moreAvailable || !completedCycle,
+      nextFolder,
+      nextStart,
+      pagesRead: threadRead.pagesRead,
+      recordsWritten: 0,
+      rows: [],
+      skipped: 0,
+      start: sweepStart,
+      status: "ok",
+      threadsMatched: 0,
+      threadsRead: threadRead.threadsRead,
+      updated: 0,
+      warnings: threadRead.warnings,
+    };
+  }
+
+  const opportunityIds = [
+    ...new Set(leadLinks.map((link) => link.internalId).filter(Boolean)),
+  ];
+  const opportunities = await prisma.salesOpportunity.findMany({
+    where: { id: { in: opportunityIds } },
+    select: {
+      contactId: true,
+      id: true,
+      contact: {
+        select: {
+          additionalEmails: { select: { email: true } },
+          email: true,
+        },
+      },
+    },
+  });
+  const opportunityById = new Map(
+    opportunities.map((opportunity) => [opportunity.id, opportunity]),
+  );
+  const warnings = [...threadRead.warnings];
+  const emailsByLeadId = new Map<string, PipedriveMailMessage[]>();
+  let emailsRead = 0;
+
+  for (const [externalLeadId, threads] of matchedThreadsByLeadId) {
+    for (const thread of threads) {
+      const threadId = pipedriveMailThreadId(thread);
+      if (!threadId) continue;
+
+      try {
+        const page = await readClient.listMailThreadMessages(threadId);
+        emailsRead += page.data.length;
+
+        for (const message of page.data) {
+          const messageWithThreadContext = withPipedriveMailThreadContext({
+            externalLeadId,
+            message,
+            thread,
+            threadId,
+          });
+          if (
+            !shouldImportPipedriveMailMessageForLead(
+              messageWithThreadContext,
+              externalLeadId,
+            )
+          ) {
+            continue;
+          }
+
+          const email = await readFullPipedriveMailMessageIfNeeded(
+            readClient,
+            messageWithThreadContext,
+            warnings,
+          );
+          const emails = emailsByLeadId.get(externalLeadId) ?? [];
+          emails.push(email);
+          emailsByLeadId.set(externalLeadId, emails);
+        }
+      } catch (error) {
+        warnings.push(
+          pipedriveReadWarning(
+            "lead email thread messages",
+            `${externalLeadId}/${threadId}`,
+            error,
+          ),
+        );
+      }
+    }
+  }
+
+  const rows: PipedriveLeadEmailThreadPageImportRow[] = [];
+  let created = 0;
+  let skipped = 0;
+  let updated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const [externalLeadId, emails] of emailsByLeadId) {
+      const links = linksByLeadId.get(externalLeadId) ?? [];
+      const threadCount =
+        matchedThreadsByLeadId.get(externalLeadId)?.length ?? 0;
+      const uniqueEmails = deduplicatePipedriveMailMessages(emails);
+
+      for (const link of links) {
+        const opportunity = opportunityById.get(link.internalId);
+        if (!opportunity) {
+          warnings.push(
+            `CRM sale ${link.internalId} is no longer available for Pipedrive lead ${externalLeadId}.`,
+          );
+          continue;
+        }
+
+        const writeResult = await syncPipedriveLeadEmailRecords(tx, {
+          contactEmails: contactEmailValues(opportunity.contact),
+          contactId: opportunity.contactId,
+          emails: uniqueEmails,
+          externalLeadId,
+          externalPersonId: null,
+          now,
+          opportunityId: opportunity.id,
+        });
+
+        created += writeResult.created;
+        skipped += writeResult.skipped;
+        updated += writeResult.updated;
+        rows.push({
+          created: writeResult.created,
+          emailRead: uniqueEmails.length,
+          externalLeadId,
+          opportunityId: opportunity.id,
+          skipped: writeResult.skipped,
+          threadCount,
+          updated: writeResult.updated,
+          warningCount: 0,
+        });
+      }
+    }
+  });
+
+  return {
+    completedCycle,
+    created,
+    emailsRead,
+    folder: sweepFolder,
+    maxPages: pageLimit,
+    moreAvailable: threadRead.moreAvailable || !completedCycle,
+    nextFolder,
+    nextStart,
+    pagesRead: threadRead.pagesRead,
+    recordsWritten: created + updated,
+    rows,
+    skipped,
+    start: sweepStart,
+    status: "ok",
+    threadsMatched,
+    threadsRead: threadRead.threadsRead,
+    updated,
+    warnings,
   };
 }
 
@@ -2992,46 +3317,29 @@ async function readPipedriveLeadThreadEmails(
   const pageLimit = boundedFullPullMaxPages(
     maxPages,
     defaultPipedriveLeadEmailMaxPages,
+    manualPipedriveLeadEmailMaxPages,
   );
   let emailsRead = 0;
 
-  try {
-    for (const folder of pipedriveLeadEmailThreadFolders) {
-      let pagesRead = 0;
-      let start: number | null = null;
+  for (const folder of pipedriveLeadEmailThreadFolders) {
+    const threadRead = await readPipedriveLeadEmailThreadPagesForFolder(
+      client,
+      folder,
+      null,
+      pageLimit,
+    );
+    warnings.push(...threadRead.warnings);
 
-      while (pagesRead < pageLimit) {
-        const params: PipedriveListMailThreadsParams = {
-          folder,
-          limit: 50,
-        };
-        if (start !== null) params.start = start;
+    for (const thread of threadRead.threadsByLeadId.get(externalLeadId) ?? []) {
+      const threadId = pipedriveMailThreadId(thread);
+      if (!threadId) continue;
 
-        const page = await client.listMailThreads(params);
-        pagesRead += 1;
-
-        for (const thread of page.data) {
-          const threadLeadId = pipedriveLeadIdFromMailThread(thread);
-          if (threadLeadId !== externalLeadId) continue;
-
-          const threadId = pipedriveMailThreadId(thread);
-          if (!threadId) continue;
-
-          matchedThreads.set(threadId, thread);
-        }
-
-        if (
-          !page.pagination.moreItemsInCollection ||
-          page.pagination.nextStart === null
-        ) {
-          break;
-        }
-
-        start = page.pagination.nextStart;
-      }
+      matchedThreads.set(threadId, thread);
     }
+  }
 
-    for (const [threadId, thread] of matchedThreads) {
+  for (const [threadId, thread] of matchedThreads) {
+    try {
       const page = await client.listMailThreadMessages(threadId);
       emailsRead += page.data.length;
 
@@ -3059,14 +3367,103 @@ async function readPipedriveLeadThreadEmails(
           ),
         );
       }
+    } catch (error) {
+      warnings.push(
+        pipedriveReadWarning(
+          "lead email thread messages",
+          `${externalLeadId}/${threadId}`,
+          error,
+        ),
+      );
     }
-  } catch (error) {
-    warnings.push(
-      pipedriveReadWarning("lead email threads", externalLeadId, error),
-    );
   }
 
   return { emails, emailsRead, warnings };
+}
+
+async function readPipedriveLeadEmailThreadPagesForFolder(
+  client: PipedriveRelatedRecordClient,
+  folder: PipedriveLeadEmailThreadFolder,
+  start: number | null,
+  maxPages: number,
+): Promise<{
+  moreAvailable: boolean;
+  nextStart: number | null;
+  pagesRead: number;
+  threadsByLeadId: Map<string, PipedriveMailThread[]>;
+  threadsRead: number;
+  warnings: string[];
+}> {
+  const threadsByLeadId = new Map<string, PipedriveMailThread[]>();
+  const warnings: string[] = [];
+  let pagesRead = 0;
+  let threadsRead = 0;
+  let nextStart = start;
+
+  try {
+    while (pagesRead < maxPages) {
+      const params: PipedriveListMailThreadsParams = {
+        folder,
+        limit: 50,
+      };
+      if (nextStart !== null) params.start = nextStart;
+
+      const page = await client.listMailThreads!(params);
+      pagesRead += 1;
+      threadsRead += page.data.length;
+
+      for (const thread of page.data) {
+        const threadLeadId = pipedriveLeadIdFromMailThread(thread);
+        if (!threadLeadId) continue;
+
+        const threads = threadsByLeadId.get(threadLeadId) ?? [];
+        threads.push(thread);
+        threadsByLeadId.set(threadLeadId, threads);
+      }
+
+      if (
+        !page.pagination.moreItemsInCollection ||
+        page.pagination.nextStart === null
+      ) {
+        return {
+          moreAvailable: false,
+          nextStart: null,
+          pagesRead,
+          threadsByLeadId,
+          threadsRead,
+          warnings,
+        };
+      }
+
+      nextStart = page.pagination.nextStart;
+    }
+  } catch (error) {
+    warnings.push(
+      pipedriveReadWarning(
+        "lead email thread pages",
+        `${folder}/${nextStart ?? 0}`,
+        error,
+      ),
+    );
+
+    return {
+      moreAvailable: true,
+      nextStart,
+      pagesRead,
+      threadsByLeadId,
+      threadsRead,
+      warnings,
+    };
+  }
+
+  return {
+    moreAvailable: nextStart !== null,
+    nextStart,
+    pagesRead,
+    threadsByLeadId,
+    threadsRead,
+    warnings,
+  };
 }
 
 async function readPipedrivePersonEmailsForLead(
@@ -4124,10 +4521,48 @@ function latestPersonListParams(params: PipedriveListPersonsParams = {}) {
 function boundedFullPullMaxPages(
   value: number | null | undefined,
   defaultValue = defaultPipedriveFullPullMaxPages,
+  maxValue = 10,
 ) {
   return typeof value === "number" && Number.isInteger(value) && value > 0
-    ? Math.min(value, 10)
+    ? Math.min(value, maxValue)
     : defaultValue;
+}
+
+function boundedOptionalStart(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : null;
+}
+
+function isLastPipedriveLeadEmailThreadFolder(
+  folder: PipedriveLeadEmailThreadFolder,
+) {
+  return (
+    pipedriveLeadEmailThreadFolders.indexOf(folder) ===
+    pipedriveLeadEmailThreadFolders.length - 1
+  );
+}
+
+function nextPipedriveLeadEmailThreadFolder(
+  folder: PipedriveLeadEmailThreadFolder,
+): PipedriveLeadEmailThreadFolder {
+  const currentIndex = pipedriveLeadEmailThreadFolders.indexOf(folder);
+  const nextIndex =
+    currentIndex >= 0
+      ? (currentIndex + 1) % pipedriveLeadEmailThreadFolders.length
+      : 0;
+
+  return pipedriveLeadEmailThreadFolders[nextIndex];
+}
+
+function pipedriveLeadEmailThreadFolderValue(
+  value: string | null | undefined,
+): PipedriveLeadEmailThreadFolder {
+  return pipedriveLeadEmailThreadFolders.includes(
+    value as PipedriveLeadEmailThreadFolder,
+  )
+    ? (value as PipedriveLeadEmailThreadFolder)
+    : "inbox";
 }
 
 function previewFieldsFromMapping(

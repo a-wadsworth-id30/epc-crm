@@ -10,9 +10,12 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
+  defaultPipedriveLeadEmailThreadSweepMaxPages,
+  importPipedriveLeadEmailThreadPages,
   importPipedriveLeadIds,
   importPipedriveLeadNotePages,
   importPipedriveLeadPages,
+  pipedriveLeadEmailThreadFolders,
   pipedriveLeadNoteImportMetadataRows,
   pipedriveLeadIdFromInput,
   pipedriveLeadImportMetadataRows,
@@ -45,6 +48,20 @@ export type PipedriveLeadPullResult = {
     | "not_configured"
     | "page";
   moreAvailable: boolean;
+  emailThreadCompletedCycle?: boolean;
+  emailThreadCreated?: number;
+  emailThreadEmailsRead?: number;
+  emailThreadFolder?: string | null;
+  emailThreadMoreAvailable?: boolean;
+  emailThreadNextFolder?: string | null;
+  emailThreadNextStart?: number | null;
+  emailThreadPagesRead?: number;
+  emailThreadRecordsWritten?: number;
+  emailThreadSkipped?: number;
+  emailThreadStart?: number | null;
+  emailThreadThreadsMatched?: number;
+  emailThreadThreadsRead?: number;
+  emailThreadUpdated?: number;
   noteCreated?: number;
   noteIgnored?: number;
   noteMoreAvailable?: boolean;
@@ -188,6 +205,13 @@ export async function runPipedriveLeadPull({
       status: backgroundStatus(result.status),
       summary: {
         created: result.created,
+        emailThreadCreated: result.emailThreadCreated,
+        emailThreadEmailsRead: result.emailThreadEmailsRead,
+        emailThreadFolder: result.emailThreadFolder,
+        emailThreadPagesRead: result.emailThreadPagesRead,
+        emailThreadThreadsMatched: result.emailThreadThreadsMatched,
+        emailThreadThreadsRead: result.emailThreadThreadsRead,
+        emailThreadUpdated: result.emailThreadUpdated,
         linkedExisting: result.linkedExisting,
         mode: result.mode,
         moreAvailable: result.moreAvailable,
@@ -468,6 +492,18 @@ export async function readPipedriveLeadPullReadiness() {
       typeof storedConfig?.lastFullLeadSyncNextStart === "number"
         ? storedConfig.lastFullLeadSyncNextStart
         : null,
+    lastLeadEmailThreadSyncCompletedAt:
+      typeof storedConfig?.lastLeadEmailThreadSyncCompletedAt === "string"
+        ? storedConfig.lastLeadEmailThreadSyncCompletedAt
+        : null,
+    lastLeadEmailThreadSyncFolder:
+      typeof storedConfig?.lastLeadEmailThreadSyncFolder === "string"
+        ? storedConfig.lastLeadEmailThreadSyncFolder
+        : null,
+    lastLeadEmailThreadSyncNextStart:
+      typeof storedConfig?.lastLeadEmailThreadSyncNextStart === "number"
+        ? storedConfig.lastLeadEmailThreadSyncNextStart
+        : null,
     lastLeadSyncAt: storedConfig?.lastLeadSyncAt ?? null,
     lastLeadNoteSyncAt: storedConfig?.lastLeadNoteSyncAt ?? null,
     lastLeadNoteSyncNextStart:
@@ -659,12 +695,23 @@ async function writePipedriveLeadPull({
   }
 
   try {
+    const existingConfig = pipedriveStoredConfigSchema.safeParse(
+      connection.config ?? {},
+    );
+    const storedConfig = existingConfig.success ? existingConfig.data : null;
     const start = client.lastFullLeadSyncNextStart;
     const updatedSince = client.lastFullLeadSyncAt;
     const noteStart = client.lastLeadNoteSyncNextStart;
     const noteUpdatedSince = client.lastLeadNoteSyncAt;
     const noteUpdatedUntil =
       client.lastLeadNoteSyncPendingUntil ?? startedAt.toISOString();
+    const emailThreadFolder = pipedriveLeadEmailThreadFolderValue(
+      storedConfig?.lastLeadEmailThreadSyncFolder,
+    );
+    const emailThreadStart =
+      typeof storedConfig?.lastLeadEmailThreadSyncNextStart === "number"
+        ? storedConfig.lastLeadEmailThreadSyncNextStart
+        : null;
     const leadSweepResult =
       start === null && updatedSince
         ? await importPipedriveLeadPages({
@@ -685,6 +732,13 @@ async function writePipedriveLeadPull({
         updatedSince: noteUpdatedSince,
         updatedUntil: noteUpdatedUntil,
       },
+    });
+    const emailThreadResult = await importPipedriveLeadEmailThreadPages({
+      client,
+      folder: emailThreadFolder,
+      maxPages: defaultPipedriveLeadEmailThreadSweepMaxPages,
+      now: startedAt,
+      start: emailThreadStart,
     });
     const finishedAt = new Date();
     const leadSweepRecordsRead =
@@ -726,8 +780,41 @@ async function writePipedriveLeadPull({
       noteResult.status === "ok" ? noteResult.moreAvailable : false;
     const notePagesRead =
       noteResult.status === "ok" ? noteResult.pagesRead : 0;
-    const recordsRead = leadRecordsRead + noteRecordsRead;
-    const recordsWritten = leadRecordsWritten + noteRecordsWritten;
+    const emailThreadCreated =
+      emailThreadResult.status === "ok" ? emailThreadResult.created : 0;
+    const emailThreadUpdated =
+      emailThreadResult.status === "ok" ? emailThreadResult.updated : 0;
+    const emailThreadSkipped =
+      emailThreadResult.status === "ok" ? emailThreadResult.skipped : 0;
+    const emailThreadRecordsWritten =
+      emailThreadResult.status === "ok"
+        ? emailThreadResult.recordsWritten
+        : 0;
+    const emailThreadThreadsRead =
+      emailThreadResult.status === "ok" ? emailThreadResult.threadsRead : 0;
+    const emailThreadThreadsMatched =
+      emailThreadResult.status === "ok"
+        ? emailThreadResult.threadsMatched
+        : 0;
+    const emailThreadEmailsRead =
+      emailThreadResult.status === "ok" ? emailThreadResult.emailsRead : 0;
+    const emailThreadPagesRead =
+      emailThreadResult.status === "ok" ? emailThreadResult.pagesRead : 0;
+    const emailThreadMoreAvailable =
+      emailThreadResult.status === "ok"
+        ? emailThreadResult.moreAvailable
+        : false;
+    const emailThreadCompletedCycle =
+      emailThreadResult.status === "ok"
+        ? emailThreadResult.completedCycle
+        : false;
+    const recordsRead =
+      leadRecordsRead +
+      noteRecordsRead +
+      emailThreadThreadsRead +
+      emailThreadEmailsRead;
+    const recordsWritten =
+      leadRecordsWritten + noteRecordsWritten + emailThreadRecordsWritten;
     const linkedExisting = leadLinkedExisting;
     const skipped = leadSkipped;
     const moreAvailable = leadMoreAvailable || noteMoreAvailable;
@@ -752,6 +839,9 @@ async function writePipedriveLeadPull({
             (count, noteImport) => count + noteImport.warnings.length,
             0,
           )
+        : 1) +
+      (emailThreadResult.status === "ok"
+        ? emailThreadResult.warnings.length
         : 1);
     const status: PipedriveLeadPullStatus =
       warningCount > 0 || skipped > 0 || recordsRead === 0 || moreAvailable
@@ -778,10 +868,14 @@ async function writePipedriveLeadPull({
     const noteSummary = noteRecordsRead
       ? ` Lead-note sweep: ${noteCreated} created, ${noteUpdated} updated, ${noteSkipped} skipped and ${noteIgnored} ignored from ${noteRecordsRead} Pipedrive note${noteRecordsRead === 1 ? "" : "s"}.`
       : "";
+    const emailThreadSummary =
+      emailThreadPagesRead > 0
+        ? ` Email-thread sweep: ${emailThreadCreated} created, ${emailThreadUpdated} updated and ${emailThreadSkipped} skipped from ${emailThreadThreadsRead} Pipedrive thread${emailThreadThreadsRead === 1 ? "" : "s"} and ${emailThreadEmailsRead} email${emailThreadEmailsRead === 1 ? "" : "s"}.`
+        : "";
     const message =
       recordsRead === 0
-        ? `${importMode}: no Pipedrive leads or notes were available to import.`
-        : `${importMode}: ${leadRecordsWritten} lead${leadRecordsWritten === 1 ? "" : "s"} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}${pageSummary}.${noteSummary}${moreAvailableSummary}`;
+        ? `${importMode}: no Pipedrive leads, notes or email threads were available to import.`
+        : `${importMode}: ${leadRecordsWritten} lead${leadRecordsWritten === 1 ? "" : "s"} created, ${leadLinkedExisting} already linked, ${leadSkipped} skipped from ${leadRecordsRead}${pageSummary}.${noteSummary}${emailThreadSummary}${moreAvailableSummary}`;
     const importRows = [
       ...(leadSweepResult?.status === "ok"
         ? pipedriveLeadImportMetadataRows(leadSweepResult.results)
@@ -794,13 +888,30 @@ async function writePipedriveLeadPull({
       noteResult.status === "ok"
         ? pipedriveLeadNoteImportMetadataRows(noteResult.results)
         : [];
-    const existingConfig = pipedriveStoredConfigSchema.safeParse(
-      connection.config ?? {},
-    );
     const metadata: Prisma.InputJsonObject = {
       actorId,
       created: leadRecordsWritten,
       dealImportEnabled: false,
+      emailThreadCompletedCycle,
+      emailThreadCreated,
+      emailThreadEmailsRead,
+      emailThreadFolder: emailThreadResult.folder,
+      emailThreadMaxPages: emailThreadResult.maxPages,
+      emailThreadMoreAvailable,
+      emailThreadNextFolder: emailThreadResult.nextFolder,
+      emailThreadNextStart: emailThreadResult.nextStart,
+      emailThreadPagesRead,
+      emailThreadRecordsWritten,
+      emailThreadRows: emailThreadResult.rows.slice(0, 50),
+      emailThreadSkipped,
+      emailThreadStart,
+      emailThreadStatus: emailThreadResult.status,
+      emailThreadThreadsMatched,
+      emailThreadThreadsRead,
+      emailThreadUpdated,
+      emailThreadWarnings: emailThreadResult.warnings
+        .slice(0, 5)
+        .map((warning) => warning.slice(0, 240)),
       imports: importRows,
       leadCreated: leadRecordsWritten,
       leadCursorCreated: leadCursorRecordsWritten,
@@ -891,6 +1002,16 @@ async function writePipedriveLeadPull({
         }
       }
 
+      if (emailThreadResult.status === "ok") {
+        nextConfig.lastLeadEmailThreadSyncFolder =
+          emailThreadResult.nextFolder;
+        nextConfig.lastLeadEmailThreadSyncNextStart =
+          emailThreadResult.nextStart;
+        if (emailThreadResult.completedCycle) {
+          nextConfig.lastLeadEmailThreadSyncCompletedAt = finishedAtIso;
+        }
+      }
+
       writes.push(
         prisma.integrationConnection.update({
           where: { provider: pipedriveProvider },
@@ -911,6 +1032,20 @@ async function writePipedriveLeadPull({
       metadata,
       mode,
       moreAvailable,
+      emailThreadCompletedCycle,
+      emailThreadCreated,
+      emailThreadEmailsRead,
+      emailThreadFolder: emailThreadResult.folder,
+      emailThreadMoreAvailable,
+      emailThreadNextFolder: emailThreadResult.nextFolder,
+      emailThreadNextStart: emailThreadResult.nextStart,
+      emailThreadPagesRead,
+      emailThreadRecordsWritten,
+      emailThreadSkipped,
+      emailThreadStart,
+      emailThreadThreadsMatched,
+      emailThreadThreadsRead,
+      emailThreadUpdated,
       noteCreated,
       noteIgnored,
       noteMoreAvailable,
@@ -1792,6 +1927,14 @@ function boundedPreviewStart(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
 
   return Math.max(Math.trunc(value), 0);
+}
+
+function pipedriveLeadEmailThreadFolderValue(value: unknown) {
+  return pipedriveLeadEmailThreadFolders.includes(
+    value as (typeof pipedriveLeadEmailThreadFolders)[number],
+  )
+    ? (value as (typeof pipedriveLeadEmailThreadFolders)[number])
+    : "inbox";
 }
 
 function syncTrigger(trigger: string) {
