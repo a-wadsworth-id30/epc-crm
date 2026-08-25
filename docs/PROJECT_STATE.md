@@ -173,6 +173,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   streams it back to the user without exposing Pipedrive credentials or storing
   the file in CRM, with the sale document panel using the shared CRM file
   preview modal and a separate download action for provider files. The Pipedrive
+  file proxy uses same-origin frame headers so previewable provider PDFs/text
+  can render inside the CRM modal without relaxing iframe permissions globally.
+  The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,
   plus a separate manual contact pull for Pipedrive persons. Preview classifies

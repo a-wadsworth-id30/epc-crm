@@ -155,6 +155,10 @@ const nextConfig: NextConfig = {
         source: "/api/media/:fileAssetId/preview",
         headers: mediaPreviewSecurityHeaders,
       },
+      {
+        source: "/api/pipedrive/files/:linkId",
+        headers: mediaPreviewSecurityHeaders,
+      },
     ];
   },
   webpack(config) {
