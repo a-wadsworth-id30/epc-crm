@@ -146,8 +146,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
   runtime fallback. `src/lib/integrations/pipedrive.ts` provides the
   server-side read-only Pipedrive client for current-user, user, lead, note,
-  file, deal, person, person mail-message and organisation GET requests, plus
-  cursor-paginated Pipedrive v2 deal and person listing.
+  file, deal, person, person mail-message, mailbox thread/mail-message and
+  organisation GET requests, plus cursor-paginated Pipedrive v2 deal and person
+  listing.
   `src/lib/integrations/pipedrive-import.ts` maps
   Pipedrive leads into CRM contacts, companies, opportunities, communications
   and `ExternalRecordLink` rows, imports Pipedrive Lead Inbox notes as
@@ -163,12 +164,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `lastLeadNoteSyncAt` / `lastLeadNoteSyncNextStart` cursor so note changes
   can auto-import even when the lead itself has not changed. Linked sale detail
   pages also trigger a throttled post-load CRM action that refreshes Pipedrive
-  lead notes and Pipedrive person mail messages, writing CRM-only `EMAIL`
+  lead notes, Pipedrive mailbox threads linked to the Lead Inbox UUID and
+  Pipedrive person mail messages, writing CRM-only `EMAIL`
   communications/`EmailMessage` rows from Pipedrive emails and reloading the
   page only when CRM notes or emails were created or updated, providing a
   fallback when scheduled jobs or note webhooks are delayed. Imported Pipedrive
   emails use stable `pipedrive:mail:*` external IDs, update existing CRM email
-  communications instead of duplicating them, and never write back to Pipedrive.
+  communications instead of duplicating them, deduplicate overlap between
+  lead-thread and person-message reads, and never write back to Pipedrive.
   Pipedrive-linked sale document panels also show provider file references and
   run a throttled metadata refresh when the Documents tab is opened, with an
   admin-only manual refresh option, without downloading files during metadata
@@ -184,9 +187,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   sale backfill for older CRM sales already linked to Pipedrive Lead Inbox
   records. The backfill has preview and import modes, runs in bounded cursor
   batches, records sync-history and background-job summaries, pulls Pipedrive
-  notes into idempotent CRM sale note rows, pulls Pipedrive person mail messages
-  into CRM-only sale email rows, and pulls Pipedrive file metadata into CRM-only
-  provider file references. File metadata backfill reads a bounded set of
+  notes into idempotent CRM sale note rows, pulls Pipedrive Lead Inbox mailbox
+  thread messages and person mail messages into CRM-only sale email rows, and
+  pulls Pipedrive file metadata into CRM-only provider file references. File
+  metadata backfill reads a bounded set of
   Pipedrive file pages once per batch and groups files by lead ID so older
   linked sales can be refreshed without per-sale file scans. Manual
   "Pull latest leads" and the scheduled Pipedrive lead pull also run one

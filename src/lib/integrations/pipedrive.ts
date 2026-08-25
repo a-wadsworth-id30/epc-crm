@@ -208,7 +208,9 @@ export type PipedriveMailMessage = Record<string, unknown> & {
   add_time?: string;
   body?: string | null;
   body_plain?: string | null;
+  deal_id?: unknown;
   from?: unknown;
+  lead_id?: unknown;
   mail_thread_id?: unknown;
   message_time?: string | null;
   subject?: string | null;
@@ -217,6 +219,25 @@ export type PipedriveMailMessage = Record<string, unknown> & {
   to?: unknown;
   update_time?: string;
 };
+
+export type PipedriveMailThread = Record<string, unknown> & {
+  id?: number;
+  add_time?: string;
+  deal_id?: unknown;
+  folders?: unknown;
+  last_message_received_timestamp?: string | null;
+  last_message_sent_timestamp?: string | null;
+  lead_id?: unknown;
+  person_id?: unknown;
+  subject?: string | null;
+  update_time?: string;
+};
+
+export type PipedriveMailThreadFolder =
+  | "archive"
+  | "drafts"
+  | "inbox"
+  | "sent";
 
 export type PipedriveListLeadsParams = {
   filterId?: number | null;
@@ -280,6 +301,16 @@ export type PipedriveListPersonMailMessagesParams = {
   includeBody?: boolean | null;
   limit?: number | null;
   start?: number | null;
+};
+
+export type PipedriveListMailThreadsParams = {
+  folder?: PipedriveMailThreadFolder | null;
+  limit?: number | null;
+  start?: number | null;
+};
+
+export type PipedriveGetMailMessageParams = {
+  includeBody?: boolean | null;
 };
 
 export class PipedriveApiError extends Error {
@@ -519,6 +550,32 @@ export class PipedriveReadOnlyClient {
         include_body: booleanParam(params.includeBody),
         limit: integerParam(params.limit, { max: 500 }),
         start: integerParam(params.start, { min: 0 }),
+      },
+    );
+  }
+
+  async listMailThreads(params: PipedriveListMailThreadsParams = {}) {
+    return this.getList<PipedriveMailThread>("mailbox/mailThreads", {
+      folder: params.folder || "inbox",
+      limit: integerParam(params.limit, { max: 500 }),
+      start: integerParam(params.start, { min: 0 }),
+    });
+  }
+
+  async listMailThreadMessages(mailThreadId: number) {
+    return this.getList<PipedriveMailMessage>(
+      `mailbox/mailThreads/${pipedriveNumericId(mailThreadId, "mail thread")}/mailMessages`,
+    );
+  }
+
+  async getMailMessage(
+    id: number,
+    params: PipedriveGetMailMessageParams = {},
+  ) {
+    return this.getSingle<PipedriveMailMessage>(
+      `mailbox/mailMessages/${pipedriveNumericId(id, "mail message")}`,
+      {
+        include_body: booleanParam(params.includeBody),
       },
     );
   }
