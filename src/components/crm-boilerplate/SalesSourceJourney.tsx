@@ -55,6 +55,10 @@ function SourceIconTooltip({ item }: { item: SourceJourneyItem }) {
       role="tooltip"
       className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 hidden max-w-72 -translate-x-1/2 whitespace-normal rounded-lg bg-gray-950 px-2.5 py-1.5 text-center text-xs leading-5 font-semibold text-white shadow-lg group-hover/source:block dark:bg-gray-800"
     >
+      <span
+        aria-hidden="true"
+        className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-950 dark:bg-gray-800"
+      />
       {sourceTooltipText(item)}
     </span>
   );
