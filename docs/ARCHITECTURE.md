@@ -276,7 +276,9 @@ does not download files during metadata refresh, reupload, delete or share the
 Pipedrive files. Opening a provider file uses an authenticated CRM route that
 checks sale access, downloads the file from Pipedrive server-side with the
 stored API token and streams it back to the user without exposing Pipedrive
-credentials. None of these paths write back to Pipedrive.
+credentials; the sale document panel opens those files through the shared CRM
+file preview modal before the user optionally opens the file directly. None of
+these paths write back to Pipedrive.
 
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`

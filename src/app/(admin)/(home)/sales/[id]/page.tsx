@@ -2218,6 +2218,8 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
 
     return {
       id: link.id,
+      mimeType:
+        stringValue(metadata.pipedriveFileType) ?? "application/octet-stream",
       name:
         stringValue(metadata.name) ??
         stringValue(metadata.pipedriveFileName) ??
