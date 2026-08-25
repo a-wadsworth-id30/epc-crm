@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { PipedriveLeadContextPanelProps } from "@/components/crm-boilerplate/PipedriveLeadContextPanel";
 import type { PipedriveLeadEmailsAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadEmailsAutoSync";
 import type { PipedriveLeadFilesAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadFilesAutoSync";
 import type { PipedriveLeadFilesPanelProps } from "@/components/crm-boilerplate/PipedriveLeadFilesPanel";
@@ -49,6 +50,12 @@ export const SaleCallButton = dynamic(
 export const PipedriveLeadUpdatesSyncButton =
   dynamic<PipedriveLeadUpdatesSyncButtonProps>(
     () => import("@/components/crm-boilerplate/PipedriveLeadUpdatesSyncButton"),
+    { loading: () => null, ssr: false },
+  );
+
+export const PipedriveLeadContextPanel =
+  dynamic<PipedriveLeadContextPanelProps>(
+    () => import("@/components/crm-boilerplate/PipedriveLeadContextPanel"),
     { loading: () => null, ssr: false },
   );
 

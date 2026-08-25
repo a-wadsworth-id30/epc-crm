@@ -145,10 +145,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   The CRM can store a Pipedrive API token encrypted in
   `IntegrationConnection.config` or read `PIPEDRIVE_API_TOKEN` from the
   runtime fallback. `src/lib/integrations/pipedrive.ts` provides the
-  server-side read-only Pipedrive client for current-user, user, lead, note,
-  file, deal, person, person mail-message, mailbox thread/mail-message and
-  organisation GET requests, plus cursor-paginated Pipedrive v2 deal and person
-  listing.
+  server-side read-only Pipedrive client for current-user, user, lead,
+  lead-field, note, file, deal, person, person mail-message, mailbox
+  thread/mail-message and organisation GET requests, plus cursor-paginated
+  Pipedrive v2 deal and person listing.
   `src/lib/integrations/pipedrive-import.ts` maps
   Pipedrive leads into CRM contacts, companies, opportunities, communications
   and `ExternalRecordLink` rows, imports Pipedrive Lead Inbox notes as
@@ -180,6 +180,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Lead Inbox notes and emails, with the email side using a deeper bounded read
   for historical recovery and surfacing sanitized Pipedrive read warnings in
   the action result.
+  Linked sale detail Lead Enquiry panels also read the latest Pipedrive lead
+  and `leadFields` definitions on demand, showing Pipedrive summary values and
+  readable custom fields inside the CRM without persisting the raw lead payload
+  or writing back to Pipedrive.
   Pipedrive-linked sale document panels also show provider file references and
   run a throttled metadata refresh when the Documents tab is opened, with an
   admin-only manual refresh option, without downloading files during metadata

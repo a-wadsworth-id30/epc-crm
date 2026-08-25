@@ -115,6 +115,45 @@ describe("Pipedrive read-only client", () => {
     assert.equal(result.pagination.nextStart, 500);
   });
 
+  it("lists lead field definitions through the v1 leadFields endpoint", async () => {
+    const requests: Array<{ init?: RequestInit; url: string }> = [];
+    globalThis.fetch = (async (input, init) => {
+      requests.push({ init, url: String(input) });
+      return jsonResponse({
+        additional_data: {
+          pagination: {
+            limit: 500,
+            more_items_in_collection: false,
+            next_start: null,
+            start: 0,
+          },
+        },
+        data: [
+          {
+            field_type: "enum",
+            key: "abcdef1234567890abcdef1234567890abcdef12",
+            name: "EPC rating",
+            options: [{ id: 2, label: "C" }],
+          },
+        ],
+        success: true,
+      });
+    }) as typeof fetch;
+
+    const result = await createClient().listLeadFields({
+      limit: 999,
+      start: -5,
+    });
+    const url = new URL(requests[0]!.url);
+
+    assert.equal(url.pathname, "/v1/leadFields");
+    assert.equal(url.searchParams.get("limit"), "500");
+    assert.equal(url.searchParams.get("start"), "0");
+    assert.equal(requests[0]?.init?.method, "GET");
+    assert.equal(result.data[0]?.name, "EPC rating");
+    assert.equal(result.pagination.moreItemsInCollection, false);
+  });
+
   it("uses the v2 persons endpoint with cursor pagination", async () => {
     const requests: Array<{ url: string }> = [];
     globalThis.fetch = (async (input) => {

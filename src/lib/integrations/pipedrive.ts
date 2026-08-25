@@ -143,6 +143,14 @@ export type PipedriveLead = Record<string, unknown> & {
   update_time?: string;
 };
 
+export type PipedriveLeadField = Record<string, unknown> & {
+  field_type?: string | null;
+  id?: number;
+  key?: string;
+  name?: string;
+  options?: unknown;
+};
+
 export type PipedriveDeal = Record<string, unknown> & {
   id?: number;
   title?: string;
@@ -257,6 +265,11 @@ export type PipedriveListLeadsParams = {
   sort?: string | null;
   start?: number | null;
   updatedSince?: string | null;
+};
+
+export type PipedriveListLeadFieldsParams = {
+  limit?: number | null;
+  start?: number | null;
 };
 
 export type PipedriveListDealsParams = {
@@ -505,6 +518,13 @@ export class PipedriveReadOnlyClient {
       sort: params.sort || undefined,
       start: integerParam(params.start, { min: 0 }),
       updated_since: pipedriveDateTimeParam(params.updatedSince),
+    });
+  }
+
+  async listLeadFields(params: PipedriveListLeadFieldsParams = {}) {
+    return this.getList<PipedriveLeadField>("leadFields", {
+      limit: integerParam(params.limit, { max: 500 }),
+      start: integerParam(params.start, { min: 0 }),
     });
   }
 

@@ -248,8 +248,10 @@ Main files:
 - `src/lib/integrations/pipedrive-import.ts`
 - `src/lib/integrations/pipedrive-lead-sync.ts`
 - `src/lib/integrations/pipedrive-contact-sync.ts`
+- `src/lib/integrations/pipedrive-sale-context.ts`
 - `src/lib/integrations/pipedrive-webhooks.ts`
 - `src/lib/integrations/pipedrive-webhook-registration.ts`
+- `src/components/crm-boilerplate/PipedriveLeadContextPanel.tsx`
 - `src/components/crm-boilerplate/PipedriveLeadFilesAutoSync.tsx`
 - `src/components/crm-boilerplate/PipedriveLeadFilesPanel.tsx`
 - `src/components/crm-boilerplate/PipedriveSettingsForm.tsx`
@@ -286,8 +288,11 @@ stored API token and streams it back to the user without exposing Pipedrive
 credentials; the sale document panel opens those files through the shared CRM
 file preview modal and exposes a separate download action backed by the same
 authenticated route. That route has the same same-origin frame header override
-as CRM media previews so PDF/text previews can render inside the modal. None of
-these paths write back to Pipedrive.
+as CRM media previews so PDF/text previews can render inside the modal.
+Pipedrive-linked sale Lead Enquiry panels can read the linked lead and
+Pipedrive `leadFields` definitions on demand, formatting custom field option
+values into readable CRM display fields without persisting raw provider
+payloads. None of these paths write back to Pipedrive.
 
 The first Pipedrive phase covers connection storage, readiness display and the
 `ExternalRecordLink` idempotency foundation. `src/lib/integrations/pipedrive.ts`
@@ -302,7 +307,10 @@ plain text and uses stable Pipedrive note IDs in `SalesCommunication.externalId`
 so repeated imports update existing CRM notes instead of duplicating them. Sale
 detail pages for Pipedrive-linked leads run a throttled post-load note refresh
 action that uses the same pull-only importer and refreshes the route only when
-CRM notes changed. The sale document panel runs a throttled Pipedrive file
+CRM notes changed. They also lazy-load a read-only Pipedrive context panel that
+uses the linked Lead Inbox UUID, current-user domain and `leadFields` endpoint
+to show summary values and custom fields in the Lead Enquiry tab. The sale
+document panel runs a throttled Pipedrive file
 metadata refresh when the Documents tab is opened and exposes an admin-only
 "Pull Pipedrive files" action. Pipedrive file IDs are stored under
 `ExternalRecordLink` with
