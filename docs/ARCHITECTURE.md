@@ -268,10 +268,12 @@ read-back imports and direct single-lead imports from a Lead Inbox URL/UUID;
 incremental lead pulls also sweep the latest one lead page before using the
 saved cursor. Lead imports and the sale detail admin action can also pull
 Pipedrive Lead Inbox notes with GET requests and store them as CRM
-`SalesCommunication` note rows. Pipedrive-linked sale detail pages can also
-pull mailbox threads linked to the Lead Inbox UUID and person mail messages
-associated with the linked Pipedrive lead contact through Pipedrive GET
-requests and store them as CRM-only `EMAIL`
+`SalesCommunication` note rows. Scheduled/manual lead pulls also advance a
+mailbox-thread cursor across inbox, sent and archive folders so older Lead
+Inbox emails can be auto-discovered over time. Pipedrive-linked sale detail
+pages can also pull mailbox threads linked to the Lead Inbox UUID and person
+mail messages associated with the linked Pipedrive lead contact through
+Pipedrive GET requests and store them as CRM-only `EMAIL`
 `SalesCommunication`/`EmailMessage` rows using stable `pipedrive:mail:*`
 external IDs. Pipedrive-linked sale detail pages can also pull Pipedrive file
 metadata with GET requests and store provider file references as CRM-only
@@ -319,7 +321,9 @@ avoiding repeated per-sale file scans while remaining
 pull-only. Manual and scheduled Pipedrive lead pulls also run one bounded
 linked-sale backfill continuation batch so older Pipedrive-linked sales
 progressively receive missing notes, emails and file references without a
-separate admin click. The
+separate admin click. They also run a cursor-based mailbox-thread sweep for
+older Lead Inbox emails, and the sale detail admin "Pull Pipedrive emails"
+action uses a deeper bounded scan for immediate historical recovery. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and

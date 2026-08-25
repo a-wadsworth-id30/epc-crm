@@ -259,6 +259,59 @@ async function findEmailMessage(args: unknown) {
   );
 }
 
+async function findExternalRecordLinks(args: unknown) {
+  const where = (
+    args as {
+      where?: {
+        externalId?: { in?: string[] } | string;
+        externalType?: string;
+        internalId?: string;
+        internalType?: string;
+        provider?: string;
+      };
+    }
+  ).where;
+  const externalIds =
+    typeof where?.externalId === "object" &&
+    Array.isArray(where.externalId.in)
+      ? new Set(where.externalId.in)
+      : null;
+
+  return externalRecordLinkRows.filter(
+    (row) =>
+      (externalIds === null || externalIds.has(row.externalId)) &&
+      (typeof where?.externalId !== "string" ||
+        row.externalId === where.externalId) &&
+      (where?.externalType === undefined ||
+        row.externalType === where.externalType) &&
+      (where?.internalId === undefined || row.internalId === where.internalId) &&
+      (where?.internalType === undefined ||
+        row.internalType === where.internalType) &&
+      (where?.provider === undefined || row.provider === where.provider),
+  );
+}
+
+async function findSalesOpportunities(args: unknown) {
+  const ids = (
+    args as { where?: { id?: { in?: string[] } | string } }
+  ).where?.id;
+  const opportunityIds =
+    typeof ids === "object" && Array.isArray(ids.in)
+      ? ids.in
+      : typeof ids === "string"
+        ? [ids]
+        : ["opportunity-existing"];
+
+  return opportunityIds.map((id) => ({
+    contact: {
+      additionalEmails: [],
+      email: "customer@example.com",
+    },
+    contactId: "contact-existing",
+    id,
+  }));
+}
+
 async function createEmailMessage(args: unknown) {
   crmWriteCalls += 1;
   crmWriteLabels.push("emailMessage.create");
@@ -341,6 +394,7 @@ before(async () => {
           update: recordCrmWriteFor("contact.update"),
         },
         externalRecordLink: {
+          findMany: findExternalRecordLinks,
           findUnique: findExternalRecordLink,
           upsert: upsertExternalRecordLink,
         },
@@ -359,6 +413,7 @@ before(async () => {
         },
         salesOpportunity: {
           create: recordCrmWriteFor("salesOpportunity.create"),
+          findMany: findSalesOpportunities,
           findUnique: async (args: unknown) => ({
             contact: {
               additionalEmails: [],
@@ -381,6 +436,7 @@ before(async () => {
             return operation(transactionClient);
           },
           externalRecordLink: {
+            findMany: findExternalRecordLinks,
             findFirst: async (args: unknown) => {
               const where = (
                 args as {
@@ -441,6 +497,7 @@ before(async () => {
             findUnique: findContactById,
           },
           salesOpportunity: {
+            findMany: findSalesOpportunities,
             findUnique: async (args: unknown) => ({
               contact: {
                 additionalEmails: [],
@@ -1667,6 +1724,245 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(salesCommunicationRows[0]?.body, "Lead inbox body");
     assert.equal(emailMessageRows.length, 1);
     assert.equal(emailMessageRows[0]?.providerMessageId, "pipedrive:mail:801");
+  });
+
+  it("can deep-scan older Pipedrive lead-thread emails for manual recovery", async () => {
+    const listThreadCalls: unknown[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-older-emails",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-emails",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.syncPipedriveLeadEmailsForOpportunity({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listMailThreadMessages: async (threadId) => ({
+          data: [
+            {
+              body_plain: "Older thread body",
+              from: { email: "customer@example.com" },
+              id: 811,
+              mail_thread_id: threadId,
+              subject: "Older lead inbox email",
+              to: [{ email: "sales@example.com" }],
+            },
+          ],
+          pagination: {
+            limit: null,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: null,
+          },
+          relatedObjects: null,
+        }),
+        listMailThreads: async (params) => {
+          listThreadCalls.push(params);
+          return {
+            data:
+              params?.folder === "inbox" && params.start === 150
+                ? [
+                    {
+                      id: 711,
+                      lead_id: "lead-older-emails",
+                      subject: "Older lead thread",
+                    },
+                  ]
+                : [],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection:
+                params?.folder === "inbox" && params.start !== 150,
+              nextStart:
+                params?.folder === "inbox"
+                  ? typeof params.start === "number"
+                    ? params.start + 50
+                    : 50
+                  : null,
+              start: typeof params?.start === "number" ? params.start : 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      maxPages: 4,
+      now: new Date("2026-08-24T12:00:00Z"),
+      opportunityId: "opportunity-emails",
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.emailsRead, 1);
+    assert.equal(result.created, 1);
+    assert.ok(
+      listThreadCalls.some(
+        (call) =>
+          (call as { folder?: string; start?: number }).folder === "inbox" &&
+          (call as { folder?: string; start?: number }).start === 150,
+      ),
+    );
+    assert.equal(salesCommunicationRows[0]?.body, "Older thread body");
+  });
+
+  it("imports matched lead-thread emails even when another folder read fails", async () => {
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-folder-warning",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-emails",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.syncPipedriveLeadEmailsForOpportunity({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+        listMailThreadMessages: async (threadId) => ({
+          data: [
+            {
+              body_plain: "Inbox still imported",
+              from: { email: "customer@example.com" },
+              id: 821,
+              mail_thread_id: threadId,
+              subject: "Folder warning",
+              to: [{ email: "sales@example.com" }],
+            },
+          ],
+          pagination: {
+            limit: null,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: null,
+          },
+          relatedObjects: null,
+        }),
+        listMailThreads: async (params) => {
+          if (params?.folder === "sent") {
+            throw new Error("Pipedrive sent folder unavailable");
+          }
+
+          return {
+            data:
+              params?.folder === "inbox"
+                ? [
+                    {
+                      id: 721,
+                      lead_id: "lead-folder-warning",
+                      subject: "Inbox thread",
+                    },
+                  ]
+                : [],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: false,
+              nextStart: null,
+              start: 0,
+            },
+            relatedObjects: null,
+          };
+        },
+      },
+      now: new Date("2026-08-24T12:00:00Z"),
+      opportunityId: "opportunity-emails",
+    });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.created, 1);
+    assert.equal(result.warnings.length, 1);
+    assert.match(result.warnings[0] ?? "", /sent/);
+    assert.equal(salesCommunicationRows[0]?.body, "Inbox still imported");
+  });
+
+  it("imports linked lead emails from a scheduled mailbox-thread sweep", async () => {
+    const listThreadMessageCalls: number[] = [];
+    externalRecordLinkRows = [
+      {
+        externalId: "lead-sweep-emails",
+        externalType: "lead",
+        id: "lead-link",
+        internalId: "opportunity-emails",
+        internalType: "salesOpportunity",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result =
+      await pipedriveImport.importPipedriveLeadEmailThreadPages({
+        client: {
+          defaultLeadSource: "Pipedrive",
+          getOrganization: async () => ({}),
+          getPerson: async () => ({}),
+          listMailThreadMessages: async (threadId) => {
+            listThreadMessageCalls.push(threadId);
+            return {
+              data: [
+                {
+                  body_plain: "Scheduled sweep body",
+                  from: { email: "customer@example.com" },
+                  id: 831,
+                  mail_thread_id: threadId,
+                  subject: "Scheduled sweep",
+                  to: [{ email: "sales@example.com" }],
+                },
+              ],
+              pagination: {
+                limit: null,
+                moreItemsInCollection: false,
+                nextStart: null,
+                start: null,
+              },
+              relatedObjects: null,
+            };
+          },
+          listMailThreads: async (params) => ({
+            data: [
+              {
+                id: 731,
+                lead_id: "lead-sweep-emails",
+                subject: "Linked sweep thread",
+              },
+              {
+                id: 732,
+                lead_id: "unlinked-lead",
+                subject: "Unlinked sweep thread",
+              },
+            ],
+            pagination: {
+              limit: 50,
+              moreItemsInCollection: true,
+              nextStart: 250,
+              start: typeof params?.start === "number" ? params.start : 200,
+            },
+            relatedObjects: null,
+          }),
+        },
+        folder: "archive",
+        maxPages: 1,
+        now: new Date("2026-08-24T12:00:00Z"),
+        start: 200,
+      });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.folder, "archive");
+    assert.equal(result.nextFolder, "archive");
+    assert.equal(result.nextStart, 250);
+    assert.equal(result.threadsRead, 2);
+    assert.equal(result.threadsMatched, 1);
+    assert.equal(result.emailsRead, 1);
+    assert.equal(result.created, 1);
+    assert.deepEqual(listThreadMessageCalls, [731]);
+    assert.equal(salesCommunicationRows[0]?.body, "Scheduled sweep body");
+    assert.equal(emailMessageRows[0]?.providerMessageId, "pipedrive:mail:831");
   });
 
   it("deduplicates Pipedrive emails returned by lead thread and person routes", async () => {

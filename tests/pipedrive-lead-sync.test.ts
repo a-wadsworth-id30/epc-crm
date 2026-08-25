@@ -18,6 +18,9 @@ let client: {
   lastFullDealSyncNextCursor: string | null;
   lastFullLeadSyncAt: string | null;
   lastFullLeadSyncNextStart: number | null;
+  lastLeadEmailThreadSyncCompletedAt?: string | null;
+  lastLeadEmailThreadSyncFolder?: string | null;
+  lastLeadEmailThreadSyncNextStart?: number | null;
   lastLeadNoteSyncAt: string | null;
   lastLeadNoteSyncNextStart: number | null;
   lastLeadNoteSyncPendingUntil: string | null;
@@ -27,6 +30,8 @@ let importDealPagesArgs: unknown;
 let importDealPagesResult: Record<string, unknown>;
 let importLeadIdsArgs: unknown;
 let importLeadIdsResult: Record<string, unknown>;
+let importLeadEmailThreadPagesArgs: unknown;
+let importLeadEmailThreadPagesResult: Record<string, unknown>;
 let importLeadNotePagesArgs: unknown;
 let importLeadNotePagesResult: Record<string, unknown>;
 let importPagesArgs: unknown;
@@ -82,6 +87,11 @@ before(async () => {
 
     if (request === "@/lib/integrations/pipedrive-import") {
       return {
+        defaultPipedriveLeadEmailThreadSweepMaxPages: 3,
+        importPipedriveLeadEmailThreadPages: async (args: unknown) => {
+          importLeadEmailThreadPagesArgs = args;
+          return importLeadEmailThreadPagesResult;
+        },
         importPipedriveDealPages: async (args: unknown) => {
           importDealPagesArgs = args;
           return importDealPagesResult;
@@ -106,6 +116,7 @@ before(async () => {
 
           return match?.[0].toLowerCase() ?? null;
         },
+        pipedriveLeadEmailThreadFolders: ["inbox", "sent", "archive"],
         pipedriveDealImportMetadataRows: () => [
           {
             externalDealId: "deal-1",
@@ -214,6 +225,9 @@ beforeEach(() => {
     lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastFullLeadSyncNextStart: null,
+    lastLeadEmailThreadSyncCompletedAt: null,
+    lastLeadEmailThreadSyncFolder: null,
+    lastLeadEmailThreadSyncNextStart: null,
     lastLeadNoteSyncAt: "2026-08-20T08:10:00.000Z",
     lastLeadNoteSyncNextStart: null,
     lastLeadNoteSyncPendingUntil: null,
@@ -225,6 +239,9 @@ beforeEach(() => {
     lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: "2026-08-20T08:00:00.000Z",
     lastLeadSyncAt: "2026-08-20T08:05:00.000Z",
+    lastLeadEmailThreadSyncCompletedAt: null,
+    lastLeadEmailThreadSyncFolder: null,
+    lastLeadEmailThreadSyncNextStart: null,
     lastLeadNoteSyncAt: "2026-08-20T08:10:00.000Z",
     lastLeadNoteSyncNextStart: null,
     lastLeadNoteSyncPendingUntil: null,
@@ -271,6 +288,27 @@ beforeEach(() => {
     ],
     skipped: 0,
     status: "ok",
+  };
+  importLeadEmailThreadPagesArgs = null;
+  importLeadEmailThreadPagesResult = {
+    completedCycle: false,
+    created: 0,
+    emailsRead: 0,
+    folder: "inbox",
+    maxPages: 3,
+    moreAvailable: false,
+    nextFolder: "inbox",
+    nextStart: null,
+    pagesRead: 0,
+    recordsWritten: 0,
+    rows: [],
+    skipped: 0,
+    start: null,
+    status: "ok",
+    threadsMatched: 0,
+    threadsRead: 0,
+    updated: 0,
+    warnings: [],
   };
   importLeadNotePagesArgs = null;
   importLeadNotePagesResult = {
@@ -502,6 +540,96 @@ describe("Pipedrive scheduled lead sync", () => {
       noteParams?.updatedUntil,
     );
     assert.equal(updateWrite.args.data.config.lastLeadNoteSyncNextStart, null);
+  });
+
+  it("sweeps Pipedrive lead email threads from the saved mailbox cursor", async () => {
+    connectionConfig = {
+      ...connectionConfig,
+      lastLeadEmailThreadSyncFolder: "sent",
+      lastLeadEmailThreadSyncNextStart: 150,
+    };
+    importPagesResult = {
+      ...importPagesResult,
+      created: 0,
+      linkedExisting: 0,
+      moreAvailable: false,
+      nextStart: null,
+      pagesRead: 1,
+      recordsRead: 0,
+      results: [],
+      skipped: 0,
+    };
+    importLeadEmailThreadPagesResult = {
+      ...importLeadEmailThreadPagesResult,
+      created: 1,
+      emailsRead: 2,
+      folder: "sent",
+      moreAvailable: true,
+      nextFolder: "sent",
+      nextStart: 200,
+      pagesRead: 3,
+      recordsWritten: 1,
+      rows: [
+        {
+          created: 1,
+          emailRead: 2,
+          externalLeadId: "lead-1",
+          opportunityId: "opportunity-1",
+          skipped: 0,
+          threadCount: 1,
+          updated: 0,
+          warningCount: 0,
+        },
+      ],
+      start: 150,
+      threadsMatched: 1,
+      threadsRead: 150,
+      updated: 0,
+    };
+
+    const result = await pipedriveLeadSync.runPipedriveLeadPull({
+      recordBackgroundJob: false,
+      trigger: "scheduled",
+    });
+
+    assert.equal(result.emailThreadCreated, 1);
+    assert.equal(result.emailThreadEmailsRead, 2);
+    assert.equal(result.emailThreadThreadsRead, 150);
+    assert.deepEqual(importLeadEmailThreadPagesArgs, {
+      client,
+      folder: "sent",
+      maxPages: 3,
+      now: (importLeadEmailThreadPagesArgs as { now?: Date }).now,
+      start: 150,
+    });
+
+    const updateWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "integration.update",
+    ) as { args: { data: { config: Record<string, unknown> } } };
+    assert.equal(
+      updateWrite.args.data.config.lastLeadEmailThreadSyncFolder,
+      "sent",
+    );
+    assert.equal(
+      updateWrite.args.data.config.lastLeadEmailThreadSyncNextStart,
+      200,
+    );
+
+    const syncWrite = transactionWrites.find(
+      (write) => (write as { type?: string }).type === "sync.create",
+    ) as {
+      args: {
+        data: {
+          metadata: Record<string, unknown>;
+          recordsRead: number;
+          recordsWritten: number;
+        };
+      };
+    };
+    assert.equal(syncWrite.args.data.recordsRead, 152);
+    assert.equal(syncWrite.args.data.recordsWritten, 1);
+    assert.equal(syncWrite.args.data.metadata.emailThreadCreated, 1);
+    assert.equal(syncWrite.args.data.metadata.emailThreadNextStart, 200);
   });
 
   it("saves a lead-note continuation without advancing the note cursor", async () => {

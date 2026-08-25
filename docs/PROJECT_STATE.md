@@ -162,7 +162,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   when the sale is linked to a Pipedrive lead. Scheduled/manual lead pulls also
   sweep updated Pipedrive notes through a separate
   `lastLeadNoteSyncAt` / `lastLeadNoteSyncNextStart` cursor so note changes
-  can auto-import even when the lead itself has not changed. Linked sale detail
+  can auto-import even when the lead itself has not changed. They also run a
+  pull-only mailbox-thread sweep using
+  `lastLeadEmailThreadSyncFolder` / `lastLeadEmailThreadSyncNextStart` so older
+  Lead Inbox email threads are progressively discovered instead of repeatedly
+  scanning only the newest mailbox pages. Linked sale detail
   pages also trigger a throttled post-load CRM action that refreshes Pipedrive
   lead notes, Pipedrive mailbox threads linked to the Lead Inbox UUID and
   Pipedrive person mail messages, writing CRM-only `EMAIL`
@@ -171,7 +175,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   fallback when scheduled jobs or note webhooks are delayed. Imported Pipedrive
   emails use stable `pipedrive:mail:*` external IDs, update existing CRM email
   communications instead of duplicating them, deduplicate overlap between
-  lead-thread and person-message reads, and never write back to Pipedrive.
+  lead-thread and person-message reads, and never write back to Pipedrive. The
+  admin-only sale detail "Pull Pipedrive emails" action uses a deeper bounded
+  read for historical recovery and surfaces sanitized Pipedrive read warnings
+  in the action result.
   Pipedrive-linked sale document panels also show provider file references and
   run a throttled metadata refresh when the Documents tab is opened, with an
   admin-only manual refresh option, without downloading files during metadata

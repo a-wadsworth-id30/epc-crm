@@ -51,6 +51,14 @@ export const pipedriveStoredConfigSchema = pipedriveConfigSchema.extend({
   lastFullLeadSyncNextStart: z.number().int().nonnegative().nullable().optional(),
   lastFullPersonSyncAt: z.string().datetime().optional(),
   lastFullPersonSyncNextCursor: z.string().nullable().optional(),
+  lastLeadEmailThreadSyncCompletedAt: z.string().datetime().nullable().optional(),
+  lastLeadEmailThreadSyncFolder: z.string().nullable().optional(),
+  lastLeadEmailThreadSyncNextStart: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),
   lastLeadSyncAt: z.string().datetime().optional(),
   lastLeadNoteSyncAt: z.string().datetime().optional(),
   lastLeadNoteSyncNextStart: z.number().int().nonnegative().nullable().optional(),
@@ -392,6 +400,20 @@ export async function getPipedriveRuntimeConfig() {
       config.lastFullPersonSyncNextCursor.trim()
         ? config.lastFullPersonSyncNextCursor
         : null,
+    lastLeadEmailThreadSyncCompletedAt:
+      typeof config?.lastLeadEmailThreadSyncCompletedAt === "string" &&
+      config.lastLeadEmailThreadSyncCompletedAt.trim()
+        ? config.lastLeadEmailThreadSyncCompletedAt
+        : null,
+    lastLeadEmailThreadSyncFolder:
+      typeof config?.lastLeadEmailThreadSyncFolder === "string" &&
+      config.lastLeadEmailThreadSyncFolder.trim()
+        ? config.lastLeadEmailThreadSyncFolder
+        : null,
+    lastLeadEmailThreadSyncNextStart:
+      typeof config?.lastLeadEmailThreadSyncNextStart === "number"
+        ? config.lastLeadEmailThreadSyncNextStart
+        : null,
     lastLeadSyncAt: config?.lastLeadSyncAt ?? null,
     lastLeadNoteSyncAt: config?.lastLeadNoteSyncAt ?? null,
     lastLeadNoteSyncNextStart:
@@ -426,6 +448,9 @@ export class PipedriveReadOnlyClient {
   readonly lastFullLeadSyncNextStart: number | null;
   readonly lastFullPersonSyncAt: string | null;
   readonly lastFullPersonSyncNextCursor: string | null;
+  readonly lastLeadEmailThreadSyncCompletedAt: string | null;
+  readonly lastLeadEmailThreadSyncFolder: string | null;
+  readonly lastLeadEmailThreadSyncNextStart: number | null;
   readonly lastLeadSyncAt: string | null;
   readonly lastLeadNoteSyncAt: string | null;
   readonly lastLeadNoteSyncNextStart: number | null;
@@ -446,6 +471,11 @@ export class PipedriveReadOnlyClient {
     this.lastFullLeadSyncNextStart = config.lastFullLeadSyncNextStart;
     this.lastFullPersonSyncAt = config.lastFullPersonSyncAt;
     this.lastFullPersonSyncNextCursor = config.lastFullPersonSyncNextCursor;
+    this.lastLeadEmailThreadSyncCompletedAt =
+      config.lastLeadEmailThreadSyncCompletedAt;
+    this.lastLeadEmailThreadSyncFolder = config.lastLeadEmailThreadSyncFolder;
+    this.lastLeadEmailThreadSyncNextStart =
+      config.lastLeadEmailThreadSyncNextStart;
     this.lastLeadSyncAt = config.lastLeadSyncAt;
     this.lastLeadNoteSyncAt = config.lastLeadNoteSyncAt;
     this.lastLeadNoteSyncNextStart = config.lastLeadNoteSyncNextStart;

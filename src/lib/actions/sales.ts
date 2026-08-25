@@ -14,6 +14,7 @@ import {
 } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import {
+  manualPipedriveLeadEmailMaxPages,
   syncPipedriveLeadEmailsForOpportunity,
   syncPipedriveLeadFilesForOpportunity,
   syncPipedriveLeadNotesForOpportunity,
@@ -81,6 +82,17 @@ export type SalesNoteActionState = {
 const pipedriveSaleViewFileSyncThrottleMs = 30_000;
 const pipedriveSaleViewEmailSyncThrottleMs = 30_000;
 const pipedriveSaleViewNoteSyncThrottleMs = 30_000;
+
+function salesPipedriveWarningMessage(warnings: string[]) {
+  if (!warnings.length) return "";
+
+  const firstWarning = warnings[0]?.trim();
+  const detail = firstWarning
+    ? ` First warning: ${firstWarning.slice(0, 240)}`
+    : "";
+
+  return ` ${warnings.length} warning${warnings.length === 1 ? "" : "s"} recorded.${detail}`;
+}
 
 const saleSchema = z.object({
   title: z.string().trim().min(2, "Sale name is required."),
@@ -1817,6 +1829,7 @@ export async function syncPipedriveLeadEmailsAction(
   }
 
   const result = await syncPipedriveLeadEmailsForOpportunity({
+    maxPages: manualPipedriveLeadEmailMaxPages,
     opportunityId: sale.id,
   });
 
@@ -1831,7 +1844,7 @@ export async function syncPipedriveLeadEmailsAction(
   if (result.status === "not_linked") {
     return {
       ok: false,
-      message: "This sale is not linked to a Pipedrive lead with a readable person.",
+      message: "This sale is not linked to a Pipedrive lead.",
     };
   }
 
@@ -1845,9 +1858,7 @@ export async function syncPipedriveLeadEmailsAction(
     revalidatePath(`/contacts/${sale.contactId}`);
   }
 
-  const warningMessage = result.warnings.length
-    ? ` ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"} recorded.`
-    : "";
+  const warningMessage = salesPipedriveWarningMessage(result.warnings);
 
   return {
     ok: true,

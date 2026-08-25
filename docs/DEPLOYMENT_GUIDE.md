@@ -296,10 +296,11 @@ bounded Pipedrive lead import helper as the manual settings
 action. Start with `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
 credentials/readiness before allowing CRM lead records to be imported. API
 and scheduled runs also sweep updated Pipedrive notes into linked CRM sales
-using a separate note cursor, and run one bounded linked-sale backfill batch
-for missing Pipedrive notes, Lead Inbox mailbox-thread emails, person emails
-and file references, then write compact background job history visible in
-Settings > System. Manual and scheduled
+using a separate note cursor, advance a mailbox-thread cursor across inbox,
+sent and archive folders for older Lead Inbox emails, and run one bounded
+linked-sale backfill batch for missing Pipedrive notes, Lead Inbox
+mailbox-thread emails, person emails and file references, then write compact
+background job history visible in Settings > System. Manual and scheduled
 Pipedrive pulls use that background job state as an overlap guard: if a
 non-stale `pipedrive.lead_import` job is already running, the newer run is
 skipped and logged as a warning instead of reading Pipedrive or moving the CRM
