@@ -6,11 +6,10 @@ import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import {
   PipedriveLeadEmailsAutoSync,
-  PipedriveLeadEmailsSyncButton,
   PipedriveLeadFilesAutoSync,
   PipedriveLeadFilesPanel,
   PipedriveLeadNotesAutoSync,
-  PipedriveLeadNotesSyncButton,
+  PipedriveLeadUpdatesSyncButton,
   SaleAutomationActivity,
   SaleCallButton,
   SaleDeleteModal,
@@ -2465,10 +2464,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               </Link>
             ) : null}
             {user.role === "ADMIN" && pipedriveLeadLink ? (
-              <>
-                <PipedriveLeadNotesSyncButton saleId={sale.id} />
-                <PipedriveLeadEmailsSyncButton saleId={sale.id} />
-              </>
+              <PipedriveLeadUpdatesSyncButton saleId={sale.id} />
             ) : null}
             {user.role === "ADMIN" ? (
               <SaleDeleteModal saleId={sale.id} saleTitle={sale.title} />

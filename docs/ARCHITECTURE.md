@@ -266,8 +266,8 @@ and create or link CRM contacts, companies and sales opportunities only. The
 lead sync service supports preview-page import, bounded full pulls, webhook
 read-back imports and direct single-lead imports from a Lead Inbox URL/UUID;
 incremental lead pulls also sweep the latest one lead page before using the
-saved cursor. Lead imports and the sale detail admin action can also pull
-Pipedrive Lead Inbox notes with GET requests and store them as CRM
+saved cursor. Lead imports and the sale detail admin update action can also
+pull Pipedrive Lead Inbox notes with GET requests and store them as CRM
 `SalesCommunication` note rows. Scheduled/manual lead pulls also advance a
 mailbox-thread cursor across inbox, sent and archive folders so older Lead
 Inbox emails can be auto-discovered over time. Pipedrive-linked sale detail
@@ -322,8 +322,9 @@ pull-only. Manual and scheduled Pipedrive lead pulls also run one bounded
 linked-sale backfill continuation batch so older Pipedrive-linked sales
 progressively receive missing notes, emails and file references without a
 separate admin click. They also run a cursor-based mailbox-thread sweep for
-older Lead Inbox emails, and the sale detail admin "Pull Pipedrive emails"
-action uses a deeper bounded scan for immediate historical recovery. The
+older Lead Inbox emails, and the sale detail admin "Pull Pipedrive updates"
+action pulls Lead Inbox notes and uses a deeper bounded email scan for
+immediate historical recovery. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and

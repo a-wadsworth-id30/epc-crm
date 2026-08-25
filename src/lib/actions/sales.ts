@@ -1866,6 +1866,99 @@ export async function syncPipedriveLeadEmailsAction(
   };
 }
 
+export async function syncPipedriveLeadUpdatesAction(
+  _: SalesActionState,
+  formData: FormData,
+): Promise<SalesActionState> {
+  const user = await requireUser();
+
+  if (user.role !== "ADMIN") {
+    return {
+      ok: false,
+      message: "Only admins can pull Pipedrive updates.",
+    };
+  }
+
+  const saleId = String(formData.get("saleId") ?? "").trim();
+
+  if (!saleId) {
+    return { ok: false, message: "Sale is required." };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityWhereWithAccess(user, { id: saleId }),
+    select: { contactId: true, id: true, title: true },
+  });
+
+  if (!sale) {
+    return { ok: false, message: "Sale not found." };
+  }
+
+  const noteResult = await syncPipedriveLeadNotesForOpportunity({
+    opportunityId: sale.id,
+  });
+
+  if (noteResult.status === "not_configured") {
+    return { ok: false, message: "Pipedrive is not configured." };
+  }
+
+  if (noteResult.status === "not_linked") {
+    return {
+      ok: false,
+      message: "This sale is not linked to a Pipedrive lead.",
+    };
+  }
+
+  const emailResult = await syncPipedriveLeadEmailsForOpportunity({
+    maxPages: manualPipedriveLeadEmailMaxPages,
+    opportunityId: sale.id,
+  });
+  const noteSummary = `Notes: read ${noteResult.notesRead}, created ${noteResult.created}, updated ${noteResult.updated}, skipped ${noteResult.skipped}.`;
+  const emailSummary = `Emails: read ${emailResult.emailsRead}, created ${emailResult.created}, updated ${emailResult.updated}, skipped ${emailResult.skipped}.`;
+
+  await bumpRealtimeTopics([
+    realtimeTopics.saleConversation(sale.id),
+    sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+    realtimeTopics.inbox,
+  ]);
+  revalidatePath(`/sales/${sale.id}`);
+  revalidatePath("/notes");
+  if (sale.contactId) {
+    revalidatePath(`/contacts/${sale.contactId}`);
+  }
+
+  if (emailResult.status === "not_configured") {
+    return {
+      ok: false,
+      message: `${noteSummary} Pipedrive emails could not be pulled because Pipedrive is not configured.`,
+    };
+  }
+
+  if (emailResult.status === "not_supported") {
+    return {
+      ok: false,
+      message: `${noteSummary} Pipedrive email reads are not supported.`,
+    };
+  }
+
+  if (emailResult.status === "not_linked") {
+    return {
+      ok: false,
+      message: `${noteSummary} Pipedrive emails could not be pulled because this sale is not linked to a readable Pipedrive lead/person.`,
+    };
+  }
+
+  const warningMessage = salesPipedriveWarningMessage([
+    ...noteResult.warnings,
+    ...emailResult.warnings,
+  ]);
+
+  return {
+    ok: true,
+    message: `Pulled Pipedrive updates. ${noteSummary} ${emailSummary}${warningMessage}`,
+  };
+}
+
 export async function syncPipedriveLeadFilesOnSaleViewAction(
   saleId: string,
 ): Promise<{

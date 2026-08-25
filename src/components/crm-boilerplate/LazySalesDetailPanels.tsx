@@ -2,11 +2,10 @@
 
 import dynamic from "next/dynamic";
 import type { PipedriveLeadEmailsAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadEmailsAutoSync";
-import type { PipedriveLeadEmailsSyncButtonProps } from "@/components/crm-boilerplate/PipedriveLeadEmailsSyncButton";
 import type { PipedriveLeadFilesAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadFilesAutoSync";
 import type { PipedriveLeadFilesPanelProps } from "@/components/crm-boilerplate/PipedriveLeadFilesPanel";
 import type { PipedriveLeadNotesAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadNotesAutoSync";
-import type { PipedriveLeadNotesSyncButtonProps } from "@/components/crm-boilerplate/PipedriveLeadNotesSyncButton";
+import type { PipedriveLeadUpdatesSyncButtonProps } from "@/components/crm-boilerplate/PipedriveLeadUpdatesSyncButton";
 import type { SaleDeleteModalProps } from "@/components/crm-boilerplate/SaleDeleteModal";
 
 function SalesPanelLoading() {
@@ -47,15 +46,9 @@ export const SaleCallButton = dynamic(
   { loading: () => null, ssr: false },
 );
 
-export const PipedriveLeadNotesSyncButton =
-  dynamic<PipedriveLeadNotesSyncButtonProps>(
-    () => import("@/components/crm-boilerplate/PipedriveLeadNotesSyncButton"),
-    { loading: () => null, ssr: false },
-  );
-
-export const PipedriveLeadEmailsSyncButton =
-  dynamic<PipedriveLeadEmailsSyncButtonProps>(
-    () => import("@/components/crm-boilerplate/PipedriveLeadEmailsSyncButton"),
+export const PipedriveLeadUpdatesSyncButton =
+  dynamic<PipedriveLeadUpdatesSyncButtonProps>(
+    () => import("@/components/crm-boilerplate/PipedriveLeadUpdatesSyncButton"),
     { loading: () => null, ssr: false },
   );
 

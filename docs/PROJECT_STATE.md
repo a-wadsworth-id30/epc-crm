@@ -158,8 +158,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   without creating opportunities. Lead
   note import converts Pipedrive HTML note content to plain text, uses stable
   Pipedrive note IDs to update existing CRM notes instead of duplicating them,
-  and can be run from an admin-only sale detail "Pull Pipedrive notes" action
-  when the sale is linked to a Pipedrive lead. Scheduled/manual lead pulls also
+  and can be run from the admin-only sale detail "Pull Pipedrive updates"
+  action when the sale is linked to a Pipedrive lead. Scheduled/manual lead pulls also
   sweep updated Pipedrive notes through a separate
   `lastLeadNoteSyncAt` / `lastLeadNoteSyncNextStart` cursor so note changes
   can auto-import even when the lead itself has not changed. They also run a
@@ -176,9 +176,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   emails use stable `pipedrive:mail:*` external IDs, update existing CRM email
   communications instead of duplicating them, deduplicate overlap between
   lead-thread and person-message reads, and never write back to Pipedrive. The
-  admin-only sale detail "Pull Pipedrive emails" action uses a deeper bounded
-  read for historical recovery and surfaces sanitized Pipedrive read warnings
-  in the action result.
+  admin-only sale detail "Pull Pipedrive updates" action pulls both Pipedrive
+  Lead Inbox notes and emails, with the email side using a deeper bounded read
+  for historical recovery and surfacing sanitized Pipedrive read warnings in
+  the action result.
   Pipedrive-linked sale document panels also show provider file references and
   run a throttled metadata refresh when the Documents tab is opened, with an
   admin-only manual refresh option, without downloading files during metadata
