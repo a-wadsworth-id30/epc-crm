@@ -96,6 +96,14 @@ type PipedriveLinkedSaleBackfillOptions = {
   trigger?: string;
 };
 
+type PipedriveLinkedSaleBackfillContinuationOptions = {
+  actorId?: string | null;
+  fileMaxPages?: number | null;
+  limit?: number | null;
+  recordBackgroundJob?: boolean;
+  trigger?: string;
+};
+
 type LinkedSaleBatchItem = {
   externalLeadId: string;
   linkId: string;
@@ -254,6 +262,26 @@ export async function runPipedriveLinkedSaleBackfill({
   }
 }
 
+export async function runPipedriveLinkedSaleBackfillContinuation({
+  actorId = null,
+  fileMaxPages = 10,
+  limit = 10,
+  recordBackgroundJob = true,
+  trigger = "scheduled",
+}: PipedriveLinkedSaleBackfillContinuationOptions = {}): Promise<PipedriveLinkedSaleBackfillResult> {
+  const cursor = await readLatestBackfillNextCursor();
+
+  return runPipedriveLinkedSaleBackfill({
+    actorId,
+    cursor,
+    fileMaxPages,
+    limit,
+    mode: "import",
+    recordBackgroundJob,
+    trigger,
+  });
+}
+
 async function writePipedriveLinkedSaleBackfillPreview({
   actorId,
   batchLimit,
@@ -356,6 +384,21 @@ async function writePipedriveLinkedSaleBackfillPreview({
   });
 
   return result;
+}
+
+async function readLatestBackfillNextCursor() {
+  const latestBackfill = await prisma.marketingIntegrationSyncLog.findFirst({
+    orderBy: { startedAt: "desc" },
+    select: { metadata: true },
+    where: {
+      provider: pipedriveProvider,
+      syncType: pipedriveLinkedSaleBackfillSyncType,
+    },
+  });
+  const metadata = jsonObject(latestBackfill?.metadata);
+  const nextCursor = stringValue(metadata.nextCursor);
+
+  return nextCursor || null;
 }
 
 async function writePipedriveLinkedSaleBackfill({
@@ -1022,6 +1065,16 @@ function cursorValue(value: string | null | undefined) {
   if (!trimmed) return null;
 
   return trimmed.slice(0, 120);
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : null;
 }
 
 function syncTrigger(trigger: string) {

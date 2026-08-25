@@ -44,7 +44,10 @@ import {
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
 import { runPipedriveContactPull } from "@/lib/integrations/pipedrive-contact-sync";
-import { runPipedriveLinkedSaleBackfill } from "@/lib/integrations/pipedrive-linked-sale-backfill";
+import {
+  runPipedriveLinkedSaleBackfill,
+  runPipedriveLinkedSaleBackfillContinuation,
+} from "@/lib/integrations/pipedrive-linked-sale-backfill";
 import {
   geoapifyConfigSchema,
   geoapifyProvider,
@@ -520,16 +523,27 @@ export async function pullPipedriveLeadsAction(
       actorId: user.id,
       trigger: "manual",
     });
+    const backfillResult = await runPipedriveLinkedSaleBackfillContinuation({
+      actorId: user.id,
+      trigger: "manual-lead-pull",
+    });
+    const combinedStatus =
+      result.status === "ERROR" || backfillResult.status === "ERROR"
+        ? "ERROR"
+        : result.status === "WARNING" || backfillResult.status === "WARNING"
+          ? "WARNING"
+          : "SUCCESS";
+    const backfillSummary = ` Historical linked-sale backfill: ${backfillResult.message}`;
 
     revalidatePipedriveImportPaths();
 
     return {
-      ok: result.status !== "ERROR",
-      message: result.message,
-      recordsRead: result.recordsRead,
-      recordsWritten: result.recordsWritten,
+      ok: combinedStatus !== "ERROR",
+      message: `${result.message}${backfillSummary}`,
+      recordsRead: result.recordsRead + backfillResult.recordsRead,
+      recordsWritten: result.recordsWritten + backfillResult.recordsWritten,
       savedAt: Date.now(),
-      status: result.status,
+      status: combinedStatus,
     };
   } catch (error) {
     const message =

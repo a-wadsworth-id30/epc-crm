@@ -40,6 +40,10 @@ function crmBaseUrl() {
 function compactImportResult(body) {
   const result = body && typeof body === "object" ? body.result : null;
   const record = result && typeof result === "object" ? result : {};
+  const linkedSaleBackfill =
+    record.linkedSaleBackfill && typeof record.linkedSaleBackfill === "object"
+      ? record.linkedSaleBackfill
+      : {};
 
   return {
     created: Number.isFinite(record.created) ? record.created : null,
@@ -59,6 +63,43 @@ function compactImportResult(body) {
     warningCount: Number.isFinite(record.warningCount)
       ? record.warningCount
       : null,
+    linkedSaleBackfill: {
+      fileCreated: Number.isFinite(linkedSaleBackfill.fileCreated)
+        ? linkedSaleBackfill.fileCreated
+        : null,
+      fileRead: Number.isFinite(linkedSaleBackfill.fileRead)
+        ? linkedSaleBackfill.fileRead
+        : null,
+      fileUpdated: Number.isFinite(linkedSaleBackfill.fileUpdated)
+        ? linkedSaleBackfill.fileUpdated
+        : null,
+      mode:
+        typeof linkedSaleBackfill.mode === "string"
+          ? linkedSaleBackfill.mode
+          : null,
+      noteCreated: Number.isFinite(linkedSaleBackfill.noteCreated)
+        ? linkedSaleBackfill.noteCreated
+        : null,
+      noteRead: Number.isFinite(linkedSaleBackfill.noteRead)
+        ? linkedSaleBackfill.noteRead
+        : null,
+      noteUpdated: Number.isFinite(linkedSaleBackfill.noteUpdated)
+        ? linkedSaleBackfill.noteUpdated
+        : null,
+      processed: Number.isFinite(linkedSaleBackfill.processed)
+        ? linkedSaleBackfill.processed
+        : null,
+      recordsRead: Number.isFinite(linkedSaleBackfill.recordsRead)
+        ? linkedSaleBackfill.recordsRead
+        : null,
+      recordsWritten: Number.isFinite(linkedSaleBackfill.recordsWritten)
+        ? linkedSaleBackfill.recordsWritten
+        : null,
+      status:
+        typeof linkedSaleBackfill.status === "string"
+          ? linkedSaleBackfill.status
+          : null,
+    },
   };
 }
 

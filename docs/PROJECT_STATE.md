@@ -182,7 +182,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   notes into idempotent CRM sale note rows, and pulls Pipedrive file metadata
   into CRM-only provider file references. File metadata backfill reads a
   bounded set of Pipedrive file pages once per batch and groups files by lead ID
-  so older linked sales can be refreshed without per-sale file scans.
+  so older linked sales can be refreshed without per-sale file scans. Manual
+  "Pull latest leads" and the scheduled Pipedrive lead pull also run one
+  bounded linked-sale backfill continuation batch, resuming from the latest
+  backfill cursor and looping back to the first linked sale after the full set
+  has been swept.
   The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,

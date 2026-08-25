@@ -6,8 +6,12 @@ import {
   runPipedriveDirectLeadImport,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
+import { runPipedriveLinkedSaleBackfillContinuation } from "@/lib/integrations/pipedrive-linked-sale-backfill";
 
 type PipedriveLeadPullResult = Awaited<ReturnType<typeof runPipedriveLeadPull>>;
+type PipedriveLinkedSaleBackfillResult = Awaited<
+  ReturnType<typeof runPipedriveLinkedSaleBackfillContinuation>
+>;
 type PipedriveApprovedLeadPageImportResult = Awaited<
   ReturnType<typeof runPipedriveApprovedLeadPageImport>
 >;
@@ -157,13 +161,33 @@ async function pipedriveLeadImportResponse(request: Request, dryRun: boolean) {
     recordBackgroundJob: true,
     trigger: jobTrigger(request),
   });
+  const linkedSaleBackfill =
+    await runPipedriveLinkedSaleBackfillContinuation({
+      fileMaxPages: integerQuery(request, "linkedSaleFileMaxPages", {
+        max: 10,
+        min: 1,
+      }),
+      limit: integerQuery(request, "linkedSaleLimit", { max: 25, min: 1 }),
+      recordBackgroundJob: true,
+      trigger: `${jobTrigger(request)}-linked-sale-backfill`,
+    });
+  const ok =
+    result.status !== "ERROR" && linkedSaleBackfill.status !== "ERROR";
 
   return NextResponse.json(
     {
-      ok: result.status !== "ERROR",
-      result: compactResult(result),
+      ok,
+      result: {
+        ...compactResult(result),
+        linkedSaleBackfill: compactLinkedSaleBackfillResult(
+          linkedSaleBackfill,
+        ),
+        recordsRead: result.recordsRead + linkedSaleBackfill.recordsRead,
+        recordsWritten:
+          result.recordsWritten + linkedSaleBackfill.recordsWritten,
+      },
     },
-    { status: result.status === "ERROR" ? 502 : 200 },
+    { status: ok ? 200 : 502 },
   );
 }
 
@@ -180,6 +204,31 @@ function compactResult(result: PipedriveLeadPullResult) {
     recordsRead: result.recordsRead,
     recordsWritten: result.recordsWritten,
     skipped: result.skipped,
+    status: result.status,
+    warningCount: result.warningCount,
+  };
+}
+
+function compactLinkedSaleBackfillResult(
+  result: PipedriveLinkedSaleBackfillResult,
+) {
+  return {
+    batchLimit: result.batchLimit,
+    fileCreated: result.fileCreated,
+    fileRead: result.fileRead,
+    fileUpdated: result.fileUpdated,
+    linkedSales: result.linkedSales,
+    message: result.message,
+    mode: result.mode,
+    moreAvailable: result.moreAvailable,
+    nextCursor: result.nextCursor ? "present" : null,
+    noteCreated: result.noteCreated,
+    noteRead: result.noteRead,
+    noteUpdated: result.noteUpdated,
+    processed: result.processed,
+    pullOnly: true,
+    recordsRead: result.recordsRead,
+    recordsWritten: result.recordsWritten,
     status: result.status,
     warningCount: result.warningCount,
   };

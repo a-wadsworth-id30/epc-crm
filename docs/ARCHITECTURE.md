@@ -309,7 +309,10 @@ notes into idempotent CRM sale notes, and stores Pipedrive file metadata as
 CRM-only provider file references. The backfill reads a bounded set of
 Pipedrive file pages once per batch and groups files by lead ID before writing
 CRM references, avoiding repeated per-sale file scans while remaining
-pull-only. The
+pull-only. Manual and scheduled Pipedrive lead pulls also run one bounded
+linked-sale backfill continuation batch so older Pipedrive-linked sales
+progressively receive missing notes and file references without a separate
+admin click. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and
