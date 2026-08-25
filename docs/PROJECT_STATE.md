@@ -175,6 +175,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   preview modal and a separate download action for provider files. The Pipedrive
   file proxy uses same-origin frame headers so previewable provider PDFs/text
   can render inside the CRM modal without relaxing iframe permissions globally.
+  Settings > Integrations > Pipedrive includes an admin-only historical linked
+  sale backfill for older CRM sales already linked to Pipedrive Lead Inbox
+  records. The backfill has preview and import modes, runs in bounded cursor
+  batches, records sync-history and background-job summaries, pulls Pipedrive
+  notes into idempotent CRM sale note rows, and pulls Pipedrive file metadata
+  into CRM-only provider file references. File metadata backfill reads a
+  bounded set of Pipedrive file pages once per batch and groups files by lead ID
+  so older linked sales can be refreshed without per-sale file scans.
   The Pipedrive
   settings page has admin-only preview and selected import actions for
   Pipedrive leads, a manual pull that imports bounded lead batches,

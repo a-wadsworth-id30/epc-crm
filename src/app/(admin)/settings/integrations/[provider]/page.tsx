@@ -21,6 +21,7 @@ import {
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
+import PipedriveLinkedSaleBackfillForm from "@/components/crm-boilerplate/PipedriveLinkedSaleBackfillForm";
 import PipedriveLeadPullForm from "@/components/crm-boilerplate/PipedriveLeadPullForm";
 import PipedriveWebhookReceiverTestForm from "@/components/crm-boilerplate/PipedriveWebhookReceiverTestForm";
 import ProviderAuthResetForm from "@/components/crm-boilerplate/ProviderAuthResetForm";
@@ -441,6 +442,7 @@ export default async function IntegrationSettingsPage({
       latestPipedrivePreviewLog,
       latestPipedriveImportLog,
       latestPipedriveContactImportLog,
+      latestPipedriveBackfillLog,
       activePipedrivePullRun,
       activePipedriveContactPullRun,
       pipedriveValidationSummary,
@@ -506,6 +508,27 @@ export default async function IntegrationSettingsPage({
         where: {
           provider: pipedriveProvider,
           syncType: { in: ["contact-import", "contact-import-webhook"] },
+        },
+      }),
+      prisma.marketingIntegrationSyncLog.findFirst({
+        orderBy: { startedAt: "desc" },
+        select: {
+          message: true,
+          metadata: true,
+          recordsRead: true,
+          recordsWritten: true,
+          startedAt: true,
+          status: true,
+          syncType: true,
+        },
+        where: {
+          provider: pipedriveProvider,
+          syncType: {
+            in: [
+              "linked-sale-backfill",
+              "linked-sale-backfill-preview",
+            ],
+          },
         },
       }),
       prisma.backgroundJobRun.findFirst({
@@ -742,6 +765,49 @@ export default async function IntegrationSettingsPage({
             scheduleSecretConfigured={pipedriveContactScheduleSecretConfigured}
             title="Contact pull state"
           />
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                  Historical sale notes and files
+                </h2>
+                <LazyHelpTooltip content="Pulls missing Pipedrive notes and file references for CRM sales already linked to Pipedrive leads. It reads Pipedrive only and writes CRM notes/file references only." />
+              </div>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Backfill older linked CRM sales that were imported before note
+                and file refreshes were available.
+              </p>
+            </div>
+            <StatusBadge>
+              {latestPipedriveBackfillLog?.status ?? "Planned"}
+            </StatusBadge>
+          </div>
+          <PipedriveLinkedSaleBackfillForm
+            disabled={pipedriveCredentialSource === "missing"}
+          />
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-800 dark:bg-white/[0.02] dark:text-gray-400">
+            {latestPipedriveBackfillLog ? (
+              <>
+                Latest {formatPipedriveImportJobLabel(
+                  latestPipedriveBackfillLog.syncType,
+                ).toLowerCase()} ran on{" "}
+                {latestPipedriveBackfillLog.startedAt.toLocaleString("en-GB")}
+                , read {latestPipedriveBackfillLog.recordsRead} Pipedrive
+                record
+                {latestPipedriveBackfillLog.recordsRead === 1 ? "" : "s"} and
+                wrote {latestPipedriveBackfillLog.recordsWritten} CRM update
+                {latestPipedriveBackfillLog.recordsWritten === 1 ? "" : "s"}.
+                {latestPipedriveBackfillLog.message
+                  ? ` ${latestPipedriveBackfillLog.message}`
+                  : ""}
+              </>
+            ) : (
+              "No historical linked-sale backfill has run yet."
+            )}
+          </div>
         </section>
 
         <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -4326,6 +4392,10 @@ function formatPipedriveImportJobLabel(syncType: string) {
   if (syncType === "webhook-receiver-test") return "Receiver test";
   if (syncType === "lead-import-direct") return "Direct lead import";
   if (syncType === "lead-import-selected") return "Selected import";
+  if (syncType === "linked-sale-backfill") return "Linked sale backfill";
+  if (syncType === "linked-sale-backfill-preview") {
+    return "Linked sale backfill preview";
+  }
   if (syncType === "lead-import") return "Full pull";
   return syncType;
 }

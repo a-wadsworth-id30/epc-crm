@@ -301,6 +301,15 @@ metadata refresh when the Documents tab is opened and exposes an admin-only
 `ExternalRecordLink` with
 `externalType = "file"` so repeated refreshes update the existing CRM
 reference instead of creating duplicate rows. The
+Pipedrive settings page also exposes a historical linked-sale backfill for CRM
+sales that already have Pipedrive Lead Inbox links. It supports preview and
+import modes, processes bounded cursor batches, writes
+`MarketingIntegrationSyncLog` and `BackgroundJobRun` summaries, pulls Pipedrive
+notes into idempotent CRM sale notes, and stores Pipedrive file metadata as
+CRM-only provider file references. The backfill reads a bounded set of
+Pipedrive file pages once per batch and groups files by lead ID before writing
+CRM references, avoiding repeated per-sale file scans while remaining
+pull-only. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
 companies without creating sales opportunities. The Pipedrive settings page can
 manually preview and

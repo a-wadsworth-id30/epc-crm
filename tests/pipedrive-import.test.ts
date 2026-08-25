@@ -1295,6 +1295,76 @@ describe("Pipedrive lead import mapping", () => {
     );
   });
 
+  it("syncs Pipedrive lead files for linked sale batches with one provider scan", async () => {
+    const listFileCalls: unknown[] = [];
+    const client = {
+      defaultLeadSource: "Pipedrive",
+      getOrganization: async () => ({}),
+      getPerson: async () => ({}),
+      listFiles: async (params: unknown) => {
+        listFileCalls.push(params);
+        return {
+          data: [
+            {
+              file_name: "first-lead.pdf",
+              id: 601,
+              lead_id: "lead-batch-1",
+            },
+            {
+              file_name: "second-lead.pdf",
+              id: 602,
+              lead_id: "lead-batch-2",
+            },
+            {
+              file_name: "unrelated.pdf",
+              id: 603,
+              lead_id: "lead-other",
+            },
+          ],
+          pagination: {
+            limit: 500,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        };
+      },
+    };
+
+    const result =
+      await pipedriveImport.syncPipedriveLeadFilesForOpportunityBatch({
+        client,
+        items: [
+          {
+            externalLeadId: "lead-batch-1",
+            opportunityId: "opportunity-batch-1",
+          },
+          {
+            externalLeadId: "lead-batch-2",
+            opportunityId: "opportunity-batch-2",
+          },
+        ],
+        now: new Date("2026-08-24T12:00:00Z"),
+      });
+
+    assert.equal(result.status, "ok");
+    assert.equal(result.filesRead, 3);
+    assert.equal(result.filesMatched, 2);
+    assert.equal(result.created, 2);
+    assert.deepEqual(listFileCalls, [{ limit: 500, sort: "update_time DESC" }]);
+    assert.equal(
+      externalRecordLinkRows.find((row) => row.externalId === "601")
+        ?.internalId,
+      "opportunity-batch-1",
+    );
+    assert.equal(
+      externalRecordLinkRows.find((row) => row.externalId === "602")
+        ?.internalId,
+      "opportunity-batch-2",
+    );
+  });
+
   it("imports updated Pipedrive lead notes from note pages", async () => {
     const listNoteCalls: unknown[] = [];
     externalRecordLinkRows = [

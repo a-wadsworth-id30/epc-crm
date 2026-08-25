@@ -289,6 +289,22 @@ export type PipedriveLeadFilesSyncResult =
       warnings: string[];
     };
 
+export type PipedriveLeadFileBatchSyncItem = {
+  externalLeadId: string;
+  opportunityId: string;
+};
+
+export type PipedriveLeadFilesBatchSyncResult = {
+  created: number;
+  filesMatched: number;
+  filesRead: number;
+  results: PipedriveLeadFilesSyncResult[];
+  skipped: number;
+  status: "ok" | "not_configured";
+  updated: number;
+  warnings: string[];
+};
+
 export type PipedriveLeadNoteImportResult = {
   created: number;
   externalLeadId: string | null;
@@ -705,10 +721,12 @@ export async function syncPipedriveLeadFilesForOpportunity({
 
 export async function syncPipedriveLeadNotesForOpportunity({
   client,
+  maxPages,
   now = new Date(),
   opportunityId,
 }: {
   client?: PipedriveRelatedRecordClient | null;
+  maxPages?: number;
   now?: Date;
   opportunityId: string;
 }): Promise<PipedriveLeadNotesSyncResult> {
@@ -759,6 +777,7 @@ export async function syncPipedriveLeadNotesForOpportunity({
   const noteRead = await readPipedriveLeadNotes(
     readClient,
     leadLink.externalId,
+    maxPages,
   );
   const writeResult = await prisma.$transaction((tx) =>
     syncPipedriveLeadNoteRecords(tx, {
@@ -779,6 +798,110 @@ export async function syncPipedriveLeadNotesForOpportunity({
     status: "ok",
     updated: writeResult.updated,
     warnings: noteRead.warnings,
+  };
+}
+
+export async function syncPipedriveLeadFilesForOpportunityBatch({
+  client,
+  items,
+  maxPages,
+  now = new Date(),
+}: {
+  client?: PipedriveRelatedRecordClient | null;
+  items: PipedriveLeadFileBatchSyncItem[];
+  maxPages?: number;
+  now?: Date;
+}): Promise<PipedriveLeadFilesBatchSyncResult> {
+  const readClient = client ?? (await getPipedriveReadOnlyClient());
+  const uniqueItems = deduplicateLeadFileBatchItems(items);
+
+  if (!readClient) {
+    return {
+      created: 0,
+      filesMatched: 0,
+      filesRead: 0,
+      results: uniqueItems.map((item) => ({
+        created: 0,
+        externalLeadId: null,
+        filesMatched: 0,
+        filesRead: 0,
+        opportunityId: item.opportunityId,
+        skipped: 0,
+        status: "not_configured",
+        updated: 0,
+        warnings: ["Pipedrive is not configured."],
+      })),
+      skipped: 0,
+      status: "not_configured",
+      updated: 0,
+      warnings: ["Pipedrive is not configured."],
+    };
+  }
+
+  if (!uniqueItems.length) {
+    return {
+      created: 0,
+      filesMatched: 0,
+      filesRead: 0,
+      results: [],
+      skipped: 0,
+      status: "ok",
+      updated: 0,
+      warnings: [],
+    };
+  }
+
+  const fileRead = await readPipedriveLeadFilesForLeadIds(
+    readClient,
+    new Set(uniqueItems.map((item) => item.externalLeadId)),
+    maxPages,
+  );
+  const integration = await prisma.integrationConnection.findUnique({
+    where: { provider: pipedriveProvider },
+    select: { id: true },
+  });
+  const results: PipedriveLeadFilesSyncResult[] = [];
+  let created = 0;
+  let skipped = 0;
+  let updated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of uniqueItems) {
+      const files = fileRead.filesByLeadId.get(item.externalLeadId) ?? [];
+      const writeResult = await syncPipedriveLeadFileRecords(tx, {
+        externalLeadId: item.externalLeadId,
+        files,
+        integrationId: integration?.id ?? null,
+        now,
+        opportunityId: item.opportunityId,
+      });
+
+      created += writeResult.created;
+      skipped += writeResult.skipped;
+      updated += writeResult.updated;
+      results.push({
+        created: writeResult.created,
+        externalLeadId: item.externalLeadId,
+        filesMatched: files.length,
+        filesRead: fileRead.filesRead,
+        opportunityId: item.opportunityId,
+        skipped: writeResult.skipped,
+        status: "ok",
+        updated: writeResult.updated,
+        warnings: fileRead.warnings,
+      });
+    }
+  });
+
+  return {
+    created,
+    filesMatched: fileRead.filesMatched,
+    filesRead: fileRead.filesRead,
+    results,
+    skipped,
+    status: "ok",
+    updated,
+    warnings: fileRead.warnings,
   };
 }
 
@@ -2511,6 +2634,76 @@ async function readPipedriveLeadFiles(
   };
 }
 
+async function readPipedriveLeadFilesForLeadIds(
+  client: PipedriveRelatedRecordClient,
+  externalLeadIds: Set<string>,
+  maxPages = defaultPipedriveLeadFileMaxPages,
+): Promise<PipedriveLeadFilesReadResult & { filesByLeadId: Map<string, PipedriveFile[]> }> {
+  if (typeof client.listFiles !== "function" || externalLeadIds.size === 0) {
+    return {
+      files: [],
+      filesByLeadId: new Map(),
+      filesMatched: 0,
+      filesRead: 0,
+      warnings: [],
+    };
+  }
+
+  const files: PipedriveFile[] = [];
+  const filesByLeadId = new Map<string, PipedriveFile[]>();
+  const warnings: string[] = [];
+  const pageLimit = boundedFullPullMaxPages(
+    maxPages,
+    defaultPipedriveLeadFileMaxPages,
+  );
+  let filesRead = 0;
+  let pagesRead = 0;
+  let start: number | null = null;
+
+  try {
+    while (pagesRead < pageLimit) {
+      const params: PipedriveListFilesParams = {
+        limit: 500,
+        sort: "update_time DESC",
+      };
+      if (start !== null) params.start = start;
+
+      const page = await client.listFiles(params);
+      pagesRead += 1;
+      filesRead += page.data.length;
+
+      for (const file of page.data) {
+        const externalLeadId = pipedriveLeadIdFromFile(file);
+        if (!externalLeadId || !externalLeadIds.has(externalLeadId)) continue;
+
+        files.push(file);
+        const currentFiles = filesByLeadId.get(externalLeadId) ?? [];
+        currentFiles.push(file);
+        filesByLeadId.set(externalLeadId, currentFiles);
+      }
+
+      if (
+        !page.pagination.moreItemsInCollection ||
+        page.pagination.nextStart === null
+      ) {
+        break;
+      }
+
+      start = page.pagination.nextStart;
+    }
+  } catch (error) {
+    warnings.push(pipedriveReadWarning("lead files", "linked-sale batch", error));
+  }
+
+  return {
+    files,
+    filesByLeadId,
+    filesMatched: files.length,
+    filesRead,
+    warnings,
+  };
+}
+
 async function syncPipedriveLeadFileRecords(
   tx: Prisma.TransactionClient,
   {
@@ -2896,6 +3089,24 @@ function pipedriveLeadIdFromFile(file: PipedriveFile) {
     externalId(leadIdRecord.id) ??
     externalId(leadIdRecord.value)
   );
+}
+
+function deduplicateLeadFileBatchItems(items: PipedriveLeadFileBatchSyncItem[]) {
+  const seen = new Set<string>();
+  const uniqueItems: PipedriveLeadFileBatchSyncItem[] = [];
+
+  for (const item of items) {
+    const externalLeadId = item.externalLeadId.trim();
+    const opportunityId = item.opportunityId.trim();
+    const key = `${opportunityId}:${externalLeadId}`;
+
+    if (!externalLeadId || !opportunityId || seen.has(key)) continue;
+
+    seen.add(key);
+    uniqueItems.push({ externalLeadId, opportunityId });
+  }
+
+  return uniqueItems;
 }
 
 function httpsUrl(value: unknown) {

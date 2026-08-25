@@ -44,6 +44,7 @@ import {
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
 import { runPipedriveContactPull } from "@/lib/integrations/pipedrive-contact-sync";
+import { runPipedriveLinkedSaleBackfill } from "@/lib/integrations/pipedrive-linked-sale-backfill";
 import {
   geoapifyConfigSchema,
   geoapifyProvider,
@@ -100,6 +101,21 @@ export type PipedriveLeadPullActionState = {
   recordsWritten: number | null;
   savedAt: number | null;
   status: string | null;
+};
+
+export type PipedriveLinkedSaleBackfillActionState = {
+  linkedSales: number | null;
+  message: string;
+  mode: "import" | "preview" | null;
+  moreAvailable: boolean;
+  nextCursor: string | null;
+  ok: boolean;
+  processed: number | null;
+  recordsRead: number | null;
+  recordsWritten: number | null;
+  savedAt: number | null;
+  status: string | null;
+  unlinkedSales: number | null;
 };
 
 type TwilioImportState = IntegrationActionState & {
@@ -550,6 +566,69 @@ export async function pullPipedriveContactsAction() {
   const user = await requireAdmin();
   await runPipedriveContactPull({ actorId: user.id, trigger: "manual" });
   revalidatePipedriveImportPaths();
+}
+
+export async function backfillPipedriveLinkedSalesAction(
+  previousState: PipedriveLinkedSaleBackfillActionState,
+  formData: FormData,
+): Promise<PipedriveLinkedSaleBackfillActionState> {
+  void previousState;
+
+  const user = await requireAdmin();
+  const mode =
+    String(formData.get("mode") ?? "").trim() === "import"
+      ? "import"
+      : "preview";
+
+  try {
+    const result = await runPipedriveLinkedSaleBackfill({
+      actorId: user.id,
+      cursor: stringFormValue(formData.get("cursor")),
+      fileMaxPages: numberFormValue(formData.get("fileMaxPages")),
+      limit: numberFormValue(formData.get("limit")),
+      mode,
+      trigger: "manual",
+    });
+
+    revalidatePipedriveImportPaths();
+
+    return {
+      linkedSales: result.linkedSales,
+      message: result.message,
+      mode,
+      moreAvailable: result.moreAvailable,
+      nextCursor: result.nextCursor,
+      ok: result.status !== "ERROR",
+      processed: result.processed,
+      recordsRead: result.recordsRead,
+      recordsWritten: result.recordsWritten,
+      savedAt: Date.now(),
+      status: result.status,
+      unlinkedSales: result.unlinkedSales,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Pipedrive linked-sale backfill failed.";
+
+    revalidatePipedriveImportPaths();
+
+    return {
+      linkedSales: null,
+      message,
+      mode,
+      moreAvailable: false,
+      nextCursor: null,
+      ok: false,
+      processed: null,
+      recordsRead: null,
+      recordsWritten: null,
+      savedAt: Date.now(),
+      status: "ERROR",
+      unlinkedSales: null,
+    };
+  }
 }
 
 export async function testPipedriveWebhookReceiverAction(
@@ -1033,6 +1112,20 @@ function selectedPipedriveLeadIds(formData: FormData) {
   }
 
   return [...leadIds];
+}
+
+function numberFormValue(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") return null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stringFormValue(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function pipedriveWebhookSecret() {
