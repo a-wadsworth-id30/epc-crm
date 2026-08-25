@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Database, ExternalLink, RefreshCw } from "lucide-react";
+import { AlertCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   readPipedriveSaleContextAction,
@@ -62,25 +62,19 @@ export default function PipedriveLeadContextPanel({
   }, [saleId]);
 
   const isBusy = isLoading;
-  const hasData = Boolean(
-    state?.summary.length || state?.customFields.length,
-  );
+  const hasData = Boolean(state?.summary.length || state?.customFields.length);
+  const subtitle = state?.leadTitle || state?.leadId || "Linked lead";
 
   return (
     <section className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-300">
-            <Database className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-gray-800 dark:text-white/90">
-              Pipedrive context
-            </h2>
-            <p className="mt-0.5 truncate text-xs font-medium text-gray-500 dark:text-gray-400">
-              {state?.leadTitle || state?.leadId || "Linked lead"}
-            </p>
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold text-gray-800 dark:text-white/90">
+            Pipedrive context
+          </h2>
+          <p className="mt-1 truncate text-sm leading-6 text-gray-500 dark:text-gray-400">
+            Pipedrive · {subtitle}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {state?.leadUrl ? (
@@ -88,7 +82,7 @@ export default function PipedriveLeadContextPanel({
               href={state.leadUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-600 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
             >
               <ExternalLink className="h-4 w-4" />
               Open
@@ -99,7 +93,8 @@ export default function PipedriveLeadContextPanel({
             onClick={() => void loadContext()}
             disabled={isBusy}
             title="Refresh Pipedrive context"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
+            aria-label="Refresh Pipedrive context"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
           >
             <RefreshCw className={`h-4 w-4 ${isBusy ? "animate-spin" : ""}`} />
           </button>
@@ -118,13 +113,16 @@ export default function PipedriveLeadContextPanel({
       {state?.ok && hasData ? (
         <div className="mt-4 space-y-4">
           {state.summary.length ? (
-            <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {state.summary.map((item) => (
-                <div key={item.label} className="min-w-0">
-                  <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                <div
+                  key={item.label}
+                  className="min-w-0 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-950/40"
+                >
+                  <dt className="truncate text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
                     {item.label}
                   </dt>
-                  <dd className="mt-1 break-words text-sm font-semibold text-gray-900 dark:text-white">
+                  <dd className="mt-1 line-clamp-2 break-words text-sm font-semibold text-gray-900 dark:text-white">
                     {item.value}
                   </dd>
                 </div>
@@ -141,7 +139,7 @@ export default function PipedriveLeadContextPanel({
                 {state.customFields.map((field) => (
                   <div
                     key={field.key}
-                    className="min-w-0 rounded-lg bg-gray-50 px-3 py-2 ring-1 ring-gray-100 dark:bg-white/[0.03] dark:ring-gray-800"
+                    className="min-w-0 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-950/40"
                   >
                     <dt className="flex min-w-0 items-center justify-between gap-3">
                       <span className="truncate text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -153,7 +151,7 @@ export default function PipedriveLeadContextPanel({
                         </span>
                       ) : null}
                     </dt>
-                    <dd className="mt-1 break-words text-sm font-semibold text-gray-900 dark:text-white">
+                    <dd className="mt-1 line-clamp-2 break-words text-sm font-semibold text-gray-900 dark:text-white">
                       {field.value}
                     </dd>
                   </div>
@@ -165,13 +163,13 @@ export default function PipedriveLeadContextPanel({
       ) : null}
 
       {state?.ok && !hasData ? (
-        <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-sm font-medium text-gray-500 ring-1 ring-gray-100 dark:bg-white/[0.03] dark:text-gray-400 dark:ring-gray-800">
+        <p className="mt-4 rounded-lg border border-dashed border-gray-200 px-3 py-3 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
           No Pipedrive fields found.
         </p>
       ) : null}
 
       {state?.fetchedAt ? (
-        <p className="mt-3 text-xs font-medium text-gray-400 dark:text-gray-500">
+        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
           Updated {new Date(state.fetchedAt).toLocaleTimeString("en-GB")}
         </p>
       ) : null}

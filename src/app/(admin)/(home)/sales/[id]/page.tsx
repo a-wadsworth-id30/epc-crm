@@ -2577,9 +2577,6 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         }
         scopePanel={
           <div className="p-4 sm:p-5">
-            {pipedriveLeadLink ? (
-              <PipedriveLeadContextPanel saleId={sale.id} />
-            ) : null}
             <section className="mb-5 border-b border-gray-200 pb-4 dark:border-gray-800">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div>
@@ -2632,6 +2629,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                 </div>
               ) : null}
             </section>
+            {pipedriveLeadLink ? (
+              <PipedriveLeadContextPanel saleId={sale.id} />
+            ) : null}
             <LeadDiscoverySummary pack={leadDiscoveryPack} />
 
             <LeadDocumentSummary
