@@ -16,11 +16,13 @@ import {
   MailerSendSettingsForm,
   OpenAISettingsForm,
   PipedriveSettingsForm,
+  SpruceZapierSettingsForm,
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import type { MailerSendSettings } from "@/components/crm-boilerplate/MailerSendSettingsForm";
 import type { OpenAISettings } from "@/components/crm-boilerplate/OpenAISettingsForm";
 import type { PipedriveSettings } from "@/components/crm-boilerplate/PipedriveSettingsForm";
+import type { SpruceZapierSettings } from "@/components/crm-boilerplate/SpruceZapierSettingsForm";
 import type { TwilioSettings } from "@/components/crm-boilerplate/TwilioSettingsForm";
 
 export type IntegrationSettingsDialogProps = {
@@ -37,6 +39,7 @@ export type IntegrationSettingsDialogProps = {
     | MailerSendSettings
     | OpenAISettings
     | PipedriveSettings
+    | SpruceZapierSettings
     | TwilioSettings;
   credentialSource?: "database" | "environment" | "missing" | "placeholder";
   hasEncryptionKey?: boolean;
@@ -97,6 +100,7 @@ export function IntegrationSettingsDialog({
   const isTwilio = provider === "twilio";
   const isOpenAI = provider === "openai";
   const isPipedrive = provider === "pipedrive";
+  const isSpruce = provider === "spruce";
   const isId30Auth = provider === "id30-auth";
 
   useEffect(() => {
@@ -140,6 +144,8 @@ export function IntegrationSettingsDialog({
                         ? "Configure OpenAI credentials for Sidekick and AI-assisted CRM workflows."
                         : isPipedrive
                           ? "Configure Pipedrive credentials for CRM lead imports."
+                          : isSpruce
+                            ? "Configure the inbound Spruce receiver used by Zapier."
                           : isTwilio
                             ? "Configure Twilio credentials for telephony, SMS and WhatsApp."
                             : "Configure the placeholder connection details for this CRM integration."}
@@ -194,6 +200,16 @@ export function IntegrationSettingsDialog({
           ) : isPipedrive ? (
             <PipedriveSettingsForm
               config={config as PipedriveSettings}
+              hasStoredCredentials={hasStoredCredentials}
+              credentialSource={credentialSource}
+              hasEncryptionKey={hasEncryptionKey}
+              canEdit={canEdit}
+              onSaved={onSaved}
+            />
+          ) : isSpruce ? (
+            <SpruceZapierSettingsForm
+              appBaseUrl={appBaseUrl}
+              config={config as SpruceZapierSettings}
               hasStoredCredentials={hasStoredCredentials}
               credentialSource={credentialSource}
               hasEncryptionKey={hasEncryptionKey}

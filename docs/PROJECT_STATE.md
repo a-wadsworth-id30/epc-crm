@@ -307,6 +307,20 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Pipedrive records.
   Pipedrive is pull-only by default; do not write back to Pipedrive without
   Adam's explicit permission for that specific operation.
+- Settings > Integrations includes Spruce via Zapier as a real inbound
+  integration shell. The CRM stores an encrypted Spruce/Zapier webhook secret
+  in `IntegrationConnection.config` or reads `SPRUCE_WEBHOOK_SECRET` /
+  `ZAPIER_SPRUCE_WEBHOOK_SECRET` from the runtime, exposes the authenticated
+  receiver at `/api/webhooks/spruce`, and supports bearer, basic-auth password,
+  `x-spruce-webhook-secret` or `x-zapier-webhook-secret` authentication. The
+  settings page includes a receiver self-test that posts a no-op payload
+  through the public webhook route and writes a `webhook-receiver-test` sync
+  log with zero Spruce records read or CRM records written. Real Spruce/Zapier
+  events are currently captured into CRM sync history with sanitized payload
+  shape metadata and `recordsWritten=0`; CRM sale/contact/timeline mapping is
+  intentionally disabled until real Zapier payloads are reviewed and approved.
+  The CRM must not send data back to Spruce or Zapier without explicit approval
+  for that specific outbound operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

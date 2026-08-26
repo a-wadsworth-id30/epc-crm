@@ -21,6 +21,10 @@ import {
   pipedriveProvider,
 } from "@/lib/integrations/pipedrive";
 import {
+  spruceProvider,
+  spruceZapierConfigSchema,
+} from "@/lib/integrations/spruce-zapier";
+import {
   id30AuthConfigSchema,
   id30AuthProvider,
   publicId30AuthConfig,
@@ -152,6 +156,9 @@ export default async function IntegrationsPage() {
             const pipedriveConfig = pipedriveConfigSchema.safeParse(
               integration.config ?? {},
             );
+            const spruceConfig = spruceZapierConfigSchema.safeParse(
+              integration.config ?? {},
+            );
             const geoapifyConfig = geoapifyConfigSchema.safeParse(
               integration.config ?? {},
             );
@@ -166,6 +173,7 @@ export default async function IntegrationsPage() {
             const isTwilio = integration.provider === "twilio";
             const isOpenAI = integration.provider === "openai";
             const isPipedrive = integration.provider === pipedriveProvider;
+            const isSpruce = integration.provider === spruceProvider;
 
             return (
               <IntegrationCard
@@ -197,11 +205,13 @@ export default async function IntegrationsPage() {
                             ? openaiConfig.data
                             : isPipedrive && pipedriveConfig.success
                               ? pipedriveConfig.data
-                              : isDocuSign && docusignConfig.success
-                                ? docusignConfig.data
-                                : isGeoapify && geoapifyConfig.success
-                                  ? geoapifyConfig.data
-                                  : undefined
+                              : isSpruce && spruceConfig.success
+                                ? spruceConfig.data
+                                : isDocuSign && docusignConfig.success
+                                  ? docusignConfig.data
+                                  : isGeoapify && geoapifyConfig.success
+                                    ? geoapifyConfig.data
+                                    : undefined
                 }
                 hasStoredCredentials={integration.hasStoredCredentials}
                 hasEncryptionKey={hasCredentialEncryptionKey()}

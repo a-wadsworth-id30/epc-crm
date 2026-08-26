@@ -55,6 +55,17 @@ import {
   hasStoredGeoapifyCredentials,
 } from "@/lib/integrations/geoapify";
 import {
+  ensureSpruceZapierIntegrationConnection,
+  getSpruceZapierRuntimeConfig,
+  hasStoredSpruceZapierCredentials,
+  spruceProvider,
+  spruceWebhookReceiverPath,
+  spruceZapierConfigSchema,
+  spruceZapierDescription,
+  spruceZapierName,
+  spruceZapierStoredConfigSchema,
+} from "@/lib/integrations/spruce-zapier";
+import {
   docusignConfigSchema,
   docusignProvider,
   docusignStoredConfigSchema,
@@ -92,6 +103,12 @@ type IntegrationActionState = {
 };
 
 export type PipedriveWebhookReceiverTestState = {
+  ok: boolean;
+  message: string;
+  savedAt: number | null;
+};
+
+export type SpruceWebhookReceiverTestState = {
   ok: boolean;
   message: string;
   savedAt: number | null;
@@ -359,6 +376,104 @@ export async function updateGeoapifyIntegrationAction(
     message: isConnected
       ? "Geoapify settings saved."
       : "Geoapify settings saved. Add an API key to enable address lookup.",
+    savedAt: Date.now(),
+    connected: isConnected,
+  };
+}
+
+export async function updateSpruceZapierIntegrationAction(
+  _: IntegrationActionState,
+  formData: FormData,
+): Promise<IntegrationActionState> {
+  await requireAdmin();
+
+  const parsed = spruceZapierConfigSchema.safeParse({
+    defaultLeadSource: formData.get("defaultLeadSource"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message:
+        parsed.error.issues[0]?.message ??
+        "Enter valid Spruce/Zapier settings.",
+      savedAt: null,
+      connected: false,
+    };
+  }
+
+  const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
+  const existing = await prisma.integrationConnection.findUnique({
+    where: { provider: spruceProvider },
+  });
+  const existingConfig = spruceZapierStoredConfigSchema.safeParse(
+    existing?.config ?? {},
+  );
+  const existingCredentials = existingConfig.success
+    ? existingConfig.data.credentials
+    : undefined;
+  let credentials = existingCredentials;
+
+  if (webhookSecret) {
+    if (!hasCredentialEncryptionKey()) {
+      return {
+        ok: false,
+        message:
+          "Set CREDENTIAL_ENCRYPTION_KEY before saving Spruce/Zapier credentials.",
+        savedAt: null,
+        connected: false,
+      };
+    }
+
+    credentials = {
+      savedAt: new Date().toISOString(),
+      webhookSecret: encryptSecret(webhookSecret),
+    };
+  }
+
+  const config = {
+    ...parsed.data,
+    ...(credentials ? { credentials } : {}),
+  };
+  const isConnected = hasStoredSpruceZapierCredentials(config);
+
+  const savedConnection = await prisma.integrationConnection.upsert({
+    where: { provider: spruceProvider },
+    update: {
+      config,
+      description: spruceZapierDescription,
+      name: spruceZapierName,
+      status: isConnected ? "CONNECTED" : "NOT_CONNECTED",
+    },
+    create: {
+      config,
+      description: spruceZapierDescription,
+      name: spruceZapierName,
+      provider: spruceProvider,
+      status: isConnected ? "CONNECTED" : "NOT_CONNECTED",
+    },
+  });
+  await recordIntegrationSetupHealth({
+    connected: isConnected,
+    integrationId: savedConnection.id,
+    message: isConnected
+      ? "Spruce/Zapier settings saved with inbound receiver credentials."
+      : "Spruce/Zapier settings saved without inbound receiver credentials.",
+    metadata: {
+      defaultLeadSource: config.defaultLeadSource,
+      outboundWriteBackDisabled: true,
+      receiverPath: spruceWebhookReceiverPath,
+    },
+    provider: spruceProvider,
+  });
+
+  revalidateSpruceZapierSettingsPaths();
+
+  return {
+    ok: true,
+    message: isConnected
+      ? "Spruce/Zapier settings saved."
+      : "Spruce/Zapier settings saved. Add a webhook secret to connect.",
     savedAt: Date.now(),
     connected: isConnected,
   };
@@ -779,6 +894,135 @@ export async function testPipedriveWebhookReceiverAction(
   }
 }
 
+export async function testSpruceZapierWebhookReceiverAction(
+  previousState: SpruceWebhookReceiverTestState,
+  formData: FormData,
+): Promise<SpruceWebhookReceiverTestState> {
+  void previousState;
+  void formData;
+
+  const user = await requireAdmin();
+  const startedAt = new Date();
+  const config = await getSpruceZapierRuntimeConfig();
+
+  if (!config.webhookSecret) {
+    await writeSpruceZapierWebhookReceiverTestFailure({
+      actorId: user.id,
+      message:
+        "Spruce/Zapier webhook receiver self-test could not run because the webhook secret is missing.",
+      reason: "missing-webhook-secret",
+      startedAt,
+      status: "WARNING",
+    });
+    revalidateSpruceZapierSettingsPaths();
+    return {
+      ok: false,
+      message:
+        "Receiver self-test could not run because the webhook secret is missing.",
+      savedAt: Date.now(),
+    };
+  }
+
+  const baseUrl = await appBaseUrlFromHeaders();
+  const url = new URL(spruceWebhookReceiverPath, baseUrl);
+
+  try {
+    const response = await fetch(url, {
+      body: JSON.stringify({
+        event: "test.receiver",
+        event_id: `crm-spruce-webhook-self-test-${startedAt.getTime()}`,
+        timestamp: startedAt.toISOString(),
+      }),
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-spruce-webhook-secret": config.webhookSecret,
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      const message = `Receiver self-test reached the CRM webhook route but failed with HTTP ${response.status}.`;
+
+      await writeSpruceZapierWebhookReceiverTestFailure({
+        actorId: user.id,
+        message,
+        reason: "receiver-http-error",
+        startedAt,
+        status: "ERROR",
+      });
+      revalidateSpruceZapierSettingsPaths();
+      return {
+        ok: false,
+        message,
+        savedAt: Date.now(),
+      };
+    }
+
+    const body = await response.json().catch(() => null);
+    const result =
+      body && typeof body === "object" && "result" in body
+        ? (body.result as {
+            recordsRead?: unknown;
+            recordsWritten?: unknown;
+            status?: unknown;
+            syncType?: unknown;
+          })
+        : null;
+
+    if (
+      result?.status !== "SUCCESS" ||
+      result.syncType !== "webhook-receiver-test" ||
+      result.recordsRead !== 0 ||
+      result.recordsWritten !== 0
+    ) {
+      const message =
+        "Receiver self-test completed but did not return the expected CRM receiver-test result.";
+
+      await writeSpruceZapierWebhookReceiverTestFailure({
+        actorId: user.id,
+        message,
+        reason: "unexpected-receiver-result",
+        startedAt,
+        status: "WARNING",
+      });
+      revalidateSpruceZapierSettingsPaths();
+      return {
+        ok: false,
+        message,
+        savedAt: Date.now(),
+      };
+    }
+
+    revalidateSpruceZapierSettingsPaths();
+    return {
+      ok: true,
+      message:
+        "Receiver self-test completed. CRM logged webhook-receiver-test with 0 Spruce records read or written.",
+      savedAt: Date.now(),
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Spruce/Zapier webhook receiver self-test failed.";
+
+    await writeSpruceZapierWebhookReceiverTestFailure({
+      actorId: user.id,
+      message,
+      reason: "receiver-request-failed",
+      startedAt,
+      status: "ERROR",
+    });
+    revalidateSpruceZapierSettingsPaths();
+    return {
+      ok: false,
+      message,
+      savedAt: Date.now(),
+    };
+  }
+}
+
 export async function previewPipedriveLeadsAction() {
   const user = await requireAdmin();
   const startedAt = new Date();
@@ -1188,9 +1432,52 @@ async function writePipedriveWebhookReceiverTestFailure({
   });
 }
 
+async function writeSpruceZapierWebhookReceiverTestFailure({
+  actorId,
+  message,
+  reason,
+  startedAt,
+  status,
+}: {
+  actorId: string;
+  message: string;
+  reason: string;
+  startedAt: Date;
+  status: "ERROR" | "WARNING";
+}) {
+  const connection = await ensureSpruceZapierIntegrationConnection();
+
+  await prisma.marketingIntegrationSyncLog.create({
+    data: {
+      finishedAt: new Date(),
+      integrationId: connection.id,
+      message,
+      metadata: {
+        action: "test",
+        actorId,
+        entity: "receiver",
+        inboundOnly: true,
+        outboundWriteBackDisabled: true,
+        reason,
+      },
+      provider: spruceProvider,
+      recordsRead: 0,
+      recordsWritten: 0,
+      startedAt,
+      status,
+      syncType: "webhook-receiver-test",
+    },
+  });
+}
+
 function revalidatePipedriveSettingsPaths() {
   revalidatePath("/settings/integrations");
   revalidatePath("/settings/integrations/pipedrive");
+}
+
+function revalidateSpruceZapierSettingsPaths() {
+  revalidatePath("/settings/integrations");
+  revalidatePath("/settings/integrations/spruce");
 }
 
 function revalidatePipedriveImportPaths() {

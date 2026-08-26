@@ -39,6 +39,13 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
+  hasSpruceZapierEnvironmentConfig,
+  hasStoredSpruceZapierCredentials,
+  spruceProvider,
+  spruceWebhookReceiverPath,
+  spruceZapierStoredConfigSchema,
+} from "@/lib/integrations/spruce-zapier";
+import {
   hasStoredTwilioCredentials,
   twilioProvider,
   twilioStoredConfigSchema,
@@ -208,6 +215,19 @@ export const systemIntegrationDefinitions: SystemIntegrationDefinition[] = [
     provider: pipedriveProvider,
     realIntegration: true,
     setupHref: "/settings/integrations/pipedrive",
+    showWhenMissing: true,
+  },
+  {
+    categoryLabel: "CRM automation",
+    capabilities: spruceZapierCapabilities,
+    description: "Inbound Spruce job and document events delivered by Zapier.",
+    hasEnvironmentConfig: hasSpruceZapierEnvironmentConfig,
+    hasStoredCredentials: hasStoredSpruceZapierCredentials,
+    iconSrc: "/images/integration/spruce-zapier.svg",
+    name: "Spruce via Zapier",
+    provider: spruceProvider,
+    realIntegration: true,
+    setupHref: "/settings/integrations/spruce",
     showWhenMissing: true,
   },
   {
@@ -549,6 +569,50 @@ function pipedriveCapabilities({
       label: "Lead import",
       optional: true,
       status: "warning",
+    }),
+  ];
+}
+
+function spruceZapierCapabilities({
+  config,
+  credentialSource,
+}: SystemIntegrationCapabilityInput) {
+  const parsed = spruceZapierStoredConfigSchema.safeParse(config ?? {});
+  const storedConfig = parsed.success ? parsed.data : null;
+  const runtimeReady =
+    credentialSource === "database" || credentialSource === "environment";
+
+  return [
+    capability({
+      detail: runtimeReady
+        ? `Receiver secret loaded from ${sourceLabel(credentialSource)}.`
+        : "Save a webhook secret before connecting Zapier.",
+      label: "Inbound receiver",
+      status: runtimeReady ? "ready" : "missing",
+    }),
+    capability({
+      detail: `${spruceWebhookReceiverPath} accepts authenticated Zapier webhook POSTs.`,
+      label: "Receiver URL",
+      status: "ready",
+    }),
+    capability({
+      detail:
+        "Spruce events are captured first; CRM sale mapping is enabled only after payload approval.",
+      label: "CRM mapping",
+      optional: true,
+      status: "warning",
+    }),
+    capability({
+      detail: "The CRM does not send data back to Spruce or Zapier.",
+      label: "Write-back",
+      optional: true,
+      status: "ready",
+    }),
+    capability({
+      detail: `Default lead source will be ${storedConfig?.defaultLeadSource ?? "Spruce"}.`,
+      label: "Lead source",
+      optional: true,
+      status: "ready",
     }),
   ];
 }

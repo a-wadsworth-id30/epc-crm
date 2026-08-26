@@ -18,6 +18,7 @@ import {
   MetaIntegrationForm,
   OpenAISettingsForm,
   PipedriveSettingsForm,
+  SpruceZapierSettingsForm,
   TwilioSettingsForm,
 } from "@/components/crm-boilerplate/LazyIntegrationForms";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
@@ -27,6 +28,7 @@ import PipedriveWebhookReceiverTestForm from "@/components/crm-boilerplate/Piped
 import ProviderAuthResetForm from "@/components/crm-boilerplate/ProviderAuthResetForm";
 import ProviderConnectionTestForm from "@/components/crm-boilerplate/ProviderConnectionTestForm";
 import ProviderSelectorRefreshForm from "@/components/crm-boilerplate/LazyProviderSelectorRefreshForm";
+import SpruceWebhookReceiverTestForm from "@/components/crm-boilerplate/SpruceWebhookReceiverTestForm";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import {
   AlertCircle,
@@ -96,6 +98,14 @@ import {
   pipedriveProvider,
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
+import {
+  hasSpruceZapierEnvironmentConfig,
+  hasStoredSpruceZapierCredentials,
+  spruceProvider,
+  spruceWebhookReceiverPath,
+  spruceZapierConfigSchema,
+  spruceZapierStoredConfigSchema,
+} from "@/lib/integrations/spruce-zapier";
 import {
   readPipedriveValidationSummary,
   type PipedriveValidationSummary,
@@ -876,6 +886,138 @@ export default async function IntegrationSettingsPage({
             Sync history
           </h2>
           <SyncHistoryTable logs={recentPipedriveSyncLogs} />
+        </section>
+      </>
+    );
+  }
+
+  if (provider === spruceProvider) {
+    const recentSpruceSyncLogs =
+      await prisma.marketingIntegrationSyncLog.findMany({
+        orderBy: { startedAt: "desc" },
+        select: {
+          id: true,
+          message: true,
+          provider: true,
+          recordsRead: true,
+          recordsWritten: true,
+          startedAt: true,
+          status: true,
+          syncType: true,
+        },
+        take: 8,
+        where: { provider: spruceProvider },
+      });
+    const config = spruceZapierConfigSchema.safeParse(
+      integration?.config ?? {},
+    );
+    const storedConfig = spruceZapierStoredConfigSchema.safeParse(
+      integration?.config ?? {},
+    );
+    const hasStoredSpruceConfig = hasStoredSpruceZapierCredentials(
+      integration?.config,
+    );
+    const spruceCredentialSource = hasStoredSpruceConfig
+      ? "database"
+      : hasSpruceZapierEnvironmentConfig()
+        ? "environment"
+        : "missing";
+    const crmBaseUrl = await appBaseUrlFromHeaders();
+    const receiverEndpoint = new URL(
+      spruceWebhookReceiverPath,
+      crmBaseUrl,
+    ).href;
+    const defaultLeadSource = storedConfig.success
+      ? storedConfig.data.defaultLeadSource
+      : "Spruce";
+
+    return (
+      <>
+        <PageHeader
+          title="Connect Spruce via Zapier"
+          description="Inbound Spruce job and document events delivered to the CRM by Zapier."
+        />
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <SpruceZapierSettingsForm
+            appBaseUrl={crmBaseUrl}
+            config={config.success ? config.data : {}}
+            credentialSource={spruceCredentialSource}
+            hasStoredCredentials={hasStoredSpruceConfig}
+            hasEncryptionKey={hasCredentialEncryptionKey()}
+            canEdit
+          />
+        </div>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                Webhook receiver
+              </h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Endpoint:{" "}
+                <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700 dark:bg-white/10 dark:text-gray-300">
+                  {receiverEndpoint}
+                </code>
+              </p>
+            </div>
+            <SpruceWebhookReceiverTestForm
+              disabled={spruceCredentialSource === "missing"}
+            />
+          </div>
+          <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <PipedrivePullStateItem
+              label="Webhook secret"
+              value={spruceCredentialSource === "missing" ? "Missing" : "Configured"}
+              detail={
+                spruceCredentialSource === "missing"
+                  ? "Save a receiver secret before connecting Zapier"
+                  : "Bearer, basic auth or header supported"
+              }
+            />
+            <PipedrivePullStateItem
+              label="Write-back"
+              value="Disabled"
+              detail="CRM does not send data to Spruce or Zapier"
+            />
+            <PipedrivePullStateItem
+              label="CRM mapping"
+              value="Capture only"
+              detail="Real events are logged with zero CRM writes"
+            />
+            <PipedrivePullStateItem
+              label="Default source"
+              value={defaultLeadSource}
+              detail="Used once CRM sale mapping is approved"
+            />
+            <PipedrivePullStateItem
+              label="Job events"
+              value="Captured"
+              detail="Job created and status-change events"
+            />
+            <PipedrivePullStateItem
+              label="Estimate events"
+              value="Captured"
+              detail="Estimate sent, opened and accepted events"
+            />
+            <PipedrivePullStateItem
+              label="Proposal events"
+              value="Captured"
+              detail="Proposal sent, opened and accepted events"
+            />
+            <PipedrivePullStateItem
+              label="Report events"
+              value="Captured"
+              detail="Report sent, downloaded and handover events"
+            />
+          </dl>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <h2 className="mb-4 text-base font-semibold text-gray-800 dark:text-white/90">
+            Sync history
+          </h2>
+          <SyncHistoryTable logs={recentSpruceSyncLogs} />
         </section>
       </>
     );

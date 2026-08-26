@@ -926,6 +926,11 @@ async function main() {
       "Lead inbox import and CRM data synchronisation.",
     ],
     [
+      "spruce",
+      "Spruce via Zapier",
+      "Inbound Spruce job and document events delivered by Zapier.",
+    ],
+    [
       "email-provider",
       "Email provider",
       "Connect SMTP, Microsoft 365 or Gmail later.",

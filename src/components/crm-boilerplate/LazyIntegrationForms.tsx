@@ -86,6 +86,11 @@ export const PipedriveSettingsForm = dynamic(
   { loading: IntegrationFormLoading, ssr: false },
 );
 
+export const SpruceZapierSettingsForm = dynamic(
+  () => import("@/components/crm-boilerplate/SpruceZapierSettingsForm"),
+  { loading: IntegrationFormLoading, ssr: false },
+);
+
 export const TwilioSettingsForm = dynamic(
   () => import("@/components/crm-boilerplate/TwilioSettingsForm"),
   { loading: IntegrationFormLoading, ssr: false },
