@@ -20,7 +20,18 @@ import {
   syncPipedriveLeadFilesForOpportunity,
   syncPipedriveLeadNotesForOpportunity,
 } from "@/lib/integrations/pipedrive-import";
-import { sendSalesOpportunityToSpruce } from "@/lib/integrations/spruce-zapier-outbound";
+import {
+  spruceBuiltForms,
+  spruceFuelTypes,
+  spruceLoftInsulationValues,
+  sprucePropertyTypes,
+  spruceWallTypes,
+  spruceWindowTypes,
+} from "@/lib/integrations/spruce-job-fields";
+import {
+  sendSalesOpportunityToSpruce,
+  type SpruceDirectJobInput,
+} from "@/lib/integrations/spruce-zapier-outbound";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
@@ -267,9 +278,60 @@ const aiFeedbackSchema = z.object({
   targetStageId: z.string().trim().optional(),
 });
 
+function optionalFormValue<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(
+    (value) =>
+      value === null ||
+      (typeof value === "string" && value.trim() === "")
+        ? undefined
+        : value,
+    schema.optional(),
+  );
+}
+
 const sendSaleToSpruceSchema = z.object({
+  builtForm: optionalFormValue(z.enum(spruceBuiltForms)),
+  floorAreaM2: optionalFormValue(z.coerce.number().positive()),
+  fuelType: optionalFormValue(z.enum(spruceFuelTypes)),
+  latitude: optionalFormValue(z.coerce.number().min(-90).max(90)),
+  loftInsulation: optionalFormValue(z.enum(spruceLoftInsulationValues)),
+  longitude: optionalFormValue(z.coerce.number().min(-180).max(180)),
+  numBedrooms: optionalFormValue(z.coerce.number().int().min(0)),
+  propertyType: optionalFormValue(z.enum(sprucePropertyTypes)),
   saleId: z.string().trim().min(1, "Sale ID is required."),
+  wallType: optionalFormValue(z.enum(spruceWallTypes)),
+  windowType: optionalFormValue(z.enum(spruceWindowTypes)),
 });
+
+function spruceDirectJobInputFromForm(
+  data: z.infer<typeof sendSaleToSpruceSchema>,
+): SpruceDirectJobInput | null {
+  if (
+    !data.builtForm ||
+    data.floorAreaM2 === undefined ||
+    !data.fuelType ||
+    !data.loftInsulation ||
+    data.numBedrooms === undefined ||
+    !data.propertyType ||
+    !data.wallType ||
+    !data.windowType
+  ) {
+    return null;
+  }
+
+  return {
+    builtForm: data.builtForm,
+    floorAreaM2: data.floorAreaM2,
+    fuelType: data.fuelType,
+    latitude: data.latitude ?? null,
+    loftInsulation: data.loftInsulation,
+    longitude: data.longitude ?? null,
+    numBedrooms: data.numBedrooms,
+    propertyType: data.propertyType,
+    wallType: data.wallType,
+    windowType: data.windowType,
+  };
+}
 
 function formValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -1820,7 +1882,17 @@ export async function sendSaleToSpruceAction(
   }
 
   const parsed = sendSaleToSpruceSchema.safeParse({
+    builtForm: formData.get("builtForm"),
+    floorAreaM2: formData.get("floorAreaM2"),
+    fuelType: formData.get("fuelType"),
+    latitude: formData.get("latitude"),
+    loftInsulation: formData.get("loftInsulation"),
+    longitude: formData.get("longitude"),
+    numBedrooms: formData.get("numBedrooms"),
+    propertyType: formData.get("propertyType"),
     saleId: formData.get("saleId"),
+    wallType: formData.get("wallType"),
+    windowType: formData.get("windowType"),
   });
 
   if (!parsed.success) {
@@ -1842,6 +1914,7 @@ export async function sendSaleToSpruceAction(
   const crmBaseUrl = await appBaseUrlFromHeaders();
   const result = await sendSalesOpportunityToSpruce({
     crmBaseUrl,
+    directJobInput: spruceDirectJobInputFromForm(parsed.data),
     saleId: sale.id,
     userId: user.id,
   });

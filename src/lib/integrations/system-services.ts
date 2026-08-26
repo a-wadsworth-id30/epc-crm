@@ -39,9 +39,11 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
+  hasSpruceDirectApiEnvironmentConfig,
   hasSpruceZapierInboundEnvironmentConfig,
   hasSpruceZapierEnvironmentConfig,
   hasSpruceZapierOutboundEnvironmentConfig,
+  hasStoredSpruceDirectApiCredentials,
   hasStoredSpruceZapierInboundCredentials,
   hasStoredSpruceZapierOutboundWebhook,
   hasStoredSpruceZapierCredentials,
@@ -225,11 +227,11 @@ export const systemIntegrationDefinitions: SystemIntegrationDefinition[] = [
     categoryLabel: "CRM automation",
     capabilities: spruceZapierCapabilities,
     description:
-      "Inbound Spruce job events and manual CRM sale sends delivered by Zapier.",
+      "Inbound Spruce job events and manual CRM sale sends via API or Zapier.",
     hasEnvironmentConfig: hasSpruceZapierEnvironmentConfig,
     hasStoredCredentials: hasStoredSpruceZapierCredentials,
     iconSrc: "/images/integration/spruce-zapier.svg",
-    name: "Spruce via Zapier",
+    name: "Spruce",
     provider: spruceProvider,
     realIntegration: true,
     setupHref: "/settings/integrations/spruce",
@@ -587,7 +589,11 @@ function spruceZapierCapabilities({
   const inboundReady =
     hasStoredSpruceZapierInboundCredentials(config) ||
     hasSpruceZapierInboundEnvironmentConfig();
+  const directApiReady =
+    hasStoredSpruceDirectApiCredentials(config) ||
+    hasSpruceDirectApiEnvironmentConfig();
   const outboundReady =
+    directApiReady ||
     hasStoredSpruceZapierOutboundWebhook(config) ||
     hasSpruceZapierOutboundEnvironmentConfig();
 
@@ -613,8 +619,10 @@ function spruceZapierCapabilities({
     }),
     capability({
       detail: outboundReady
-        ? "Admins can manually send a CRM sale to the configured outbound Zapier webhook."
-        : "Add an outbound Zapier webhook before using Send to Spruce.",
+        ? directApiReady
+          ? "Admins can manually create a Spruce job from a CRM sale."
+          : "Admins can manually send a CRM sale to the configured outbound Zapier webhook."
+        : "Add a Spruce API key or outbound Zapier webhook before using Send to Spruce.",
       label: "Manual outbound",
       optional: true,
       status: outboundReady ? "ready" : "missing",

@@ -21,6 +21,10 @@ import {
   pipedriveProvider,
 } from "@/lib/integrations/pipedrive";
 import {
+  hasSpruceDirectApiEnvironmentConfig,
+  hasSpruceZapierInboundEnvironmentConfig,
+  hasStoredSpruceDirectApiCredentials,
+  hasStoredSpruceZapierInboundCredentials,
   hasStoredSpruceZapierOutboundWebhook,
   spruceProvider,
   spruceZapierConfigSchema,
@@ -160,6 +164,12 @@ export default async function IntegrationsPage() {
             const spruceConfig = spruceZapierConfigSchema.safeParse(
               integration.config ?? {},
             );
+            const spruceDirectApiConfigured =
+              hasStoredSpruceDirectApiCredentials(integration.config) ||
+              hasSpruceDirectApiEnvironmentConfig();
+            const spruceInboundWebhookConfigured =
+              hasStoredSpruceZapierInboundCredentials(integration.config) ||
+              hasSpruceZapierInboundEnvironmentConfig();
             const spruceOutboundWebhookConfigured =
               hasStoredSpruceZapierOutboundWebhook(integration.config);
             const geoapifyConfig = geoapifyConfigSchema.safeParse(
@@ -209,11 +219,15 @@ export default async function IntegrationsPage() {
                             : isPipedrive && pipedriveConfig.success
                               ? pipedriveConfig.data
                               : isSpruce && spruceConfig.success
-                                ? {
-                                    ...spruceConfig.data,
-                                    outboundWebhookConfigured:
-                                      spruceOutboundWebhookConfigured,
-                                  }
+                                  ? {
+                                      ...spruceConfig.data,
+                                      directApiConfigured:
+                                        spruceDirectApiConfigured,
+                                      inboundWebhookConfigured:
+                                        spruceInboundWebhookConfigured,
+                                      outboundWebhookConfigured:
+                                        spruceOutboundWebhookConfigured,
+                                    }
                                 : isDocuSign && docusignConfig.success
                                   ? docusignConfig.data
                                   : isGeoapify && geoapifyConfig.success
