@@ -334,7 +334,7 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   the sale detail "Open Spruce" action beside the linked status can take admins
   back to the linked Spruce job. When only the Spruce job ID is stored, the CRM
   builds the link with `SPRUCE_JOB_URL_TEMPLATE`, defaulting to
-  `https://app.sprouce.eco/admin/quotes/{jobId}`. The sale detail page prefers
+  `https://app.spruce.eco/admin/quotes/{jobId}`. The sale detail page prefers
   this CRM-built quote URL from the stored Spruce ID over older stored `/jobs/`
   URLs so linked records keep opening the editable Spruce quote entry.
 - Settings > Integrations includes DocuSign as a real document-signing service.

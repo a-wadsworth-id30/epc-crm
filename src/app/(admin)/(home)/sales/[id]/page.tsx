@@ -242,7 +242,7 @@ function spruceQuoteUrlFromExternalId(externalId: string | null | undefined) {
 
   const template =
     process.env.SPRUCE_JOB_URL_TEMPLATE?.trim() ||
-    "https://app.sprouce.eco/admin/quotes/{jobId}";
+    "https://app.spruce.eco/admin/quotes/{jobId}";
   const encodedJobId = encodeURIComponent(jobId);
   const resolved = template.includes("{jobId}")
     ? template.replaceAll("{jobId}", encodedJobId)
