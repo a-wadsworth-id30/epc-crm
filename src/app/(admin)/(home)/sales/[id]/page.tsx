@@ -236,6 +236,21 @@ function safeExternalHttpsUrl(value: unknown) {
   }
 }
 
+function spruceJobUrlFromExternalId(externalId: string | null | undefined) {
+  const jobId = stringValue(externalId);
+  if (!jobId) return null;
+
+  const template =
+    process.env.SPRUCE_JOB_URL_TEMPLATE?.trim() ||
+    "https://app.spruce.eco/jobs/{jobId}";
+  const encodedJobId = encodeURIComponent(jobId);
+  const resolved = template.includes("{jobId}")
+    ? template.replaceAll("{jobId}", encodedJobId)
+    : `${template.replace(/\/+$/, "")}/${encodedJobId}`;
+
+  return safeExternalHttpsUrl(resolved);
+}
+
 function numberValue(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value !== "string" || !value.trim()) return null;
@@ -1992,7 +2007,8 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     hasSpruceDirectApiEnvironmentConfig();
   const spruceExternalJobUrl =
     spruceSaleLink?.externalType === spruceJobExternalType
-      ? safeExternalHttpsUrl(jsonObject(spruceSaleLink.metadata).externalJobUrl)
+      ? (safeExternalHttpsUrl(jsonObject(spruceSaleLink.metadata).externalJobUrl) ??
+        spruceJobUrlFromExternalId(spruceSaleLink.externalId))
       : null;
   const discoveryAnswerTypes = new Set(
     discoveryTemplates.flatMap((template) =>

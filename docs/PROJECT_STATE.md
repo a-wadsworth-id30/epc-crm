@@ -332,7 +332,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   attempt and adds a CRM system note only when Spruce accepts the outbound sale
   payload. Direct API sends store Spruce's returned job URL when available so
   the sale detail "Open Spruce" action beside the linked status can take admins
-  back to the linked Spruce job.
+  back to the linked Spruce job. When only the Spruce job ID is stored, the CRM
+  builds the link with `SPRUCE_JOB_URL_TEMPLATE`, defaulting to
+  `https://app.spruce.eco/jobs/{jobId}`.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity
