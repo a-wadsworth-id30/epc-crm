@@ -52,8 +52,8 @@ the reply panel before sending.
 
 Use the contact record header actions to create a linked lead, edit the person,
 merge a duplicate contact into the current record, or delete the contact.
-The header also shows every stored email address and phone number when the
-person has multiple contact methods.
+The contact workspace summary also shows every stored email address and phone
+number when the person has multiple contact methods.
 
 Segments can be drafted from a plain-language prompt, such as "people that have
 started digital marketing in the last 12 months". The CRM converts the prompt

@@ -47,6 +47,12 @@ type ContactWorkspaceTabKey =
   | "leads"
   | "documents";
 
+type ContactSummaryMethod = {
+  href: string;
+  label: string;
+  value: string;
+};
+
 export type ContactConversationWorkspaceProps = {
   communications: SaleConversationItem[];
   communicationsCount?: number;
@@ -59,7 +65,9 @@ export type ContactConversationWorkspaceProps = {
   openLeadCount: number;
   profilePanel: ReactNode;
   recipientEmail: string | null;
+  recipientEmails: ContactSummaryMethod[];
   recipientPhone: string | null;
+  recipientPhones: ContactSummaryMethod[];
   replyTarget: ReplyTarget;
   summary: {
     companyName: string | null;
@@ -206,8 +214,8 @@ function ContactWorkspaceSummary({
   contactName,
   documentCount,
   openLeadCount,
-  recipientEmail,
-  recipientPhone,
+  recipientEmails,
+  recipientPhones,
   summary,
 }: {
   closedLeadCount: number;
@@ -215,20 +223,30 @@ function ContactWorkspaceSummary({
   contactName: string;
   documentCount: number;
   openLeadCount: number;
-  recipientEmail: string | null;
-  recipientPhone: string | null;
+  recipientEmails: ContactSummaryMethod[];
+  recipientPhones: ContactSummaryMethod[];
   summary: ContactConversationWorkspaceProps["summary"];
 }) {
   const metrics = [
     {
       Icon: Mail,
       label: "Email",
-      value: recipientEmail || "Not captured",
+      value: (
+        <ContactSummaryMethodList
+          emptyLabel="Not captured"
+          methods={recipientEmails}
+        />
+      ),
     },
     {
       Icon: Phone,
       label: "Phone",
-      value: recipientPhone || "Not captured",
+      value: (
+        <ContactSummaryMethodList
+          emptyLabel="Not captured"
+          methods={recipientPhones}
+        />
+      ),
     },
     {
       Icon: Building2,
@@ -294,9 +312,15 @@ function ContactWorkspaceSummary({
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {metric.label}
                   </p>
-                  <p className="mt-1 line-clamp-2 text-sm leading-5 font-semibold text-gray-900 dark:text-white">
-                    {metric.value}
-                  </p>
+                  {typeof metric.value === "string" ? (
+                    <p className="mt-1 line-clamp-2 text-sm leading-5 font-semibold text-gray-900 dark:text-white">
+                      {metric.value}
+                    </p>
+                  ) : (
+                    <div className="mt-1 text-sm leading-5 font-semibold text-gray-900 dark:text-white">
+                      {metric.value}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -304,6 +328,34 @@ function ContactWorkspaceSummary({
         })}
       </div>
     </section>
+  );
+}
+
+function ContactSummaryMethodList({
+  emptyLabel,
+  methods,
+}: {
+  emptyLabel: string;
+  methods: ContactSummaryMethod[];
+}) {
+  if (!methods.length) return <span>{emptyLabel}</span>;
+
+  return (
+    <span className="block space-y-1">
+      {methods.map((method, index) => (
+        <a
+          key={`${method.value}-${index}`}
+          href={method.href}
+          className="block min-w-0 rounded-md py-0.5 text-gray-900 transition hover:text-brand-600 dark:text-white dark:hover:text-brand-300"
+          title={`${method.label}: ${method.value}`}
+        >
+          <span className="mr-1.5 inline-flex h-4 items-center rounded-full bg-gray-100 px-1 text-[10px] font-semibold text-gray-500 dark:bg-white/10 dark:text-gray-300">
+            {method.label}
+          </span>
+          <span className="break-all">{method.value}</span>
+        </a>
+      ))}
+    </span>
   );
 }
 
@@ -393,7 +445,9 @@ export default function ContactConversationWorkspace({
   openLeadCount,
   profilePanel,
   recipientEmail,
+  recipientEmails,
   recipientPhone,
+  recipientPhones,
   replyTarget,
   summary,
 }: ContactConversationWorkspaceProps) {
@@ -700,8 +754,8 @@ export default function ContactConversationWorkspace({
         contactName={contactName}
         documentCount={documentCount}
         openLeadCount={openLeadCount}
-        recipientEmail={recipientEmail}
-        recipientPhone={recipientPhone}
+        recipientEmails={recipientEmails}
+        recipientPhones={recipientPhones}
         summary={summary}
       />
 
