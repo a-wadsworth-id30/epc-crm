@@ -12,6 +12,7 @@ import {
   salesOpportunityIdAccessWhere,
   salesOpportunityWhereWithAccess,
 } from "@/lib/crm-resource-access";
+import { appBaseUrlFromHeaders } from "@/lib/http/origin";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import {
   manualPipedriveLeadEmailMaxPages,
@@ -19,6 +20,7 @@ import {
   syncPipedriveLeadFilesForOpportunity,
   syncPipedriveLeadNotesForOpportunity,
 } from "@/lib/integrations/pipedrive-import";
+import { sendSalesOpportunityToSpruce } from "@/lib/integrations/spruce-zapier-outbound";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
@@ -263,6 +265,10 @@ const aiFeedbackSchema = z.object({
   rationale: z.string().trim().max(1000).optional(),
   targetStage: z.string().trim().max(160).optional(),
   targetStageId: z.string().trim().optional(),
+});
+
+const sendSaleToSpruceSchema = z.object({
+  saleId: z.string().trim().min(1, "Sale ID is required."),
 });
 
 function formValue(formData: FormData, key: string) {
@@ -1797,6 +1803,65 @@ export async function syncPipedriveLeadNotesAction(
   return {
     ok: true,
     message: `Pulled ${result.notesRead} Pipedrive note${result.notesRead === 1 ? "" : "s"}. Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}.${warningMessage}`,
+  };
+}
+
+export async function sendSaleToSpruceAction(
+  _: SalesActionState,
+  formData: FormData,
+): Promise<SalesActionState> {
+  const user = await requireUser();
+
+  if (user.role !== "ADMIN") {
+    return {
+      ok: false,
+      message: "Only admins can send sales to Spruce.",
+    };
+  }
+
+  const parsed = sendSaleToSpruceSchema.safeParse({
+    saleId: formData.get("saleId"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Sale is required.",
+    };
+  }
+
+  const sale = await prisma.salesOpportunity.findFirst({
+    where: salesOpportunityWhereWithAccess(user, { id: parsed.data.saleId }),
+    select: { contactId: true, id: true },
+  });
+
+  if (!sale) {
+    return { ok: false, message: "Sale not found." };
+  }
+
+  const crmBaseUrl = await appBaseUrlFromHeaders();
+  const result = await sendSalesOpportunityToSpruce({
+    crmBaseUrl,
+    saleId: sale.id,
+    userId: user.id,
+  });
+
+  if (result.ok) {
+    await bumpRealtimeTopics([
+      realtimeTopics.saleConversation(sale.id),
+      sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+    ]);
+    revalidatePath(`/sales/${sale.id}`);
+    revalidatePath("/sales");
+    if (sale.contactId) {
+      revalidatePath(`/contacts/${sale.contactId}`);
+    }
+  }
+
+  return {
+    ok: result.ok,
+    message: result.message,
+    saleId: sale.id,
   };
 }
 

@@ -43,6 +43,7 @@ export type SpruceJobPayloadMapping = {
     phoneNormalized: string | null;
     role: string;
   };
+  crmSaleId: string | null;
   customerNotes: string | null;
   eventName: string | null;
   externalJobId: string | null;
@@ -140,6 +141,22 @@ export async function importSpruceJobCreatedPayload({
         now,
         opportunityId: existingJobLink.internalId,
       });
+    }
+
+    if (mapping.crmSaleId) {
+      const linkedSale = await tx.salesOpportunity.findUnique({
+        where: { id: mapping.crmSaleId },
+        select: { id: true },
+      });
+
+      if (linkedSale) {
+        return updateExistingSpruceSale(tx, {
+          integrationId: resolvedIntegrationId,
+          mapping,
+          now,
+          opportunityId: linkedSale.id,
+        });
+      }
     }
 
     const contactResult = await resolveSpruceContact(tx, {
@@ -334,6 +351,15 @@ export function mapSpruceJobPayloadToCrm({
     job.customer_notes,
     job.customerNotes,
   );
+  const crmSaleId =
+    firstText(
+      body.crm_sale_id,
+      body.crmSaleId,
+      data.crm_sale_id,
+      data.crmSaleId,
+      job.crm_sale_id,
+      job.crmSaleId,
+    ) ?? crmSaleIdFromText(customerNotes);
   const status = firstText(body.status, data.status, job.status);
   const occurredAt =
     dateValue(
@@ -359,6 +385,7 @@ export function mapSpruceJobPayloadToCrm({
     address,
     eventName,
     externalJobId,
+    crmSaleId,
     homeownerEmail: email,
     homeownerPhone: phone,
     importedFrom: "spruce",
@@ -370,6 +397,7 @@ export function mapSpruceJobPayloadToCrm({
   });
   const leadScope = jsonObject({
     address,
+    crmSaleId,
     externalJobId,
     importedFrom: "spruce",
     postcode,
@@ -410,6 +438,7 @@ export function mapSpruceJobPayloadToCrm({
       phoneNormalized,
       role: "Spruce job homeowner",
     },
+    crmSaleId,
     customerNotes,
     eventName,
     externalJobId,
@@ -848,6 +877,12 @@ function dateValue(value: string | null) {
   const parsed = new Date(value);
 
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function crmSaleIdFromText(value: string | null) {
+  if (!value) return null;
+
+  return value.match(/\bCRM sale ID:\s*([a-z0-9]+)/i)?.[1] ?? null;
 }
 
 function jsonObject(value: Record<string, unknown>) {

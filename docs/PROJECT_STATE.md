@@ -321,9 +321,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   link the Spruce `job_id` through `ExternalRecordLink` for idempotent Zap
   replays. Other Spruce/Zapier events are captured into CRM sync history with
   sanitized payload shape metadata and `recordsWritten=0` until their payload
-  mapping is approved.
-  The CRM must not send data back to Spruce or Zapier without explicit approval
-  for that specific outbound operation.
+  mapping is approved. Spruce settings can also store an encrypted outbound
+  Zapier webhook URL for admin-triggered single-sale sends from the sale detail
+  page. Outbound sends are manual only: the CRM does not automatically send
+  data back to Spruce or Zapier, blocks duplicate sends after a sale is linked
+  or sent, writes sync-history rows for each attempt and adds a CRM system note
+  only when Zapier accepts the outbound sale payload.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

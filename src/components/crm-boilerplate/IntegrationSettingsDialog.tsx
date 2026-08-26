@@ -145,7 +145,7 @@ export function IntegrationSettingsDialog({
                         : isPipedrive
                           ? "Configure Pipedrive credentials for CRM lead imports."
                           : isSpruce
-                            ? "Configure the inbound Spruce receiver used by Zapier."
+                            ? "Configure inbound Spruce events and manual outbound sale sends."
                           : isTwilio
                             ? "Configure Twilio credentials for telephony, SMS and WhatsApp."
                             : "Configure the placeholder connection details for this CRM integration."}

@@ -99,8 +99,10 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
-  hasSpruceZapierEnvironmentConfig,
-  hasStoredSpruceZapierCredentials,
+  hasSpruceZapierInboundEnvironmentConfig,
+  hasSpruceZapierOutboundEnvironmentConfig,
+  hasStoredSpruceZapierInboundCredentials,
+  hasStoredSpruceZapierOutboundWebhook,
   spruceProvider,
   spruceWebhookReceiverPath,
   spruceZapierConfigSchema,
@@ -914,12 +916,15 @@ export default async function IntegrationSettingsPage({
     const storedConfig = spruceZapierStoredConfigSchema.safeParse(
       integration?.config ?? {},
     );
-    const hasStoredSpruceConfig = hasStoredSpruceZapierCredentials(
+    const hasStoredSpruceConfig = hasStoredSpruceZapierInboundCredentials(
       integration?.config,
     );
+    const hasSpruceOutboundWebhook =
+      hasStoredSpruceZapierOutboundWebhook(integration?.config) ||
+      hasSpruceZapierOutboundEnvironmentConfig();
     const spruceCredentialSource = hasStoredSpruceConfig
       ? "database"
-      : hasSpruceZapierEnvironmentConfig()
+      : hasSpruceZapierInboundEnvironmentConfig()
         ? "environment"
         : "missing";
     const crmBaseUrl = await appBaseUrlFromHeaders();
@@ -935,12 +940,19 @@ export default async function IntegrationSettingsPage({
       <>
         <PageHeader
           title="Connect Spruce via Zapier"
-          description="Inbound Spruce job and document events delivered to the CRM by Zapier."
+          description="Inbound Spruce job events and manual CRM sale sends delivered by Zapier."
         />
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <SpruceZapierSettingsForm
             appBaseUrl={crmBaseUrl}
-            config={config.success ? config.data : {}}
+            config={
+              config.success
+                ? {
+                    ...config.data,
+                    outboundWebhookConfigured: hasSpruceOutboundWebhook,
+                  }
+                : { outboundWebhookConfigured: hasSpruceOutboundWebhook }
+            }
             credentialSource={spruceCredentialSource}
             hasStoredCredentials={hasStoredSpruceConfig}
             hasEncryptionKey={hasCredentialEncryptionKey()}
@@ -976,9 +988,13 @@ export default async function IntegrationSettingsPage({
               }
             />
             <PipedrivePullStateItem
-              label="Write-back"
-              value="Disabled"
-              detail="CRM does not send data to Spruce or Zapier"
+              label="Manual outbound"
+              value={hasSpruceOutboundWebhook ? "Configured" : "Missing"}
+              detail={
+                hasSpruceOutboundWebhook
+                  ? "Admins can send one sale at a time"
+                  : "Add an outbound Zapier webhook URL"
+              }
             />
             <PipedrivePullStateItem
               label="CRM mapping"

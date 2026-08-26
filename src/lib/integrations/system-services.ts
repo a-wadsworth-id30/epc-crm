@@ -39,7 +39,11 @@ import {
   pipedriveStoredConfigSchema,
 } from "@/lib/integrations/pipedrive";
 import {
+  hasSpruceZapierInboundEnvironmentConfig,
   hasSpruceZapierEnvironmentConfig,
+  hasSpruceZapierOutboundEnvironmentConfig,
+  hasStoredSpruceZapierInboundCredentials,
+  hasStoredSpruceZapierOutboundWebhook,
   hasStoredSpruceZapierCredentials,
   spruceProvider,
   spruceWebhookReceiverPath,
@@ -220,7 +224,8 @@ export const systemIntegrationDefinitions: SystemIntegrationDefinition[] = [
   {
     categoryLabel: "CRM automation",
     capabilities: spruceZapierCapabilities,
-    description: "Inbound Spruce job and document events delivered by Zapier.",
+    description:
+      "Inbound Spruce job events and manual CRM sale sends delivered by Zapier.",
     hasEnvironmentConfig: hasSpruceZapierEnvironmentConfig,
     hasStoredCredentials: hasStoredSpruceZapierCredentials,
     iconSrc: "/images/integration/spruce-zapier.svg",
@@ -579,16 +584,20 @@ function spruceZapierCapabilities({
 }: SystemIntegrationCapabilityInput) {
   const parsed = spruceZapierStoredConfigSchema.safeParse(config ?? {});
   const storedConfig = parsed.success ? parsed.data : null;
-  const runtimeReady =
-    credentialSource === "database" || credentialSource === "environment";
+  const inboundReady =
+    hasStoredSpruceZapierInboundCredentials(config) ||
+    hasSpruceZapierInboundEnvironmentConfig();
+  const outboundReady =
+    hasStoredSpruceZapierOutboundWebhook(config) ||
+    hasSpruceZapierOutboundEnvironmentConfig();
 
   return [
     capability({
-      detail: runtimeReady
+      detail: inboundReady
         ? `Receiver secret loaded from ${sourceLabel(credentialSource)}.`
         : "Save a webhook secret before connecting Zapier.",
       label: "Inbound receiver",
-      status: runtimeReady ? "ready" : "missing",
+      status: inboundReady ? "ready" : "missing",
     }),
     capability({
       detail: `${spruceWebhookReceiverPath} accepts authenticated Zapier webhook POSTs.`,
@@ -603,10 +612,12 @@ function spruceZapierCapabilities({
       status: "ready",
     }),
     capability({
-      detail: "The CRM does not send data back to Spruce or Zapier.",
-      label: "Write-back",
+      detail: outboundReady
+        ? "Admins can manually send a CRM sale to the configured outbound Zapier webhook."
+        : "Add an outbound Zapier webhook before using Send to Spruce.",
+      label: "Manual outbound",
       optional: true,
-      status: "ready",
+      status: outboundReady ? "ready" : "missing",
     }),
     capability({
       detail: `Default lead source will be ${storedConfig?.defaultLeadSource ?? "Spruce"}.`,

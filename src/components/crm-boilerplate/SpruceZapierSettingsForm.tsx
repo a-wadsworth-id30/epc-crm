@@ -10,6 +10,7 @@ import { updateSpruceZapierIntegrationAction } from "@/lib/actions/integrations"
 
 export type SpruceZapierSettings = {
   defaultLeadSource?: string;
+  outboundWebhookConfigured?: boolean;
 };
 
 export default function SpruceZapierSettingsForm({
@@ -50,9 +51,8 @@ export default function SpruceZapierSettingsForm({
     ? `${appBaseUrl.replace(/\/+$/, "")}/api/webhooks/spruce`
     : "/api/webhooks/spruce";
   const receiverReady =
-    credentialSource === "environment" ||
-    hasStoredCredentials ||
-    (state.ok && state.connected);
+    credentialSource === "environment" || hasStoredCredentials;
+  const outboundWebhookReady = Boolean(config.outboundWebhookConfigured);
 
   useEffect(() => {
     if (!state.ok || state.savedAt === null) return;
@@ -78,8 +78,8 @@ export default function SpruceZapierSettingsForm({
                 Inbound Zapier receiver
               </p>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Spruce events can be posted into the CRM. CRM write-back to
-                Zapier or Spruce is disabled.
+                Spruce events can be posted into the CRM. Outbound CRM sends
+                are manual only.
               </p>
             </div>
             <span
@@ -152,6 +152,68 @@ export default function SpruceZapierSettingsForm({
               maxLength={80}
               disabled={!canEdit}
             />
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                  Manual CRM to Spruce send
+                </p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Single sale records can be sent to a configured Zapier
+                  webhook only when an admin confirms the sale action.
+                </p>
+              </div>
+              <span
+                className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  outboundWebhookReady
+                    ? "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300"
+                    : "bg-warning-50 text-warning-700 dark:bg-warning-900/20 dark:text-warning-300"
+                }`}
+              >
+                {outboundWebhookReady ? "Outbound ready" : "Outbound missing"}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="spruce-outbound-webhook-url">
+              Outbound Zapier webhook URL
+            </Label>
+            <Input
+              id="spruce-outbound-webhook-url"
+              name="outboundWebhookUrl"
+              type="password"
+              autoComplete="new-password"
+              placeholder={
+                outboundWebhookReady ? "Saved - leave blank to keep" : ""
+              }
+              disabled={!canEdit}
+            />
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+              Used only by the manual Send to Spruce button on a CRM sale.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="spruce-outbound-webhook-secret">
+              Optional outbound bearer secret
+            </Label>
+            <Input
+              id="spruce-outbound-webhook-secret"
+              name="outboundWebhookSecret"
+              type="password"
+              autoComplete="new-password"
+              placeholder={
+                outboundWebhookReady ? "Saved - leave blank to keep" : ""
+              }
+              disabled={!canEdit}
+            />
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+              If set, CRM sends it as an Authorization bearer token with the
+              outbound request.
+            </p>
           </div>
         </div>
 

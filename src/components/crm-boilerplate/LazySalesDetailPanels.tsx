@@ -8,6 +8,7 @@ import type { PipedriveLeadFilesPanelProps } from "@/components/crm-boilerplate/
 import type { PipedriveLeadNotesAutoSyncProps } from "@/components/crm-boilerplate/PipedriveLeadNotesAutoSync";
 import type { PipedriveLeadUpdatesSyncButtonProps } from "@/components/crm-boilerplate/PipedriveLeadUpdatesSyncButton";
 import type { SaleDeleteModalProps } from "@/components/crm-boilerplate/SaleDeleteModal";
+import type { SpruceSaleSendModalProps } from "@/components/crm-boilerplate/SpruceSaleSendModal";
 
 function SalesPanelLoading() {
   return (
@@ -89,6 +90,11 @@ export const SaleDetailAIWorkspace = dynamic(
 
 export const SaleDeleteModal = dynamic<SaleDeleteModalProps>(
   () => import("@/components/crm-boilerplate/SaleDeleteModal"),
+  { loading: () => null, ssr: false },
+);
+
+export const SpruceSaleSendModal = dynamic<SpruceSaleSendModalProps>(
+  () => import("@/components/crm-boilerplate/SpruceSaleSendModal"),
   { loading: () => null, ssr: false },
 );
 

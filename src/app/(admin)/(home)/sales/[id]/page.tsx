@@ -17,6 +17,7 @@ import {
   SaleDetailAIWorkspace,
   SaleDiscoveryPanel,
   SaleStageControl,
+  SpruceSaleSendModal,
 } from "@/components/crm-boilerplate/LazySalesDetailPanels";
 import type { SaleDiscoveryPack } from "@/components/crm-boilerplate/SaleDiscoveryPanel";
 import type {
@@ -55,6 +56,12 @@ import {
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
+import {
+  spruceJobExternalType,
+  spruceOutboundJobRequestExternalType,
+  spruceSalesOpportunityInternalType,
+} from "@/lib/integrations/spruce-zapier-outbound";
+import { spruceProvider } from "@/lib/integrations/spruce-zapier";
 import { prisma } from "@/lib/prisma";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
 import { getCrmSettings } from "@/lib/settings";
@@ -1771,6 +1778,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     mentionMembers,
     pipedriveLeadLink,
     pipedriveFileLinks,
+    spruceSaleLink,
     r2Integration,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
@@ -1940,6 +1948,18 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         updatedAt: true,
       },
       take: 20,
+    }),
+    prisma.externalRecordLink.findFirst({
+      where: {
+        externalType: {
+          in: [spruceJobExternalType, spruceOutboundJobRequestExternalType],
+        },
+        internalId: id,
+        internalType: spruceSalesOpportunityInternalType,
+        provider: spruceProvider,
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      select: { externalId: true, externalType: true },
     }),
     prisma.integrationConnection.findUnique({
       where: { provider: cloudflareR2Provider },
@@ -2466,6 +2486,25 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             ) : null}
             {user.role === "ADMIN" && pipedriveLeadLink ? (
               <PipedriveLeadUpdatesSyncButton saleId={sale.id} />
+            ) : null}
+            {user.role === "ADMIN" ? (
+              <SpruceSaleSendModal
+                customerName={customerName || sale.company?.name || ""}
+                hasOutboundRequest={
+                  spruceSaleLink?.externalType ===
+                  spruceOutboundJobRequestExternalType
+                }
+                linkedExternalJobId={
+                  spruceSaleLink?.externalType === spruceJobExternalType
+                    ? spruceSaleLink.externalId
+                    : null
+                }
+                projectAddress={
+                  projectAddress === "Not captured" ? "" : projectAddress
+                }
+                saleId={sale.id}
+                saleTitle={sale.title}
+              />
             ) : null}
             {user.role === "ADMIN" ? (
               <SaleDeleteModal saleId={sale.id} saleTitle={sale.title} />

@@ -21,6 +21,7 @@ import {
   pipedriveProvider,
 } from "@/lib/integrations/pipedrive";
 import {
+  hasStoredSpruceZapierOutboundWebhook,
   spruceProvider,
   spruceZapierConfigSchema,
 } from "@/lib/integrations/spruce-zapier";
@@ -159,6 +160,8 @@ export default async function IntegrationsPage() {
             const spruceConfig = spruceZapierConfigSchema.safeParse(
               integration.config ?? {},
             );
+            const spruceOutboundWebhookConfigured =
+              hasStoredSpruceZapierOutboundWebhook(integration.config);
             const geoapifyConfig = geoapifyConfigSchema.safeParse(
               integration.config ?? {},
             );
@@ -206,7 +209,11 @@ export default async function IntegrationsPage() {
                             : isPipedrive && pipedriveConfig.success
                               ? pipedriveConfig.data
                               : isSpruce && spruceConfig.success
-                                ? spruceConfig.data
+                                ? {
+                                    ...spruceConfig.data,
+                                    outboundWebhookConfigured:
+                                      spruceOutboundWebhookConfigured,
+                                  }
                                 : isDocuSign && docusignConfig.success
                                   ? docusignConfig.data
                                   : isGeoapify && geoapifyConfig.success
