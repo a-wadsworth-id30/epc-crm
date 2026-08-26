@@ -2070,6 +2070,8 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   );
 
   const customerName = contactName(sale.contact);
+  const headerCustomerLabel =
+    customerName || sale.company?.name || "No customer";
   const contactAdditionalEmails = sale.contact
     ? normalizeContactEmailMethods(
         sale.contact.additionalEmails,
@@ -2493,7 +2495,16 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                 color={saleStageColor}
                 label={saleStageName}
               />
-              <span>{customerName || sale.company?.name || "No customer"}</span>
+              {sale.contactId ? (
+                <Link
+                  href={`/contacts/${sale.contactId}`}
+                  className="font-semibold text-gray-700 transition hover:text-brand-600 hover:underline dark:text-gray-200 dark:hover:text-brand-300"
+                >
+                  {headerCustomerLabel}
+                </Link>
+              ) : (
+                <span>{headerCustomerLabel}</span>
+              )}
             </div>
           </div>
           <div className="hidden shrink-0 lg:block">
@@ -2505,9 +2516,18 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           <span className="hidden h-8 w-px shrink-0 bg-gray-200 lg:block dark:bg-gray-800" />
           <div className="hidden max-w-[220px] min-w-0 shrink-0 items-center gap-2 lg:flex">
             <UserIcon className="h-5 w-5 shrink-0 text-gray-500 dark:text-gray-400" />
-            <span className="truncate text-sm font-semibold text-gray-700 dark:text-gray-200">
-              {customerName || sale.company?.name || "No customer"}
-            </span>
+            {sale.contactId ? (
+              <Link
+                href={`/contacts/${sale.contactId}`}
+                className="truncate text-sm font-semibold text-gray-700 transition hover:text-brand-600 hover:underline dark:text-gray-200 dark:hover:text-brand-300"
+              >
+                {headerCustomerLabel}
+              </Link>
+            ) : (
+              <span className="truncate text-sm font-semibold text-gray-700 dark:text-gray-200">
+                {headerCustomerLabel}
+              </span>
+            )}
           </div>
           <span className="hidden h-8 w-px shrink-0 bg-gray-200 lg:block dark:bg-gray-800" />
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:justify-end">
