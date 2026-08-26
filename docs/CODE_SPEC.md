@@ -376,8 +376,10 @@ Sales is intentionally generic enough for bespoke builds:
   inline Reply action opens the existing AI reply composer for the active lead
   or customer context.
 - `/sales/[id]` uses a compact lead header with back navigation, current stage,
-  linked customer, call action and overflow action. The detail body is a
-  connected tab workspace: Conversation, Lead, Discovery, Estimate and Proposal.
+  linked customer, call action and overflow action. When the sale has a linked
+  contact, the customer name in this header opens `/contacts/[id]`. The detail
+  body is a connected tab workspace: Conversation, Lead, Discovery, Estimate
+  and Proposal.
 - The Lead tab owns editable `SalesOpportunity.leadScope` and key lead facts.
   Do not reintroduce a separate left-hand lead-info sidebar; the left rail is
   reserved for workspace tabs.

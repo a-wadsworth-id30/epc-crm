@@ -661,7 +661,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   explicit Prisma selects, caps the first conversation payload to recent
   activity with the true total count shown in the workspace, avoids Twilio
   provider status fetches during page render and only loads full product/category
-  selector options when active Discovery questions need those option lists.
+  selector options when active Discovery questions need those option lists. The
+  compact sale header links the displayed customer name to the linked contact
+  detail record when the sale has a `contactId`.
 - Contact detail keeps contact facts and linked lead summaries immediate while
   lazy-loading the customer conversation thread, AI reply composer and AI
   guidance rail into route-local chunks, reducing the first-load bundle for
