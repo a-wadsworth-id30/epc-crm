@@ -54,10 +54,15 @@ export default function SpruceSaleSendModal({
         href={linkedExternalJobUrl}
         target="_blank"
         rel="noreferrer"
+        title={
+          linkedExternalJobId
+            ? `Open Spruce job ${linkedExternalJobId}`
+            : "Open Spruce entry"
+        }
         className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 dark:border-brand-900/40 dark:bg-brand-900/20 dark:text-brand-300 dark:hover:bg-brand-900/30"
       >
         <ExternalLink className="size-4" />
-        Open Spruce
+        Sent to Spruce
       </a>
     );
   }
