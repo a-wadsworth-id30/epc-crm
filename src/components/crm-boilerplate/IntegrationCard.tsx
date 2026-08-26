@@ -2,11 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import DeferredActionLoader from "@/components/crm-boilerplate/DeferredActionLoader";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import type { IntegrationPlaceholderSwitchProps } from "@/components/crm-boilerplate/IntegrationPlaceholderSwitch";
 import type { IntegrationSettingsDialogProps } from "@/components/crm-boilerplate/IntegrationSettingsDialog";
+import { ExternalLink } from "lucide-react";
 
 const LoadedIntegrationSettingsDialog = dynamic<IntegrationSettingsDialogProps>(
   () =>
@@ -125,6 +127,7 @@ export default function IntegrationCard({
   latestHealthSnapshot = null,
   readinessStatus = "missing",
   canEdit = false,
+  setupHref = "",
 }: IntegrationCardProps) {
   const effectiveEnabled =
     status === "CONNECTED" ||
@@ -253,31 +256,42 @@ export default function IntegrationCard({
         </div>
 
         <div className="flex items-center justify-between border-t border-gray-200 p-5 dark:border-gray-800">
-          <DeferredActionLoader
-            renderTrigger={(open) => (
-              <IntegrationSettingsTrigger
-                ariaLabel={`Open ${name} settings`}
-                onOpen={open}
-              />
-            )}
-          >
-            {(autoOpen) => (
-              <LoadedIntegrationSettingsDialog
-                appBaseUrl={appBaseUrl}
-                autoOpen={autoOpen}
-                bootstrapUrl={bootstrapUrl}
-                callbackUrl={callbackUrl}
-                canEdit={canEdit}
-                config={config}
-                credentialSource={credentialSource}
-                hasEncryptionKey={hasEncryptionKey}
-                hasStoredCredentials={hasStoredCredentials}
-                name={name}
-                onSaved={setEnabled}
-                provider={provider}
-              />
-            )}
-          </DeferredActionLoader>
+          <div className="flex flex-wrap items-center gap-2">
+            <DeferredActionLoader
+              renderTrigger={(open) => (
+                <IntegrationSettingsTrigger
+                  ariaLabel={`Open ${name} settings`}
+                  onOpen={open}
+                />
+              )}
+            >
+              {(autoOpen) => (
+                <LoadedIntegrationSettingsDialog
+                  appBaseUrl={appBaseUrl}
+                  autoOpen={autoOpen}
+                  bootstrapUrl={bootstrapUrl}
+                  callbackUrl={callbackUrl}
+                  canEdit={canEdit}
+                  config={config}
+                  credentialSource={credentialSource}
+                  hasEncryptionKey={hasEncryptionKey}
+                  hasStoredCredentials={hasStoredCredentials}
+                  name={name}
+                  onSaved={setEnabled}
+                  provider={provider}
+                />
+              )}
+            </DeferredActionLoader>
+            {setupHref ? (
+              <Link
+                href={setupHref}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 shadow-theme-xs transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/5"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                Full setup
+              </Link>
+            ) : null}
+          </div>
           {isRealIntegration ? (
             <div className="flex items-center gap-2">
               {internal ? (
