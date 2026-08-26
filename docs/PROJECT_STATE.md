@@ -315,10 +315,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `x-spruce-webhook-secret` or `x-zapier-webhook-secret` authentication. The
   settings page includes a receiver self-test that posts a no-op payload
   through the public webhook route and writes a `webhook-receiver-test` sync
-  log with zero Spruce records read or CRM records written. Real Spruce/Zapier
-  events are currently captured into CRM sync history with sanitized payload
-  shape metadata and `recordsWritten=0`; CRM sale/contact/timeline mapping is
-  intentionally disabled until real Zapier payloads are reviewed and approved.
+  log with zero Spruce records read or CRM records written. Spruce/Zapier
+  `job created` events with the approved Zapier fields create or reuse a CRM
+  contact, create or update a CRM sale, store customer notes as a CRM note and
+  link the Spruce `job_id` through `ExternalRecordLink` for idempotent Zap
+  replays. Other Spruce/Zapier events are captured into CRM sync history with
+  sanitized payload shape metadata and `recordsWritten=0` until their payload
+  mapping is approved.
   The CRM must not send data back to Spruce or Zapier without explicit approval
   for that specific outbound operation.
 - Settings > Integrations includes DocuSign as a real document-signing service.

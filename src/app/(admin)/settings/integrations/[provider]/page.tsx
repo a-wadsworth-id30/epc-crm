@@ -982,18 +982,18 @@ export default async function IntegrationSettingsPage({
             />
             <PipedrivePullStateItem
               label="CRM mapping"
-              value="Capture only"
-              detail="Real events are logged with zero CRM writes"
+              value="Job created"
+              detail="Creates CRM sale, contact and customer note"
             />
             <PipedrivePullStateItem
               label="Default source"
               value={defaultLeadSource}
-              detail="Used once CRM sale mapping is approved"
+              detail="Used for imported Spruce jobs"
             />
             <PipedrivePullStateItem
               label="Job events"
-              value="Captured"
-              detail="Job created and status-change events"
+              value="Imported"
+              detail="Job created events write CRM records"
             />
             <PipedrivePullStateItem
               label="Estimate events"

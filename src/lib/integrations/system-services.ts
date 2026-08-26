@@ -597,10 +597,10 @@ function spruceZapierCapabilities({
     }),
     capability({
       detail:
-        "Spruce events are captured first; CRM sale mapping is enabled only after payload approval.",
+        "Spruce job-created events create or update CRM sales, contacts and customer notes.",
       label: "CRM mapping",
       optional: true,
-      status: "warning",
+      status: "ready",
     }),
     capability({
       detail: "The CRM does not send data back to Spruce or Zapier.",

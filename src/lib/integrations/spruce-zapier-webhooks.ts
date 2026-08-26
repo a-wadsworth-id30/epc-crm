@@ -6,6 +6,10 @@ import {
   spruceProvider,
 } from "@/lib/integrations/spruce-zapier";
 import {
+  importSpruceJobCreatedPayload,
+  type SpruceJobImportResult,
+} from "@/lib/integrations/spruce-zapier-import";
+import {
   completeBackgroundJobRun,
   failBackgroundJobRun,
   startBackgroundJobRun,
@@ -68,7 +72,7 @@ export async function processSpruceZapierWebhook(
   });
 
   try {
-    const result = await writeSpruceWebhookResult(event);
+    const result = await writeSpruceWebhookResult(event, payload);
 
     await completeBackgroundJobRun(jobRun, {
       message: result.message,
@@ -123,6 +127,8 @@ export function parseSpruceZapierWebhookEvent(
     entityId:
       textValue(body.job_id) ??
       textValue(body.jobId) ??
+      textValue(data.job_id) ??
+      textValue(data.jobId) ??
       textValue(job.id) ??
       textValue(body.proposal_id) ??
       textValue(body.proposalId) ??
@@ -156,6 +162,7 @@ export function parseSpruceZapierWebhookEvent(
 
 async function writeSpruceWebhookResult(
   event: SpruceWebhookEvent,
+  payload: unknown,
 ): Promise<SpruceWebhookResult> {
   const connection = await ensureSpruceZapierIntegrationConnection();
   const startedAt = new Date();
@@ -180,16 +187,46 @@ async function writeSpruceWebhookResult(
     });
   }
 
+  if (event.action === "create" && event.entity === "job") {
+    const importResult = await importSpruceJobCreatedPayload({
+      integrationId: connection.id,
+      now: startedAt,
+      payload,
+    });
+    const status =
+      importResult.status === "skipped" || importResult.warnings.length
+        ? "WARNING"
+        : "SUCCESS";
+
+    return writeWebhookLog({
+      connectionId: connection.id,
+      finishedAt: new Date(),
+      message: spruceJobImportMessage(importResult),
+      metadata: {
+        ...metadata,
+        crmWritesEnabled: true,
+        importResult: spruceJobImportMetadata(importResult),
+        outboundWriteBackDisabled: true,
+      },
+      recordsRead: 1,
+      recordsWritten: importResult.recordsWritten,
+      startedAt,
+      status,
+      syncType: "job-created-import",
+      warningCount: importResult.warnings.length,
+    });
+  }
+
   return writeWebhookLog({
     connectionId: connection.id,
     finishedAt: new Date(),
     message:
-      "Spruce/Zapier webhook captured. CRM mapping is disabled pending approved payload mapping, so no CRM records were written.",
+      "Spruce/Zapier webhook captured. CRM mapping is enabled for job-created events only, so no CRM records were written for this event.",
     metadata: {
       ...metadata,
       crmWritesEnabled: false,
       outboundWriteBackDisabled: true,
-      reason: "mapping-disabled",
+      reason: "unsupported-event",
     },
     recordsRead: 1,
     recordsWritten: 0,
@@ -262,6 +299,35 @@ function webhookMetadata(event: SpruceWebhookEvent) {
     inboundOnly: true,
     payloadShape: event.payloadShape,
     timestamp: event.timestamp,
+  } satisfies Prisma.InputJsonObject;
+}
+
+function spruceJobImportMessage(result: SpruceJobImportResult) {
+  if (result.status === "created") {
+    return `Spruce/Zapier job import created CRM sale "${result.title ?? "Untitled"}" from Spruce job ${result.externalJobId ?? "unknown"}.`;
+  }
+
+  if (result.status === "linked_existing") {
+    return `Spruce/Zapier job import updated existing CRM sale "${result.title ?? "Untitled"}" for Spruce job ${result.externalJobId ?? "unknown"}.`;
+  }
+
+  return `Spruce/Zapier job import skipped: ${result.warnings.join(" ") || "No writable CRM mapping was available."}`;
+}
+
+function spruceJobImportMetadata(result: SpruceJobImportResult) {
+  return {
+    contactId: result.contactId,
+    createdContact: result.created.contact,
+    createdOpportunity: result.created.opportunity,
+    externalJobId: result.externalJobId,
+    opportunityId: result.opportunityId,
+    recordsWritten: result.recordsWritten,
+    status: result.status,
+    title: result.title,
+    updatedContact: result.updated.contact,
+    updatedNote: result.updated.note,
+    updatedOpportunity: result.updated.opportunity,
+    warnings: result.warnings,
   } satisfies Prisma.InputJsonObject;
 }
 
