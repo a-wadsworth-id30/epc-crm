@@ -322,15 +322,15 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   replays. Other Spruce/Zapier events are captured into CRM sync history with
   sanitized payload shape metadata and `recordsWritten=0` until their payload
   mapping is approved. Spruce settings can also store an encrypted direct
-  Spruce API key and/or outbound Zapier webhook URL for admin-triggered
-  single-sale sends from the sale detail page. When the API key is configured,
-  the Send to Spruce modal collects Spruce-required property fields and creates
-  a Spruce job through `POST /v1/jobs`; latitude/longitude can be provided
-  manually or resolved server-side through Geoapify when configured. Outbound
-  sends are manual only: the CRM does not automatically send data back to
-  Spruce or Zapier, blocks duplicate sends after a sale is linked or sent,
-  writes sync-history rows for each attempt and adds a CRM system note only
-  when Spruce or Zapier accepts the outbound sale payload.
+  Spruce API key for admin-triggered single-sale sends from the sale detail
+  page. When the API key is configured, the Send to Spruce modal collects
+  Spruce-required property fields and creates a Spruce job through
+  `POST /v1/jobs`; latitude/longitude can be provided manually or resolved
+  server-side through Geoapify when configured. Outbound sends are manual only:
+  the CRM does not automatically send data back to Spruce, blocks duplicate
+  sends after a sale is linked or sent, writes sync-history rows for each
+  attempt and adds a CRM system note only when Spruce accepts the outbound sale
+  payload.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity

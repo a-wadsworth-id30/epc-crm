@@ -21,7 +21,7 @@ export const spruceJobExternalType = "job";
 export const spruceOutboundJobRequestExternalType = "outbound-job-request";
 export const spruceSalesOpportunityInternalType = "salesOpportunity";
 
-const spruceManualSaleSendSource = "spruce-zapier-manual-sale-send";
+const spruceManualSaleSendSource = "spruce-api-manual-sale-send";
 const spruceManualSaleSendSyncType = "manual-sale-send";
 const spruceOutboundSendExternalIdPrefix = "spruce:outbound-send:";
 const geoapifyRequestTimeoutMs = 5000;
@@ -156,29 +156,13 @@ export async function sendSalesOpportunityToSpruce({
 
   const crmSaleUrl = new URL(`/sales/${sale.id}`, crmBaseUrl).href;
 
-  if (runtimeConfig.apiKey) {
-    return sendSalesOpportunityToSpruceDirectApi({
-      apiBaseUrl: runtimeConfig.apiBaseUrl,
-      apiKey: runtimeConfig.apiKey,
-      connectionId: connection.id,
-      crmSaleUrl,
-      directJobInput,
-      now,
-      sale,
-      saleId,
-      userId,
-    });
-  }
-
-  const outboundWebhookUrl = runtimeConfig.outboundWebhookUrl;
-
-  if (!outboundWebhookUrl) {
+  if (!runtimeConfig.apiKey) {
     await writeSpruceOutboundSyncLog({
       connectionId: connection.id,
       message:
-        "Manual CRM sale send to Spruce skipped because no outbound Zapier webhook URL is configured.",
+        "Manual CRM sale send to Spruce skipped because no Spruce API key is configured.",
       metadata: {
-        reason: "missing-outbound-webhook-url",
+        reason: "missing-spruce-api-key",
         saleId,
       },
       recordsWritten: 0,
@@ -188,8 +172,7 @@ export async function sendSalesOpportunityToSpruce({
 
     return {
       externalJobId: null,
-      message:
-        "Add a Spruce API key or outbound Zapier webhook URL in Settings > Integrations > Spruce before sending sales.",
+      message: "Add a Spruce API key in Settings > Integrations > Spruce before sending sales.",
       ok: false,
       recordsWritten: 0,
       saleId,
@@ -197,227 +180,17 @@ export async function sendSalesOpportunityToSpruce({
     };
   }
 
-  const target = safeOutboundUrl(outboundWebhookUrl);
-  if (!target) {
-    await writeSpruceOutboundSyncLog({
-      connectionId: connection.id,
-      message:
-        "Manual CRM sale send to Spruce skipped because the outbound Zapier webhook URL is invalid.",
-      metadata: {
-        reason: "invalid-outbound-webhook-url",
-        saleId,
-      },
-      recordsWritten: 0,
-      startedAt: now,
-      status: "ERROR",
-    });
-
-    return {
-      externalJobId: null,
-      message:
-        "The saved outbound Zapier webhook URL is invalid. Update Spruce settings before sending.",
-      ok: false,
-      recordsWritten: 0,
-      saleId,
-      status: "error",
-    };
-  }
-
-  const mapped = mapSaleToSpruceOutboundPayload({
-    crmBaseUrl,
+  return sendSalesOpportunityToSpruceDirectApi({
+    apiBaseUrl: runtimeConfig.apiBaseUrl,
+    apiKey: runtimeConfig.apiKey,
+    connectionId: connection.id,
+    crmSaleUrl,
+    directJobInput,
     now,
     sale,
-  });
-
-  if (mapped.warnings.length) {
-    await writeSpruceOutboundSyncLog({
-      connectionId: connection.id,
-      message: `Manual CRM sale send to Spruce skipped: ${mapped.warnings.join(" ")}`,
-      metadata: {
-        reason: "missing-required-sale-data",
-        saleId,
-        warnings: mapped.warnings,
-      },
-      recordsWritten: 0,
-      startedAt: now,
-      status: "WARNING",
-    });
-
-    return {
-      externalJobId: null,
-      message: mapped.warnings.join(" "),
-      ok: false,
-      recordsWritten: 0,
-      saleId,
-      status: "error",
-    };
-  }
-
-  let outboundResponse: Awaited<ReturnType<typeof postSpruceOutboundWebhook>>;
-
-  try {
-    outboundResponse = await postSpruceOutboundWebhook({
-      payload: mapped.payload,
-      secret: runtimeConfig.outboundWebhookSecret,
-      target,
-    });
-  } catch (error) {
-    await writeSpruceOutboundSyncLog({
-      connectionId: connection.id,
-      message: "Manual CRM sale send to Spruce failed before Zapier responded.",
-      metadata: {
-        errorName:
-          error && typeof error === "object" && "name" in error
-            ? String(error.name)
-            : "Error",
-        saleId,
-      },
-      recordsWritten: 0,
-      startedAt: now,
-      status: "ERROR",
-    });
-
-    return {
-      externalJobId: null,
-      message:
-        "Spruce/Zapier did not respond. Check the outbound webhook URL and try again.",
-      ok: false,
-      recordsWritten: 0,
-      saleId,
-      status: "error",
-    };
-  }
-
-  if (!outboundResponse.ok) {
-    await writeSpruceOutboundSyncLog({
-      connectionId: connection.id,
-      message: `Manual CRM sale send to Spruce failed with HTTP ${outboundResponse.statusCode}.`,
-      metadata: {
-        responseStatus: outboundResponse.statusCode,
-        responseShape: outboundResponse.responseShape,
-        saleId,
-      },
-      recordsWritten: 0,
-      startedAt: now,
-      status: "ERROR",
-    });
-
-    return {
-      externalJobId: null,
-      message:
-        "Spruce/Zapier did not accept the sale. Check Spruce sync history for the HTTP status.",
-      ok: false,
-      recordsWritten: 0,
-      saleId,
-      status: "error",
-    };
-  }
-
-  const externalJobId = outboundResponse.externalJobId;
-  const externalType = externalJobId
-    ? spruceJobExternalType
-    : spruceOutboundJobRequestExternalType;
-  const externalId = externalJobId ?? sale.id;
-  const writeResult = await prisma.$transaction(async (tx) => {
-    const link = await tx.externalRecordLink.upsert({
-      where: {
-        provider_externalType_externalId: {
-          externalId,
-          externalType,
-          provider: spruceProvider,
-        },
-      },
-      create: {
-        externalId,
-        externalType,
-        integrationId: connection.id,
-        internalId: sale.id,
-        internalType: spruceSalesOpportunityInternalType,
-        lastSeenAt: now,
-        metadata: {
-          crmSaleId: sale.id,
-          externalJobId,
-          outboundWriteBackApprovedByUserId: userId,
-          provider: spruceProvider,
-          source: spruceManualSaleSendSource,
-        } satisfies Prisma.InputJsonObject,
-        provider: spruceProvider,
-      },
-      update: {
-        integrationId: connection.id,
-        internalId: sale.id,
-        internalType: spruceSalesOpportunityInternalType,
-        lastSeenAt: now,
-        metadata: {
-          crmSaleId: sale.id,
-          externalJobId,
-          outboundWriteBackApprovedByUserId: userId,
-          provider: spruceProvider,
-          source: spruceManualSaleSendSource,
-        } satisfies Prisma.InputJsonObject,
-      },
-      select: { id: true },
-    });
-
-    await tx.salesCommunication.create({
-      data: {
-        opportunityId: sale.id,
-        body: [
-          `Sent CRM sale ${sale.id} to Spruce via Zapier.`,
-          externalJobId ? `Spruce job ID: ${externalJobId}` : null,
-          `CRM sale URL: ${crmSaleUrl}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        channel: "SYSTEM",
-        contactId: sale.contactId,
-        direction: "INTERNAL",
-        externalId: `${spruceOutboundSendExternalIdPrefix}${sale.id}:${now.getTime()}`,
-        metadata: {
-          externalJobId,
-          externalLinkId: link.id,
-          outboundWriteBackApprovedByUserId: userId,
-          provider: spruceProvider,
-          source: spruceManualSaleSendSource,
-        } satisfies Prisma.InputJsonObject,
-        occurredAt: now,
-        subject: "Sent to Spruce",
-        summary: externalJobId
-          ? `Sent to Spruce job ${externalJobId}.`
-          : "Sent to Spruce via Zapier. Waiting for returned job ID.",
-      },
-      select: { id: true },
-    });
-
-    return { recordsWritten: 2 };
-  });
-
-  await writeSpruceOutboundSyncLog({
-    connectionId: connection.id,
-    message: externalJobId
-      ? `Manual CRM sale send to Spruce completed for job ${externalJobId}.`
-      : "Manual CRM sale send to Spruce completed via Zapier. No Spruce job ID was returned.",
-    metadata: {
-      externalJobId,
-      externalType,
-      responseShape: outboundResponse.responseShape,
-      saleId,
-    },
-    recordsWritten: 1,
-    startedAt: now,
-    status: "SUCCESS",
-  });
-
-  return {
-    externalJobId,
-    message: externalJobId
-      ? `Sent to Spruce job ${externalJobId}.`
-      : "Sent to Spruce via Zapier. No Spruce job ID was returned yet.",
-    ok: true,
-    recordsWritten: writeResult.recordsWritten,
     saleId,
-    status: "sent",
-  };
+    userId,
+  });
 }
 
 async function sendSalesOpportunityToSpruceDirectApi({
@@ -616,7 +389,7 @@ async function sendSalesOpportunityToSpruceDirectApi({
           externalJobUrl: jobUrl,
           outboundWriteBackApprovedByUserId: userId,
           provider: spruceProvider,
-          source: "spruce-api-manual-sale-send",
+          source: spruceManualSaleSendSource,
         } satisfies Prisma.InputJsonObject,
         provider: spruceProvider,
       },
@@ -631,7 +404,7 @@ async function sendSalesOpportunityToSpruceDirectApi({
           externalJobUrl: jobUrl,
           outboundWriteBackApprovedByUserId: userId,
           provider: spruceProvider,
-          source: "spruce-api-manual-sale-send",
+          source: spruceManualSaleSendSource,
         } satisfies Prisma.InputJsonObject,
       },
       select: { id: true },
@@ -657,7 +430,7 @@ async function sendSalesOpportunityToSpruceDirectApi({
           externalLinkId: link.id,
           outboundWriteBackApprovedByUserId: userId,
           provider: spruceProvider,
-          source: "spruce-api-manual-sale-send",
+          source: spruceManualSaleSendSource,
         } satisfies Prisma.InputJsonObject,
         occurredAt: now,
         subject: "Sent to Spruce",
@@ -692,76 +465,6 @@ async function sendSalesOpportunityToSpruceDirectApi({
     recordsWritten: writeResult.recordsWritten,
     saleId,
     status: "sent",
-  };
-}
-
-function mapSaleToSpruceOutboundPayload({
-  crmBaseUrl,
-  now,
-  sale,
-}: {
-  crmBaseUrl: string;
-  now: Date;
-  sale: SpruceOutboundSaleRecord;
-}) {
-  const addressRecord = sale.contact ?? sale.company;
-  const address = compactAddress(addressRecord);
-  const postcode = cleanText(addressRecord?.postcode);
-  const contact = sale.contact;
-  const email = cleanText(contact?.email);
-  const phone = cleanText(contact?.phone);
-  const warnings: string[] = [];
-  const crmSaleUrl = new URL(`/sales/${sale.id}`, crmBaseUrl).href;
-
-  if (!contact) {
-    warnings.push("Link a customer contact before sending this sale to Spruce.");
-  }
-
-  if (!email && !phone) {
-    warnings.push(
-      "Add a customer email address or phone number before sending this sale to Spruce.",
-    );
-  }
-
-  if (!address) {
-    warnings.push("Add a property address before sending this sale to Spruce.");
-  }
-
-  if (!postcode) {
-    warnings.push("Add a postcode before sending this sale to Spruce.");
-  }
-
-  const customerNotes = [
-    `CRM sale ID: ${sale.id}`,
-    `CRM sale URL: ${crmSaleUrl}`,
-    `Sale title: ${sale.title}`,
-    `Stage: ${sale.stage}`,
-    sale.source ? `Source: ${sale.source}` : null,
-    sale.nextStep ? `Next step: ${sale.nextStep}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return {
-    payload: {
-      event: "crm.sale.send_to_spruce",
-      crm_sale_id: sale.id,
-      crm_sale_url: crmSaleUrl,
-      homeowner_first_name: cleanText(contact?.firstName),
-      homeowner_last_name: cleanText(contact?.lastName),
-      homeowner_email: email,
-      homeowner_phone: phone,
-      address,
-      postcode,
-      customer_notes: customerNotes,
-      status: sale.stage,
-      sale_title: sale.title,
-      sale_source: sale.source,
-      sale_value_cents: sale.valueCents,
-      sale_currency: sale.currency,
-      sent_at: now.toISOString(),
-    },
-    warnings,
   };
 }
 
@@ -985,43 +688,6 @@ async function postJson({
   }
 }
 
-async function postSpruceOutboundWebhook({
-  payload,
-  secret,
-  target,
-}: {
-  payload: Record<string, unknown>;
-  secret: string | null;
-  target: URL;
-}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), outboundRequestTimeoutMs);
-
-  try {
-    const response = await fetch(target, {
-      body: JSON.stringify(payload),
-      cache: "no-store",
-      headers: {
-        "content-type": "application/json",
-        ...(secret ? { authorization: `Bearer ${secret}` } : {}),
-      },
-      method: "POST",
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    const json = parseJsonObject(text);
-
-    return {
-      externalJobId: extractExternalJobId(json),
-      ok: response.ok,
-      responseShape: responseShape(json),
-      statusCode: response.status,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function writeSpruceOutboundSyncLog({
   connectionId,
   message,
@@ -1058,36 +724,6 @@ async function writeSpruceOutboundSyncLog({
   });
 }
 
-function compactAddress(
-  entity:
-    | {
-        addressLine1: string | null;
-        addressLine2: string | null;
-        city: string | null;
-        county: string | null;
-        postcode: string | null;
-        country: string | null;
-      }
-    | null
-    | undefined,
-) {
-  if (!entity) return null;
-
-  return (
-    [
-      entity.addressLine1,
-      entity.addressLine2,
-      entity.city,
-      entity.county,
-      entity.postcode,
-      entity.country,
-    ]
-      .map((part) => part?.trim())
-      .filter(Boolean)
-      .join(", ") || null
-  );
-}
-
 function compactPropertyAddress(
   entity:
     | {
@@ -1115,17 +751,6 @@ function cleanText(value: string | null | undefined) {
   return text ? text : null;
 }
 
-function safeOutboundUrl(value: string) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-
-    return url;
-  } catch {
-    return null;
-  }
-}
-
 function parseJsonObject(value: string) {
   if (!value.trim()) return null;
 
@@ -1139,39 +764,12 @@ function parseJsonObject(value: string) {
   }
 }
 
-function extractExternalJobId(value: Record<string, unknown> | null) {
-  if (!value) return null;
-
-  const result = objectValue(value.result);
-  const data = objectValue(value.data);
-
-  return (
-    textValue(value.job_id) ??
-    textValue(value.jobId) ??
-    textValue(value.result_entity_id) ??
-    textValue(value.resultEntityId) ??
-    textValue(result.job_id) ??
-    textValue(result.jobId) ??
-    textValue(result.entity_id) ??
-    textValue(result.entityId) ??
-    textValue(data.job_id) ??
-    textValue(data.jobId) ??
-    null
-  );
-}
-
 function responseShape(value: Record<string, unknown> | null) {
   if (!value) return { responseType: "empty-or-non-json" };
 
   return {
     responseKeys: Object.keys(value).sort().slice(0, 30),
   };
-}
-
-function objectValue(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 }
 
 function textValue(value: unknown) {

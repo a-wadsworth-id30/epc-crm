@@ -928,7 +928,7 @@ async function main() {
     [
       "spruce",
       "Spruce",
-      "Inbound Spruce job events and manual CRM sale sends via API or Zapier.",
+      "Inbound Spruce job events and manual CRM sale sends via API.",
     ],
     [
       "email-provider",

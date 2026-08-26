@@ -12,7 +12,6 @@ export type SpruceZapierSettings = {
   defaultLeadSource?: string;
   directApiConfigured?: boolean;
   inboundWebhookConfigured?: boolean;
-  outboundWebhookConfigured?: boolean;
 };
 
 export default function SpruceZapierSettingsForm({
@@ -57,8 +56,6 @@ export default function SpruceZapierSettingsForm({
     : "/api/webhooks/spruce";
   const receiverReady = inboundWebhookReady;
   const directApiReady = Boolean(config.directApiConfigured);
-  const outboundWebhookReady = Boolean(config.outboundWebhookConfigured);
-  const manualOutboundReady = directApiReady || outboundWebhookReady;
 
   useEffect(() => {
     if (!state.ok || state.savedAt === null) return;
@@ -167,18 +164,18 @@ export default function SpruceZapierSettingsForm({
                   Manual CRM to Spruce send
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Single sale records can be sent through the Spruce API or a
-                  Zapier webhook only when an admin confirms the sale action.
+                  Single sale records can be sent through the Spruce API only
+                  when an admin confirms the sale action.
                 </p>
               </div>
               <span
                 className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  manualOutboundReady
+                  directApiReady
                     ? "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300"
                     : "bg-warning-50 text-warning-700 dark:bg-warning-900/20 dark:text-warning-300"
                 }`}
               >
-                {manualOutboundReady ? "Outbound ready" : "Outbound missing"}
+                {directApiReady ? "API ready" : "API key missing"}
               </span>
             </div>
           </div>
@@ -196,45 +193,6 @@ export default function SpruceZapierSettingsForm({
             <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
               Used by the manual Send to Spruce button to create Spruce jobs
               directly.
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="spruce-outbound-webhook-url">
-              Outbound Zapier webhook URL
-            </Label>
-            <Input
-              id="spruce-outbound-webhook-url"
-              name="outboundWebhookUrl"
-              type="password"
-              autoComplete="new-password"
-              placeholder={
-                outboundWebhookReady ? "Saved - leave blank to keep" : ""
-              }
-              disabled={!canEdit}
-            />
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-              Used only by the manual Send to Spruce button on a CRM sale.
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="spruce-outbound-webhook-secret">
-              Optional outbound bearer secret
-            </Label>
-            <Input
-              id="spruce-outbound-webhook-secret"
-              name="outboundWebhookSecret"
-              type="password"
-              autoComplete="new-password"
-              placeholder={
-                outboundWebhookReady ? "Saved - leave blank to keep" : ""
-              }
-              disabled={!canEdit}
-            />
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-              If set, CRM sends it as an Authorization bearer token with the
-              outbound request.
             </p>
           </div>
         </div>

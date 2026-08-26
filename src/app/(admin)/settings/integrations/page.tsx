@@ -25,7 +25,6 @@ import {
   hasSpruceZapierInboundEnvironmentConfig,
   hasStoredSpruceDirectApiCredentials,
   hasStoredSpruceZapierInboundCredentials,
-  hasStoredSpruceZapierOutboundWebhook,
   spruceProvider,
   spruceZapierConfigSchema,
 } from "@/lib/integrations/spruce-zapier";
@@ -170,8 +169,6 @@ export default async function IntegrationsPage() {
             const spruceInboundWebhookConfigured =
               hasStoredSpruceZapierInboundCredentials(integration.config) ||
               hasSpruceZapierInboundEnvironmentConfig();
-            const spruceOutboundWebhookConfigured =
-              hasStoredSpruceZapierOutboundWebhook(integration.config);
             const geoapifyConfig = geoapifyConfigSchema.safeParse(
               integration.config ?? {},
             );
@@ -225,8 +222,6 @@ export default async function IntegrationsPage() {
                                         spruceDirectApiConfigured,
                                       inboundWebhookConfigured:
                                         spruceInboundWebhookConfigured,
-                                      outboundWebhookConfigured:
-                                        spruceOutboundWebhookConfigured,
                                     }
                                 : isDocuSign && docusignConfig.success
                                   ? docusignConfig.data

@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 export const spruceProvider = "spruce";
 export const spruceZapierName = "Spruce";
 export const spruceZapierDescription =
-  "Inbound Spruce job events and manual CRM sale sends via direct API or Zapier.";
+  "Inbound Spruce job events and manual CRM sale sends via direct API.";
 export const spruceWebhookReceiverPath = "/api/webhooks/spruce";
 export const spruceApiBaseUrl = "https://api.spruce.eco";
 export const defaultSpruceLeadSource = "Spruce";
@@ -21,8 +21,6 @@ const spruceLeadSourceSchema = z
 
 const spruceStoredCredentialsSchema = z.object({
   apiKey: z.string().min(1).optional(),
-  outboundWebhookSecret: z.string().min(1).optional(),
-  outboundWebhookUrl: z.string().min(1).optional(),
   savedAt: z.string().datetime().optional(),
   webhookSecret: z.string().min(1).optional(),
 });
@@ -37,24 +35,6 @@ export const spruceZapierSettingsFormSchema =
       .preprocess(
         (value) => (typeof value === "string" ? value.trim() : ""),
         z.string().max(500, "Keep the Spruce API key under 500 characters."),
-      )
-      .optional(),
-    outboundWebhookSecret: z
-      .preprocess(
-        (value) => (typeof value === "string" ? value.trim() : ""),
-        z.string().max(500, "Keep the outbound secret under 500 characters."),
-      )
-      .optional(),
-    outboundWebhookUrl: z
-      .preprocess(
-        (value) => (typeof value === "string" ? value.trim() : ""),
-        z
-          .string()
-          .trim()
-          .url("Enter a valid outbound Zapier webhook URL.")
-          .max(2048, "Keep the outbound URL under 2048 characters.")
-          .optional()
-          .or(z.literal("")),
       )
       .optional(),
   });
@@ -72,8 +52,7 @@ export type SpruceZapierStoredConfig = z.infer<
 export function hasSpruceZapierEnvironmentConfig() {
   return (
     hasSpruceZapierInboundEnvironmentConfig() ||
-    hasSpruceDirectApiEnvironmentConfig() ||
-    hasSpruceZapierOutboundEnvironmentConfig()
+    hasSpruceDirectApiEnvironmentConfig()
   );
 }
 
@@ -84,13 +63,6 @@ export function hasSpruceZapierInboundEnvironmentConfig() {
   );
 }
 
-export function hasSpruceZapierOutboundEnvironmentConfig() {
-  return Boolean(
-    process.env.SPRUCE_OUTBOUND_WEBHOOK_URL?.trim() ||
-      process.env.ZAPIER_SPRUCE_OUTBOUND_WEBHOOK_URL?.trim(),
-  );
-}
-
 export function hasSpruceDirectApiEnvironmentConfig() {
   return Boolean(process.env.SPRUCE_API_KEY?.trim());
 }
@@ -98,8 +70,7 @@ export function hasSpruceDirectApiEnvironmentConfig() {
 export function hasStoredSpruceZapierCredentials(config: unknown) {
   return (
     hasStoredSpruceDirectApiCredentials(config) ||
-    hasStoredSpruceZapierInboundCredentials(config) ||
-    hasStoredSpruceZapierOutboundWebhook(config)
+    hasStoredSpruceZapierInboundCredentials(config)
   );
 }
 
@@ -115,12 +86,6 @@ export function hasStoredSpruceZapierInboundCredentials(config: unknown) {
   return Boolean(parsed.success && parsed.data.credentials?.webhookSecret);
 }
 
-export function hasStoredSpruceZapierOutboundWebhook(config: unknown) {
-  const parsed = spruceZapierStoredConfigSchema.safeParse(config ?? {});
-
-  return Boolean(parsed.success && parsed.data.credentials?.outboundWebhookUrl);
-}
-
 export async function getSpruceZapierRuntimeConfig() {
   const integration = await prisma.integrationConnection.findUnique({
     where: { provider: spruceProvider },
@@ -131,8 +96,6 @@ export async function getSpruceZapierRuntimeConfig() {
   );
   const config = parsed.success ? parsed.data : null;
   let apiKey: string | null = null;
-  let outboundWebhookSecret: string | null = null;
-  let outboundWebhookUrl: string | null = null;
   let webhookSecret: string | null = null;
 
   if (config?.credentials?.apiKey) {
@@ -151,32 +114,6 @@ export async function getSpruceZapierRuntimeConfig() {
     }
   }
 
-  if (config?.credentials?.outboundWebhookUrl) {
-    try {
-      outboundWebhookUrl = decryptSecret(
-        config.credentials.outboundWebhookUrl,
-      );
-    } catch (error) {
-      console.error(
-        "Unable to decrypt Spruce/Zapier outbound webhook URL",
-        error,
-      );
-    }
-  }
-
-  if (config?.credentials?.outboundWebhookSecret) {
-    try {
-      outboundWebhookSecret = decryptSecret(
-        config.credentials.outboundWebhookSecret,
-      );
-    } catch (error) {
-      console.error(
-        "Unable to decrypt Spruce/Zapier outbound webhook secret",
-        error,
-      );
-    }
-  }
-
   return {
     apiBaseUrl: spruceApiBaseUrl,
     apiKey: apiKey ?? process.env.SPRUCE_API_KEY?.trim() ?? null,
@@ -184,16 +121,6 @@ export async function getSpruceZapierRuntimeConfig() {
       config?.defaultLeadSource ||
       process.env.SPRUCE_DEFAULT_LEAD_SOURCE?.trim() ||
       defaultSpruceLeadSource,
-    outboundWebhookSecret:
-      outboundWebhookSecret ??
-      process.env.SPRUCE_OUTBOUND_WEBHOOK_SECRET?.trim() ??
-      process.env.ZAPIER_SPRUCE_OUTBOUND_WEBHOOK_SECRET?.trim() ??
-      null,
-    outboundWebhookUrl:
-      outboundWebhookUrl ??
-      process.env.SPRUCE_OUTBOUND_WEBHOOK_URL?.trim() ??
-      process.env.ZAPIER_SPRUCE_OUTBOUND_WEBHOOK_URL?.trim() ??
-      null,
     webhookSecret:
       webhookSecret ??
       process.env.SPRUCE_WEBHOOK_SECRET?.trim() ??
