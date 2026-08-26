@@ -42,10 +42,8 @@ import {
   hasSpruceDirectApiEnvironmentConfig,
   hasSpruceZapierInboundEnvironmentConfig,
   hasSpruceZapierEnvironmentConfig,
-  hasSpruceZapierOutboundEnvironmentConfig,
   hasStoredSpruceDirectApiCredentials,
   hasStoredSpruceZapierInboundCredentials,
-  hasStoredSpruceZapierOutboundWebhook,
   hasStoredSpruceZapierCredentials,
   spruceProvider,
   spruceWebhookReceiverPath,
@@ -227,7 +225,7 @@ export const systemIntegrationDefinitions: SystemIntegrationDefinition[] = [
     categoryLabel: "CRM automation",
     capabilities: spruceZapierCapabilities,
     description:
-      "Inbound Spruce job events and manual CRM sale sends via API or Zapier.",
+      "Inbound Spruce job events and manual CRM sale sends via API.",
     hasEnvironmentConfig: hasSpruceZapierEnvironmentConfig,
     hasStoredCredentials: hasStoredSpruceZapierCredentials,
     iconSrc: "/images/integration/spruce-zapier.svg",
@@ -592,10 +590,6 @@ function spruceZapierCapabilities({
   const directApiReady =
     hasStoredSpruceDirectApiCredentials(config) ||
     hasSpruceDirectApiEnvironmentConfig();
-  const outboundReady =
-    directApiReady ||
-    hasStoredSpruceZapierOutboundWebhook(config) ||
-    hasSpruceZapierOutboundEnvironmentConfig();
 
   return [
     capability({
@@ -618,14 +612,12 @@ function spruceZapierCapabilities({
       status: "ready",
     }),
     capability({
-      detail: outboundReady
-        ? directApiReady
-          ? "Admins can manually create a Spruce job from a CRM sale."
-          : "Admins can manually send a CRM sale to the configured outbound Zapier webhook."
-        : "Add a Spruce API key or outbound Zapier webhook before using Send to Spruce.",
+      detail: directApiReady
+        ? "Admins can manually create a Spruce job from a CRM sale."
+        : "Add a Spruce API key before using Send to Spruce.",
       label: "Manual outbound",
       optional: true,
-      status: outboundReady ? "ready" : "missing",
+      status: directApiReady ? "ready" : "missing",
     }),
     capability({
       detail: `Default lead source will be ${storedConfig?.defaultLeadSource ?? "Spruce"}.`,

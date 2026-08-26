@@ -101,10 +101,8 @@ import {
 import {
   hasSpruceDirectApiEnvironmentConfig,
   hasSpruceZapierInboundEnvironmentConfig,
-  hasSpruceZapierOutboundEnvironmentConfig,
   hasStoredSpruceDirectApiCredentials,
   hasStoredSpruceZapierInboundCredentials,
-  hasStoredSpruceZapierOutboundWebhook,
   spruceProvider,
   spruceWebhookReceiverPath,
   spruceZapierConfigSchema,
@@ -926,9 +924,6 @@ export default async function IntegrationSettingsPage({
     const hasSpruceDirectApi =
       hasStoredSpruceDirectApiCredentials(integration?.config) ||
       hasSpruceDirectApiEnvironmentConfig();
-    const hasSpruceOutboundWebhook =
-      hasStoredSpruceZapierOutboundWebhook(integration?.config) ||
-      hasSpruceZapierOutboundEnvironmentConfig();
     const spruceCredentialSource = hasStoredSpruceConfig
       ? "database"
       : hasSpruceZapierInboundEnvironmentConfig()
@@ -947,7 +942,7 @@ export default async function IntegrationSettingsPage({
       <>
         <PageHeader
           title="Connect Spruce"
-          description="Inbound Spruce job events and manual CRM sale sends through direct API or Zapier."
+          description="Inbound Spruce job events and manual CRM sale sends through the Spruce API."
         />
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <SpruceZapierSettingsForm
@@ -958,12 +953,10 @@ export default async function IntegrationSettingsPage({
                     ...config.data,
                     directApiConfigured: hasSpruceDirectApi,
                     inboundWebhookConfigured: hasSpruceInboundReceiver,
-                    outboundWebhookConfigured: hasSpruceOutboundWebhook,
                   }
                 : {
                     directApiConfigured: hasSpruceDirectApi,
                     inboundWebhookConfigured: hasSpruceInboundReceiver,
-                    outboundWebhookConfigured: hasSpruceOutboundWebhook,
                   }
             }
             credentialSource={spruceCredentialSource}
@@ -1002,19 +995,11 @@ export default async function IntegrationSettingsPage({
             />
             <PipedrivePullStateItem
               label="Manual outbound"
-              value={
-                hasSpruceDirectApi
-                  ? "Direct API"
-                  : hasSpruceOutboundWebhook
-                    ? "Zapier"
-                    : "Missing"
-              }
+              value={hasSpruceDirectApi ? "Direct API" : "Missing"}
               detail={
                 hasSpruceDirectApi
                   ? "Admins can create one Spruce job at a time"
-                  : hasSpruceOutboundWebhook
-                    ? "Admins can send one sale at a time via Zapier"
-                    : "Add a Spruce API key or outbound Zapier webhook URL"
+                  : "Add a Spruce API key"
               }
             />
             <PipedrivePullStateItem

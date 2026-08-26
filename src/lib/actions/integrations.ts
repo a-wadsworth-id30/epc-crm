@@ -59,10 +59,8 @@ import {
   getSpruceZapierRuntimeConfig,
   hasSpruceDirectApiEnvironmentConfig,
   hasSpruceZapierInboundEnvironmentConfig,
-  hasSpruceZapierOutboundEnvironmentConfig,
   hasStoredSpruceDirectApiCredentials,
   hasStoredSpruceZapierInboundCredentials,
-  hasStoredSpruceZapierOutboundWebhook,
   hasStoredSpruceZapierCredentials,
   spruceProvider,
   spruceWebhookReceiverPath,
@@ -396,8 +394,6 @@ export async function updateSpruceZapierIntegrationAction(
   const parsed = spruceZapierSettingsFormSchema.safeParse({
     apiKey: formData.get("apiKey"),
     defaultLeadSource: formData.get("defaultLeadSource"),
-    outboundWebhookSecret: formData.get("outboundWebhookSecret"),
-    outboundWebhookUrl: formData.get("outboundWebhookUrl"),
   });
 
   if (!parsed.success) {
@@ -412,8 +408,6 @@ export async function updateSpruceZapierIntegrationAction(
   }
 
   const apiKey = parsed.data.apiKey?.trim() ?? "";
-  const outboundWebhookSecret = parsed.data.outboundWebhookSecret?.trim() ?? "";
-  const outboundWebhookUrl = parsed.data.outboundWebhookUrl?.trim() ?? "";
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
   const existing = await prisma.integrationConnection.findUnique({
     where: { provider: spruceProvider },
@@ -424,9 +418,21 @@ export async function updateSpruceZapierIntegrationAction(
   const existingCredentials = existingConfig.success
     ? existingConfig.data.credentials
     : undefined;
-  let credentials = existingCredentials;
+  let credentials = existingCredentials
+    ? {
+        ...(existingCredentials.apiKey
+          ? { apiKey: existingCredentials.apiKey }
+          : {}),
+        ...(existingCredentials.savedAt
+          ? { savedAt: existingCredentials.savedAt }
+          : {}),
+        ...(existingCredentials.webhookSecret
+          ? { webhookSecret: existingCredentials.webhookSecret }
+          : {}),
+      }
+    : undefined;
 
-  if (apiKey || webhookSecret || outboundWebhookUrl || outboundWebhookSecret) {
+  if (apiKey || webhookSecret) {
     if (!hasCredentialEncryptionKey()) {
       return {
         ok: false,
@@ -441,12 +447,6 @@ export async function updateSpruceZapierIntegrationAction(
       ...credentials,
       savedAt: new Date().toISOString(),
       ...(apiKey ? { apiKey: encryptSecret(apiKey) } : {}),
-      ...(outboundWebhookSecret
-        ? { outboundWebhookSecret: encryptSecret(outboundWebhookSecret) }
-        : {}),
-      ...(outboundWebhookUrl
-        ? { outboundWebhookUrl: encryptSecret(outboundWebhookUrl) }
-        : {}),
       ...(webhookSecret ? { webhookSecret: encryptSecret(webhookSecret) } : {}),
     };
   }
@@ -462,10 +462,6 @@ export async function updateSpruceZapierIntegrationAction(
   const directApiConnected =
     hasStoredSpruceDirectApiCredentials(config) ||
     hasSpruceDirectApiEnvironmentConfig();
-  const outboundConnected =
-    directApiConnected ||
-    hasStoredSpruceZapierOutboundWebhook(config) ||
-    hasSpruceZapierOutboundEnvironmentConfig();
 
   const savedConnection = await prisma.integrationConnection.upsert({
     where: { provider: spruceProvider },
@@ -493,7 +489,7 @@ export async function updateSpruceZapierIntegrationAction(
       defaultLeadSource: config.defaultLeadSource,
       directApiConnected,
       inboundConnected,
-      manualOutboundEnabled: outboundConnected,
+      manualOutboundEnabled: directApiConnected,
       receiverPath: spruceWebhookReceiverPath,
     },
     provider: spruceProvider,
@@ -505,7 +501,7 @@ export async function updateSpruceZapierIntegrationAction(
     ok: true,
     message: isConnected
       ? "Spruce settings saved."
-      : "Spruce settings saved. Add a webhook secret, API key or outbound endpoint to connect.",
+      : "Spruce settings saved. Add a webhook secret or API key to connect.",
     savedAt: Date.now(),
     connected: isConnected,
   };
