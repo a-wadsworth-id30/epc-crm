@@ -48,7 +48,7 @@ type ContactPageProps = {
   params: Promise<{ id: string }>;
 };
 
-type HeaderContactMethod = {
+type ContactSummaryMethod = {
   href: string;
   label: string;
   value: string;
@@ -645,7 +645,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   );
   const recipientEmail = contact.email ?? additionalEmails[0]?.email ?? null;
   const recipientPhone = contact.phone ?? additionalPhones[0]?.phone ?? null;
-  const headerEmailMethods: HeaderContactMethod[] = [
+  const summaryEmailMethods: ContactSummaryMethod[] = [
     ...(contact.email
       ? [
           {
@@ -661,7 +661,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       value: method.email,
     })),
   ];
-  const headerPhoneMethods: HeaderContactMethod[] = [
+  const summaryPhoneMethods: ContactSummaryMethod[] = [
     ...(contact.phone
       ? [
           {
@@ -1108,12 +1108,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             </Link>
           </div>
         }
-      >
-        <ContactHeaderMethodStrip
-          emails={headerEmailMethods}
-          phones={headerPhoneMethods}
-        />
-      </PageHeader>
+      />
 
       <LazyContactConversationWorkspace
         closedLeadCount={closedOpportunities.length}
@@ -1127,7 +1122,9 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         openLeadCount={openOpportunities.length}
         profilePanel={contactProfilePanel}
         recipientEmail={recipientEmail}
+        recipientEmails={summaryEmailMethods}
         recipientPhone={recipientPhone}
+        recipientPhones={summaryPhoneMethods}
         replyTarget={
           replyTarget
             ? {
@@ -1145,53 +1142,6 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         }}
       />
     </>
-  );
-}
-
-function ContactHeaderMethodStrip({
-  emails,
-  phones,
-}: {
-  emails: HeaderContactMethod[];
-  phones: HeaderContactMethod[];
-}) {
-  if (!emails.length && !phones.length) return null;
-
-  return (
-    <div className="mt-3 flex max-w-5xl flex-wrap gap-2 text-sm">
-      <ContactHeaderMethodGroup label="Emails" methods={emails} />
-      <ContactHeaderMethodGroup label="Phones" methods={phones} />
-    </div>
-  );
-}
-
-function ContactHeaderMethodGroup({
-  label,
-  methods,
-}: {
-  label: string;
-  methods: HeaderContactMethod[];
-}) {
-  if (!methods.length) return null;
-
-  return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-white/[0.03]">
-      <span className="shrink-0 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
-        {label}
-      </span>
-      {methods.map((method, index) => (
-        <a
-          key={`${label}-${method.value}-${index}`}
-          href={method.href}
-          className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:text-brand-600 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-800 dark:hover:text-brand-300"
-        >
-          <span className="shrink-0 text-[11px] font-semibold text-gray-400 dark:text-gray-500">
-            {method.label}
-          </span>
-          <span className="min-w-0 break-all">{method.value}</span>
-        </a>
-      ))}
-    </div>
   );
 }
 
