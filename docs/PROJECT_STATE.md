@@ -668,7 +668,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   lazy-loading the customer conversation thread, AI reply composer and AI
   guidance rail into route-local chunks, reducing the first-load bundle for
   `/contacts/[id]` while preserving the same reply, regenerate, task and call
-  actions.
+  actions. Its header strip shows every primary and labelled secondary
+  email/phone method so users can pick the right contact route immediately.
 - Profile keeps the page header and account overview immediate while
   lazy-loading the interactive profile, password, two-factor, session and
   account-removal forms behind route-local skeletons. Profile and account form
