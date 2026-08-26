@@ -10,6 +10,8 @@ import { updateSpruceZapierIntegrationAction } from "@/lib/actions/integrations"
 
 export type SpruceZapierSettings = {
   defaultLeadSource?: string;
+  directApiConfigured?: boolean;
+  inboundWebhookConfigured?: boolean;
   outboundWebhookConfigured?: boolean;
 };
 
@@ -42,22 +44,26 @@ export default function SpruceZapierSettingsForm({
     },
   );
   const hasEnvironmentCredentials = credentialSource === "environment";
-  const credentialLabel = hasStoredCredentials
-    ? "Webhook secret saved"
-    : hasEnvironmentCredentials
-      ? "Environment configured"
-      : "Webhook secret missing";
+  const inboundWebhookReady = Boolean(
+    config.inboundWebhookConfigured ?? hasStoredCredentials,
+  );
+  const credentialLabel = inboundWebhookReady
+    ? hasStoredCredentials
+      ? "Webhook secret saved"
+      : "Environment configured"
+    : "Webhook secret missing";
   const endpoint = appBaseUrl
     ? `${appBaseUrl.replace(/\/+$/, "")}/api/webhooks/spruce`
     : "/api/webhooks/spruce";
-  const receiverReady =
-    credentialSource === "environment" || hasStoredCredentials;
+  const receiverReady = inboundWebhookReady;
+  const directApiReady = Boolean(config.directApiConfigured);
   const outboundWebhookReady = Boolean(config.outboundWebhookConfigured);
+  const manualOutboundReady = directApiReady || outboundWebhookReady;
 
   useEffect(() => {
     if (!state.ok || state.savedAt === null) return;
 
-    showToast(state.message || "Spruce/Zapier settings saved.");
+    showToast(state.message || "Spruce settings saved.");
     queueMicrotask(() => {
       setIsDirty(false);
       onSaved?.(state.connected);
@@ -93,7 +99,7 @@ export default function SpruceZapierSettingsForm({
             </span>
           </div>
           <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            {hasEnvironmentCredentials ? (
+            {hasEnvironmentCredentials && inboundWebhookReady ? (
               "The receiver secret is available from environment variables. Save a secret here only when this CRM should override that runtime config."
             ) : hasEncryptionKey ? (
               "Leave the webhook secret blank to keep the saved value."
@@ -161,20 +167,36 @@ export default function SpruceZapierSettingsForm({
                   Manual CRM to Spruce send
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Single sale records can be sent to a configured Zapier
-                  webhook only when an admin confirms the sale action.
+                  Single sale records can be sent through the Spruce API or a
+                  Zapier webhook only when an admin confirms the sale action.
                 </p>
               </div>
               <span
                 className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  outboundWebhookReady
+                  manualOutboundReady
                     ? "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300"
                     : "bg-warning-50 text-warning-700 dark:bg-warning-900/20 dark:text-warning-300"
                 }`}
               >
-                {outboundWebhookReady ? "Outbound ready" : "Outbound missing"}
+                {manualOutboundReady ? "Outbound ready" : "Outbound missing"}
               </span>
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="spruce-api-key">Spruce API key</Label>
+            <Input
+              id="spruce-api-key"
+              name="apiKey"
+              type="password"
+              autoComplete="new-password"
+              placeholder={directApiReady ? "Saved - leave blank to keep" : ""}
+              disabled={!canEdit}
+            />
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+              Used by the manual Send to Spruce button to create Spruce jobs
+              directly.
+            </p>
           </div>
 
           <div>
@@ -224,7 +246,7 @@ export default function SpruceZapierSettingsForm({
             disabled={!canEdit || isPending || !isDirty}
             className="inline-flex w-full items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isPending ? "Saving..." : "Save Spruce/Zapier settings"}
+            {isPending ? "Saving..." : "Save Spruce settings"}
           </button>
         </div>
       </form>

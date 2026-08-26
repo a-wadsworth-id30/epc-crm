@@ -5,10 +5,11 @@ import { decryptSecret } from "@/lib/crypto/secrets";
 import { prisma } from "@/lib/prisma";
 
 export const spruceProvider = "spruce";
-export const spruceZapierName = "Spruce via Zapier";
+export const spruceZapierName = "Spruce";
 export const spruceZapierDescription =
-  "Inbound Spruce job events and manual CRM sale sends delivered by Zapier.";
+  "Inbound Spruce job events and manual CRM sale sends via direct API or Zapier.";
 export const spruceWebhookReceiverPath = "/api/webhooks/spruce";
+export const spruceApiBaseUrl = "https://api.spruce.eco";
 export const defaultSpruceLeadSource = "Spruce";
 
 const spruceLeadSourceSchema = z
@@ -19,6 +20,7 @@ const spruceLeadSourceSchema = z
   .transform((value) => value || defaultSpruceLeadSource);
 
 const spruceStoredCredentialsSchema = z.object({
+  apiKey: z.string().min(1).optional(),
   outboundWebhookSecret: z.string().min(1).optional(),
   outboundWebhookUrl: z.string().min(1).optional(),
   savedAt: z.string().datetime().optional(),
@@ -31,6 +33,12 @@ export const spruceZapierConfigSchema = z.object({
 
 export const spruceZapierSettingsFormSchema =
   spruceZapierConfigSchema.extend({
+    apiKey: z
+      .preprocess(
+        (value) => (typeof value === "string" ? value.trim() : ""),
+        z.string().max(500, "Keep the Spruce API key under 500 characters."),
+      )
+      .optional(),
     outboundWebhookSecret: z
       .preprocess(
         (value) => (typeof value === "string" ? value.trim() : ""),
@@ -64,6 +72,7 @@ export type SpruceZapierStoredConfig = z.infer<
 export function hasSpruceZapierEnvironmentConfig() {
   return (
     hasSpruceZapierInboundEnvironmentConfig() ||
+    hasSpruceDirectApiEnvironmentConfig() ||
     hasSpruceZapierOutboundEnvironmentConfig()
   );
 }
@@ -82,11 +91,22 @@ export function hasSpruceZapierOutboundEnvironmentConfig() {
   );
 }
 
+export function hasSpruceDirectApiEnvironmentConfig() {
+  return Boolean(process.env.SPRUCE_API_KEY?.trim());
+}
+
 export function hasStoredSpruceZapierCredentials(config: unknown) {
   return (
+    hasStoredSpruceDirectApiCredentials(config) ||
     hasStoredSpruceZapierInboundCredentials(config) ||
     hasStoredSpruceZapierOutboundWebhook(config)
   );
+}
+
+export function hasStoredSpruceDirectApiCredentials(config: unknown) {
+  const parsed = spruceZapierStoredConfigSchema.safeParse(config ?? {});
+
+  return Boolean(parsed.success && parsed.data.credentials?.apiKey);
 }
 
 export function hasStoredSpruceZapierInboundCredentials(config: unknown) {
@@ -110,9 +130,18 @@ export async function getSpruceZapierRuntimeConfig() {
     integration?.config ?? {},
   );
   const config = parsed.success ? parsed.data : null;
+  let apiKey: string | null = null;
   let outboundWebhookSecret: string | null = null;
   let outboundWebhookUrl: string | null = null;
   let webhookSecret: string | null = null;
+
+  if (config?.credentials?.apiKey) {
+    try {
+      apiKey = decryptSecret(config.credentials.apiKey);
+    } catch (error) {
+      console.error("Unable to decrypt Spruce API key", error);
+    }
+  }
 
   if (config?.credentials?.webhookSecret) {
     try {
@@ -149,6 +178,8 @@ export async function getSpruceZapierRuntimeConfig() {
   }
 
   return {
+    apiBaseUrl: spruceApiBaseUrl,
+    apiKey: apiKey ?? process.env.SPRUCE_API_KEY?.trim() ?? null,
     defaultLeadSource:
       config?.defaultLeadSource ||
       process.env.SPRUCE_DEFAULT_LEAD_SOURCE?.trim() ||

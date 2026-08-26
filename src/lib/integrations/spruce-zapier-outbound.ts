@@ -1,6 +1,15 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
+import { getGeoapifyRuntimeConfig } from "@/lib/integrations/geoapify";
+import type {
+  SpruceBuiltForm,
+  SpruceFuelType,
+  SpruceLoftInsulation,
+  SprucePropertyType,
+  SpruceWallType,
+  SpruceWindowType,
+} from "@/lib/integrations/spruce-job-fields";
 import {
   ensureSpruceZapierIntegrationConnection,
   getSpruceZapierRuntimeConfig,
@@ -15,11 +24,25 @@ export const spruceSalesOpportunityInternalType = "salesOpportunity";
 const spruceManualSaleSendSource = "spruce-zapier-manual-sale-send";
 const spruceManualSaleSendSyncType = "manual-sale-send";
 const spruceOutboundSendExternalIdPrefix = "spruce:outbound-send:";
+const geoapifyRequestTimeoutMs = 5000;
 const outboundRequestTimeoutMs = 15000;
 
 type SpruceOutboundSaleRecord = Prisma.SalesOpportunityGetPayload<{
   select: typeof spruceOutboundSaleSelect;
 }>;
+
+export type SpruceDirectJobInput = {
+  builtForm: SpruceBuiltForm;
+  floorAreaM2: number;
+  fuelType: SpruceFuelType;
+  latitude: number | null;
+  loftInsulation: SpruceLoftInsulation;
+  longitude: number | null;
+  numBedrooms: number;
+  propertyType: SprucePropertyType;
+  wallType: SpruceWallType;
+  windowType: SpruceWindowType;
+};
 
 export type SpruceSaleOutboundResult = {
   externalJobId: string | null;
@@ -71,11 +94,13 @@ const spruceOutboundSaleSelect = {
 
 export async function sendSalesOpportunityToSpruce({
   crmBaseUrl,
+  directJobInput = null,
   now = new Date(),
   saleId,
   userId,
 }: {
   crmBaseUrl: string;
+  directJobInput?: SpruceDirectJobInput | null;
   now?: Date;
   saleId: string;
   userId: string;
@@ -129,6 +154,22 @@ export async function sendSalesOpportunityToSpruce({
     };
   }
 
+  const crmSaleUrl = new URL(`/sales/${sale.id}`, crmBaseUrl).href;
+
+  if (runtimeConfig.apiKey) {
+    return sendSalesOpportunityToSpruceDirectApi({
+      apiBaseUrl: runtimeConfig.apiBaseUrl,
+      apiKey: runtimeConfig.apiKey,
+      connectionId: connection.id,
+      crmSaleUrl,
+      directJobInput,
+      now,
+      sale,
+      saleId,
+      userId,
+    });
+  }
+
   const outboundWebhookUrl = runtimeConfig.outboundWebhookUrl;
 
   if (!outboundWebhookUrl) {
@@ -148,7 +189,7 @@ export async function sendSalesOpportunityToSpruce({
     return {
       externalJobId: null,
       message:
-        "Add the outbound Zapier webhook URL in Settings > Integrations > Spruce before sending sales.",
+        "Add a Spruce API key or outbound Zapier webhook URL in Settings > Integrations > Spruce before sending sales.",
       ok: false,
       recordsWritten: 0,
       saleId,
@@ -324,7 +365,7 @@ export async function sendSalesOpportunityToSpruce({
         body: [
           `Sent CRM sale ${sale.id} to Spruce via Zapier.`,
           externalJobId ? `Spruce job ID: ${externalJobId}` : null,
-          `CRM sale URL: ${mapped.payload.crm_sale_url}`,
+          `CRM sale URL: ${crmSaleUrl}`,
         ]
           .filter(Boolean)
           .join("\n"),
@@ -372,6 +413,281 @@ export async function sendSalesOpportunityToSpruce({
     message: externalJobId
       ? `Sent to Spruce job ${externalJobId}.`
       : "Sent to Spruce via Zapier. No Spruce job ID was returned yet.",
+    ok: true,
+    recordsWritten: writeResult.recordsWritten,
+    saleId,
+    status: "sent",
+  };
+}
+
+async function sendSalesOpportunityToSpruceDirectApi({
+  apiBaseUrl,
+  apiKey,
+  connectionId,
+  crmSaleUrl,
+  directJobInput,
+  now,
+  sale,
+  saleId,
+  userId,
+}: {
+  apiBaseUrl: string;
+  apiKey: string;
+  connectionId: string;
+  crmSaleUrl: string;
+  directJobInput: SpruceDirectJobInput | null;
+  now: Date;
+  sale: SpruceOutboundSaleRecord;
+  saleId: string;
+  userId: string;
+}): Promise<SpruceSaleOutboundResult> {
+  const mapped = await mapSaleToSpruceDirectJobPayload({
+    directJobInput,
+    sale,
+  });
+
+  if (mapped.warnings.length || !mapped.payload) {
+    await writeSpruceOutboundSyncLog({
+      connectionId,
+      message: `Manual CRM sale send to Spruce skipped: ${mapped.warnings.join(" ")}`,
+      metadata: {
+        reason: "missing-required-spruce-job-data",
+        saleId,
+        warnings: mapped.warnings,
+      },
+      recordsWritten: 0,
+      startedAt: now,
+      status: "WARNING",
+    });
+
+    return {
+      externalJobId: null,
+      message: mapped.warnings.join(" "),
+      ok: false,
+      recordsWritten: 0,
+      saleId,
+      status: "error",
+    };
+  }
+
+  let authResponse: Awaited<ReturnType<typeof authenticateSpruceApi>>;
+
+  try {
+    authResponse = await authenticateSpruceApi({
+      apiBaseUrl,
+      apiKey,
+    });
+  } catch (error) {
+    await writeSpruceOutboundSyncLog({
+      connectionId,
+      message: "Manual CRM sale send to Spruce failed before API authentication responded.",
+      metadata: {
+        errorName:
+          error && typeof error === "object" && "name" in error
+            ? String(error.name)
+            : "Error",
+        saleId,
+      },
+      recordsWritten: 0,
+      startedAt: now,
+      status: "ERROR",
+    });
+
+    return {
+      externalJobId: null,
+      message: "Spruce API did not respond during authentication.",
+      ok: false,
+      recordsWritten: 0,
+      saleId,
+      status: "error",
+    };
+  }
+
+  if (!authResponse.ok || !authResponse.token) {
+    await writeSpruceOutboundSyncLog({
+      connectionId,
+      message: `Manual CRM sale send to Spruce API authentication failed with HTTP ${authResponse.statusCode}.`,
+      metadata: {
+        responseShape: authResponse.responseShape,
+        responseStatus: authResponse.statusCode,
+        saleId,
+      },
+      recordsWritten: 0,
+      startedAt: now,
+      status: "ERROR",
+    });
+
+    return {
+      externalJobId: null,
+      message:
+        authResponse.statusCode === 401 || authResponse.statusCode === 403
+          ? "Spruce API rejected the saved API key."
+          : "Spruce API authentication failed. Check Spruce sync history for the HTTP status.",
+      ok: false,
+      recordsWritten: 0,
+      saleId,
+      status: "error",
+    };
+  }
+
+  let createResponse: Awaited<ReturnType<typeof createSpruceJob>>;
+
+  try {
+    createResponse = await createSpruceJob({
+      apiBaseUrl,
+      payload: mapped.payload,
+      token: authResponse.token,
+    });
+  } catch (error) {
+    await writeSpruceOutboundSyncLog({
+      connectionId,
+      message: "Manual CRM sale send to Spruce failed before the create-job API responded.",
+      metadata: {
+        errorName:
+          error && typeof error === "object" && "name" in error
+            ? String(error.name)
+            : "Error",
+        saleId,
+      },
+      recordsWritten: 0,
+      startedAt: now,
+      status: "ERROR",
+    });
+
+    return {
+      externalJobId: null,
+      message: "Spruce API did not respond while creating the job.",
+      ok: false,
+      recordsWritten: 0,
+      saleId,
+      status: "error",
+    };
+  }
+
+  if (!createResponse.ok || !createResponse.jobId) {
+    await writeSpruceOutboundSyncLog({
+      connectionId,
+      message: `Manual CRM sale send to Spruce create-job failed with HTTP ${createResponse.statusCode}.`,
+      metadata: {
+        responseShape: createResponse.responseShape,
+        responseStatus: createResponse.statusCode,
+        saleId,
+      },
+      recordsWritten: 0,
+      startedAt: now,
+      status: "ERROR",
+    });
+
+    return {
+      externalJobId: null,
+      message:
+        createResponse.statusCode === 409
+          ? "Spruce already has a job using this CRM sale reference."
+          : "Spruce API did not create the job. Check Spruce sync history for the HTTP status.",
+      ok: false,
+      recordsWritten: 0,
+      saleId,
+      status: "error",
+    };
+  }
+
+  const jobId = createResponse.jobId;
+  const jobUrl = createResponse.jobUrl;
+
+  const writeResult = await prisma.$transaction(async (tx) => {
+    const link = await tx.externalRecordLink.upsert({
+      where: {
+        provider_externalType_externalId: {
+          externalId: jobId,
+          externalType: spruceJobExternalType,
+          provider: spruceProvider,
+        },
+      },
+      create: {
+        externalId: jobId,
+        externalType: spruceJobExternalType,
+        integrationId: connectionId,
+        internalId: sale.id,
+        internalType: spruceSalesOpportunityInternalType,
+        lastSeenAt: now,
+        metadata: {
+          crmSaleId: sale.id,
+          externalJobId: jobId,
+          externalJobUrl: jobUrl,
+          outboundWriteBackApprovedByUserId: userId,
+          provider: spruceProvider,
+          source: "spruce-api-manual-sale-send",
+        } satisfies Prisma.InputJsonObject,
+        provider: spruceProvider,
+      },
+      update: {
+        integrationId: connectionId,
+        internalId: sale.id,
+        internalType: spruceSalesOpportunityInternalType,
+        lastSeenAt: now,
+        metadata: {
+          crmSaleId: sale.id,
+          externalJobId: jobId,
+          externalJobUrl: jobUrl,
+          outboundWriteBackApprovedByUserId: userId,
+          provider: spruceProvider,
+          source: "spruce-api-manual-sale-send",
+        } satisfies Prisma.InputJsonObject,
+      },
+      select: { id: true },
+    });
+
+    await tx.salesCommunication.create({
+      data: {
+        opportunityId: sale.id,
+        body: [
+          `Created Spruce job ${jobId} from CRM sale ${sale.id}.`,
+          jobUrl ? `Spruce job URL: ${jobUrl}` : null,
+          `CRM sale URL: ${crmSaleUrl}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        channel: "SYSTEM",
+        contactId: sale.contactId,
+        direction: "INTERNAL",
+        externalId: `${spruceOutboundSendExternalIdPrefix}${sale.id}:${now.getTime()}`,
+        metadata: {
+          externalJobId: jobId,
+          externalJobUrl: jobUrl,
+          externalLinkId: link.id,
+          outboundWriteBackApprovedByUserId: userId,
+          provider: spruceProvider,
+          source: "spruce-api-manual-sale-send",
+        } satisfies Prisma.InputJsonObject,
+        occurredAt: now,
+        subject: "Sent to Spruce",
+        summary: `Created Spruce job ${jobId}.`,
+      },
+      select: { id: true },
+    });
+
+    return { recordsWritten: 2 };
+  });
+
+  await writeSpruceOutboundSyncLog({
+    connectionId,
+    message: `Manual CRM sale send to Spruce completed for job ${jobId}.`,
+    metadata: {
+      externalJobId: jobId,
+      externalJobUrl: jobUrl,
+      externalType: spruceJobExternalType,
+      responseShape: createResponse.responseShape,
+      saleId,
+      transport: "direct-api",
+    },
+    recordsWritten: 1,
+    startedAt: now,
+    status: "SUCCESS",
+  });
+
+  return {
+    externalJobId: jobId,
+    message: `Created Spruce job ${jobId}.`,
     ok: true,
     recordsWritten: writeResult.recordsWritten,
     saleId,
@@ -447,6 +763,226 @@ function mapSaleToSpruceOutboundPayload({
     },
     warnings,
   };
+}
+
+async function mapSaleToSpruceDirectJobPayload({
+  directJobInput,
+  sale,
+}: {
+  directJobInput: SpruceDirectJobInput | null;
+  sale: SpruceOutboundSaleRecord;
+}) {
+  const addressRecord = sale.contact ?? sale.company;
+  const address = compactPropertyAddress(addressRecord);
+  const postcode = cleanText(addressRecord?.postcode);
+  const contact = sale.contact;
+  const firstName = cleanText(contact?.firstName);
+  const lastName = cleanText(contact?.lastName);
+  const email = cleanText(contact?.email);
+  const phone = cleanText(contact?.phone);
+  const warnings: string[] = [];
+
+  if (!directJobInput) {
+    warnings.push("Complete the Spruce property details before creating the job.");
+  }
+
+  if (!contact) {
+    warnings.push("Link a customer contact before sending this sale to Spruce.");
+  }
+
+  if (!firstName) {
+    warnings.push("Add the customer's first name before sending this sale to Spruce.");
+  }
+
+  if (!lastName) {
+    warnings.push("Add the customer's last name before sending this sale to Spruce.");
+  }
+
+  if (!email) {
+    warnings.push("Add the customer's email address before sending this sale to Spruce.");
+  }
+
+  if (!phone) {
+    warnings.push("Add the customer's phone number before sending this sale to Spruce.");
+  }
+
+  if (!address) {
+    warnings.push("Add a property address before sending this sale to Spruce.");
+  }
+
+  if (!postcode) {
+    warnings.push("Add a postcode before sending this sale to Spruce.");
+  }
+
+  if (!directJobInput || !address || !postcode || !firstName || !lastName || !email || !phone) {
+    return { payload: null, warnings };
+  }
+
+  const latLng =
+    directJobInput.latitude !== null && directJobInput.longitude !== null
+      ? [directJobInput.latitude, directJobInput.longitude]
+      : await geocodeSpruceJobAddress({ address, postcode });
+
+  if (!latLng) {
+    warnings.push(
+      "Add latitude and longitude, or configure Geoapify so CRM can geocode the property address.",
+    );
+    return { payload: null, warnings };
+  }
+
+  return {
+    payload: {
+      address,
+      built_form: directJobInput.builtForm,
+      customer_email: email,
+      customer_first_name: firstName,
+      customer_last_name: lastName,
+      customer_phone: phone,
+      floor_area_m2: directJobInput.floorAreaM2,
+      fuel_type: directJobInput.fuelType,
+      job_name: sale.title,
+      job_reference: `CRM-${sale.id}`,
+      lat_lng: latLng,
+      loft_insulation: directJobInput.loftInsulation,
+      num_bedrooms: directJobInput.numBedrooms,
+      postcode,
+      property_type: directJobInput.propertyType,
+      source: sale.source || "CRM",
+      tags: ["CRM", "EPC Improvements"],
+      wall_type: directJobInput.wallType,
+      window_type: directJobInput.windowType,
+    },
+    warnings,
+  };
+}
+
+async function geocodeSpruceJobAddress({
+  address,
+  postcode,
+}: {
+  address: string;
+  postcode: string;
+}) {
+  const runtimeConfig = await getGeoapifyRuntimeConfig({
+    workspaceCountry: "GB",
+  });
+
+  if (!runtimeConfig.apiKey) return null;
+
+  const lookupUrl = new URL("https://api.geoapify.com/v1/geocode/search");
+  lookupUrl.searchParams.set("text", `${address}, ${postcode}`.slice(0, 180));
+  lookupUrl.searchParams.set("format", "json");
+  lookupUrl.searchParams.set("limit", "1");
+  lookupUrl.searchParams.set("lang", runtimeConfig.language || "en");
+  if (runtimeConfig.countryFilter && /^[A-Z]{2}$/.test(runtimeConfig.countryFilter)) {
+    lookupUrl.searchParams.set(
+      "filter",
+      `countrycode:${runtimeConfig.countryFilter.toLowerCase()}`,
+    );
+  }
+  lookupUrl.searchParams.set("apiKey", runtimeConfig.apiKey);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), geoapifyRequestTimeoutMs);
+
+  try {
+    const response = await fetch(lookupUrl, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      results?: Array<{ lat?: unknown; lon?: unknown }>;
+    } | null;
+    const result = response.ok ? payload?.results?.[0] : null;
+    const lat = typeof result?.lat === "number" ? result.lat : null;
+    const lng = typeof result?.lon === "number" ? result.lon : null;
+
+    return lat !== null && lng !== null ? [lat, lng] : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function authenticateSpruceApi({
+  apiBaseUrl,
+  apiKey,
+}: {
+  apiBaseUrl: string;
+  apiKey: string;
+}) {
+  const response = await postJson({
+    body: { api_key: apiKey },
+    headers: {},
+    target: new URL("/v1/auth", apiBaseUrl),
+  });
+
+  return {
+    ...response,
+    token: textValue(response.json?.token),
+  };
+}
+
+async function createSpruceJob({
+  apiBaseUrl,
+  payload,
+  token,
+}: {
+  apiBaseUrl: string;
+  payload: Record<string, unknown>;
+  token: string;
+}) {
+  const response = await postJson({
+    body: payload,
+    headers: { authorization: `Bearer ${token}` },
+    target: new URL("/v1/jobs", apiBaseUrl),
+  });
+
+  return {
+    ...response,
+    jobId: textValue(response.json?.uuid),
+    jobUrl: textValue(response.json?.url),
+  };
+}
+
+async function postJson({
+  body,
+  headers,
+  target,
+}: {
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+  target: URL;
+}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), outboundRequestTimeoutMs);
+
+  try {
+    const response = await fetch(target, {
+      body: JSON.stringify(body),
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "content-type": "application/json",
+        ...headers,
+      },
+      method: "POST",
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    const json = parseJsonObject(text);
+
+    return {
+      json,
+      ok: response.ok,
+      responseShape: responseShape(json),
+      statusCode: response.status,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function postSpruceOutboundWebhook({
@@ -546,6 +1082,27 @@ function compactAddress(
       entity.postcode,
       entity.country,
     ]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(", ") || null
+  );
+}
+
+function compactPropertyAddress(
+  entity:
+    | {
+        addressLine1: string | null;
+        addressLine2: string | null;
+        city: string | null;
+        county: string | null;
+      }
+    | null
+    | undefined,
+) {
+  if (!entity) return null;
+
+  return (
+    [entity.addressLine1, entity.addressLine2, entity.city, entity.county]
       .map((part) => part?.trim())
       .filter(Boolean)
       .join(", ") || null

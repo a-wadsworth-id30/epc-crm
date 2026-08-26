@@ -57,8 +57,10 @@ import {
 import {
   ensureSpruceZapierIntegrationConnection,
   getSpruceZapierRuntimeConfig,
+  hasSpruceDirectApiEnvironmentConfig,
   hasSpruceZapierInboundEnvironmentConfig,
   hasSpruceZapierOutboundEnvironmentConfig,
+  hasStoredSpruceDirectApiCredentials,
   hasStoredSpruceZapierInboundCredentials,
   hasStoredSpruceZapierOutboundWebhook,
   hasStoredSpruceZapierCredentials,
@@ -392,6 +394,7 @@ export async function updateSpruceZapierIntegrationAction(
   await requireAdmin();
 
   const parsed = spruceZapierSettingsFormSchema.safeParse({
+    apiKey: formData.get("apiKey"),
     defaultLeadSource: formData.get("defaultLeadSource"),
     outboundWebhookSecret: formData.get("outboundWebhookSecret"),
     outboundWebhookUrl: formData.get("outboundWebhookUrl"),
@@ -402,12 +405,13 @@ export async function updateSpruceZapierIntegrationAction(
       ok: false,
       message:
         parsed.error.issues[0]?.message ??
-        "Enter valid Spruce/Zapier settings.",
+        "Enter valid Spruce settings.",
       savedAt: null,
       connected: false,
     };
   }
 
+  const apiKey = parsed.data.apiKey?.trim() ?? "";
   const outboundWebhookSecret = parsed.data.outboundWebhookSecret?.trim() ?? "";
   const outboundWebhookUrl = parsed.data.outboundWebhookUrl?.trim() ?? "";
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
@@ -422,12 +426,12 @@ export async function updateSpruceZapierIntegrationAction(
     : undefined;
   let credentials = existingCredentials;
 
-  if (webhookSecret || outboundWebhookUrl || outboundWebhookSecret) {
+  if (apiKey || webhookSecret || outboundWebhookUrl || outboundWebhookSecret) {
     if (!hasCredentialEncryptionKey()) {
       return {
         ok: false,
         message:
-          "Set CREDENTIAL_ENCRYPTION_KEY before saving Spruce/Zapier credentials.",
+          "Set CREDENTIAL_ENCRYPTION_KEY before saving Spruce credentials.",
         savedAt: null,
         connected: false,
       };
@@ -436,6 +440,7 @@ export async function updateSpruceZapierIntegrationAction(
     credentials = {
       ...credentials,
       savedAt: new Date().toISOString(),
+      ...(apiKey ? { apiKey: encryptSecret(apiKey) } : {}),
       ...(outboundWebhookSecret
         ? { outboundWebhookSecret: encryptSecret(outboundWebhookSecret) }
         : {}),
@@ -454,7 +459,11 @@ export async function updateSpruceZapierIntegrationAction(
   const inboundConnected =
     hasStoredSpruceZapierInboundCredentials(config) ||
     hasSpruceZapierInboundEnvironmentConfig();
+  const directApiConnected =
+    hasStoredSpruceDirectApiCredentials(config) ||
+    hasSpruceDirectApiEnvironmentConfig();
   const outboundConnected =
+    directApiConnected ||
     hasStoredSpruceZapierOutboundWebhook(config) ||
     hasSpruceZapierOutboundEnvironmentConfig();
 
@@ -478,10 +487,11 @@ export async function updateSpruceZapierIntegrationAction(
     connected: isConnected,
     integrationId: savedConnection.id,
     message: isConnected
-      ? "Spruce/Zapier settings saved with integration credentials."
-      : "Spruce/Zapier settings saved without inbound receiver credentials.",
+      ? "Spruce settings saved with integration credentials."
+      : "Spruce settings saved without integration credentials.",
     metadata: {
       defaultLeadSource: config.defaultLeadSource,
+      directApiConnected,
       inboundConnected,
       manualOutboundEnabled: outboundConnected,
       receiverPath: spruceWebhookReceiverPath,
@@ -494,8 +504,8 @@ export async function updateSpruceZapierIntegrationAction(
   return {
     ok: true,
     message: isConnected
-      ? "Spruce/Zapier settings saved."
-      : "Spruce/Zapier settings saved. Add a webhook secret or outbound endpoint to connect.",
+      ? "Spruce settings saved."
+      : "Spruce settings saved. Add a webhook secret, API key or outbound endpoint to connect.",
     savedAt: Date.now(),
     connected: isConnected,
   };

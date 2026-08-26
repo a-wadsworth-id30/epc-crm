@@ -61,7 +61,11 @@ import {
   spruceOutboundJobRequestExternalType,
   spruceSalesOpportunityInternalType,
 } from "@/lib/integrations/spruce-zapier-outbound";
-import { spruceProvider } from "@/lib/integrations/spruce-zapier";
+import {
+  hasSpruceDirectApiEnvironmentConfig,
+  hasStoredSpruceDirectApiCredentials,
+  spruceProvider,
+} from "@/lib/integrations/spruce-zapier";
 import { prisma } from "@/lib/prisma";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
 import { getCrmSettings } from "@/lib/settings";
@@ -1779,6 +1783,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     pipedriveLeadLink,
     pipedriveFileLinks,
     spruceSaleLink,
+    spruceIntegration,
     r2Integration,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
@@ -1962,10 +1967,17 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       select: { externalId: true, externalType: true },
     }),
     prisma.integrationConnection.findUnique({
+      where: { provider: spruceProvider },
+      select: { config: true },
+    }),
+    prisma.integrationConnection.findUnique({
       where: { provider: cloudflareR2Provider },
       select: { config: true },
     }),
   ]);
+  const hasSpruceDirectApi =
+    hasStoredSpruceDirectApiCredentials(spruceIntegration?.config) ||
+    hasSpruceDirectApiEnvironmentConfig();
   const discoveryAnswerTypes = new Set(
     discoveryTemplates.flatMap((template) =>
       template.questions.map((assignment) => assignment.question.answerType),
@@ -2490,6 +2502,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             {user.role === "ADMIN" ? (
               <SpruceSaleSendModal
                 customerName={customerName || sale.company?.name || ""}
+                directApiConfigured={hasSpruceDirectApi}
                 hasOutboundRequest={
                   spruceSaleLink?.externalType ===
                   spruceOutboundJobRequestExternalType
