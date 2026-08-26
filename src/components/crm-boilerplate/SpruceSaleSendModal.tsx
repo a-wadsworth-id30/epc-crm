@@ -1,6 +1,6 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { ExternalLink, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
@@ -14,6 +14,7 @@ export type SpruceSaleSendModalProps = {
   directApiConfigured: boolean;
   hasOutboundRequest: boolean;
   linkedExternalJobId: string | null;
+  linkedExternalJobUrl: string | null;
   projectAddress: string;
   saleId: string;
   saleTitle: string;
@@ -26,6 +27,7 @@ export default function SpruceSaleSendModal({
   directApiConfigured,
   hasOutboundRequest,
   linkedExternalJobId,
+  linkedExternalJobUrl,
   projectAddress,
   saleId,
   saleTitle,
@@ -45,6 +47,20 @@ export default function SpruceSaleSendModal({
     closeModal();
     router.refresh();
   }, [closeModal, router, state.ok]);
+
+  if (alreadySent && linkedExternalJobUrl) {
+    return (
+      <a
+        href={linkedExternalJobUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 dark:border-brand-900/40 dark:bg-brand-900/20 dark:text-brand-300 dark:hover:bg-brand-900/30"
+      >
+        <ExternalLink className="size-4" />
+        Open Spruce
+      </a>
+    );
+  }
 
   return (
     <>
@@ -77,7 +93,7 @@ export default function SpruceSaleSendModal({
           <p className="text-sm leading-6 text-gray-500 dark:text-gray-400">
             {directApiConfigured
               ? "Create a Spruce job through the configured Spruce API. This is a manual write to Spruce and will be logged in sync history."
-              : "Send this CRM sale to the configured Spruce/Zapier outbound webhook. This is a manual write to Zapier/Spruce and will be logged in sync history."}
+              : "Add a Spruce API key in Settings > Integrations > Spruce before sending sales."}
           </p>
 
           <form action={formAction} className="mt-5 space-y-5">
@@ -184,11 +200,15 @@ export default function SpruceSaleSendModal({
               </button>
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || !directApiConfigured}
                 className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="size-4" />
-                {isPending ? "Sending..." : "Send to Spruce"}
+                {isPending
+                  ? "Sending..."
+                  : directApiConfigured
+                    ? "Send to Spruce"
+                    : "API key missing"}
               </button>
             </div>
           </form>

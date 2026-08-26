@@ -224,6 +224,18 @@ function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function safeExternalHttpsUrl(value: unknown) {
+  const text = stringValue(value);
+  if (!text) return null;
+
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function numberValue(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value !== "string" || !value.trim()) return null;
@@ -1964,7 +1976,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         provider: spruceProvider,
       },
       orderBy: [{ updatedAt: "desc" }],
-      select: { externalId: true, externalType: true },
+      select: { externalId: true, externalType: true, metadata: true },
     }),
     prisma.integrationConnection.findUnique({
       where: { provider: spruceProvider },
@@ -1978,6 +1990,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   const hasSpruceDirectApi =
     hasStoredSpruceDirectApiCredentials(spruceIntegration?.config) ||
     hasSpruceDirectApiEnvironmentConfig();
+  const spruceExternalJobUrl =
+    spruceSaleLink?.externalType === spruceJobExternalType
+      ? safeExternalHttpsUrl(jsonObject(spruceSaleLink.metadata).externalJobUrl)
+      : null;
   const discoveryAnswerTypes = new Set(
     discoveryTemplates.flatMap((template) =>
       template.questions.map((assignment) => assignment.question.answerType),
@@ -2512,6 +2528,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                     ? spruceSaleLink.externalId
                     : null
                 }
+                linkedExternalJobUrl={spruceExternalJobUrl}
                 projectAddress={
                   projectAddress === "Not captured" ? "" : projectAddress
                 }
