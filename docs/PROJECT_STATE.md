@@ -330,7 +330,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   the CRM does not automatically send data back to Spruce, blocks duplicate
   sends after a sale is linked or sent, writes sync-history rows for each
   attempt and adds a CRM system note only when Spruce accepts the outbound sale
-  payload.
+  payload. Direct API sends store Spruce's returned job URL when available so
+  the sale detail "Open Spruce" action can take admins back to the linked
+  Spruce job.
 - Settings > Integrations includes DocuSign as a real document-signing service.
   DocuSign JWT credentials and the Connect HMAC secret are encrypted in
   `IntegrationConnection.config`. Contact, company and sales opportunity
