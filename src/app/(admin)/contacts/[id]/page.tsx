@@ -922,6 +922,9 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     ? formatAddress(contact.company)
     : [];
   const companyHeaderAddress = companyAddressLines.join(", ");
+  const headerDescription =
+    [companyName, contact.role].filter(Boolean).join(" / ") ||
+    "Contact workspace";
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const contactProfilePanel = (
     <div className="p-5">
@@ -967,20 +970,27 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
           </dd>
         </div>
         <div>
-          <dt className="text-gray-500 dark:text-gray-400">Company</dt>
+          <dt className="text-gray-500 dark:text-gray-400">Company / role</dt>
           <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
-            {companyName ? (
+            {companyName || contact.role ? (
               <span className="block min-w-0">
-                {settings.companiesEnabled && contact.companyId ? (
-                  <Link
-                    href={`/clients/${contact.companyId}`}
-                    className="text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                  >
-                    {companyName}
-                  </Link>
-                ) : (
-                  companyName
-                )}
+                {companyName ? (
+                  settings.companiesEnabled && contact.companyId ? (
+                    <Link
+                      href={`/clients/${contact.companyId}`}
+                      className="text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    >
+                      {companyName}
+                    </Link>
+                  ) : (
+                    companyName
+                  )
+                ) : null}
+                {contact.role ? (
+                  <span className="mt-1 block text-xs leading-5 font-normal text-gray-500 dark:text-gray-400">
+                    {contact.role}
+                  </span>
+                ) : null}
                 {companyHeaderAddress ? (
                   <span className="mt-1 block text-xs leading-5 font-normal text-gray-500 dark:text-gray-400">
                     {companyHeaderAddress}
@@ -996,12 +1006,6 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
           <dt className="text-gray-500 dark:text-gray-400">Lead source</dt>
           <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
             {contact.leadSource ?? "Not set"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-gray-500 dark:text-gray-400">Role</dt>
-          <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
-            {contact.role ?? "Not set"}
           </dd>
         </div>
         <div>
@@ -1079,24 +1083,29 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     <>
       <PageHeader
         title={name}
-        description={companyName ?? "Contact workspace"}
+        description={headerDescription}
         descriptionContent={
           <div className="space-y-1">
             {contactHeaderAddress ? <p>{contactHeaderAddress}</p> : null}
-            {companyName ? (
+            {companyName || contact.role ? (
               <div>
-                {settings.companiesEnabled && contact.companyId ? (
-                  <Link
-                    href={`/clients/${contact.companyId}`}
-                    className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                  >
-                    {companyName}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    {companyName}
-                  </span>
-                )}
+                {companyName ? (
+                  settings.companiesEnabled && contact.companyId ? (
+                    <Link
+                      href={`/clients/${contact.companyId}`}
+                      className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    >
+                      {companyName}
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {companyName}
+                    </span>
+                  )
+                ) : null}
+                {contact.role ? (
+                  <p className="mt-0.5">{contact.role}</p>
+                ) : null}
                 {companyHeaderAddress ? (
                   <p className="mt-0.5">{companyHeaderAddress}</p>
                 ) : null}

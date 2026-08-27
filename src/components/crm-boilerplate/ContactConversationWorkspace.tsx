@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import {
-  BriefcaseBusiness,
   Building2,
   ClipboardList,
   FolderOpen,
@@ -250,13 +249,13 @@ function ContactWorkspaceSummary({
     },
     {
       Icon: Building2,
-      label: "Company",
-      value: summary.companyName || "Not linked",
-    },
-    {
-      Icon: BriefcaseBusiness,
-      label: "Role",
-      value: summary.role || "Not captured",
+      label: "Company / role",
+      value: (
+        <CompanyRoleSummary
+          companyName={summary.companyName}
+          role={summary.role}
+        />
+      ),
     },
     {
       Icon: ClipboardList,
@@ -295,7 +294,7 @@ function ContactWorkspaceSummary({
         </div>
       </div>
 
-      <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         {metrics.map((metric) => {
           const Icon = metric.Icon;
 
@@ -328,6 +327,27 @@ function ContactWorkspaceSummary({
         })}
       </div>
     </section>
+  );
+}
+
+function CompanyRoleSummary({
+  companyName,
+  role,
+}: {
+  companyName: string | null;
+  role: string | null;
+}) {
+  return (
+    <span className="block min-w-0 space-y-1">
+      <span className="block line-clamp-2">
+        {companyName || "Not linked"}
+      </span>
+      {role ? (
+        <span className="block text-xs leading-4 font-medium text-gray-500 dark:text-gray-400">
+          {role}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

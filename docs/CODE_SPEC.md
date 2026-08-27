@@ -469,10 +469,11 @@ Sales is intentionally generic enough for bespoke builds:
   using the same compact latest-open timeline and AI Reply composer pattern as
   lead detail. The contact detail header shows the contact address under the
   person name and the linked company address under the company name when those
-  values exist.
+  values exist, with role grouped under the same company block.
 - Contact detail workspace summaries show all primary and labelled secondary
   email/phone methods in the existing Email and Phone summary cells so users
-  can choose the correct method without opening the profile tab.
+  can choose the correct method without opening the profile tab. Company and
+  role share one summary column.
 - Contact segments live at `/contacts/segments`. Segment criteria must be
   stored as validated JSON rules and evaluated through Prisma filters; do not
   generate or execute raw SQL from AI prompts.

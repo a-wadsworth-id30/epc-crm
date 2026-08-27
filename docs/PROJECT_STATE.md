@@ -856,7 +856,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   under the company name when available.
 - Contact detail uses the same postal context in the page header and profile
   panel, showing the contact address below the person name and the linked
-  company address below the company name.
+  company address below the company name. Company and role are grouped together
+  in the header, profile panel and workspace summary strip.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain

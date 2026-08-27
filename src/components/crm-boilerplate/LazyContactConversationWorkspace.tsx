@@ -16,8 +16,8 @@ function ContactConversationWorkspaceSkeleton() {
             </div>
           </div>
         </div>
-        <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          {["email", "phone", "company", "role", "leads", "documents"].map(
+        <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          {["email", "phone", "company-role", "leads", "documents"].map(
             (item) => (
               <div
                 key={item}
