@@ -473,7 +473,7 @@ Sales is intentionally generic enough for bespoke builds:
 - Contact detail workspace summaries show all primary and labelled secondary
   email/phone methods in the existing Email and Phone summary cells so users
   can choose the correct method without opening the profile tab. Company and
-  role share one summary column.
+  role share one summary column with separate stacked label/value groups.
 - Contact segments live at `/contacts/segments`. Segment criteria must be
   stored as validated JSON rules and evaluated through Prisma filters; do not
   generate or execute raw SQL from AI prompts.
