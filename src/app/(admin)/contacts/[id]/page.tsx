@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
+import {
+  BriefcaseBusiness,
+  Building2,
+  MapPin,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import {
   DeferredContactDeleteModal,
   DeferredContactEditModal,
@@ -58,6 +65,23 @@ function contactName(contact: { firstName: string; lastName: string } | null) {
   if (!contact) return "";
 
   return `${contact.firstName} ${contact.lastName}`.trim();
+}
+
+function ContactHeaderDetailRow({
+  children,
+  Icon,
+}: {
+  children: ReactNode;
+  Icon: LucideIcon;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center text-gray-400 dark:text-gray-500">
+        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      </span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
 }
 
 function formatJourneyDate(date: Date) {
@@ -922,6 +946,9 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     ? formatAddress(contact.company)
     : [];
   const companyHeaderAddress = companyAddressLines.join(", ");
+  const hasHeaderDetails = Boolean(
+    contactHeaderAddress || companyName || contact.role || companyHeaderAddress,
+  );
   const headerDescription =
     [companyName, contact.role].filter(Boolean).join(" / ") ||
     "People workspace";
@@ -1085,32 +1112,39 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         title={name}
         description={headerDescription}
         descriptionContent={
-          <div className="space-y-1">
-            {contactHeaderAddress ? <p>{contactHeaderAddress}</p> : null}
-            {companyName || contact.role ? (
-              <div>
-                {companyName ? (
-                  settings.companiesEnabled && contact.companyId ? (
-                    <Link
-                      href={`/clients/${contact.companyId}`}
-                      className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                    >
-                      {companyName}
-                    </Link>
-                  ) : (
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                      {companyName}
-                    </span>
-                  )
-                ) : null}
-                {contact.role ? (
-                  <p className="mt-0.5">{contact.role}</p>
-                ) : null}
-                {companyHeaderAddress ? (
-                  <p className="mt-0.5">{companyHeaderAddress}</p>
-                ) : null}
-              </div>
-            ) : !contactHeaderAddress ? (
+          <div className="space-y-1.5">
+            {contactHeaderAddress ? (
+              <ContactHeaderDetailRow Icon={MapPin}>
+                <p>{contactHeaderAddress}</p>
+              </ContactHeaderDetailRow>
+            ) : null}
+            {companyName ? (
+              <ContactHeaderDetailRow Icon={Building2}>
+                {settings.companiesEnabled && contact.companyId ? (
+                  <Link
+                    href={`/clients/${contact.companyId}`}
+                    className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                  >
+                    {companyName}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                    {companyName}
+                  </span>
+                )}
+              </ContactHeaderDetailRow>
+            ) : null}
+            {contact.role ? (
+              <ContactHeaderDetailRow Icon={BriefcaseBusiness}>
+                <p>{contact.role}</p>
+              </ContactHeaderDetailRow>
+            ) : null}
+            {companyHeaderAddress ? (
+              <ContactHeaderDetailRow Icon={MapPin}>
+                <p>{companyHeaderAddress}</p>
+              </ContactHeaderDetailRow>
+            ) : null}
+            {!hasHeaderDetails ? (
               <p>People workspace</p>
             ) : null}
           </div>
