@@ -330,7 +330,15 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         postcode: true,
         role: true,
         company: {
-          select: { name: true },
+          select: {
+            addressLine1: true,
+            addressLine2: true,
+            city: true,
+            country: true,
+            county: true,
+            name: true,
+            postcode: true,
+          },
         },
         tagAssignments: {
           orderBy: { tag: { name: "asc" } },
@@ -909,6 +917,11 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     opportunityIsClosed(opportunity.stage, opportunity.closedAt),
   );
   const addressLines = formatAddress(contact);
+  const contactHeaderAddress = addressLines.join(", ");
+  const companyAddressLines = contact.company
+    ? formatAddress(contact.company)
+    : [];
+  const companyHeaderAddress = companyAddressLines.join(", ");
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const contactProfilePanel = (
     <div className="p-5">
@@ -957,16 +970,23 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
           <dt className="text-gray-500 dark:text-gray-400">Company</dt>
           <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
             {companyName ? (
-              settings.companiesEnabled && contact.companyId ? (
-                <Link
-                  href={`/clients/${contact.companyId}`}
-                  className="text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                >
-                  {companyName}
-                </Link>
-              ) : (
-                companyName
-              )
+              <span className="block min-w-0">
+                {settings.companiesEnabled && contact.companyId ? (
+                  <Link
+                    href={`/clients/${contact.companyId}`}
+                    className="text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                  >
+                    {companyName}
+                  </Link>
+                ) : (
+                  companyName
+                )}
+                {companyHeaderAddress ? (
+                  <span className="mt-1 block text-xs leading-5 font-normal text-gray-500 dark:text-gray-400">
+                    {companyHeaderAddress}
+                  </span>
+                ) : null}
+              </span>
             ) : (
               "Not set"
             )}
@@ -1060,6 +1080,32 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       <PageHeader
         title={name}
         description={companyName ?? "Contact workspace"}
+        descriptionContent={
+          <div className="space-y-1">
+            {contactHeaderAddress ? <p>{contactHeaderAddress}</p> : null}
+            {companyName ? (
+              <div>
+                {settings.companiesEnabled && contact.companyId ? (
+                  <Link
+                    href={`/clients/${contact.companyId}`}
+                    className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                  >
+                    {companyName}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                    {companyName}
+                  </span>
+                )}
+                {companyHeaderAddress ? (
+                  <p className="mt-0.5">{companyHeaderAddress}</p>
+                ) : null}
+              </div>
+            ) : !contactHeaderAddress ? (
+              <p>Contact workspace</p>
+            ) : null}
+          </div>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <DeferredAddSaleModal

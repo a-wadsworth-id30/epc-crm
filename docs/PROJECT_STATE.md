@@ -854,6 +854,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Contacts > People rows surface stored postal context inline: the contact
   address appears under the person name and the linked company address appears
   under the company name when available.
+- Contact detail uses the same postal context in the page header and profile
+  panel, showing the contact address below the person name and the linked
+  company address below the company name.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain

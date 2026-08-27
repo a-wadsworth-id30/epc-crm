@@ -467,7 +467,9 @@ Sales is intentionally generic enough for bespoke builds:
 - Table footer backgrounds use `bg-gray-50 dark:bg-white/[0.02]` and must preserve bottom border radius.
 - Contact detail shows a combined customer conversation across linked leads,
   using the same compact latest-open timeline and AI Reply composer pattern as
-  lead detail.
+  lead detail. The contact detail header shows the contact address under the
+  person name and the linked company address under the company name when those
+  values exist.
 - Contact detail workspace summaries show all primary and labelled secondary
   email/phone methods in the existing Email and Phone summary cells so users
   can choose the correct method without opening the profile tab.
