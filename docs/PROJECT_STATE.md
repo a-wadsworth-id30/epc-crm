@@ -847,6 +847,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   secondary methods, including custom labels when Other is selected. Search, MCP
   search, inbound email matching, website lead matching, telephony caller context
   and privacy export read these secondary methods.
+- Contact create/edit places Company and Role / job title together in the main
+  contact grid, with the lead source field spanning the full width underneath.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain

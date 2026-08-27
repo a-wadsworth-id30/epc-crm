@@ -454,6 +454,8 @@ Sales is intentionally generic enough for bespoke builds:
   summaries and contact detail. Existing sales, softphone and reply flows should
   use primary values first and fall back to the first secondary value when the
   primary is blank.
+- Contact create/edit keeps Company and Role / job title on the same row, with
+  lead source as a full-width field below them.
 - Delete uses a confirmation modal.
 - Contact tables include live search, sortable columns, page size control,
   icon-only previous/next pagination and the shared table column selector.

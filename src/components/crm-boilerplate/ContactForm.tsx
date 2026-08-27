@@ -163,6 +163,34 @@ export default function ContactForm({
           />
         </div>
         <div>
+          <Label htmlFor={`${mode}-contact-company`}>Company</Label>
+          {companiesEnabled ? (
+            <SearchableCompanySelect
+              allowCreate
+              id={`${mode}-contact-company`}
+              companies={companies}
+              defaultCompanyId={contact?.companyId}
+              defaultCompanyName={contact?.companyName}
+              onDirty={() => setIsDirty(true)}
+            />
+          ) : (
+            <Input
+              id={`${mode}-contact-company`}
+              name="companyName"
+              defaultValue={contact?.companyName ?? ""}
+              placeholder="Optional company name"
+            />
+          )}
+        </div>
+        <div>
+          <Label htmlFor={`${mode}-contact-role`}>Role / job title</Label>
+          <Input
+            id={`${mode}-contact-role`}
+            name="role"
+            defaultValue={contact?.role ?? ""}
+          />
+        </div>
+        <div className="md:col-span-2">
           <Label htmlFor={`${mode}-contact-lead-source`}>
             Where did you hear about us?
           </Label>
@@ -182,34 +210,6 @@ export default function ContactForm({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <Label htmlFor={`${mode}-contact-role`}>Role / job title</Label>
-          <Input
-            id={`${mode}-contact-role`}
-            name="role"
-            defaultValue={contact?.role ?? ""}
-          />
-        </div>
-        <div>
-          <Label htmlFor={`${mode}-contact-company`}>Company</Label>
-          {companiesEnabled ? (
-            <SearchableCompanySelect
-              allowCreate
-              id={`${mode}-contact-company`}
-              companies={companies}
-              defaultCompanyId={contact?.companyId}
-              defaultCompanyName={contact?.companyName}
-              onDirty={() => setIsDirty(true)}
-            />
-          ) : (
-            <Input
-              id={`${mode}-contact-company`}
-              name="companyName"
-              defaultValue={contact?.companyName ?? ""}
-              placeholder="Optional company name"
-            />
-          )}
         </div>
         <ContactTagInput
           key={`${contact?.id ?? "new"}-${tagResetSignal}`}
