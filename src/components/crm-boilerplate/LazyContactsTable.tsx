@@ -30,6 +30,12 @@ type ContactRow = {
   country: string | null;
   companyId: string | null;
   companyName: string | null;
+  companyAddressLine1: string | null;
+  companyAddressLine2: string | null;
+  companyCity: string | null;
+  companyCounty: string | null;
+  companyPostcode: string | null;
+  companyCountry: string | null;
   tags: ContactTagOption[];
 };
 

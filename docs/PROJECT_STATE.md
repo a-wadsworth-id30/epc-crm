@@ -851,6 +851,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   methods.
 - Contact create/edit places Company and Role / job title together in the main
   contact grid, with the lead source field spanning the full width underneath.
+- Contacts > People rows surface stored postal context inline: the contact
+  address appears under the person name and the linked company address appears
+  under the company name when available.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain

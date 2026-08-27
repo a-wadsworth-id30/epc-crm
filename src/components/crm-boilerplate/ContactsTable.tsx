@@ -44,6 +44,12 @@ type ContactRow = {
   country: string | null;
   companyId: string | null;
   companyName: string | null;
+  companyAddressLine1: string | null;
+  companyAddressLine2: string | null;
+  companyCity: string | null;
+  companyCounty: string | null;
+  companyPostcode: string | null;
+  companyCountry: string | null;
   tags: ContactTagOption[];
 };
 
@@ -84,6 +90,19 @@ function contactAddress(contact: ContactRow) {
     contact.county,
     contact.postcode,
     contact.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function companyAddress(contact: ContactRow) {
+  return [
+    contact.companyAddressLine1,
+    contact.companyAddressLine2,
+    contact.companyCity,
+    contact.companyCounty,
+    contact.companyPostcode,
+    contact.companyCountry,
   ]
     .filter(Boolean)
     .join(", ");
@@ -222,38 +241,19 @@ export default function ContactsTable({
       enableHiding: false,
       sortable: true,
       sortValue: contactName,
-      cell: (contact) => (
-        <Link
-          href={`/contacts/${contact.id}`}
-          className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-        >
-          {contactName(contact)}
-        </Link>
-      ),
+      cell: (contact) => <ContactNameCell contact={contact} />,
     },
     {
       id: "company",
       header: "Company",
       sortable: true,
       sortValue: (contact) => contact.companyName ?? "",
-      cell: (contact) => {
-        if (!contact.companyName) {
-          return "None";
-        }
-
-        if (companiesEnabled && contact.companyId) {
-          return (
-            <Link
-              href={`/clients/${contact.companyId}`}
-              className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-            >
-              {contact.companyName}
-            </Link>
-          );
-        }
-
-        return contact.companyName;
-      },
+      cell: (contact) => (
+        <ContactCompanyCell
+          companiesEnabled={companiesEnabled}
+          contact={contact}
+        />
+      ),
     },
     {
       id: "role",
@@ -344,6 +344,68 @@ export default function ContactsTable({
         />
       )}
     />
+  );
+}
+
+function AddressSubline({ address }: { address: string }) {
+  if (!address) {
+    return null;
+  }
+
+  return (
+    <span
+      className="mt-1 block max-w-72 truncate text-xs font-normal text-gray-500 dark:text-gray-400"
+      title={address}
+    >
+      {address}
+    </span>
+  );
+}
+
+function ContactNameCell({ contact }: { contact: ContactRow }) {
+  const address = contactAddress(contact);
+
+  return (
+    <div className="min-w-0">
+      <Link
+        href={`/contacts/${contact.id}`}
+        className="block truncate font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+      >
+        {contactName(contact)}
+      </Link>
+      <AddressSubline address={address} />
+    </div>
+  );
+}
+
+function ContactCompanyCell({
+  companiesEnabled,
+  contact,
+}: {
+  companiesEnabled: boolean;
+  contact: ContactRow;
+}) {
+  if (!contact.companyName) {
+    return <span className="text-gray-400">None</span>;
+  }
+
+  const address = companyAddress(contact);
+  const companyName = companiesEnabled && contact.companyId ? (
+    <Link
+      href={`/clients/${contact.companyId}`}
+      className="block truncate font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+    >
+      {contact.companyName}
+    </Link>
+  ) : (
+    <span className="block truncate">{contact.companyName}</span>
+  );
+
+  return (
+    <div className="min-w-0">
+      {companyName}
+      <AddressSubline address={address} />
+    </div>
   );
 }
 

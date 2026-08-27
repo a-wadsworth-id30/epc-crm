@@ -462,6 +462,8 @@ Sales is intentionally generic enough for bespoke builds:
   icon-only previous/next pagination and the shared table column selector.
   The People list defaults to the core contact columns while allowing optional
   columns such as Address to be added or removed through URL-backed table state.
+  People rows show the contact postal address under the contact name and the
+  linked company postal address under the company name when those values exist.
 - Table footer backgrounds use `bg-gray-50 dark:bg-white/[0.02]` and must preserve bottom border radius.
 - Contact detail shows a combined customer conversation across linked leads,
   using the same compact latest-open timeline and AI Reply composer pattern as
