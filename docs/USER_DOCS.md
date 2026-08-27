@@ -40,6 +40,8 @@ products, tags and recent lead history.
 
 People records can be edited with a manual postal address: address line 1,
 address line 2, city, county, postcode and country.
+Additional email addresses and phone numbers can use the built-in labels, or
+choose Other to enter a custom label for that method.
 When the Companies module is enabled, the company field can link to an existing
 organisation or create a new one by name. When the module is disabled, it is a
 plain company-name field on the contact.

@@ -844,9 +844,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   existing sales, search and softphone flows, plus optional secondary email
   addresses in `ContactEmailAddress` and secondary phone numbers in
   `ContactPhoneNumber`. Contact create/edit supports adding multiple labelled
-  secondary methods. Search, MCP search, inbound email matching, website lead
-  matching, telephony caller context and privacy export read these secondary
-  methods.
+  secondary methods, including custom labels when Other is selected. Search, MCP
+  search, inbound email matching, website lead matching, telephony caller context
+  and privacy export read these secondary methods.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain

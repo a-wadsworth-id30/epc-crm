@@ -449,9 +449,11 @@ Sales is intentionally generic enough for bespoke builds:
 - Successful manual contact creation routes the user to the new contact detail
   page rather than leaving them on the people list.
 - Contact forms keep one primary email and one primary phone, and can add
-  multiple labelled secondary emails/phone numbers. Existing sales, softphone
-  and reply flows should use primary values first and fall back to the first
-  secondary value when the primary is blank.
+  multiple labelled secondary emails/phone numbers. Selecting Other on a
+  secondary method reveals a custom label field, and that saved label is used in
+  summaries and contact detail. Existing sales, softphone and reply flows should
+  use primary values first and fall back to the first secondary value when the
+  primary is blank.
 - Delete uses a confirmation modal.
 - Contact tables include live search, sortable columns, page size control,
   icon-only previous/next pagination and the shared table column selector.

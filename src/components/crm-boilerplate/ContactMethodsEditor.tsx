@@ -13,12 +13,14 @@ import {
 type EditableEmailMethod = {
   id: string;
   label: string;
+  customLabel: string;
   email: string;
 };
 
 type EditablePhoneMethod = {
   id: string;
   label: string;
+  customLabel: string;
   phone: string;
 };
 
@@ -37,26 +39,51 @@ function methodId(prefix: string) {
     .slice(2, 8)}`;
 }
 
+function editableLabel(
+  label: string | null | undefined,
+  options: readonly string[],
+) {
+  const cleanedLabel = label?.trim() || "Other";
+
+  return options.includes(cleanedLabel)
+    ? { label: cleanedLabel, customLabel: "" }
+    : { label: "Other", customLabel: cleanedLabel };
+}
+
+function resolvedLabel(method: { label: string; customLabel: string }) {
+  return method.label === "Other"
+    ? method.customLabel.trim() || "Other"
+    : method.label.trim() || "Other";
+}
+
 function emailRows(defaultEmails: ContactEmailMethod[] | undefined) {
-  return (defaultEmails ?? []).map((method, index) => ({
-    id: method.id ?? `email-${index}`,
-    label: method.label || "Other",
-    email: method.email,
-  }));
+  return (defaultEmails ?? []).map((method, index) => {
+    const label = editableLabel(method.label, contactEmailLabelOptions);
+
+    return {
+      id: method.id ?? `email-${index}`,
+      ...label,
+      email: method.email,
+    };
+  });
 }
 
 function phoneRows(defaultPhones: ContactPhoneMethod[] | undefined) {
-  return (defaultPhones ?? []).map((method, index) => ({
-    id: method.id ?? `phone-${index}`,
-    label: method.label || "Other",
-    phone: method.phone,
-  }));
+  return (defaultPhones ?? []).map((method, index) => {
+    const label = editableLabel(method.label, contactPhoneLabelOptions);
+
+    return {
+      id: method.id ?? `phone-${index}`,
+      ...label,
+      phone: method.phone,
+    };
+  });
 }
 
 function emailPayload(methods: EditableEmailMethod[]) {
   return methods
     .map((method) => ({
-      label: method.label.trim() || "Other",
+      label: resolvedLabel(method),
       email: method.email.trim(),
     }))
     .filter((method) => method.email);
@@ -65,7 +92,7 @@ function emailPayload(methods: EditableEmailMethod[]) {
 function phonePayload(methods: EditablePhoneMethod[]) {
   return methods
     .map((method) => ({
-      label: method.label.trim() || "Other",
+      label: resolvedLabel(method),
       phone: method.phone.trim(),
     }))
     .filter((method) => method.phone);
@@ -103,7 +130,9 @@ export default function ContactMethodsEditor({
 
   function updateEmail(
     methodIdValue: string,
-    updates: Partial<Pick<EditableEmailMethod, "email" | "label">>,
+    updates: Partial<
+      Pick<EditableEmailMethod, "email" | "label" | "customLabel">
+    >,
   ) {
     setEmails((current) =>
       current.map((method) =>
@@ -115,7 +144,9 @@ export default function ContactMethodsEditor({
 
   function updatePhone(
     methodIdValue: string,
-    updates: Partial<Pick<EditablePhoneMethod, "phone" | "label">>,
+    updates: Partial<
+      Pick<EditablePhoneMethod, "phone" | "label" | "customLabel">
+    >,
   ) {
     setPhones((current) =>
       current.map((method) =>
@@ -145,7 +176,12 @@ export default function ContactMethodsEditor({
               onClick={() => {
                 setEmails((current) => [
                   ...current,
-                  { id: methodId("email"), label: "Work", email: "" },
+                  {
+                    id: methodId("email"),
+                    label: "Work",
+                    customLabel: "",
+                    email: "",
+                  },
                 ]);
                 markDirty();
               }}
@@ -165,9 +201,14 @@ export default function ContactMethodsEditor({
                     aria-label={`Additional email ${index + 1} label`}
                     className={selectClassName}
                     value={method.label}
-                    onChange={(event) =>
-                      updateEmail(method.id, { label: event.target.value })
-                    }
+                    onChange={(event) => {
+                      const label = event.target.value;
+                      updateEmail(method.id, {
+                        label,
+                        customLabel:
+                          label === "Other" ? method.customLabel : "",
+                      });
+                    }}
                   >
                     {contactEmailLabelOptions.map((label) => (
                       <option key={label} value={label}>
@@ -175,16 +216,32 @@ export default function ContactMethodsEditor({
                       </option>
                     ))}
                   </select>
-                  <Input
-                    aria-label={`Additional email ${index + 1}`}
-                    id={`${id}-additional-email-${index}`}
-                    type="email"
-                    value={method.email}
-                    placeholder="name@example.com"
-                    onChange={(event) =>
-                      updateEmail(method.id, { email: event.target.value })
-                    }
-                  />
+                  <div className="grid gap-2">
+                    {method.label === "Other" ? (
+                      <Input
+                        aria-label={`Additional email ${index + 1} custom label`}
+                        id={`${id}-additional-email-${index}-custom-label`}
+                        type="text"
+                        value={method.customLabel}
+                        placeholder="Custom label"
+                        onChange={(event) =>
+                          updateEmail(method.id, {
+                            customLabel: event.target.value,
+                          })
+                        }
+                      />
+                    ) : null}
+                    <Input
+                      aria-label={`Additional email ${index + 1}`}
+                      id={`${id}-additional-email-${index}`}
+                      type="email"
+                      value={method.email}
+                      placeholder="name@example.com"
+                      onChange={(event) =>
+                        updateEmail(method.id, { email: event.target.value })
+                      }
+                    />
+                  </div>
                   <button
                     type="button"
                     aria-label={`Remove additional email ${index + 1}`}
@@ -218,7 +275,12 @@ export default function ContactMethodsEditor({
               onClick={() => {
                 setPhones((current) => [
                   ...current,
-                  { id: methodId("phone"), label: "Mobile", phone: "" },
+                  {
+                    id: methodId("phone"),
+                    label: "Mobile",
+                    customLabel: "",
+                    phone: "",
+                  },
                 ]);
                 markDirty();
               }}
@@ -238,9 +300,14 @@ export default function ContactMethodsEditor({
                     aria-label={`Additional phone ${index + 1} label`}
                     className={selectClassName}
                     value={method.label}
-                    onChange={(event) =>
-                      updatePhone(method.id, { label: event.target.value })
-                    }
+                    onChange={(event) => {
+                      const label = event.target.value;
+                      updatePhone(method.id, {
+                        label,
+                        customLabel:
+                          label === "Other" ? method.customLabel : "",
+                      });
+                    }}
                   >
                     {contactPhoneLabelOptions.map((label) => (
                       <option key={label} value={label}>
@@ -248,16 +315,32 @@ export default function ContactMethodsEditor({
                       </option>
                     ))}
                   </select>
-                  <Input
-                    aria-label={`Additional phone ${index + 1}`}
-                    id={`${id}-additional-phone-${index}`}
-                    type="tel"
-                    value={method.phone}
-                    placeholder="Phone number"
-                    onChange={(event) =>
-                      updatePhone(method.id, { phone: event.target.value })
-                    }
-                  />
+                  <div className="grid gap-2">
+                    {method.label === "Other" ? (
+                      <Input
+                        aria-label={`Additional phone ${index + 1} custom label`}
+                        id={`${id}-additional-phone-${index}-custom-label`}
+                        type="text"
+                        value={method.customLabel}
+                        placeholder="Custom label"
+                        onChange={(event) =>
+                          updatePhone(method.id, {
+                            customLabel: event.target.value,
+                          })
+                        }
+                      />
+                    ) : null}
+                    <Input
+                      aria-label={`Additional phone ${index + 1}`}
+                      id={`${id}-additional-phone-${index}`}
+                      type="tel"
+                      value={method.phone}
+                      placeholder="Phone number"
+                      onChange={(event) =>
+                        updatePhone(method.id, { phone: event.target.value })
+                      }
+                    />
+                  </div>
                   <button
                     type="button"
                     aria-label={`Remove additional phone ${index + 1}`}
