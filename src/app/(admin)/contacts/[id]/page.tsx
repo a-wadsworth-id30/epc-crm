@@ -924,7 +924,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   const companyHeaderAddress = companyAddressLines.join(", ");
   const headerDescription =
     [companyName, contact.role].filter(Boolean).join(" / ") ||
-    "Contact workspace";
+    "People workspace";
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const contactProfilePanel = (
     <div className="p-5">
@@ -1111,7 +1111,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
                 ) : null}
               </div>
             ) : !contactHeaderAddress ? (
-              <p>Contact workspace</p>
+              <p>People workspace</p>
             ) : null}
           </div>
         }

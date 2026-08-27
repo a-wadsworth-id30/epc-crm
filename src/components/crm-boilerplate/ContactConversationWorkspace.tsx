@@ -279,7 +279,7 @@ function ContactWorkspaceSummary({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                Contact workspace
+                People workspace
               </h2>
               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-900/40">
                 Live
@@ -790,7 +790,7 @@ export default function ContactConversationWorkspace({
             <div className="grid min-w-0 lg:grid-cols-[184px_minmax(0,1fr)]">
               <nav
                 className="flex min-w-0 overflow-x-auto border-b border-gray-200 bg-gray-50/80 p-1.5 lg:block lg:overflow-visible lg:border-r lg:border-b-0 lg:p-0 dark:border-gray-800 dark:bg-white/[0.02]"
-                aria-label="Contact workspace sections"
+                aria-label="People workspace sections"
               >
                 {orderedTabs.map((tab) => {
                   const isActive = activeTab === tab.key;
