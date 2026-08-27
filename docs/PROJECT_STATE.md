@@ -857,9 +857,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Contact detail uses the same postal context in the page header and profile
   panel, showing the contact address below the person name and the linked
   company address below the company name. Company and role are grouped together
-  in the header, profile panel and workspace summary strip, with the summary
-  tile showing separate stacked Company and Role label/value groups beside the
-  company icon. The user-facing workspace label follows the People section
+  in the header and profile panel, and are not duplicated in the workspace
+  summary strip. The user-facing workspace label follows the People section
   wording.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked

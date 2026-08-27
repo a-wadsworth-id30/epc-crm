@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import {
-  Building2,
   ClipboardList,
   FolderOpen,
   GripVertical,
@@ -248,16 +247,6 @@ function ContactWorkspaceSummary({
       ),
     },
     {
-      Icon: Building2,
-      label: "Company",
-      value: (
-        <CompanyRoleSummary
-          companyName={summary.companyName}
-          role={summary.role}
-        />
-      ),
-    },
-    {
       Icon: ClipboardList,
       label: "Linked leads",
       value: `${openLeadCount} open / ${closedLeadCount} closed`,
@@ -294,7 +283,7 @@ function ContactWorkspaceSummary({
         </div>
       </div>
 
-      <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+      <div className="grid gap-0 sm:grid-cols-2 2xl:grid-cols-4">
         {metrics.map((metric) => {
           const Icon = metric.Icon;
 
@@ -327,32 +316,6 @@ function ContactWorkspaceSummary({
         })}
       </div>
     </section>
-  );
-}
-
-function CompanyRoleSummary({
-  companyName,
-  role,
-}: {
-  companyName: string | null;
-  role: string | null;
-}) {
-  return (
-    <span className="block min-w-0 space-y-2">
-      <span className="block min-w-0">
-        <span className="block line-clamp-2 text-sm leading-5 font-semibold text-gray-900 dark:text-white">
-          {companyName || "Not linked"}
-        </span>
-      </span>
-      <span className="block min-w-0">
-        <span className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
-          Role
-        </span>
-        <span className="mt-1 block line-clamp-2 text-sm leading-5 font-semibold text-gray-900 dark:text-white">
-          {role || "Not captured"}
-        </span>
-      </span>
-    </span>
   );
 }
 
