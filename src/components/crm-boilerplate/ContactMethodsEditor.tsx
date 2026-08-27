@@ -163,7 +163,7 @@ export default function ContactMethodsEditor({
       <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
         Additional contact methods
       </h3>
-      <div className="mt-4 grid gap-5 lg:grid-cols-2">
+      <div className="mt-4 grid gap-6">
         <section className="min-w-0">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -195,7 +195,7 @@ export default function ContactMethodsEditor({
               emails.map((method, index) => (
                 <div
                   key={method.id}
-                  className="grid gap-2 sm:grid-cols-[118px_minmax(0,1fr)_44px]"
+                  className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_44px]"
                 >
                   <select
                     aria-label={`Additional email ${index + 1} label`}
@@ -263,7 +263,7 @@ export default function ContactMethodsEditor({
           </div>
         </section>
 
-        <section className="min-w-0">
+        <section className="min-w-0 border-t border-gray-100 pt-5 dark:border-gray-800">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
               <Phone className="h-4 w-4 text-gray-400" />
@@ -294,7 +294,7 @@ export default function ContactMethodsEditor({
               phones.map((method, index) => (
                 <div
                   key={method.id}
-                  className="grid gap-2 sm:grid-cols-[118px_minmax(0,1fr)_44px]"
+                  className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_44px]"
                 >
                   <select
                     aria-label={`Additional phone ${index + 1} label`}

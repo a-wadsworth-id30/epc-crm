@@ -844,9 +844,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   existing sales, search and softphone flows, plus optional secondary email
   addresses in `ContactEmailAddress` and secondary phone numbers in
   `ContactPhoneNumber`. Contact create/edit supports adding multiple labelled
-  secondary methods, including custom labels when Other is selected. Search, MCP
-  search, inbound email matching, website lead matching, telephony caller context
-  and privacy export read these secondary methods.
+  secondary methods, including custom labels when Other is selected, with
+  secondary email and phone editors stacked as full-width sections to avoid
+  cramped modal rows. Search, MCP search, inbound email matching, website lead
+  matching, telephony caller context and privacy export read these secondary
+  methods.
 - Contact create/edit places Company and Role / job title together in the main
   contact grid, with the lead source field spanning the full width underneath.
 - When Companies is enabled, contact create/edit uses a searchable company

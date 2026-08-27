@@ -451,9 +451,10 @@ Sales is intentionally generic enough for bespoke builds:
 - Contact forms keep one primary email and one primary phone, and can add
   multiple labelled secondary emails/phone numbers. Selecting Other on a
   secondary method reveals a custom label field, and that saved label is used in
-  summaries and contact detail. Existing sales, softphone and reply flows should
-  use primary values first and fall back to the first secondary value when the
-  primary is blank.
+  summaries and contact detail. The secondary email and phone editors stack as
+  full-width sections so method rows have enough room in the modal. Existing
+  sales, softphone and reply flows should use primary values first and fall back
+  to the first secondary value when the primary is blank.
 - Contact create/edit keeps Company and Role / job title on the same row, with
   lead source as a full-width field below them.
 - Delete uses a confirmation modal.
