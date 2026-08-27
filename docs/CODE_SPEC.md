@@ -469,8 +469,8 @@ Sales is intentionally generic enough for bespoke builds:
   using the same compact latest-open timeline and AI Reply composer pattern as
   lead detail. The contact detail header shows the contact address under the
   person name and the linked company address under the company name when those
-  values exist, with address, company and role rows using compact contextual
-  icons.
+  values exist, with address, company and role details shown inline with
+  compact contextual icons.
 - People detail workspace summaries show all primary and labelled secondary
   email/phone methods in the existing Email and Phone summary cells so users
   can choose the correct method without opening the profile tab. Company and

@@ -75,8 +75,8 @@ function ContactHeaderDetailRow({
   Icon: LucideIcon;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-2">
-      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center text-gray-400 dark:text-gray-500">
+    <div className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-gray-400 dark:text-gray-500">
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
       <div className="min-w-0">{children}</div>
@@ -1112,7 +1112,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         title={name}
         description={headerDescription}
         descriptionContent={
-          <div className="space-y-1.5">
+          <div className="flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-1.5">
             {contactHeaderAddress ? (
               <ContactHeaderDetailRow Icon={MapPin}>
                 <p>{contactHeaderAddress}</p>
