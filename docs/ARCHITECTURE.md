@@ -748,9 +748,9 @@ horizontal tabs inside those pages, not as nested left-menu items.
 
 GitHub Actions runs CI. The live app deploys through Netlify from GitHub
 `main`. A GitHub push alone does not prove live has changed; verify
-`/api/health` after Netlify finishes. Public health exposes only the short
-build fingerprint; full build metadata is available to authenticated CRM users
-through `/api/build-info` and Settings > System.
+`/api/health` after Netlify finishes. Public health and `/api/build-version`
+expose only the short build fingerprint; full build metadata is available to
+authenticated CRM users through `/api/build-info` and Settings > System.
 
 Netlify settings:
 

@@ -1,5 +1,5 @@
 export const config = {
-  schedule: "*/15 * * * *",
+  schedule: "*/30 * * * *",
 };
 
 function booleanEnv(name, defaultValue = false) {

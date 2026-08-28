@@ -147,6 +147,13 @@ views from keeping low-value database polling active.
 The sidebar application-health widget follows the same pattern: it checks
 `/api/health` while visible/focused, then pauses hidden-tab polling so idle CRM
 tabs do not keep waking the DB-backed health route.
+The deploy-version guard checks the DB-free public `/api/build-version`
+fingerprint every five minutes while visible, with immediate checks retained
+for asset load errors. Authenticated `/api/build-info` remains available for
+manual operator diagnostics rather than routine tab polling.
+Normal CRM tabs also pause desktop-softphone presence checks while hidden; the
+standalone `/softphone-window` heartbeat continues so live browser routing
+presence is not marked offline just because the dashboard tab is inactive.
 
 Operational retention is available through `/api/maintenance/retention` and an
 optional disabled-by-default Netlify scheduled function. It removes old

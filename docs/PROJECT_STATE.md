@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-25
+Last updated: 2026-08-28
 
 ## Current Product Shape
 
@@ -1654,8 +1654,11 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
 - DB load is reduced with short-lived caches for header notification counts and
   attribution domain config. Routine enabled attribution config requests update
   diagnostics at most every 15 minutes per registered domain instead of writing
-  on every script load. Desktop softphone presence polling runs every 30 seconds
-  with a 90-second active window.
+  on every script load. Deploy-version checks use the DB-free public
+  `/api/build-version` endpoint every five minutes in visible tabs instead of
+  routine authenticated `/api/build-info` polling. Normal CRM tabs pause passive
+  desktop-softphone presence reads while hidden, while the standalone
+  `/softphone-window` heartbeat keeps live browser routing presence fresh.
 - Inbound queue routing treats queue-level assigned agent IDs and per-agent
   assigned queue IDs separately, so a queue with assigned users can correctly
   find available agents.
@@ -1710,9 +1713,10 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   `/settings/browser-extension` for older links.
 - Phone System and Call Tracking were removed from the generic Settings nav to reduce duplication.
 - Pushing to GitHub `main` triggers the Netlify production build; verify the
-  live `/api/health` public build fingerprint after deployment. Detailed build
-  metadata is available only to authenticated CRM users through `/api/build-info`
-  and Settings > System.
+  live `/api/health` public build fingerprint after deployment. The client
+  deploy-version guard uses `/api/build-version` for a DB-free public short
+  commit check. Detailed build metadata is available only to authenticated CRM
+  users through `/api/build-info` and Settings > System.
 - Netlify uses `npm run netlify:build`, which runs Prisma migrations before
   `next build`. Keep `MIGRATE_DATABASE_URL` set to a direct Neon URL when
   `DATABASE_URL` is pooled.

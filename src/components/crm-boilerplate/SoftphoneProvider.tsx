@@ -866,8 +866,17 @@ export default function SoftphoneProvider({
     }
 
     let cancelled = false;
+    let interval: number | null = null;
+
+    function isVisible() {
+      return document.visibilityState === "visible";
+    }
 
     const checkPresence = () => {
+      if (!isVisible()) {
+        return;
+      }
+
       fetch("/api/telephony/desktop-presence", {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
@@ -889,13 +898,43 @@ export default function SoftphoneProvider({
         });
     };
 
-    checkPresence();
-    const interval = window.setInterval(checkPresence, 60000);
+    function stopInterval() {
+      if (interval === null) return;
+
+      window.clearInterval(interval);
+      interval = null;
+    }
+
+    function startInterval() {
+      if (interval !== null || !isVisible()) return;
+
+      interval = window.setInterval(checkPresence, 60000);
+    }
+
+    function syncVisibility({ checkNow = true } = {}) {
+      if (isVisible()) {
+        startInterval();
+        if (checkNow) checkPresence();
+        return;
+      }
+
+      stopInterval();
+    }
+
+    const handleVisibilityChange = () => syncVisibility();
+
+    syncVisibility();
+    window.addEventListener("focus", checkPresence);
+    window.addEventListener("online", checkPresence);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       cancelled = true;
       window.__id30DesktopSoftphoneActive = false;
-      window.clearInterval(interval);
+      stopInterval();
+      window.removeEventListener("focus", checkPresence);
+      window.removeEventListener("online", checkPresence);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [isStandaloneMode]);
 

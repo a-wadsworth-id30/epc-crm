@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type BuildInfoResponse = {
+type BuildVersionResponse = {
   build?: {
-    branch?: string;
-    commit?: string;
     shortCommit?: string;
   };
 };
@@ -55,18 +53,20 @@ function assetUrlFromTarget(target: EventTarget | null) {
 
 export default function DeployVersionGuard({
   currentCommit,
-  pollIntervalMs = 120_000,
+  pollIntervalMs = 300_000,
 }: DeployVersionGuardProps) {
-  const initialCommitRef = useRef(currentCommit);
+  const initialCommitRef = useRef(
+    isKnownCommit(currentCommit) ? currentCommit.slice(0, 7) : currentCommit,
+  );
   const [latestCommit, setLatestCommit] = useState<string | null>(null);
   const [availableBuild, setAvailableBuild] = useState<
-    BuildInfoResponse["build"] | null
+    BuildVersionResponse["build"] | null
   >(null);
   const [assetErrorDetected, setAssetErrorDetected] = useState(false);
   const [dismissedCommit, setDismissedCommit] = useState<string | null>(null);
 
   const checkBuild = useCallback(async () => {
-    const response = await fetch(`/api/build-info?t=${Date.now()}`, {
+    const response = await fetch("/api/build-version", {
       cache: "no-store",
       headers: {
         Accept: "application/json",
@@ -75,8 +75,8 @@ export default function DeployVersionGuard({
 
     if (!response.ok) return;
 
-    const data = (await response.json()) as BuildInfoResponse;
-    const nextCommit = data.build?.commit;
+    const data = (await response.json()) as BuildVersionResponse;
+    const nextCommit = data.build?.shortCommit;
     setLatestCommit(isKnownCommit(nextCommit) ? (nextCommit ?? null) : null);
 
     if (
@@ -90,21 +90,19 @@ export default function DeployVersionGuard({
 
   useEffect(() => {
     const runCheck = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
       void checkBuild().catch(() => undefined);
     };
 
     const firstCheck = window.setTimeout(runCheck, 1_000);
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        runCheck();
-      }
+      runCheck();
     }, pollIntervalMs);
 
-    const checkWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        runCheck();
-      }
-    };
+    const checkWhenVisible = () => runCheck();
 
     window.addEventListener("focus", checkWhenVisible);
     window.addEventListener("online", checkWhenVisible);
@@ -150,7 +148,7 @@ export default function DeployVersionGuard({
     };
   }, [checkBuild]);
 
-  const visibleCommit = availableBuild?.commit ?? latestCommit;
+  const visibleCommit = availableBuild?.shortCommit ?? latestCommit;
   const shouldShow =
     (Boolean(availableBuild) || assetErrorDetected) &&
     (!visibleCommit || dismissedCommit !== visibleCommit);

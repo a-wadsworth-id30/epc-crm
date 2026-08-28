@@ -227,8 +227,9 @@ a public build fingerprint embedded into the compiled Next.js bundle:
 }
 ```
 
-Detailed build metadata is available to authenticated CRM users at
-`/api/build-info` and in Settings > System.
+The client deploy-version guard uses `/api/build-version` for a DB-free public
+short commit check. Detailed build metadata is available to authenticated CRM
+users at `/api/build-info` and in Settings > System.
 
 After every Netlify deploy, verify the live runtime is serving the
 expected commit:
@@ -288,12 +289,13 @@ configured window. API and scheduled refreshes write compact background job
 history visible in Settings > System.
 
 The repository also includes
-`netlify/functions/pull-pipedrive-leads.mjs`, scheduled every 15 minutes. It is
+`netlify/functions/pull-pipedrive-leads.mjs`, scheduled every 30 minutes. It is
 disabled unless `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` is set. When enabled,
 it calls `/api/maintenance/pipedrive-lead-import` with
 `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` and runs the same pull-only,
-bounded Pipedrive lead import helper as the manual settings
-action. Start with `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
+bounded Pipedrive lead import helper as the manual settings action. Webhooks
+remain the near-real-time path; the scheduled job is a conservative fallback
+and backfill path. Start with `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
 credentials/readiness before allowing CRM lead records to be imported. API
 and scheduled runs also sweep updated Pipedrive notes into linked CRM sales
 using a separate note cursor, advance a mailbox-thread cursor across inbox,

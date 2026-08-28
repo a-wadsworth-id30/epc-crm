@@ -177,6 +177,9 @@ Non-browser routes use SIP, landline or mobile depending on `voiceRoutingMode`.
 Browser softphones should not be marked offline merely because the CRM dashboard
 tab is hidden. The `/softphone-window` route can keep the browser heartbeat
 alive while it remains open; unload/page exit is what sends `OFFLINE`.
+Normal CRM tabs pause passive desktop-softphone presence reads while hidden and
+resume on focus/visibility. The standalone softphone window still sends its
+presence heartbeat while open so routing can continue to see the desktop client.
 Agents can manually select `BUSY` when they are unavailable at their desk; the
 softphone must not treat manually selected busy as stale call state or
 immediately reset it to available.
