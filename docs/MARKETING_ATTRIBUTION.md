@@ -58,7 +58,7 @@ to the matching `/telephony/call-tracking/...` route.
 Install on lead-generation websites:
 
 ```html
-<script src="https://crm.id30.com/attribution.js" data-id30-attribution defer></script>
+<script src="https://crm.epc-improvements.co.uk/attribution.js" data-id30-attribution defer></script>
 ```
 
 The admin install checker fetches candidate websites from the CRM server. In

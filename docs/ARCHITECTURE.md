@@ -761,7 +761,7 @@ Netlify settings:
 Healthcheck:
 
 ```text
-GET https://crm.id30.com/api/health
+GET https://crm.epc-improvements.co.uk/api/health
 ```
 
 Focused authenticated route smoke test:

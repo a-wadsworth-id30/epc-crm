@@ -1,6 +1,6 @@
 # Hosting Setup
 
-This document is for the iD30 CRM at `https://crm.id30.com`.
+This document is for the iD30 CRM at `https://crm.epc-improvements.co.uk`.
 
 The CRM deploys to Netlify. iD30 Prospecting is the Hostinger deployment; do
 not use Prospecting/Hostinger settings for the CRM.
@@ -65,7 +65,7 @@ Required environment variables:
 
 ```text
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
-APP_BASE_URL=https://crm.id30.com
+APP_BASE_URL=https://crm.epc-improvements.co.uk
 NEXT_PUBLIC_APP_NAME=iD30 CRM
 SESSION_COOKIE_NAME=id30_crm_session
 SESSION_TTL_DAYS=7
@@ -95,5 +95,5 @@ npm run verify
 Production check:
 
 ```text
-https://crm.id30.com/api/health
+https://crm.epc-improvements.co.uk/api/health
 ```

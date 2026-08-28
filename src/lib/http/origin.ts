@@ -28,12 +28,12 @@ function configuredOrigin(value: string | undefined) {
   }
 }
 
-export function trustedAppBaseUrl(fallback = "https://crm.id30.com") {
+export function trustedAppBaseUrl(fallback = "https://crm.epc-improvements.co.uk") {
   return (
     configuredOrigin(process.env.APP_BASE_URL) ??
     configuredOrigin(process.env.NEXT_PUBLIC_APP_URL) ??
     configuredOrigin(fallback) ??
-    "https://crm.id30.com"
+    "https://crm.epc-improvements.co.uk"
   );
 }
 

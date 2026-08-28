@@ -27,13 +27,13 @@ Required environment:
 
 ```text
 CREDENTIAL_ENCRYPTION_KEY
-APP_BASE_URL=https://crm.id30.com
+APP_BASE_URL=https://crm.epc-improvements.co.uk
 ```
 
 The webhook base URL in Twilio config should be:
 
 ```text
-https://crm.id30.com
+https://crm.epc-improvements.co.uk
 ```
 
 ## Main User Surfaces
@@ -308,7 +308,7 @@ status webhook must treat the queue as abandoned, close the call log, cancel
 any pending agent call legs and release attempted agents back to available.
 
 Queue `waitUrl` redirects must always be built from the configured public
-webhook base URL, normally `https://crm.id30.com`. Do not use `request.url`
+webhook base URL, normally `https://crm.epc-improvements.co.uk`. Do not use `request.url`
 for Twilio redirects; reverse proxies can expose internal URLs such as
 `https://0.0.0.0:3000/...`, causing Twilio Debugger error `11200` and the
 caller-facing "application error" message.

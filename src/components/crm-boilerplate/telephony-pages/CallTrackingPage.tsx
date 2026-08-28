@@ -11,7 +11,7 @@ function appBaseUrl() {
   return (
     process.env.APP_BASE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crm.id30.com"
+    "https://crm.epc-improvements.co.uk"
   ).replace(/\/$/, "");
 }
 

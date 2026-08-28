@@ -31,7 +31,7 @@ For marketing attribution work, also read:
 ## Project Facts
 
 - Product: iD30 CRM live implementation based on the CRM boilerplate.
-- Live URL: `https://crm.id30.com`.
+- Live URL: `https://crm.epc-improvements.co.uk`.
 - Runtime: Netlify Next.js runtime.
 - Production database: Neon Postgres.
 - ORM: Prisma.
@@ -94,4 +94,4 @@ Netlify expected settings:
 - Build command: `npm run netlify:build`
 - Node.js version: 20
 
-After a GitHub push, verify live separately through `https://crm.id30.com/api/health` and the relevant user workflow. iD30 Prospecting is the Hostinger deployment; do not apply Hostinger deployment assumptions to the CRM.
+After a GitHub push, verify live separately through `https://crm.epc-improvements.co.uk/api/health` and the relevant user workflow. iD30 Prospecting is the Hostinger deployment; do not apply Hostinger deployment assumptions to the CRM.

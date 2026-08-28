@@ -11,7 +11,7 @@ function commandOutput(command: string) {
 }
 
 const baseUrl = (
-  process.env.DEPLOY_CHECK_BASE_URL ?? "https://crm.id30.com"
+  process.env.DEPLOY_CHECK_BASE_URL ?? "https://crm.epc-improvements.co.uk"
 ).replace(/\/$/, "");
 const expectedCommit =
   process.env.EXPECTED_COMMIT ||

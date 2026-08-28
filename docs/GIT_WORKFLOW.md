@@ -96,7 +96,7 @@ Merge only after:
 
 During the current development phase, completing a job means deploying it too:
 merge the PR, wait for or trigger the Netlify production deploy, then verify
-`https://crm.id30.com/api/health` is serving the merged `main` short commit
+`https://crm.epc-improvements.co.uk/api/health` is serving the merged `main` short commit
 before handing off. If the healthcheck is still on an older commit, do not
 imply the work is live; report that Netlify is still serving the previous
 build.

@@ -47,14 +47,14 @@ events or background job history.
 Dry run:
 
 ```bash
-curl -X GET https://crm.id30.com/api/maintenance/retention \
+curl -X GET https://crm.epc-improvements.co.uk/api/maintenance/retention \
   -H "Authorization: Bearer $OPERATIONAL_RETENTION_SECRET"
 ```
 
 Real run:
 
 ```bash
-curl -X POST https://crm.id30.com/api/maintenance/retention \
+curl -X POST https://crm.epc-improvements.co.uk/api/maintenance/retention \
   -H "Authorization: Bearer $OPERATIONAL_RETENTION_SECRET"
 ```
 
@@ -102,14 +102,14 @@ summary rows or background job history; it only previews the refresh totals.
 Dry run:
 
 ```bash
-curl -X GET "https://crm.id30.com/api/maintenance/marketing-rollups?windowDays=90" \
+curl -X GET "https://crm.epc-improvements.co.uk/api/maintenance/marketing-rollups?windowDays=90" \
   -H "Authorization: Bearer $MARKETING_ROLLUP_SECRET"
 ```
 
 Real refresh:
 
 ```bash
-curl -X POST "https://crm.id30.com/api/maintenance/marketing-rollups?windowDays=90" \
+curl -X POST "https://crm.epc-improvements.co.uk/api/maintenance/marketing-rollups?windowDays=90" \
   -H "Authorization: Bearer $MARKETING_ROLLUP_SECRET"
 ```
 
