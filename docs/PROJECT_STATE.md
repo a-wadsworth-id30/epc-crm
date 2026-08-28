@@ -1648,8 +1648,9 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   are encrypted in `IntegrationConnection.config`; the same connection is used
   by Sidekick and call transcript analysis, with environment variables retained
   as fallback.
-- Netlify runs a scheduled warmup function every four minutes to reduce
-  user-facing cold starts on the main SSR/API path and keep Neon compute warm.
+- Netlify runs a scheduled warmup function every four minutes against DB-free
+  public paths by default. This keeps the static sign-in path warm without
+  deliberately keeping Neon compute awake.
 - DB load is reduced with short-lived caches for header notification counts and
   attribution domain config. Routine enabled attribution config requests update
   diagnostics at most every 15 minutes per registered domain instead of writing
@@ -1715,9 +1716,9 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
 - Netlify uses `npm run netlify:build`, which runs Prisma migrations before
   `next build`. Keep `MIGRATE_DATABASE_URL` set to a direct Neon URL when
   `DATABASE_URL` is pooled.
-- Netlify scheduled function `warm-crm` pings `/api/health` and `/signin`
-  every four minutes. Override with
-  `CRM_WARMUP_PATHS` if the warmup target list needs changing.
+- Netlify scheduled function `warm-crm` pings `/signin` every four minutes by
+  default. Override with `CRM_WARMUP_PATHS` if the warmup target list needs
+  changing, but keep it DB-free unless explicitly choosing Neon warm compute.
 - Netlify Edge Function `attribution-geo` runs on `/api/attribution/*` and
   forwards passive `context.geo` fields to the Next.js attribution handlers
   through normalized internal request headers.

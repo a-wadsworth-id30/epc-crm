@@ -2,7 +2,7 @@ export const config = {
   schedule: "*/4 * * * *",
 };
 
-const defaultWarmupPaths = ["/api/health", "/signin"];
+const defaultWarmupPaths = ["/signin"];
 
 export default async function handler() {
   const baseUrl = (
