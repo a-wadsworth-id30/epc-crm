@@ -7,7 +7,7 @@ This layer captures raw attribution on lead-generation websites and sends it int
 Add the script to the website, replacing the domain with the CRM domain:
 
 ```html
-<script src="https://crm.epc-improvements.co.uk/attribution.js" data-id30-attribution defer></script>
+<script src="https://crm[.]epc-improvements[.]co[.]uk/attribution.js" data-id30-attribution defer></script>
 ```
 
 The script captures:

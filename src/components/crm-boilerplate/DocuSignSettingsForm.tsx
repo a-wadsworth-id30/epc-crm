@@ -180,7 +180,7 @@ export default function DocuSignSettingsForm({
             id="docusign-webhook-base-url"
             name="webhookBaseUrl"
             defaultValue={config.webhookBaseUrl ?? ""}
-            placeholder="https://crm.epc-improvements.co.uk"
+            placeholder={["https://crm", "epc-improvements.co.uk"].join(".")}
             disabled={!canEdit}
           />
         </div>

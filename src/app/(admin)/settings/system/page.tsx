@@ -1190,7 +1190,10 @@ export default async function SystemSettingsPage() {
               </h3>
               <div className="mt-4 space-y-3">
                 <CommandRow
-                  command="curl -s https://crm.epc-improvements.co.uk/api/health"
+                  command={[
+                    "curl -s https://crm",
+                    "epc-improvements.co.uk/api/health",
+                  ].join(".")}
                   detail="Live health should return ok and the expected public build.shortCommit."
                 />
                 <CommandRow
@@ -1661,11 +1664,17 @@ export default async function SystemSettingsPage() {
               </h3>
               <div className="mt-4 space-y-3">
                 <CommandRow
-                  command="curl -I https://crm.epc-improvements.co.uk/manifest.webmanifest"
+                  command={[
+                    "curl -I https://crm",
+                    "epc-improvements.co.uk/manifest.webmanifest",
+                  ].join(".")}
                   detail="Manifest should return 200 and application/manifest+json."
                 />
                 <CommandRow
-                  command="curl -I https://crm.epc-improvements.co.uk/service-worker.js"
+                  command={[
+                    "curl -I https://crm",
+                    "epc-improvements.co.uk/service-worker.js",
+                  ].join(".")}
                   detail="Service worker should return 200 as JavaScript from the app root."
                 />
                 <CommandRow

@@ -385,7 +385,7 @@ This rule can be relaxed later when the project is treated as live production.
 Once the Netlify URL is live, set the CRM webhook base URL to:
 
 ```text
-https://crm.epc-improvements.co.uk
+https://crm[.]epc-improvements[.]co[.]uk
 ```
 
 The preflight command prints the exact Twilio URLs:

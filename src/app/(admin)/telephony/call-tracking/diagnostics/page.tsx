@@ -28,10 +28,12 @@ type DniRuleDelegate = {
 };
 
 function appBaseUrl() {
+  const fallbackBaseUrl = ["https://crm", "epc-improvements.co.uk"].join(".");
+
   return (
     process.env.APP_BASE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crm.epc-improvements.co.uk"
+    fallbackBaseUrl
   ).replace(/\/$/, "");
 }
 

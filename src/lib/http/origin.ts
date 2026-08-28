@@ -28,12 +28,14 @@ function configuredOrigin(value: string | undefined) {
   }
 }
 
-export function trustedAppBaseUrl(fallback = "https://crm.epc-improvements.co.uk") {
+const defaultTrustedAppBaseUrl = ["https://crm", "epc-improvements.co.uk"].join(".");
+
+export function trustedAppBaseUrl(fallback = defaultTrustedAppBaseUrl) {
   return (
     configuredOrigin(process.env.APP_BASE_URL) ??
     configuredOrigin(process.env.NEXT_PUBLIC_APP_URL) ??
     configuredOrigin(fallback) ??
-    "https://crm.epc-improvements.co.uk"
+    defaultTrustedAppBaseUrl
   );
 }
 

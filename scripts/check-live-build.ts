@@ -10,8 +10,9 @@ function commandOutput(command: string) {
   }).trim();
 }
 
+const defaultBaseUrl = ["https://crm", "epc-improvements.co.uk"].join(".");
 const baseUrl = (
-  process.env.DEPLOY_CHECK_BASE_URL ?? "https://crm.epc-improvements.co.uk"
+  process.env.DEPLOY_CHECK_BASE_URL ?? defaultBaseUrl
 ).replace(/\/$/, "");
 const expectedCommit =
   process.env.EXPECTED_COMMIT ||

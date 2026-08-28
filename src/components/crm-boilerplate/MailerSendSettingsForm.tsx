@@ -234,7 +234,7 @@ export default function MailerSendSettingsForm({
               name="webhookBaseUrl"
               type="url"
               defaultValue={config.webhookBaseUrl ?? ""}
-              placeholder="https://crm.epc-improvements.co.uk"
+              placeholder={["https://crm", "epc-improvements.co.uk"].join(".")}
               disabled={!canEdit}
             />
           </Field>

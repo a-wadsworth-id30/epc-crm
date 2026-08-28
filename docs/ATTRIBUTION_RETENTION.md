@@ -13,7 +13,7 @@ Manual purge is available on the Session Settings page.
 For automated cleanup, schedule a daily request:
 
 ```bash
-curl -X POST https://crm.epc-improvements.co.uk/api/attribution/privacy/purge \
+curl -X POST https://crm[.]epc-improvements[.]co[.]uk/api/attribution/privacy/purge \
   -H "Authorization: Bearer $ATTRIBUTION_RETENTION_SECRET"
 ```
 

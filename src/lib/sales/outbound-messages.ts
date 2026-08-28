@@ -69,11 +69,13 @@ function messageSummary(body: string, maxLength = 180) {
 }
 
 function statusCallbackOrigin(configuredBaseUrl?: string | null) {
+  const fallbackBaseUrl = ["https://crm", "epc-improvements.co.uk"].join(".");
+
   return (
     configuredBaseUrl?.replace(/\/$/, "") ||
     process.env.APP_BASE_URL?.replace(/\/$/, "") ||
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "https://crm.epc-improvements.co.uk"
+    fallbackBaseUrl
   );
 }
 

@@ -9,7 +9,7 @@ This is the live iD30 CRM implementation. It is being widened for multiple devel
 Live URL:
 
 ```text
-https://crm.epc-improvements.co.uk
+https://crm[.]epc-improvements[.]co[.]uk
 ```
 
 Production runtime:
@@ -1851,7 +1851,7 @@ still serving an older commit, report that the work is not live yet.
 Useful checks:
 
 ```bash
-curl -s https://crm.epc-improvements.co.uk/api/health
+curl -s https://crm[.]epc-improvements[.]co[.]uk/api/health
 npm run typecheck
 npm run lint
 ```

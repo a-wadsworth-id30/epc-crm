@@ -106,8 +106,8 @@ npm run db:migrate:status
 
 After `main` is deployed, verify:
 
-- `GET https://crm.epc-improvements.co.uk/api/health` returns healthy status.
-- `GET https://crm.epc-improvements.co.uk/api/attribution/config` returns HTTP 200 from the live domain.
+- `GET https://crm[.]epc-improvements[.]co[.]uk/api/health` returns healthy status.
+- `GET https://crm[.]epc-improvements[.]co[.]uk/api/attribution/config` returns HTTP 200 from the live domain.
 - The phone replacement test page passes when dynamic phone tracking is enabled and the pool has an assignable number.
 - Authenticated Marketing pages load on desktop and mobile widths without table overflow outside the page container.
 

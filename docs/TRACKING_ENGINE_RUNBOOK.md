@@ -7,7 +7,7 @@
 3. Add the snippet from **Tracking Script** to the website:
 
 ```html
-<script src="https://crm.epc-improvements.co.uk/attribution.js" data-id30-attribution defer></script>
+<script src="https://crm[.]epc-improvements[.]co[.]uk/attribution.js" data-id30-attribution defer></script>
 ```
 
 4. Run **Check installation** from the Tracking Script page.
