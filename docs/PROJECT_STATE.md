@@ -445,6 +445,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   telemetry, then writes a sanitized JSON audit report under `.neon-advisor/`.
   It does not change Neon settings, schema, indexes, data or retention rules.
   See `docs/NEON_OPTIMIZATION_ADVISOR.md`.
+- Production env checks now classify `DATABASE_URL` and `MIGRATE_DATABASE_URL`
+  without printing hostnames or credentials. Netlify builds run the sanitized
+  check before migrations/build, Settings > System shows whether the runtime is
+  using the Neon pooled endpoint, and Prisma still adds conservative
+  `connection_limit=1` / `pool_timeout=10` defaults for pooled Neon URLs.
 - Migration-sensitive features should use the shared Prisma schema-drift
   helpers in `src/lib/prisma-errors.ts` so optional table/column rollout gaps
   produce controlled fallback states rather than taking down normal routes.

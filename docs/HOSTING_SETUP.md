@@ -72,6 +72,10 @@ SESSION_TTL_DAYS=7
 CREDENTIAL_ENCRYPTION_KEY=<openssl rand -base64 32>
 ```
 
+Use the Neon pooled connection string for production `DATABASE_URL` and the
+direct Neon connection string for `MIGRATE_DATABASE_URL`. The env and preflight
+checks print sanitized connection kinds only.
+
 Bootstrap-only variables:
 
 ```text

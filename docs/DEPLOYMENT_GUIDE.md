@@ -83,10 +83,16 @@ Generate `CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32` before
 running preflight. Blank values and unresolved placeholders fail
 `npm run env:check` and `npm run production:preflight`.
 
-`DATABASE_URL` may be the Neon pooled URL for serverless runtime performance.
+`DATABASE_URL` should be the Neon pooled URL for serverless runtime performance.
 `MIGRATE_DATABASE_URL`, when set, should be the direct Neon connection URL. The
 Netlify build temporarily uses it for `prisma migrate deploy`; runtime still
 uses `DATABASE_URL`.
+
+`npm run env:check` and `npm run production:preflight` print only sanitized
+connection kinds, such as `Neon pooled runtime` or `Neon direct connection`, so
+operators can confirm the runtime pooling posture without exposing database
+hostnames or credentials. Netlify production builds run the same env check
+before migrations and `next build`.
 
 When the runtime `DATABASE_URL` uses a Neon pooled host, the shared Prisma
 client adds conservative defaults of `connection_limit=1` and

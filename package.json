@@ -22,7 +22,7 @@
     "start": "next start",
     "hostinger:build": "npm run db:migrate:deploy && npm run build",
     "hostinger:start": "npm run start -- -p ${PORT:-3000}",
-    "netlify:build": "prisma generate && node scripts/deploy-migrations.mjs && next build",
+    "netlify:build": "tsx scripts/check-env.ts && prisma generate && node scripts/deploy-migrations.mjs && next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "env:check": "tsx scripts/check-env.ts",

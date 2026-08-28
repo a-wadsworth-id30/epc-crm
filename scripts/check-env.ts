@@ -4,6 +4,9 @@ loadDotEnv();
 
 const result = validateProductionEnv();
 
+console.log(`Runtime database: ${result.database.runtime.label}`);
+console.log(`Migration database: ${result.database.migration.label}`);
+
 for (const warning of result.warnings) {
   console.warn(`WARN ${warning}`);
 }

@@ -1,4 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
+import {
+  databaseConnectionKindLabel,
+  inspectDatabaseConnectionUrl,
+} from "../src/lib/database/connection-url";
 
 const requiredProductionKeys = [
   "DATABASE_URL",
@@ -41,6 +45,18 @@ export function validateProductionEnv() {
   const missing = requiredProductionKeys.filter((key) => !process.env[key]);
   const invalid: string[] = [];
   const warnings: string[] = [];
+  const runtimeDatabase = inspectDatabaseConnectionUrl(process.env.DATABASE_URL);
+  const migrationDatabase = inspectDatabaseConnectionUrl(
+    process.env.MIGRATE_DATABASE_URL,
+  );
+
+  if (runtimeDatabase.present && !runtimeDatabase.valid) {
+    invalid.push("DATABASE_URL");
+  }
+
+  if (migrationDatabase.present && !migrationDatabase.valid) {
+    invalid.push("MIGRATE_DATABASE_URL");
+  }
 
   const encryptionKey = validateCredentialEncryptionKey(
     process.env.CREDENTIAL_ENCRYPTION_KEY,
@@ -66,16 +82,43 @@ export function validateProductionEnv() {
     );
   }
 
-  if (
-    process.env.DATABASE_URL?.includes("-pooler.") &&
-    !process.env.MIGRATE_DATABASE_URL
-  ) {
+  if (runtimeDatabase.kind === "neon-direct") {
+    warnings.push(
+      "DATABASE_URL uses a direct Neon host. Use the pooled Neon host for Netlify runtime to reduce serverless connection churn; keep MIGRATE_DATABASE_URL on the direct host.",
+    );
+  }
+
+  if (runtimeDatabase.usesNeon && !runtimeDatabase.hasSslModeRequire) {
+    warnings.push("DATABASE_URL should include sslmode=require for Neon.");
+  }
+
+  if (runtimeDatabase.usesPooler && !process.env.MIGRATE_DATABASE_URL) {
     warnings.push(
       "DATABASE_URL appears to use a Neon pooled host. Set MIGRATE_DATABASE_URL to a direct Neon connection for Netlify migration deploys.",
     );
   }
 
+  if (migrationDatabase.usesPooler) {
+    warnings.push(
+      "MIGRATE_DATABASE_URL appears to use a Neon pooled host. Use the direct Neon connection for Prisma migration deploys.",
+    );
+  }
+
+  if (migrationDatabase.usesNeon && !migrationDatabase.hasSslModeRequire) {
+    warnings.push("MIGRATE_DATABASE_URL should include sslmode=require for Neon.");
+  }
+
   return {
+    database: {
+      migration: {
+        kind: migrationDatabase.kind,
+        label: databaseConnectionKindLabel(migrationDatabase.kind),
+      },
+      runtime: {
+        kind: runtimeDatabase.kind,
+        label: databaseConnectionKindLabel(runtimeDatabase.kind),
+      },
+    },
     ok: missing.length === 0 && invalid.length === 0,
     invalid,
     missing,

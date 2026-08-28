@@ -10,6 +10,7 @@ import StatusDetailCard from "@/components/crm-boilerplate/StatusDetailCard";
 import { requireAdmin } from "@/lib/auth";
 import { buildMetadata } from "@/lib/build-metadata";
 import { hasCredentialEncryptionKey } from "@/lib/crypto/secrets";
+import { inspectDatabaseConnectionUrl } from "@/lib/database/connection-url";
 import {
   readMigrationReadiness,
   type MigrationReadiness,
@@ -298,7 +299,11 @@ function booleanEnv(key: string) {
 function getEnvironmentChecks(): EnvironmentCheck[] {
   const databaseUrl = envValue("DATABASE_URL");
   const migrationDatabaseUrl = envValue("MIGRATE_DATABASE_URL");
-  const runtimeUsesPooler = databaseUrl.includes("-pooler.");
+  const runtimeDatabase = inspectDatabaseConnectionUrl(databaseUrl);
+  const migrationDatabase = inspectDatabaseConnectionUrl(migrationDatabaseUrl);
+  const runtimeUsesPooler = runtimeDatabase.kind === "neon-pooler";
+  const runtimeUsesDirectNeon = runtimeDatabase.kind === "neon-direct";
+  const migrationUsesPooler = migrationDatabase.kind === "neon-pooler";
   const operationalRetentionSecretReady = Boolean(
     envValue("OPERATIONAL_RETENTION_SECRET") || envValue("CRON_SECRET"),
   );
@@ -314,9 +319,23 @@ function getEnvironmentChecks(): EnvironmentCheck[] {
     {
       label: "Database connection",
       key: "DATABASE_URL",
-      status: databaseUrl ? "Ready" : "Needed",
+      status: databaseUrl && runtimeDatabase.valid ? "Ready" : "Needed",
       detail: "Required for Prisma runtime queries and server-rendered CRM pages.",
       required: true,
+    },
+    {
+      label: "Neon runtime pooling",
+      key: "DATABASE_URL",
+      status: runtimeUsesPooler
+        ? "Ready"
+        : runtimeUsesDirectNeon
+          ? "WARNING"
+          : "Planned",
+      detail: runtimeUsesDirectNeon
+        ? "Use the pooled Neon connection string for Netlify runtime to reduce serverless connection churn."
+        : runtimeUsesPooler
+          ? "Runtime DATABASE_URL uses the Neon pooled endpoint."
+          : "Only applies when DATABASE_URL points at Neon.",
     },
     {
       label: "Credential encryption",
@@ -348,10 +367,18 @@ function getEnvironmentChecks(): EnvironmentCheck[] {
     {
       label: "Migration database",
       key: "MIGRATE_DATABASE_URL",
-      status: migrationDatabaseUrl ? "Ready" : runtimeUsesPooler ? "WARNING" : "Planned",
-      detail: runtimeUsesPooler
-        ? "Recommended when runtime DATABASE_URL uses a pooled Neon connection."
-        : "Only needed when migrations require a separate direct database connection.",
+      status: migrationUsesPooler
+        ? "WARNING"
+        : migrationDatabaseUrl
+          ? "Ready"
+          : runtimeUsesPooler
+            ? "WARNING"
+            : "Planned",
+      detail: migrationUsesPooler
+        ? "Use a direct Neon connection for Prisma migration deploys."
+        : runtimeUsesPooler
+          ? "Recommended when runtime DATABASE_URL uses a pooled Neon connection."
+          : "Only needed when migrations require a separate direct database connection.",
     },
     {
       label: "Build commit",

@@ -4,6 +4,7 @@ import {
   databaseQueryTimingEnabled,
   recordDatabaseQueryTiming,
 } from "@/lib/performance/db-query-metrics";
+import { databaseUrlWithPoolDefaults } from "@/lib/database/connection-url";
 
 function createPrismaClient(): PrismaClient {
   const datasourceUrl = databaseUrlWithPoolDefaults(process.env.DATABASE_URL);
@@ -39,35 +40,6 @@ function createPrismaClient(): PrismaClient {
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
-
-function databaseUrlWithPoolDefaults(url: string | undefined) {
-  if (!url) return undefined;
-
-  try {
-    const parsed = new URL(url);
-    const isNeonPooler = parsed.hostname.includes("-pooler.");
-
-    if (!isNeonPooler) return url;
-
-    if (!parsed.searchParams.has("connection_limit")) {
-      parsed.searchParams.set(
-        "connection_limit",
-        process.env.PRISMA_CONNECTION_LIMIT ?? "1",
-      );
-    }
-
-    if (!parsed.searchParams.has("pool_timeout")) {
-      parsed.searchParams.set(
-        "pool_timeout",
-        process.env.PRISMA_POOL_TIMEOUT ?? "10",
-      );
-    }
-
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
 
 export const prisma =
   globalForPrisma.prisma ?? createPrismaClient();

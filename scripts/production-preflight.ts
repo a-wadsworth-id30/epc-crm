@@ -8,6 +8,8 @@ const baseUrl = process.env.APP_BASE_URL ?? "{APP_BASE_URL}";
 console.log("CRM production preflight");
 console.log("========================");
 console.log(`Base URL: ${baseUrl}`);
+console.log(`Runtime database: ${result.database.runtime.label}`);
+console.log(`Migration database: ${result.database.migration.label}`);
 console.log(`Healthcheck: ${baseUrl}/api/health`);
 console.log(`Twilio voice webhook: ${baseUrl}/api/webhooks/twilio/voice`);
 console.log(

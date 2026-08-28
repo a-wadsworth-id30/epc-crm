@@ -156,6 +156,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   safe PostgreSQL statistics views and optional Neon API telemetry, then ranks
   cost/resource recommendations with evidence, validation steps and rollback
   notes. Production execution is disabled and the action allow-list is empty.
+- `src/lib/database/connection-url.ts` classifies runtime and migration database
+  URLs without exposing hostnames. Env checks, production preflight, Prisma pool
+  defaults and Settings > System use this shared classifier to keep Netlify
+  runtime on Neon pooled connections while migration deploys stay direct.
 
 ## Integrations
 

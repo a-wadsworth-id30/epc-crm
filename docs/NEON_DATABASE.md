@@ -29,7 +29,9 @@ SESSION_TTL_DAYS="7"
 CREDENTIAL_ENCRYPTION_KEY="<same key if they need to decrypt existing integration credentials>"
 ```
 
-Use a direct/non-pooled Neon connection for migration commands when possible. Pooled URLs are better for app runtime, but can cause issues with Prisma schema migration workflows.
+Use the Neon pooled URL for app runtime and a direct/non-pooled Neon connection
+for migration commands when possible. Pooled URLs reduce serverless connection
+churn, but can cause issues with Prisma schema migration workflows.
 
 ## App Data Changes
 
