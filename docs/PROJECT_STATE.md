@@ -439,6 +439,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `npm run build:profile`, `npm run perf:bundle`, opt-in server timing logs,
   opt-in database query timing and opt-in Web Vitals logging. The metrics
   intentionally exclude query strings, form values and customer records.
+- Neon database cost and resource review is available through
+  `npm run neon:advisor`. The first milestone is read-only: it inspects local
+  runtime configuration, safe PostgreSQL statistics views and optional Neon API
+  telemetry, then writes a sanitized JSON audit report under `.neon-advisor/`.
+  It does not change Neon settings, schema, indexes, data or retention rules.
+  See `docs/NEON_OPTIMIZATION_ADVISOR.md`.
 - Migration-sensitive features should use the shared Prisma schema-drift
   helpers in `src/lib/prisma-errors.ts` so optional table/column rollout gaps
   produce controlled fallback states rather than taking down normal routes.

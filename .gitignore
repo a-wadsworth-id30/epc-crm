@@ -44,6 +44,7 @@ yarn-error.log*
 !.env.example
 !.env.*.example
 .npm-cache/
+.neon-advisor/
 
 # vercel
 .vercel

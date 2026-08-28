@@ -151,6 +151,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   whether scheduled/manual jobs are running, stale, warning or failing without
   re-aggregating raw provider data. Admin header notifications reuse the same
   background job health rules for failed and stale job alerts.
+- `src/lib/neon-advisor/*` powers the read-only Neon optimization advisor.
+  `npm run neon:advisor` inspects repository/runtime database configuration,
+  safe PostgreSQL statistics views and optional Neon API telemetry, then ranks
+  cost/resource recommendations with evidence, validation steps and rollback
+  notes. Production execution is disabled and the action allow-list is empty.
 
 ## Integrations
 

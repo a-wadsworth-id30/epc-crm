@@ -27,6 +27,7 @@
     "typecheck": "tsc --noEmit",
     "env:check": "tsx scripts/check-env.ts",
     "production:preflight": "tsx scripts/production-preflight.ts",
+    "neon:advisor": "tsx scripts/neon-optimization-report.ts",
     "perf:bundle": "node scripts/performance/bundle-summary.mjs",
     "deploy:check": "tsx scripts/check-live-build.ts",
     "sidekick:prompt-smoke": "tsx scripts/sidekick-report-prompt-smoke.ts",
