@@ -22,6 +22,18 @@ describe("Neon optimization advisor", () => {
     assert.equal(config.thresholds.p95LatencyIncreaseLimitPercent, 10);
     assert.equal(config.thresholds.errorRateIncreaseLimitPoints, 1);
     assert.equal(config.thresholds.activeConnectionSaturationPercent, 80);
+    assert.equal(config.thresholds.targetMinCu, 0);
+    assert.equal(config.thresholds.targetMaxCu, 2);
+  });
+
+  it("allows CRM autoscaling review targets to be tuned from env", () => {
+    const config = readAdvisorConfig({
+      NEON_ADVISOR_TARGET_MAX_CU: "1",
+      NEON_ADVISOR_TARGET_MIN_CU: "0.25",
+    } as unknown as NodeJS.ProcessEnv);
+
+    assert.equal(config.thresholds.targetMinCu, 0.25);
+    assert.equal(config.thresholds.targetMaxCu, 1);
   });
 
   it("extracts Neon consumption metrics from nested response shapes", () => {
@@ -77,6 +89,48 @@ describe("Neon optimization advisor", () => {
       ),
     );
   });
+
+  it("flags Neon endpoints above the configured autoscaling target", () => {
+    const config = readAdvisorConfig({
+      NEON_ADVISOR_TARGET_MAX_CU: "2",
+      NEON_ADVISOR_TARGET_MIN_CU: "0",
+    } as unknown as NodeJS.ProcessEnv);
+    const recommendations = buildRecommendations({
+      config,
+      costModel: costModelFixture(config.costRates.currency),
+      neon: neonFixture({
+        endpoints: [
+          {
+            autoscaling_limit_max_cu: 4,
+            autoscaling_limit_min_cu: 0,
+            suspend_timeout_seconds: 300,
+          },
+        ],
+      }),
+      postgres: postgresFixture({
+        active_connections: 1,
+        current_database_connections: 2,
+        idle_connections: 1,
+        idle_in_transaction_connections: 0,
+        max_connections: 100,
+        waiting_connections: 0,
+      }),
+      repository: repositoryFixture("neon-pooler"),
+    });
+
+    const autoscaling = recommendations.find(
+      (recommendation) =>
+        recommendation.id === "review-compute-autoscaling-limits",
+    );
+
+    assert.ok(autoscaling);
+    assert.match(autoscaling.issue, /cost-review target/);
+    assert.ok(
+      autoscaling.evidence.some(
+        (item) => item.label === "Target max CU" && item.value === 2,
+      ),
+    );
+  });
 });
 
 function capability<T>(
@@ -114,11 +168,15 @@ function costModelFixture(currency: string): CostModelContext {
   };
 }
 
-function neonFixture(): NeonApiSnapshot {
+function neonFixture({
+  endpoints = [],
+}: {
+  endpoints?: Record<string, unknown>[];
+} = {}): NeonApiSnapshot {
   return {
     branchConsumption: capability("branch-consumption-history", null, "skipped"),
     branches: capability("branches", { branches: [] }),
-    endpoints: capability("endpoints", { endpoints: [] }),
+    endpoints: capability("endpoints", { endpoints }),
     operations: capability("operations", null, "skipped"),
     project: capability("project", null, "skipped"),
     projectConsumption: capability("project-consumption-history", null, "skipped"),

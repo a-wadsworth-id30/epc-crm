@@ -450,6 +450,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   check before migrations/build, Settings > System shows whether the runtime is
   using the Neon pooled endpoint, and Prisma still adds conservative
   `connection_limit=1` / `pool_timeout=10` defaults for pooled Neon URLs.
+- The Neon advisor has configurable autoscaling review targets
+  (`NEON_ADVISOR_TARGET_MIN_CU`, `NEON_ADVISOR_TARGET_MAX_CU`) so endpoint
+  min/max CU settings can be compared against a conservative CRM target before
+  any manual Neon console/API capacity change.
 - Migration-sensitive features should use the shared Prisma schema-drift
   helpers in `src/lib/prisma-errors.ts` so optional table/column rollout gaps
   produce controlled fallback states rather than taking down normal routes.

@@ -260,7 +260,10 @@ function addEndpointRecommendations({
     const minCu = numberField(endpoint, ["autoscaling_limit_min_cu", "min_cu"]);
     const maxCu = numberField(endpoint, ["autoscaling_limit_max_cu", "max_cu"]);
 
-    return (minCu !== null && minCu >= 1) || (maxCu !== null && maxCu >= 4);
+    return (
+      (minCu !== null && minCu > config.thresholds.targetMinCu) ||
+      (maxCu !== null && maxCu > config.thresholds.targetMaxCu)
+    );
   });
 
   if (endpointsWithoutSuspend.length) {
@@ -329,18 +332,39 @@ function addEndpointRecommendations({
             source: "neon-api",
             value: oversizedCandidates.length,
           }),
+          evidence({
+            label: "Target min CU",
+            measured: false,
+            source: "advisor-config",
+            value: config.thresholds.targetMinCu,
+            unit: "CU",
+          }),
+          evidence({
+            label: "Target max CU",
+            measured: false,
+            source: "advisor-config",
+            value: config.thresholds.targetMaxCu,
+            unit: "CU",
+          }),
         ],
         expectedSavings:
           "Lower compute spend if peak load has enough headroom at a smaller size.",
         id: "review-compute-autoscaling-limits",
         issue:
-          "Endpoint autoscaling limits may be larger than the currently observed workload requires, but peak-load headroom must be proven first.",
+          "Endpoint autoscaling limits are above the CRM cost-review target, but peak-load headroom must be proven first.",
         proposedOptimization:
-          "Compare peak CPU, memory, active connections and p95 latency against current CU limits before proposing any downsize.",
+          "Compare peak CPU, memory, active connections and p95 latency against the target CU range before applying a lower Neon autoscaling ceiling.",
         reversibility: 0.9,
         riskLevel: "medium",
         savingsScore: 65,
         title: "Review Neon compute autoscaling limits",
+        validationProcedure: [
+          "Run the advisor with read-only Neon API telemetry over a representative week.",
+          "Confirm peak CPU, memory and connection saturation stay below configured guardrails.",
+          "Apply the new Neon max CU in the Neon console or API during a quiet period.",
+          "Verify `/api/health`, sign-in, dashboard, Sales and Pipedrive scheduled imports.",
+          "Roll back the CU ceiling if latency, errors or saturation breach guardrails.",
+        ],
       }),
     );
   }

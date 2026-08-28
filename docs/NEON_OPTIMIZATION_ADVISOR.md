@@ -116,7 +116,14 @@ NEON_ADVISOR_MEMORY_PRESSURE_PERCENT="85"
 NEON_ADVISOR_CONNECTION_SATURATION_PERCENT="80"
 NEON_ADVISOR_QUERY_DURATION_MS="500"
 NEON_ADVISOR_LOCK_WAIT_MS="1000"
+NEON_ADVISOR_TARGET_MIN_CU="0"
+NEON_ADVISOR_TARGET_MAX_CU="2"
 ```
+
+`NEON_ADVISOR_TARGET_MIN_CU` and `NEON_ADVISOR_TARGET_MAX_CU` are review
+targets only. The advisor compares Neon endpoint autoscaling settings with
+those values when read-only Neon API telemetry is configured; it does not change
+endpoint capacity automatically.
 
 Example rollback rule used by the report:
 

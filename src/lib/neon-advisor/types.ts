@@ -83,6 +83,8 @@ export type AdvisorThresholds = AdvisorGuardrails & {
   minQueryCallsForNPlusOneSignal: number;
   minUnusedIndexBytes: number;
   seqScanWarningCount: number;
+  targetMaxCu: number;
+  targetMinCu: number;
 };
 
 export type AdvisorCostRates = {

@@ -86,6 +86,8 @@ export function readAdvisorConfig(
       ),
       queryDurationMs: numberEnv(env, "NEON_ADVISOR_QUERY_DURATION_MS", 500),
       seqScanWarningCount: numberEnv(env, "NEON_ADVISOR_SEQ_SCAN_WARNING_COUNT", 100),
+      targetMaxCu: numberEnv(env, "NEON_ADVISOR_TARGET_MAX_CU", 2),
+      targetMinCu: numberEnv(env, "NEON_ADVISOR_TARGET_MIN_CU", 0),
     },
   };
 }

@@ -94,6 +94,7 @@ function neonProfileLines(report: NeonOptimizationReport) {
     `- Neon project telemetry: ${capabilityLabel(report.neon.project)}`,
     `- Neon endpoints seen: ${endpoints ?? "unavailable"}`,
     `- Neon branches seen: ${branches ?? "unavailable"}`,
+    `- Autoscaling review target: min ${formatNullableNumber(report.config.thresholds.targetMinCu)} CU / max ${formatNullableNumber(report.config.thresholds.targetMaxCu)} CU`,
     `- Monthly compute CU-hours: ${formatNullableNumber(report.costModel.monthlyComputeCuHours)}`,
     `- Database size for storage estimate: ${formatGb(report.costModel.databaseSizeGb)}`,
   ];
