@@ -48,12 +48,25 @@ export default function ApplicationHealthWidget({
       }
     }
 
-    loadHealth();
-    const interval = window.setInterval(loadHealth, 300_000);
+    const loadHealthWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadHealth();
+      }
+    };
+
+    loadHealthWhenVisible();
+    const interval = window.setInterval(loadHealthWhenVisible, 300_000);
+
+    window.addEventListener("focus", loadHealthWhenVisible);
+    window.addEventListener("online", loadHealthWhenVisible);
+    document.addEventListener("visibilitychange", loadHealthWhenVisible);
 
     return () => {
       active = false;
       window.clearInterval(interval);
+      window.removeEventListener("focus", loadHealthWhenVisible);
+      window.removeEventListener("online", loadHealthWhenVisible);
+      document.removeEventListener("visibilitychange", loadHealthWhenVisible);
     };
   }, []);
 
