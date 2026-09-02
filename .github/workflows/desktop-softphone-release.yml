@@ -6,9 +6,15 @@ on:
       version:
         description: "desktop/softphone package version to release"
         required: false
+      repair_metadata_only:
+        description: "Only repair R2 Content-Disposition metadata for existing current-version downloads"
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "desktop-softphone-v*"
+      - "desktop-softphone-metadata-v*"
 
 permissions:
   contents: read
@@ -16,6 +22,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.label }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.repair_metadata_only) && !startsWith(github.ref_name, 'desktop-softphone-metadata-v') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -33,8 +40,17 @@ jobs:
       run:
         working-directory: desktop/softphone
     env:
-      DESKTOP_SOFTPHONE_PUBLIC_BASE_URL: ${{ vars.DESKTOP_SOFTPHONE_PUBLIC_BASE_URL }}
+      DESKTOP_SOFTPHONE_PUBLIC_BASE_URL: ${{ vars.DESKTOP_SOFTPHONE_PUBLIC_BASE_URL || 'https://pub-dd0c50b7d886446ea973dd80b6ea38f6.r2.dev' }}
       REQUESTED_VERSION: ${{ inputs.version }}
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_SIGN_WITH_PARAMS: ${{ secrets.DESKTOP_SOFTPHONE_WINDOWS_SIGN_WITH_PARAMS }}
+      WINDOWS_TIMESTAMP_SERVER: ${{ vars.DESKTOP_SOFTPHONE_WINDOWS_TIMESTAMP_SERVER || 'http://timestamp.digicert.com' }}
+      R2_ACCOUNT_ID: ${{ secrets.DESKTOP_SOFTPHONE_R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.DESKTOP_SOFTPHONE_R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.DESKTOP_SOFTPHONE_R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.DESKTOP_SOFTPHONE_R2_BUCKET }}
+      R2_PREFIX: ${{ vars.DESKTOP_SOFTPHONE_R2_PREFIX }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,37 +103,156 @@ jobs:
           );
           NODE
 
+      - name: Prepare Windows signing certificate
+        if: matrix.platform == 'windows' && env.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const certificate = process.env.WINDOWS_CERTIFICATE_BASE64 || "";
+          const certificatePath = path.join(
+            process.env.RUNNER_TEMP,
+            "id30-softphone-windows.pfx",
+          );
+
+          fs.writeFileSync(certificatePath, Buffer.from(certificate, "base64"));
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `WINDOWS_CERTIFICATE_FILE=${certificatePath}\n`,
+          );
+          NODE
+
       - name: Make desktop package
         run: npm run make -- ${{ matrix.makeArgs }}
 
       - name: Prepare public release assets
         run: node ../../scripts/desktop-softphone/prepare-release-assets.mjs --platform=${{ matrix.platform }}
 
-      - name: Upload prepared assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-softphone-${{ matrix.platform }}
-          path: desktop/softphone/.release/public
-          if-no-files-found: error
+      - name: Validate publishing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${R2_ACCOUNT_ID:?Set DESKTOP_SOFTPHONE_R2_ACCOUNT_ID secret.}"
+          : "${R2_ACCESS_KEY_ID:?Set DESKTOP_SOFTPHONE_R2_ACCESS_KEY_ID secret.}"
+          : "${R2_SECRET_ACCESS_KEY:?Set DESKTOP_SOFTPHONE_R2_SECRET_ACCESS_KEY secret.}"
+          : "${R2_BUCKET:?Set DESKTOP_SOFTPHONE_R2_BUCKET secret.}"
 
-  publish:
-    name: Publish public downloads
+      - name: Upload platform assets to Cloudflare R2
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          set -euo pipefail
+
+          destination="s3://${R2_BUCKET}"
+          if [[ -n "${R2_PREFIX}" ]]; then
+            destination="${destination}/${R2_PREFIX}"
+          fi
+          aws s3 sync .release/public "${destination}" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --cache-control "public,max-age=300"
+
+      - name: Apply platform download object metadata
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          set -euo pipefail
+
+          key_prefix="${R2_PREFIX%/}"
+          r2_key() {
+            if [[ -n "${key_prefix}" ]]; then
+              printf '%s/%s' "${key_prefix}" "$1"
+            else
+              printf '%s' "$1"
+            fi
+          }
+
+          upload_download() {
+            local source_file="$1"
+            local object_key="$2"
+            local filename="$3"
+            local content_type="$4"
+
+            aws s3 cp "${source_file}" "s3://${R2_BUCKET}/${object_key}" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --cache-control "public,max-age=300" \
+              --content-disposition "attachment; filename=\"${filename}\"" \
+              --content-type "${content_type}"
+          }
+
+          shopt -s nullglob
+
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            upload_download \
+              ".release/public/latest/iD30-Softphone-macOS-arm64.zip" \
+              "$(r2_key "latest/iD30-Softphone-macOS-arm64.zip")" \
+              "iD30-Softphone-macOS-arm64.zip" \
+              "application/zip"
+
+            for source_file in .release/public/versions/*/iD30-Softphone-macOS-arm64-*.zip; do
+              relative_path="${source_file#.release/public/}"
+              upload_download \
+                "${source_file}" \
+                "$(r2_key "${relative_path}")" \
+                "$(basename "${source_file}")" \
+                "application/zip"
+            done
+          fi
+
+          if [[ "${{ matrix.platform }}" == "windows" ]]; then
+            upload_download \
+              ".release/public/latest/iD30-Softphone-Windows-x64.exe" \
+              "$(r2_key "latest/iD30-Softphone-Windows-x64.exe")" \
+              "iD30-Softphone-Windows-x64.exe" \
+              "application/x-msdownload"
+
+            for source_file in .release/public/versions/*/iD30-Softphone-Windows-x64-*.exe; do
+              relative_path="${source_file#.release/public/}"
+              upload_download \
+                "${source_file}" \
+                "$(r2_key "${relative_path}")" \
+                "$(basename "${source_file}")" \
+                "application/x-msdownload"
+            done
+          fi
+
+      - name: Release summary
+        shell: bash
+        run: |
+          {
+            echo "### Desktop softphone downloads"
+            echo
+            echo "- Platform: ${{ matrix.label }}"
+            echo "- macOS: ${DESKTOP_SOFTPHONE_PUBLIC_BASE_URL%/}/latest/iD30-Softphone-macOS-arm64.zip"
+            echo "- Windows: ${DESKTOP_SOFTPHONE_PUBLIC_BASE_URL%/}/latest/iD30-Softphone-Windows-x64.exe"
+            echo "- Updates: ${DESKTOP_SOFTPHONE_PUBLIC_BASE_URL%/}/updates"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  repair-download-metadata:
+    name: Repair R2 download metadata
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.repair_metadata_only) || startsWith(github.ref_name, 'desktop-softphone-metadata-v') }}
     runs-on: ubuntu-latest
-    needs: build
     env:
       R2_ACCOUNT_ID: ${{ secrets.DESKTOP_SOFTPHONE_R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.DESKTOP_SOFTPHONE_R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.DESKTOP_SOFTPHONE_R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ secrets.DESKTOP_SOFTPHONE_R2_BUCKET }}
-      R2_PREFIX: ${{ vars.DESKTOP_SOFTPHONE_R2_PREFIX || 'desktop-softphone' }}
-      PUBLIC_BASE_URL: ${{ vars.DESKTOP_SOFTPHONE_PUBLIC_BASE_URL }}
+      R2_PREFIX: ${{ vars.DESKTOP_SOFTPHONE_R2_PREFIX }}
+      PUBLIC_BASE_URL: ${{ vars.DESKTOP_SOFTPHONE_PUBLIC_BASE_URL || 'https://pub-dd0c50b7d886446ea973dd80b6ea38f6.r2.dev' }}
+      REQUESTED_VERSION: ${{ inputs.version }}
     steps:
-      - name: Download release assets
-        uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-softphone-*
-          path: release-assets
-          merge-multiple: true
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Validate publishing configuration
         shell: bash
@@ -129,28 +264,76 @@ jobs:
           : "${R2_BUCKET:?Set DESKTOP_SOFTPHONE_R2_BUCKET secret.}"
           : "${PUBLIC_BASE_URL:?Set DESKTOP_SOFTPHONE_PUBLIC_BASE_URL repository variable.}"
 
-      - name: Configure R2 credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
+          package_version="$(node -p "require('./desktop/softphone/package.json').version")"
+          requested_version="${REQUESTED_VERSION}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == desktop-softphone-metadata-v* ]]; then
+            requested_version="${GITHUB_REF_NAME#desktop-softphone-metadata-v}"
+          fi
 
-      - name: Upload to Cloudflare R2
+          if [[ -n "${requested_version}" && "${requested_version}" != "${package_version}" ]]; then
+            echo "::error::Requested metadata repair version ${requested_version} does not match desktop/softphone package version ${package_version}."
+            exit 1
+          fi
+
+          echo "RELEASE_VERSION=${package_version}" >> "$GITHUB_ENV"
+
+      - name: Apply existing download object metadata
         shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: true
         run: |
           set -euo pipefail
-          aws s3 sync release-assets "s3://${R2_BUCKET}/${R2_PREFIX}" \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            --cache-control "public,max-age=300"
 
-      - name: Release summary
+          key_prefix="${R2_PREFIX%/}"
+          r2_key() {
+            if [[ -n "${key_prefix}" ]]; then
+              printf '%s/%s' "${key_prefix}" "$1"
+            else
+              printf '%s' "$1"
+            fi
+          }
+
+          repair_metadata() {
+            local relative_path="$1"
+            local filename="$2"
+            local content_type="$3"
+            local object_key
+            object_key="$(r2_key "${relative_path}")"
+
+            aws s3 cp "s3://${R2_BUCKET}/${object_key}" "s3://${R2_BUCKET}/${object_key}" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --metadata-directive REPLACE \
+              --cache-control "public,max-age=300" \
+              --content-disposition "attachment; filename=\"${filename}\"" \
+              --content-type "${content_type}"
+          }
+
+          repair_metadata \
+            "latest/iD30-Softphone-macOS-arm64.zip" \
+            "iD30-Softphone-macOS-arm64.zip" \
+            "application/zip"
+          repair_metadata \
+            "latest/iD30-Softphone-Windows-x64.exe" \
+            "iD30-Softphone-Windows-x64.exe" \
+            "application/x-msdownload"
+          repair_metadata \
+            "versions/${RELEASE_VERSION}/iD30-Softphone-macOS-arm64-${RELEASE_VERSION}.zip" \
+            "iD30-Softphone-macOS-arm64-${RELEASE_VERSION}.zip" \
+            "application/zip"
+          repair_metadata \
+            "versions/${RELEASE_VERSION}/iD30-Softphone-Windows-x64-${RELEASE_VERSION}.exe" \
+            "iD30-Softphone-Windows-x64-${RELEASE_VERSION}.exe" \
+            "application/x-msdownload"
+
+      - name: Repair summary
         shell: bash
         run: |
           {
-            echo "### Desktop softphone downloads"
+            echo "### Desktop softphone download metadata repaired"
             echo
             echo "- macOS: ${PUBLIC_BASE_URL%/}/latest/iD30-Softphone-macOS-arm64.zip"
             echo "- Windows: ${PUBLIC_BASE_URL%/}/latest/iD30-Softphone-Windows-x64.exe"
-            echo "- Updates: ${PUBLIC_BASE_URL%/}/updates"
           } >> "$GITHUB_STEP_SUMMARY"

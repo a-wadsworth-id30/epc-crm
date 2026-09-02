@@ -9,11 +9,13 @@ const downloadOptions = {
   mac: {
     label: "macOS",
     detail: "Apple Silicon Mac app",
+    filename: "iD30-Softphone-macOS-arm64.zip",
     href: "/api/desktop-softphone/download?platform=mac",
   },
   windows: {
     label: "Windows",
     detail: "Windows 10/11 installer",
+    filename: "iD30-Softphone-Windows-x64.exe",
     href: "/api/desktop-softphone/download?platform=windows",
   },
 };
@@ -86,6 +88,7 @@ export default function DesktopSoftphoneSettingsPanel({
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a
                 href={recommended.href}
+                download={recommended.filename}
                 aria-disabled={!downloads[recommendedPlatform]}
                 onClick={(event) => {
                   if (!downloads[recommendedPlatform]) event.preventDefault();
@@ -184,6 +187,7 @@ function DownloadCard({
   return (
     <a
       href={option.href}
+      download={option.filename}
       aria-disabled={!configured}
       onClick={(event) => {
         if (!configured) event.preventDefault();

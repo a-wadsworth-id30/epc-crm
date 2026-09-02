@@ -11,6 +11,18 @@ const shouldNotarizeMac =
 const shouldBuildMacPkg =
   process.platform === "darwin" &&
   process.env.ID30_SOFTPHONE_BUILD_MAC_INSTALLER === "true";
+const windowsCertificateFile =
+  process.env.WINDOWS_CERTIFICATE_FILE ||
+  process.env.ID30_SOFTPHONE_WINDOWS_CERTIFICATE_FILE;
+const windowsCertificatePassword =
+  process.env.WINDOWS_CERTIFICATE_PASSWORD ||
+  process.env.ID30_SOFTPHONE_WINDOWS_CERTIFICATE_PASSWORD;
+const windowsSignWithParams =
+  process.env.WINDOWS_SIGN_WITH_PARAMS ||
+  process.env.ID30_SOFTPHONE_WINDOWS_SIGN_WITH_PARAMS;
+const shouldSignWindows =
+  process.platform === "win32" &&
+  Boolean(windowsCertificateFile || windowsSignWithParams);
 
 function notarizeConfig() {
   if (!shouldNotarizeMac) return undefined;
@@ -30,6 +42,28 @@ function notarizeConfig() {
   };
 }
 
+function windowsSignConfig() {
+  if (!shouldSignWindows) return undefined;
+
+  return {
+    ...(windowsCertificateFile
+      ? { certificateFile: windowsCertificateFile }
+      : {}),
+    ...(windowsCertificatePassword
+      ? { certificatePassword: windowsCertificatePassword }
+      : {}),
+    ...(windowsSignWithParams ? { signWithParams: windowsSignWithParams } : {}),
+    description: "iD30 Softphone",
+    timestampServer:
+      process.env.WINDOWS_TIMESTAMP_SERVER ||
+      process.env.ID30_SOFTPHONE_WINDOWS_TIMESTAMP_SERVER ||
+      "http://timestamp.digicert.com",
+    website: "https://crm.epc-improvements.co.uk",
+  };
+}
+
+const windowsSign = windowsSignConfig();
+
 const makers = [
   {
     name: "@electron-forge/maker-zip",
@@ -40,6 +74,20 @@ const makers = [
     platforms: ["win32"],
     config: {
       name: "id30_softphone",
+      ...(windowsSign
+        ? {
+            windowsSign,
+            ...(windowsCertificateFile
+              ? { certificateFile: windowsCertificateFile }
+              : {}),
+            ...(windowsCertificatePassword
+              ? { certificatePassword: windowsCertificatePassword }
+              : {}),
+            ...(windowsSignWithParams
+              ? { signWithParams: windowsSignWithParams }
+              : {}),
+          }
+        : {}),
     },
   },
 ];
@@ -63,6 +111,7 @@ module.exports = {
     appCategoryType: "public.app-category.business",
     icon: "./assets/icon",
     asar: true,
+    ...(windowsSign ? { windowsSign } : {}),
     osxSign: shouldSignMac
       ? {
           identity: process.env.MACOS_CODESIGN_IDENTITY,

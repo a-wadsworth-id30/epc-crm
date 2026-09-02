@@ -1,4 +1,5 @@
 const path = require("node:path");
+const http = require("node:http");
 const { execFile } = require("node:child_process");
 const {
   app,
@@ -21,7 +22,8 @@ if (require("electron-squirrel-startup")) {
 }
 
 const protocolScheme = "id30-softphone";
-const softphoneUrl = process.env.ID30_SOFTPHONE_URL || "https://crm.id30.com/softphone-window";
+const localBridgePort = Number(process.env.ID30_SOFTPHONE_BRIDGE_PORT || 47730);
+const softphoneUrl = process.env.ID30_SOFTPHONE_URL || "https://crm.epc-improvements.co.uk/softphone-window";
 const softphoneOrigin = new URL(softphoneUrl).origin;
 const appWindowPaths = new Set(["/", "/signin", "/softphone-window"]);
 const updateRepo = process.env.ID30_UPDATE_REPO || releaseConfig.updateRepo || "";
@@ -43,6 +45,7 @@ let updateFeedConfigured = false;
 let updateCheckTimer = null;
 let hasActiveCall = false;
 let pendingAutoInstall = false;
+let localBridgeServer = null;
 let updateState = {
   configured: false,
   currentVersion: app.getVersion(),
@@ -148,6 +151,165 @@ function sendDialCommand(payload) {
     showCollapsedCallControls: false,
   });
   mainWindow.webContents.send("desktop-softphone:dial", dialPayload);
+}
+
+function allowedBridgeOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+
+  if (origin === softphoneOrigin) {
+    return true;
+  }
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
+function writeBridgeResponse(response, statusCode, payload, origin) {
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": origin && allowedBridgeOrigin(origin) ? origin : softphoneOrigin,
+    "Access-Control-Allow-Headers": "Content-Type, Accept",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Vary": "Origin",
+  });
+  response.end(JSON.stringify(payload));
+}
+
+function readBridgeJson(request) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+
+      if (body.length > 8192) {
+        reject(new Error("Request body too large."));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      if (!body) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function dialPayloadFromBridgeBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return null;
+  }
+
+  const phone = typeof body.phone === "string" && body.phone.trim()
+    ? body.phone.trim()
+    : null;
+
+  if (!phone) {
+    return null;
+  }
+
+  return {
+    phone,
+    requestId:
+      typeof body.requestId === "string" && body.requestId.trim()
+        ? body.requestId.trim()
+        : undefined,
+    contactName:
+      typeof body.contactName === "string" && body.contactName.trim()
+        ? body.contactName.trim()
+        : undefined,
+    contextName:
+      typeof body.contextName === "string" && body.contextName.trim()
+        ? body.contextName.trim()
+        : undefined,
+    opportunityId:
+      typeof body.opportunityId === "string" && body.opportunityId.trim()
+        ? body.opportunityId.trim()
+        : undefined,
+    contactId:
+      typeof body.contactId === "string" && body.contactId.trim()
+        ? body.contactId.trim()
+        : undefined,
+  };
+}
+
+function startLocalBridge() {
+  if (localBridgeServer || !Number.isFinite(localBridgePort)) {
+    return;
+  }
+
+  localBridgeServer = http.createServer(async (request, response) => {
+    const origin = request.headers.origin;
+
+    if (!allowedBridgeOrigin(origin)) {
+      writeBridgeResponse(response, 403, { error: "Origin not allowed." }, origin);
+      return;
+    }
+
+    if (request.method === "OPTIONS") {
+      writeBridgeResponse(response, 204, {}, origin);
+      return;
+    }
+
+    const requestUrl = new URL(request.url || "/", `http://127.0.0.1:${localBridgePort}`);
+
+    if (request.method === "GET" && requestUrl.pathname === "/status") {
+      writeBridgeResponse(response, 200, {
+        ok: true,
+        version: app.getVersion(),
+        packaged: app.isPackaged,
+      }, origin);
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/dial") {
+      try {
+        const payload = dialPayloadFromBridgeBody(await readBridgeJson(request));
+
+        if (!payload) {
+          writeBridgeResponse(response, 400, { error: "A dial command requires a phone number." }, origin);
+          return;
+        }
+
+        focusOrCreateWindow();
+        sendDialCommand(payload);
+        writeBridgeResponse(response, 200, { ok: true }, origin);
+      } catch (error) {
+        writeBridgeResponse(response, 400, { error: error?.message ?? "Invalid request." }, origin);
+      }
+      return;
+    }
+
+    writeBridgeResponse(response, 404, { error: "Not found." }, origin);
+  });
+
+  localBridgeServer.on("error", (error) => {
+    console.error("Desktop softphone local bridge failed:", error);
+    localBridgeServer = null;
+  });
+
+  localBridgeServer.listen(localBridgePort, "127.0.0.1", () => {
+    console.log(`Desktop softphone local bridge listening on 127.0.0.1:${localBridgePort}`);
+  });
+}
+
+function stopLocalBridge() {
+  if (!localBridgeServer) {
+    return;
+  }
+
+  localBridgeServer.close();
+  localBridgeServer = null;
 }
 
 function flushPendingDialCommands() {
@@ -316,7 +478,7 @@ async function requestMacMicrophoneAccess() {
 function configurePermissions() {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL();
-    const trustedOrigin = url.startsWith("https://crm.id30.com");
+    const trustedOrigin = url.startsWith("https://crm.epc-improvements.co.uk");
 
     if (trustedOrigin && permission === "media") {
       callback(true);
@@ -610,6 +772,7 @@ function dialPayloadFromProtocolUrl(url) {
 
     return {
       phone,
+      requestId: optionalProtocolParam(parsedUrl.searchParams, "requestId"),
       contactName: optionalProtocolParam(parsedUrl.searchParams, "contactName"),
       contextName: optionalProtocolParam(parsedUrl.searchParams, "contextName"),
       opportunityId: optionalProtocolParam(parsedUrl.searchParams, "opportunityId"),
@@ -770,7 +933,7 @@ function buildApplicationMenu() {
         },
         {
           label: "Open CRM",
-          click: () => openExternalUrl("https://crm.id30.com").catch(() => {}),
+          click: () => openExternalUrl("https://crm.epc-improvements.co.uk").catch(() => {}),
         },
       ],
     },
@@ -922,6 +1085,7 @@ app.whenReady().then(async () => {
 
   configureAutoUpdates();
   configurePermissions();
+  startLocalBridge();
   await requestMacMicrophoneAccess();
   buildApplicationMenu();
   createTray();
@@ -965,3 +1129,5 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+app.on("before-quit", stopLocalBridge);

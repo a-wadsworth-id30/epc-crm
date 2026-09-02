@@ -1487,16 +1487,18 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   keep the phone available without an active CRM dashboard tab.
 - A first-pass desktop softphone wrapper lives in `desktop/softphone`. It is a
   separate Electron package that loads `/softphone-window`, supports
-  always-on-top and compact/expanded window modes, and is not part of the
-  Hostinger Next.js production build.
+  always-on-top and compact/expanded window modes, exposes a local loopback
+  command bridge on `127.0.0.1:47730`, and is not part of the Netlify CRM
+  production build.
 - Packaged desktop softphone builds check for updates at startup and then every
   15 minutes from the baked static update feed. The desktop app surfaces its
   current version and update state in the softphone Settings panel, downloads
   updates in the background, and installs automatically when the phone is not
   in a live/ringing/dialing call. macOS automatic install requires signed
   builds.
-- Desktop installer download URLs must be public URLs configured with
-  `ID30_SOFTPHONE_DOWNLOAD_BASE_URL`, or platform-specific overrides
+- Desktop installer download URLs default to the dedicated public R2 bucket and
+  can be overridden with `ID30_SOFTPHONE_DOWNLOAD_BASE_URL`, or
+  platform-specific overrides
   `ID30_SOFTPHONE_MAC_DOWNLOAD_URL` and
   `ID30_SOFTPHONE_WINDOWS_DOWNLOAD_URL`. The desktop release workflow builds
   macOS and Windows installers, uploads them to R2-compatible public storage,
@@ -1505,9 +1507,8 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   `ID30_SOFTPHONE_ALLOW_GITHUB_RELEASE_DOWNLOADS=true`, which is not suitable
   while the GitHub repo is private.
 - A dedicated public R2 bucket, `id30-softphone-downloads`, currently hosts the
-  macOS desktop softphone download at
-  `https://pub-dd0c50b7d886446ea973dd80b6ea38f6.r2.dev`. Windows downloads
-  remain disabled until the Windows installer is published.
+  macOS and Windows desktop softphone downloads at
+  `https://pub-dd0c50b7d886446ea973dd80b6ea38f6.r2.dev`.
 - The Desktop Softphone settings page uses authenticated staff download links.
   The legacy `/api/desktop-softphone/install-macos` script route is
   authenticated and retained only for controlled internal use; public curl
@@ -1713,9 +1714,10 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   diagnostics at most every 15 minutes per registered domain instead of writing
   on every script load. Deploy-version checks use the DB-free public
   `/api/build-version` endpoint every five minutes in visible tabs instead of
-  routine authenticated `/api/build-info` polling. Normal CRM tabs pause passive
-  desktop-softphone presence reads while hidden, while the standalone
-  `/softphone-window` heartbeat keeps live browser routing presence fresh.
+  routine authenticated `/api/build-info` polling. Desktop softphone
+  click-to-call uses the local desktop bridge/protocol instead of polling
+  Netlify for commands; server presence is now a sparse compatibility signal
+  with a 10-minute active window.
 - Inbound queue routing treats queue-level assigned agent IDs and per-agent
   assigned queue IDs separately, so a queue with assigned users can correctly
   find available agents.

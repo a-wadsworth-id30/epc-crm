@@ -21,6 +21,8 @@ declare global {
   }
 }
 
+const desktopBridgeBaseUrl = "http://127.0.0.1:47730";
+
 function dispatchLocalSoftphoneDial(detail: SoftphoneDialDetail) {
   window.dispatchEvent(
     new CustomEvent("crm-softphone:dial", {
@@ -29,7 +31,44 @@ function dispatchLocalSoftphoneDial(detail: SoftphoneDialDetail) {
   );
 }
 
-async function fetchDesktopSoftphoneActive() {
+function requestId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = 700,
+) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(input, {
+    ...init,
+    signal: controller.signal,
+  }).finally(() => window.clearTimeout(timeout));
+}
+
+export async function fetchLocalDesktopSoftphoneActive() {
+  try {
+    const response = await fetchWithTimeout(`${desktopBridgeBaseUrl}/status`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    window.__id30DesktopSoftphoneActive = true;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchServerDesktopSoftphoneActive() {
   try {
     const response = await fetch("/api/telephony/desktop-presence", {
       headers: { Accept: "application/json" },
@@ -54,7 +93,29 @@ async function fetchDesktopSoftphoneActive() {
   }
 }
 
-async function queueDesktopSoftphoneDial(detail: SoftphoneDialDetail) {
+async function sendLocalDesktopSoftphoneDial(detail: SoftphoneDialDetail) {
+  try {
+    const response = await fetchWithTimeout(`${desktopBridgeBaseUrl}/dial`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(detail),
+    });
+
+    if (response.ok) {
+      window.__id30DesktopSoftphoneActive = true;
+      return true;
+    }
+  } catch {
+    // Fall back to the registered desktop protocol.
+  }
+
+  return false;
+}
+
+async function queueLegacyDesktopSoftphoneDial(detail: SoftphoneDialDetail) {
   const response = await fetch("/api/telephony/desktop-command", {
     method: "POST",
     headers: {
@@ -72,6 +133,7 @@ function desktopSoftphoneDialUrl(detail: SoftphoneDialDetail) {
   const params = new URLSearchParams();
 
   params.set("phone", detail.phone);
+  params.set("requestId", detail.requestId ?? requestId());
 
   if (detail.contactName) params.set("contactName", detail.contactName);
   if (detail.contextName) params.set("contextName", detail.contextName);
@@ -93,22 +155,36 @@ function launchDesktopSoftphoneDial(detail: SoftphoneDialDetail) {
 }
 
 async function routeSoftphoneDial(detail: SoftphoneDialDetail) {
-  if (window.__id30DesktopSoftphoneActive) {
-    launchDesktopSoftphoneDial(detail);
+  const command = {
+    ...detail,
+    requestId: detail.requestId ?? requestId(),
+  };
+
+  if (await sendLocalDesktopSoftphoneDial(command)) {
     return;
   }
 
-  const desktopActive = await fetchDesktopSoftphoneActive();
-
-  if (desktopActive) {
-    const queued = await queueDesktopSoftphoneDial(detail).catch(() => false);
-
-    if (queued) {
-      return;
-    }
+  if (window.__id30DesktopSoftphoneActive) {
+    launchDesktopSoftphoneDial(command);
+    return;
   }
 
-  dispatchLocalSoftphoneDial(detail);
+  const desktopActive = await fetchLocalDesktopSoftphoneActive();
+
+  if (desktopActive) {
+    launchDesktopSoftphoneDial(command);
+    return;
+  }
+
+  const serverDesktopActive = await fetchServerDesktopSoftphoneActive();
+
+  if (serverDesktopActive) {
+    launchDesktopSoftphoneDial(command);
+    void queueLegacyDesktopSoftphoneDial(command).catch(() => false);
+    return;
+  }
+
+  dispatchLocalSoftphoneDial(command);
 }
 
 export function triggerSoftphoneDial(
