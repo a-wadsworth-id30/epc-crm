@@ -145,8 +145,9 @@ when the browser tab is hidden, then reconnect and refresh when the tab becomes
 visible. This prevents hidden dashboards, inboxes, conversations and telephony
 views from keeping low-value database polling active.
 The sidebar application-health widget follows the same pattern: it checks
-`/api/health` while visible/focused, then pauses hidden-tab polling so idle CRM
-tabs do not keep waking the DB-backed health route.
+the DB-free `/api/health` route while visible/focused, then pauses hidden-tab
+polling so idle CRM tabs do not keep doing passive network checks. Explicit
+database proof is available at `/api/health?database=1` for operator checks.
 The deploy-version guard checks the DB-free public `/api/build-version`
 fingerprint every five minutes while visible, with immediate checks retained
 for asset load errors. Authenticated `/api/build-info` remains available for

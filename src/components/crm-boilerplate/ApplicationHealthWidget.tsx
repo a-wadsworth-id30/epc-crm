@@ -84,7 +84,7 @@ export default function ApplicationHealthWidget({
           minute: "2-digit",
         }).format(new Date(value))
       : "Unknown";
-  const healthy = Boolean(health?.ok && health.database === "ok" && !error);
+  const healthy = Boolean(health?.ok && health.database !== "error" && !error);
   const statusLabel = healthy ? "Healthy" : error ? "Check failed" : "Checking";
   const statusClasses = healthy
     ? "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300"
@@ -100,11 +100,23 @@ export default function ApplicationHealthWidget({
   const builtAt = formatDateTime(health?.build?.builtAt);
   const runtimeStartedAt = formatDateTime(health?.build?.runtimeStartedAt);
   const hasDetailedBuild =
-    builtAt !== "Unknown" || runtimeStartedAt !== "Unknown" || health?.build?.branch;
+    builtAt !== "Unknown" ||
+    runtimeStartedAt !== "Unknown" ||
+    health?.build?.branch;
   const buildLabel =
-    [health?.build?.branch, health?.build?.shortCommit].filter(Boolean).join(" @ ") ||
+    [health?.build?.branch, health?.build?.shortCommit]
+      .filter(Boolean)
+      .join(" @ ") ||
     health?.build?.shortCommit ||
     "Unknown";
+  const databaseLabel =
+    health?.database === "skipped"
+      ? "Not checked"
+      : health?.database === "ok"
+        ? "OK"
+        : health?.database === "error"
+          ? "Error"
+          : "Unknown";
   const popoverId = "application-health-popover";
 
   return (
@@ -164,11 +176,10 @@ export default function ApplicationHealthWidget({
           </div>
 
           <div className="mt-3 space-y-2">
-            <HealthPopoverRow
-              label="Database"
-              value={health?.database ?? "Unknown"}
-            />
-            {hasDetailedBuild && <HealthPopoverRow label="Built" value={builtAt} />}
+            <HealthPopoverRow label="Database check" value={databaseLabel} />
+            {hasDetailedBuild && (
+              <HealthPopoverRow label="Built" value={builtAt} />
+            )}
             {hasDetailedBuild && (
               <HealthPopoverRow label="Runtime" value={runtimeStartedAt} />
             )}

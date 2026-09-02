@@ -224,7 +224,7 @@ function addConnectionPoolRecommendation({
       validationProcedure: [
         "Confirm `DATABASE_URL` host contains `-pooler.` and `MIGRATE_DATABASE_URL` points to the direct endpoint.",
         "Deploy to staging or canary.",
-        "Verify `/api/health`, sign-in and high-volume list routes.",
+        "Verify `/api/build-version`, `/api/health?database=1`, sign-in and high-volume list routes.",
         "Compare active connections, connection errors and p95 latency with the previous baseline.",
       ],
     }),
@@ -315,7 +315,7 @@ function addEndpointRecommendations({
           "Capture active compute and request baseline for at least one week.",
           "Confirm no background worker needs a persistent database connection.",
           "Apply the suspend timeout target only after approval in a low-traffic window.",
-          "Monitor cold-start latency, webhook failures, scheduled jobs and `/api/health`.",
+          "Monitor cold-start latency, webhook failures, scheduled jobs, `/api/build-version` and explicit database health.",
         ],
       }),
     );
@@ -373,7 +373,7 @@ function addEndpointRecommendations({
           "Run the advisor with read-only Neon API telemetry over a representative week.",
           "Confirm peak CPU, memory and connection saturation stay below configured guardrails.",
           "Apply the new Neon max CU in the Neon console or API during a quiet period.",
-          "Verify `/api/health`, sign-in, dashboard, Sales and Pipedrive scheduled imports.",
+          "Verify `/api/build-version`, `/api/health?database=1`, sign-in, dashboard, Sales and Pipedrive scheduled imports.",
           "Roll back the CU ceiling if latency, errors or saturation breach guardrails.",
         ],
       }),

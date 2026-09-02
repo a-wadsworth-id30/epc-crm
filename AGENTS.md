@@ -40,7 +40,7 @@ For marketing attribution work, also read:
 - File storage integration: Cloudflare R2.
 - Integration credentials are encrypted in `IntegrationConnection.config`.
 - `CREDENTIAL_ENCRYPTION_KEY` must match the environment that saved encrypted credentials.
-- Pushing to GitHub is not the same as verifying live; wait for the Netlify production deploy and confirm `/api/health`.
+- Pushing to GitHub is not the same as verifying live; wait for the Netlify production deploy and confirm `/api/build-version`.
 
 ## Working Rules
 
@@ -94,4 +94,4 @@ Netlify expected settings:
 - Build command: `npm run netlify:build`
 - Node.js version: 20
 
-After a GitHub push, verify live separately through `https://crm[.]epc-improvements[.]co[.]uk/api/health` and the relevant user workflow. iD30 Prospecting is the Hostinger deployment; do not apply Hostinger deployment assumptions to the CRM.
+After a GitHub push, verify live separately through `https://crm[.]epc-improvements[.]co[.]uk/api/build-version`, use `/api/health?database=1` only when DB proof is needed, and check the relevant user workflow. iD30 Prospecting is the Hostinger deployment; do not apply Hostinger deployment assumptions to the CRM.

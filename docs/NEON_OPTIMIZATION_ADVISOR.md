@@ -168,7 +168,8 @@ For any future approved change:
 1. Capture a pre-change advisor report.
 2. Capture application health, latency, error-rate and database metrics.
 3. Apply the exact approved change only.
-4. Validate `/api/health` and the affected CRM workflow.
+4. Validate `/api/build-version`, `/api/health?database=1` when database proof
+   is required, and the affected CRM workflow.
 5. Compare p50, p95, p99, errors, active connections, slow queries and lock
    waits against baseline.
 6. Roll back if the configured guardrails are breached.

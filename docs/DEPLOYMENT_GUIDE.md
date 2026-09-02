@@ -104,7 +104,9 @@ Optional:
 
 - `CRM_WARMUP_PATHS`: comma-separated public paths for the scheduled Netlify
   warmup function. Defaults to `/signin`. Keep warmup paths DB-free; do not
-  include `/api/health` or attribution config because they wake Neon compute.
+  include `/api/health?database=1` or attribution config because they wake
+  Neon compute. Use `/api/health` only when a public function warmup is a
+  deliberate choice.
 - `MARKETING_UPLOAD_CRON_ENABLED`: set to `true` to let the scheduled Netlify
   conversion-upload function call the protected upload processor.
 - `MARKETING_UPLOAD_CRON_SECRET`: shared secret required by
@@ -231,7 +233,9 @@ Healthcheck:
 GET /api/health
 ```
 
-Use this for uptime and deployment freshness monitoring. The response includes
+Use this for uptime and deployment freshness monitoring. By default it does not
+ping the database, so routine probes do not keep Neon compute awake. The
+response includes
 a public build fingerprint embedded into the compiled Next.js bundle:
 
 ```json
@@ -240,6 +244,12 @@ a public build fingerprint embedded into the compiled Next.js bundle:
     "shortCommit": "c374b97"
   }
 }
+```
+
+For explicit database verification, call:
+
+```text
+GET /api/health?database=1
 ```
 
 The client deploy-version guard uses `/api/build-version` for a DB-free public
@@ -253,8 +263,8 @@ expected commit:
 npm run deploy:check
 ```
 
-If `/api/health.build.shortCommit` does not match GitHub `main`, wait for or
-retry the Netlify production deploy before testing live workflows.
+If `/api/build-version.build.shortCommit` does not match GitHub `main`, wait
+for or retry the Netlify production deploy before testing live workflows.
 
 Settings > System includes a read-only Schema migrations panel. It compares
 committed Prisma migration folders with the runtime database
@@ -277,7 +287,8 @@ The repository includes `netlify/functions/warm-crm.mjs`, a scheduled Netlify
 function that fetches `/signin` every four minutes by default. Keep this list
 DB-free so the warmup does not keep Neon compute awake unnecessarily. Override
 `CRM_WARMUP_PATHS` only after checking the database cost/cold-start tradeoff.
-Do not add `/api/health` unless deliberately choosing to keep Neon warm.
+Do not add `/api/health?database=1` unless deliberately choosing to keep Neon
+warm.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.
@@ -396,7 +407,7 @@ For now, Codex should deploy when completing a job. The expected handoff is:
 
 1. Merge the completed PR to `main`.
 2. Wait for or trigger the Netlify production deploy.
-3. Run `npm run deploy:check` or compare `/api/health.build.shortCommit`
+3. Run `npm run deploy:check` or compare `/api/build-version.build.shortCommit`
    against GitHub `main`.
 4. State clearly whether the change is actually live.
 

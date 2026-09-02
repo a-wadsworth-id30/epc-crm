@@ -11,6 +11,7 @@ console.log(`Base URL: ${baseUrl}`);
 console.log(`Runtime database: ${result.database.runtime.label}`);
 console.log(`Migration database: ${result.database.migration.label}`);
 console.log(`Healthcheck: ${baseUrl}/api/health`);
+console.log(`Database healthcheck: ${baseUrl}/api/health?database=1`);
 console.log(`Twilio voice webhook: ${baseUrl}/api/webhooks/twilio/voice`);
 console.log(
   `Twilio voice status callback: ${baseUrl}/api/webhooks/twilio/voice/status`,

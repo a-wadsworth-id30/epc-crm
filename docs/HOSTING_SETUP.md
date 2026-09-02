@@ -99,5 +99,6 @@ npm run verify
 Production check:
 
 ```text
-https://crm[.]epc-improvements[.]co[.]uk/api/health
+https://crm[.]epc-improvements[.]co[.]uk/api/build-version
+https://crm[.]epc-improvements[.]co[.]uk/api/health?database=1
 ```

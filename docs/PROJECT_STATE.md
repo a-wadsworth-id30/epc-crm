@@ -1435,9 +1435,10 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   sections live in page-level tab bars.
   Call Tracking overview, number-pool and tracking-number inventory pages are
   server-gated to admins because they expose operational phone setup state.
-- Main sidebar shows an application health widget backed by `/api/health`, with
-  lightweight polling, a public short build fingerprint and short server-side
-  health result caching to avoid unnecessary database pings.
+- Main sidebar shows an application health widget backed by the DB-free
+  `/api/health` default response, with lightweight visible-tab polling, a
+  public short build fingerprint and short server-side result caching. Use
+  `/api/health?database=1` only for explicit database proof.
 - Desktop softphone install guidance lives under `Settings > Desktop Softphone`
   at `/settings/browser-extension`. The page detects macOS vs Windows in the
   browser and points downloads through `/api/desktop-softphone/download`. The
@@ -1732,10 +1733,12 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   `/settings/browser-extension` for older links.
 - Phone System and Call Tracking were removed from the generic Settings nav to reduce duplication.
 - Pushing to GitHub `main` triggers the Netlify production build; verify the
-  live `/api/health` public build fingerprint after deployment. The client
-  deploy-version guard uses `/api/build-version` for a DB-free public short
-  commit check. Detailed build metadata is available only to authenticated CRM
-  users through `/api/build-info` and Settings > System.
+  live `/api/build-version` public build fingerprint after deployment. The
+  client deploy-version guard uses `/api/build-version` for a DB-free public
+  short commit check. Use `/api/health?database=1` only when deployment
+  verification needs an explicit database ping. Detailed build metadata is
+  available only to authenticated CRM users through `/api/build-info` and
+  Settings > System.
 - Netlify uses `npm run netlify:build`, which runs Prisma migrations before
   `next build`. Keep `MIGRATE_DATABASE_URL` set to a direct Neon URL when
   `DATABASE_URL` is pooled.
@@ -1755,11 +1758,12 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
 - Queue wait URLs now guard terminal entries so Twilio cannot reroute an already-ended call after a reject or conference lifecycle callback.
 - Conference status callbacks no longer complete waiting queue entries by themselves; the actual caller leg ending is what completes the queue.
 - Queue wait URL redirects must use the public webhook base URL. Hostinger can expose `request.url` as `https://0.0.0.0:3000`, which caused Twilio error `11200` and caller-facing application errors.
-- `/api/health` includes only an embedded short build fingerprint so live
-  deployment freshness can be verified without exposing full release metadata
-  publicly. Authenticated CRM users can read full commit, branch, build time
-  and runtime start time from `/api/build-info`. Use `npm run deploy:check`
-  after Netlify deploys.
+- `/api/health` is DB-free by default and includes only an embedded short build
+  fingerprint so uptime checks do not keep Neon compute awake or expose full
+  release metadata publicly. Use `/api/health?database=1` for an explicit DB
+  ping. Authenticated CRM users can read full commit, branch, build time and
+  runtime start time from `/api/build-info`. Use `npm run deploy:check` after
+  Netlify deploys.
 - Browser softphone heartbeats continue while `/softphone-window` is open, including when the dashboard tab is closed; the stale browser-agent window is ten minutes.
 - Desktop softphone packaging is separate from CRM deployment. Use
   `desktop/softphone` for Electron development and package signing/release
@@ -1864,13 +1868,14 @@ GitHub `main` deploys to Netlify production. Netlify live state must be checked 
 
 During the current dev phase, Codex should deploy completed jobs by merging or
 pushing the intended commit to `main`, waiting for Netlify deployment, and
-verifying `/api/health.build.shortCommit` matches GitHub `main`. If Netlify is
-still serving an older commit, report that the work is not live yet.
+verifying `/api/build-version.build.shortCommit` matches GitHub `main`. If
+Netlify is still serving an older commit, report that the work is not live yet.
 
 Useful checks:
 
 ```bash
-curl -s https://crm[.]epc-improvements[.]co[.]uk/api/health
+curl -s https://crm[.]epc-improvements[.]co[.]uk/api/build-version
+curl -s 'https://crm[.]epc-improvements[.]co[.]uk/api/health?database=1'
 npm run typecheck
 npm run lint
 ```

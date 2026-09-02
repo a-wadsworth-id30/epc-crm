@@ -12,7 +12,7 @@ export function buildValidationSummary(
     ].join(" "),
     guardrails,
     monitor: [
-      "GET /api/health status and database field",
+      "GET /api/build-version status and GET /api/health?database=1 for explicit database checks",
       "Application error rate",
       "p50, p95 and p99 request latency",
       "Neon CPU and memory pressure",
@@ -38,7 +38,7 @@ export function defaultRollbackProcedure() {
   return [
     "Restore the previous configuration or code commit.",
     "Redeploy the previous known-good build if application behavior changes.",
-    "Re-run `/api/health` and the affected user workflow.",
+    "Re-run `/api/build-version`, `/api/health?database=1` and the affected user workflow.",
     "Compare post-rollback metrics against the pre-change baseline.",
   ];
 }

@@ -271,7 +271,8 @@ const releaseCommands = [
 const releaseVerificationSteps = [
   "Merge feature branches through pull requests into main.",
   "Wait for the host deploy to complete before treating the change as live.",
-  "Confirm /api/health returns ok and reports the merged short commit.",
+  "Confirm /api/build-version reports the merged short commit.",
+  "Use /api/health?database=1 only when the release needs an explicit database ping.",
   "Verify the changed workflow in the browser with an admin account.",
 ] as const;
 const marketingRollupSystemPreviewDays = 30;
@@ -1129,6 +1130,7 @@ export default async function SystemSettingsPage() {
         actions={
           <>
             <HeaderLink href="/api/health">Health JSON</HeaderLink>
+            <HeaderLink href="/api/health?database=1">DB Health JSON</HeaderLink>
             <HeaderLink href="/api/build-info">Build info</HeaderLink>
             <HeaderLink href="/settings/security">Security</HeaderLink>
             <HeaderLink href="/settings/integrations">Integrations</HeaderLink>
@@ -1219,9 +1221,16 @@ export default async function SystemSettingsPage() {
                 <CommandRow
                   command={[
                     "curl -s https://crm",
-                    "epc-improvements.co.uk/api/health",
+                    "epc-improvements.co.uk/api/build-version",
                   ].join(".")}
-                  detail="Live health should return ok and the expected public build.shortCommit."
+                  detail="DB-free build check should return ok and the expected public build.shortCommit."
+                />
+                <CommandRow
+                  command={[
+                    "curl -s 'https://crm",
+                    "epc-improvements.co.uk/api/health?database=1'",
+                  ].join(".")}
+                  detail="Runs an explicit database ping only when deployment verification needs DB proof."
                 />
                 <CommandRow
                   command="npm run deploy:check"

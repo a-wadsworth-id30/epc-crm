@@ -1,30 +1,55 @@
 import { NextResponse } from "next/server";
 import { publicBuildMetadata } from "@/lib/build-metadata";
-import { prisma } from "@/lib/prisma";
+import { healthDatabaseCheckRequested } from "@/lib/health-check";
 
 type HealthPayload = {
   ok: boolean;
-  database: "ok" | "error";
+  database: "ok" | "error" | "skipped";
   build: ReturnType<typeof publicBuildMetadata>;
 };
 
-let cachedHealth: {
+type HealthCacheKey = "runtime" | "database";
+
+type CachedHealth = {
   checkedAt: number;
   payload: HealthPayload;
   status: number;
-} | null = null;
+};
+
+const cachedHealth: Partial<Record<HealthCacheKey, CachedHealth>> = {};
 
 const healthCacheTtlMs = 30_000;
+const healthHeaders = { "Cache-Control": "private, max-age=30" };
 
-export async function GET() {
-  if (cachedHealth && Date.now() - cachedHealth.checkedAt < healthCacheTtlMs) {
-    return NextResponse.json(cachedHealth.payload, {
-      status: cachedHealth.status,
-      headers: { "Cache-Control": "private, max-age=30" },
+export async function GET(request: Request) {
+  const withDatabase = healthDatabaseCheckRequested(request.url);
+  const cacheKey: HealthCacheKey = withDatabase ? "database" : "runtime";
+  const cached = cachedHealth[cacheKey];
+
+  if (cached && Date.now() - cached.checkedAt < healthCacheTtlMs) {
+    return NextResponse.json(cached.payload, {
+      status: cached.status,
+      headers: healthHeaders,
+    });
+  }
+
+  if (!withDatabase) {
+    const payload: HealthPayload = {
+      ok: true,
+      database: "skipped",
+      build: publicBuildMetadata(),
+    };
+
+    cachedHealth[cacheKey] = { checkedAt: Date.now(), payload, status: 200 };
+
+    return NextResponse.json(payload, {
+      headers: healthHeaders,
     });
   }
 
   try {
+    const { prisma } = await import("@/lib/prisma");
+
     await prisma.$queryRaw`SELECT 1`;
 
     const payload: HealthPayload = {
@@ -33,10 +58,10 @@ export async function GET() {
       build: publicBuildMetadata(),
     };
 
-    cachedHealth = { checkedAt: Date.now(), payload, status: 200 };
+    cachedHealth[cacheKey] = { checkedAt: Date.now(), payload, status: 200 };
 
     return NextResponse.json(payload, {
-      headers: { "Cache-Control": "private, max-age=30" },
+      headers: healthHeaders,
     });
   } catch {
     const payload: HealthPayload = {
@@ -45,11 +70,11 @@ export async function GET() {
       build: publicBuildMetadata(),
     };
 
-    cachedHealth = { checkedAt: Date.now(), payload, status: 503 };
+    cachedHealth[cacheKey] = { checkedAt: Date.now(), payload, status: 503 };
 
     return NextResponse.json(payload, {
       status: 503,
-      headers: { "Cache-Control": "private, max-age=30" },
+      headers: healthHeaders,
     });
   }
 }

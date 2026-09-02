@@ -752,9 +752,11 @@ horizontal tabs inside those pages, not as nested left-menu items.
 
 GitHub Actions runs CI. The live app deploys through Netlify from GitHub
 `main`. A GitHub push alone does not prove live has changed; verify
-`/api/health` after Netlify finishes. Public health and `/api/build-version`
-expose only the short build fingerprint; full build metadata is available to
-authenticated CRM users through `/api/build-info` and Settings > System.
+`/api/build-version` after Netlify finishes. Public health and
+`/api/build-version` expose only the short build fingerprint; full build
+metadata is available to authenticated CRM users through `/api/build-info` and
+Settings > System. `/api/health` is DB-free by default; use
+`/api/health?database=1` for an explicit database ping.
 
 Netlify settings:
 
@@ -766,6 +768,12 @@ Healthcheck:
 
 ```text
 GET https://crm[.]epc-improvements[.]co[.]uk/api/health
+```
+
+Database healthcheck:
+
+```text
+GET https://crm[.]epc-improvements[.]co[.]uk/api/health?database=1
 ```
 
 Focused authenticated route smoke test:
