@@ -49,14 +49,12 @@ function SalesPipelineFiltersLoading() {
           <div className="h-5 w-14 rounded-full bg-gray-100 dark:bg-white/[0.08]" />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-1.5 xl:block xl:space-y-1.5">
-          {["lead", "qualified", "proposal", "negotiation", "won", "lost"].map(
-            (item) => (
-              <div
-                key={item}
-                className="h-8 rounded-lg border border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.04]"
-              />
-            ),
-          )}
+          {["enquiries", "opportunities", "projects", "lost"].map((item) => (
+            <div
+              key={item}
+              className="h-8 rounded-lg border border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.04]"
+            />
+          ))}
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:block xl:space-y-3">
           {["search", "stage", "owner", "sort"].map((item) => (

@@ -199,10 +199,10 @@ function buildSuggestions({
 
   if (staleLeadCount > 0) {
     suggestions.push({
-      cta: "Review leads",
-      detail: `${staleLeadCount} lead${staleLeadCount === 1 ? "" : "s"} still need qualification or a next step.`,
+      cta: "Review enquiries",
+      detail: `${staleLeadCount} enquir${staleLeadCount === 1 ? "y" : "ies"} still need engagement or a next step.`,
       href: "/sales?stage=LEAD",
-      title: "Qualify new leads",
+      title: "Nurture new enquiries",
       tone: "brand",
     });
   }
@@ -210,9 +210,9 @@ function buildSuggestions({
   if (proposalCount > 0) {
     suggestions.push({
       cta: "Open pipeline",
-      detail: `${proposalCount} proposal-stage deal${proposalCount === 1 ? "" : "s"} may need chasing.`,
+      detail: `${proposalCount} opportunit${proposalCount === 1 ? "y" : "ies"} may need quote follow-up.`,
       href: "/sales?stage=PROPOSAL",
-      title: "Check proposal follow-up",
+      title: "Check opportunity follow-up",
       tone: "warning",
     });
   }
@@ -534,10 +534,10 @@ export default async function DashboardPage() {
           value={formatMoney(openPipelineValue, currency, displayFormatting)}
         />
         <DashboardMetric
-          detail="Lead-stage opportunities"
+          detail="Enquiry-stage sales"
           href="/sales?stage=LEAD"
           iconName="users-round"
-          label="New leads"
+          label="Enquiries"
           tone="success"
           value={leadCount}
         />
