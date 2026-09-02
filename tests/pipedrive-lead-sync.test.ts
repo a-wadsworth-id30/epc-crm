@@ -40,6 +40,8 @@ let importPagesResult: Record<string, unknown>;
 let previewPageArgs: unknown;
 let previewPageResult: Record<string, unknown>;
 let runningJobRun: { id: string; startedAt: Date; trigger: string } | null;
+let latestLeadImportLog: { startedAt: Date; status: string; syncType: string } | null;
+let recentWebhookLog: { startedAt: Date; status: string; syncType: string } | null;
 let completedJob: unknown;
 let startedJob: unknown;
 let syncCreates: unknown[];
@@ -205,6 +207,21 @@ before(async () => {
               syncCreates.push(write);
 
               return write;
+            },
+            findFirst: async (args: {
+              where?: { syncType?: string | { in?: string[] } };
+            }) => {
+              const syncType = args.where?.syncType;
+
+              if (syncType && typeof syncType === "object") {
+                return recentWebhookLog;
+              }
+
+              if (syncType === "lead-import") {
+                return latestLeadImportLog;
+              }
+
+              return null;
             },
           },
         },
@@ -381,6 +398,12 @@ beforeEach(() => {
     wouldCreate: 2,
   };
   runningJobRun = null;
+  latestLeadImportLog = {
+    startedAt: new Date("2026-08-20T09:00:00.000Z"),
+    status: "SUCCESS",
+    syncType: "lead-import",
+  };
+  recentWebhookLog = null;
   completedJob = null;
   startedJob = null;
   syncCreates = [];
@@ -388,6 +411,68 @@ beforeEach(() => {
 });
 
 describe("Pipedrive scheduled lead sync", () => {
+  it("skips adaptive scheduled pulls when recent provider webhooks are healthy", async () => {
+    recentWebhookLog = {
+      startedAt: new Date("2026-08-20T09:45:00.000Z"),
+      status: "SUCCESS",
+      syncType: "lead-import-webhook",
+    };
+
+    const decision =
+      await pipedriveLeadSync.readPipedriveScheduledLeadPullDecision({
+        maxSkipMinutes: 180,
+        now: new Date("2026-08-20T10:00:00.000Z"),
+        webhookWindowMinutes: 90,
+      });
+
+    assert.equal(decision.shouldRun, false);
+    assert.equal(decision.skipReason, "recent-provider-webhook");
+    assert.equal(decision.recentProviderWebhookAt, "2026-08-20T09:45:00.000Z");
+    assert.equal(decision.lastLeadImportAt, "2026-08-20T09:00:00.000Z");
+  });
+
+  it("keeps adaptive scheduled pulls running when a continuation is pending", async () => {
+    connectionConfig.lastLeadEmailThreadSyncNextStart = 150;
+    recentWebhookLog = {
+      startedAt: new Date("2026-08-20T09:45:00.000Z"),
+      status: "SUCCESS",
+      syncType: "lead-import-webhook",
+    };
+
+    const decision =
+      await pipedriveLeadSync.readPipedriveScheduledLeadPullDecision({
+        maxSkipMinutes: 180,
+        now: new Date("2026-08-20T10:00:00.000Z"),
+        webhookWindowMinutes: 90,
+      });
+
+    assert.equal(decision.shouldRun, true);
+    assert.equal(decision.skipReason, "continuation-pending");
+  });
+
+  it("forces adaptive scheduled pulls after the max skip window", async () => {
+    latestLeadImportLog = {
+      startedAt: new Date("2026-08-20T06:30:00.000Z"),
+      status: "SUCCESS",
+      syncType: "lead-import",
+    };
+    recentWebhookLog = {
+      startedAt: new Date("2026-08-20T09:45:00.000Z"),
+      status: "SUCCESS",
+      syncType: "lead-import-webhook",
+    };
+
+    const decision =
+      await pipedriveLeadSync.readPipedriveScheduledLeadPullDecision({
+        maxSkipMinutes: 180,
+        now: new Date("2026-08-20T10:00:00.000Z"),
+        webhookWindowMinutes: 90,
+      });
+
+    assert.equal(decision.shouldRun, true);
+    assert.equal(decision.skipReason, "latest-import-too-old");
+  });
+
   it("saves a pagination continuation without advancing the full cursor", async () => {
     const result = await pipedriveLeadSync.runPipedriveLeadPull({
       actorId: "user-1",

@@ -32,6 +32,13 @@ import { prisma } from "@/lib/prisma";
 
 type PipedriveLeadPullStatus = "SUCCESS" | "WARNING" | "ERROR";
 const pipedriveLeadImportJobName = "pipedrive.lead_import";
+const pipedriveLeadImportSyncType = "lead-import";
+const pipedriveProviderWebhookSyncTypes = [
+  "contact-import-webhook",
+  "lead-import-webhook",
+  "lead-note-import-webhook",
+  "webhook",
+];
 
 export type PipedriveLeadPullResult = {
   connectionId: string;
@@ -134,6 +141,23 @@ export type PipedriveApprovedLeadPageImportResult = PipedriveLeadPullResult & {
 
 export type PipedriveDirectLeadImportResult = PipedriveLeadPullResult & {
   requestedLeadId: string | null;
+};
+
+export type PipedriveScheduledLeadPullDecision = {
+  hasContinuationCursor: boolean;
+  lastLeadImportAt: string | null;
+  maxSkipMinutes: number;
+  message: string;
+  recentProviderWebhookAt: string | null;
+  shouldRun: boolean;
+  skipReason:
+    | "adaptive-disabled"
+    | "continuation-pending"
+    | "latest-import-too-old"
+    | "no-recent-provider-webhook"
+    | "not-connected"
+    | "recent-provider-webhook";
+  webhookWindowMinutes: number;
 };
 
 export async function runPipedriveLeadPull({
@@ -484,7 +508,8 @@ export async function readPipedriveLeadPullReadiness() {
     connectionId: connection?.id ?? null,
     hasContinuationCursor:
       typeof storedConfig?.lastFullLeadSyncNextStart === "number" ||
-      typeof storedConfig?.lastLeadNoteSyncNextStart === "number",
+      typeof storedConfig?.lastLeadNoteSyncNextStart === "number" ||
+      typeof storedConfig?.lastLeadEmailThreadSyncNextStart === "number",
     lastFullDealSyncAt: null,
     lastFullDealSyncNextCursor: null,
     lastFullLeadSyncAt: storedConfig?.lastFullLeadSyncAt ?? null,
@@ -518,6 +543,120 @@ export async function readPipedriveLeadPullReadiness() {
     pullOnly: true,
     status: connection?.status ?? null,
     updatedAt: connection?.updatedAt.toISOString() ?? null,
+  };
+}
+
+export async function readPipedriveScheduledLeadPullDecision({
+  maxSkipMinutes = pipedriveLeadImportAdaptiveMaxSkipMinutes(),
+  now = new Date(),
+  webhookWindowMinutes = pipedriveLeadImportAdaptiveWebhookWindowMinutes(),
+}: {
+  maxSkipMinutes?: number;
+  now?: Date;
+  webhookWindowMinutes?: number;
+} = {}): Promise<PipedriveScheduledLeadPullDecision> {
+  const normalizedWebhookWindowMinutes = nonNegativeInteger(
+    webhookWindowMinutes,
+    90,
+  );
+  const normalizedMaxSkipMinutes = nonNegativeInteger(maxSkipMinutes, 180);
+  const readiness = await readPipedriveLeadPullReadiness();
+  const [latestProviderWebhook, latestLeadImport] = await Promise.all([
+    latestRecentProviderWebhook({
+      now,
+      webhookWindowMinutes: normalizedWebhookWindowMinutes,
+    }),
+    latestLeadImportRun(),
+  ]);
+  const recentProviderWebhookAt =
+    latestProviderWebhook?.startedAt.toISOString() ?? null;
+  const lastLeadImportAt = latestLeadImport?.startedAt.toISOString() ?? null;
+
+  if (normalizedWebhookWindowMinutes <= 0) {
+    return {
+      hasContinuationCursor: readiness.hasContinuationCursor,
+      lastLeadImportAt,
+      maxSkipMinutes: normalizedMaxSkipMinutes,
+      message:
+        "Adaptive Pipedrive lead import is disabled, so the scheduled fallback should run.",
+      recentProviderWebhookAt,
+      shouldRun: true,
+      skipReason: "adaptive-disabled",
+      webhookWindowMinutes: normalizedWebhookWindowMinutes,
+    };
+  }
+
+  if (!readiness.connected) {
+    return {
+      hasContinuationCursor: readiness.hasContinuationCursor,
+      lastLeadImportAt,
+      maxSkipMinutes: normalizedMaxSkipMinutes,
+      message:
+        "Pipedrive credentials are not connected, so the scheduled fallback should run and report readiness.",
+      recentProviderWebhookAt,
+      shouldRun: true,
+      skipReason: "not-connected",
+      webhookWindowMinutes: normalizedWebhookWindowMinutes,
+    };
+  }
+
+  if (readiness.hasContinuationCursor) {
+    return {
+      hasContinuationCursor: true,
+      lastLeadImportAt,
+      maxSkipMinutes: normalizedMaxSkipMinutes,
+      message:
+        "A Pipedrive lead, note or email-thread continuation is pending, so the scheduled fallback should run.",
+      recentProviderWebhookAt,
+      shouldRun: true,
+      skipReason: "continuation-pending",
+      webhookWindowMinutes: normalizedWebhookWindowMinutes,
+    };
+  }
+
+  if (!latestProviderWebhook) {
+    return {
+      hasContinuationCursor: false,
+      lastLeadImportAt,
+      maxSkipMinutes: normalizedMaxSkipMinutes,
+      message:
+        "No recent real Pipedrive webhook delivery was found, so the scheduled fallback should run.",
+      recentProviderWebhookAt,
+      shouldRun: true,
+      skipReason: "no-recent-provider-webhook",
+      webhookWindowMinutes: normalizedWebhookWindowMinutes,
+    };
+  }
+
+  if (
+    normalizedMaxSkipMinutes > 0 &&
+    (!latestLeadImport ||
+      latestLeadImport.startedAt.getTime() <=
+        now.getTime() - normalizedMaxSkipMinutes * 60_000)
+  ) {
+    return {
+      hasContinuationCursor: false,
+      lastLeadImportAt,
+      maxSkipMinutes: normalizedMaxSkipMinutes,
+      message:
+        "The last full Pipedrive lead import is outside the adaptive max-skip window, so the scheduled fallback should run.",
+      recentProviderWebhookAt,
+      shouldRun: true,
+      skipReason: "latest-import-too-old",
+      webhookWindowMinutes: normalizedWebhookWindowMinutes,
+    };
+  }
+
+  return {
+    hasContinuationCursor: false,
+    lastLeadImportAt,
+    maxSkipMinutes: normalizedMaxSkipMinutes,
+    message:
+      "Recent real Pipedrive webhook activity was received and no continuation is pending, so the scheduled fallback can skip this run.",
+    recentProviderWebhookAt,
+    shouldRun: false,
+    skipReason: "recent-provider-webhook",
+    webhookWindowMinutes: normalizedWebhookWindowMinutes,
   };
 }
 
@@ -673,7 +812,7 @@ async function writePipedriveLeadPull({
         recordsWritten: 0,
         startedAt,
         status: "WARNING",
-        syncType: "lead-import",
+        syncType: pipedriveLeadImportSyncType,
       },
     });
 
@@ -970,7 +1109,7 @@ async function writePipedriveLeadPull({
           recordsWritten,
           startedAt,
           status,
-          syncType: "lead-import",
+          syncType: pipedriveLeadImportSyncType,
         },
       }),
     ];
@@ -1082,7 +1221,7 @@ async function writePipedriveLeadPull({
         recordsWritten: 0,
         startedAt,
         status: "ERROR",
-        syncType: "lead-import",
+        syncType: pipedriveLeadImportSyncType,
       },
     });
 
@@ -1713,6 +1852,66 @@ async function currentPipedriveLeadPullRun(
   }
 }
 
+async function latestRecentProviderWebhook({
+  now,
+  webhookWindowMinutes,
+}: {
+  now: Date;
+  webhookWindowMinutes: number;
+}) {
+  if (webhookWindowMinutes <= 0) return null;
+
+  return prisma.marketingIntegrationSyncLog.findFirst({
+    orderBy: { startedAt: "desc" },
+    select: {
+      startedAt: true,
+      status: true,
+      syncType: true,
+    },
+    where: {
+      provider: pipedriveProvider,
+      startedAt: {
+        gte: new Date(now.getTime() - webhookWindowMinutes * 60_000),
+      },
+      status: { not: "ERROR" },
+      syncType: { in: pipedriveProviderWebhookSyncTypes },
+    },
+  });
+}
+
+async function latestLeadImportRun() {
+  return prisma.marketingIntegrationSyncLog.findFirst({
+    orderBy: { startedAt: "desc" },
+    select: {
+      startedAt: true,
+      status: true,
+      syncType: true,
+    },
+    where: {
+      provider: pipedriveProvider,
+      syncType: pipedriveLeadImportSyncType,
+    },
+  });
+}
+
+function pipedriveLeadImportAdaptiveWebhookWindowMinutes() {
+  return nonNegativeInteger(
+    Number(process.env.PIPEDRIVE_LEAD_IMPORT_ADAPTIVE_WEBHOOK_WINDOW_MINUTES),
+    90,
+  );
+}
+
+function pipedriveLeadImportAdaptiveMaxSkipMinutes() {
+  return nonNegativeInteger(
+    Number(process.env.PIPEDRIVE_LEAD_IMPORT_ADAPTIVE_MAX_SKIP_MINUTES),
+    180,
+  );
+}
+
+function nonNegativeInteger(value: number, fallback: number) {
+  return Number.isFinite(value) && value >= 0 ? Math.trunc(value) : fallback;
+}
+
 async function skipPipedriveLeadPull({
   actorId,
   activeRun,
@@ -1748,7 +1947,7 @@ async function skipPipedriveLeadPull({
       recordsWritten: 0,
       startedAt,
       status: "WARNING",
-      syncType: "lead-import",
+      syncType: pipedriveLeadImportSyncType,
     },
   });
 

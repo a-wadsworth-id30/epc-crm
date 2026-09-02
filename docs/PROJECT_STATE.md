@@ -261,6 +261,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `pipedrive.lead_import` or `pipedrive.contact_import` background jobs before
   importing; if another non-stale pull of the same type is already running, the
   newer pull is skipped and logged as a warning without reading Pipedrive.
+  Scheduled lead fallback imports also use adaptive skip logic by default:
+  when recent real provider webhooks are healthy, no lead/note/email
+  continuation cursor is pending and the last full fallback import is inside the
+  max-skip window, the maintenance route returns a compact skipped result
+  without reading Pipedrive pages. If a linked-sale backfill cursor is pending,
+  the route can still skip the lead page pull while draining that cursor.
   Scheduled Pipedrive functions use the first valid HTTPS CRM base URL from
   `APP_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Netlify `URL` or `DEPLOY_URL`, and log
   aggregate-only import summaries so scheduled activity can be verified without

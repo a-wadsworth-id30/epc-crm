@@ -296,6 +296,15 @@ export async function runPipedriveLinkedSaleBackfillContinuation({
   });
 }
 
+export async function readPipedriveLinkedSaleBackfillContinuationState() {
+  const nextCursor = await readLatestBackfillNextCursor();
+
+  return {
+    hasContinuationCursor: Boolean(nextCursor),
+    nextCursor: nextCursor ? "present" : null,
+  };
+}
+
 async function writePipedriveLinkedSaleBackfillPreview({
   actorId,
   batchLimit,

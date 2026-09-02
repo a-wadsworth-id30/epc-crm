@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import {
   readPipedriveLeadPullPreview,
   readPipedriveLeadPullReadiness,
+  readPipedriveScheduledLeadPullDecision,
   runPipedriveApprovedLeadPageImport,
   runPipedriveDirectLeadImport,
   runPipedriveLeadPull,
 } from "@/lib/integrations/pipedrive-lead-sync";
-import { runPipedriveLinkedSaleBackfillContinuation } from "@/lib/integrations/pipedrive-linked-sale-backfill";
+import {
+  readPipedriveLinkedSaleBackfillContinuationState,
+  runPipedriveLinkedSaleBackfillContinuation,
+} from "@/lib/integrations/pipedrive-linked-sale-backfill";
 
 type PipedriveLeadPullResult = Awaited<ReturnType<typeof runPipedriveLeadPull>>;
 type PipedriveLinkedSaleBackfillResult = Awaited<
@@ -157,6 +161,67 @@ async function pipedriveLeadImportResponse(request: Request, dryRun: boolean) {
     );
   }
 
+  const adaptiveDecision = booleanQuery(request, "adaptive")
+    ? await readPipedriveScheduledLeadPullDecision({
+        maxSkipMinutes:
+          integerQuery(request, "adaptiveMaxSkipMinutes", {
+            max: 1_440,
+            min: 0,
+          }) ?? undefined,
+        webhookWindowMinutes:
+          integerQuery(request, "adaptiveWebhookWindowMinutes", {
+            max: 1_440,
+            min: 0,
+          }) ?? undefined,
+      })
+    : null;
+
+  if (adaptiveDecision && !adaptiveDecision.shouldRun) {
+    const linkedSaleBackfillState =
+      await readPipedriveLinkedSaleBackfillContinuationState();
+
+    if (linkedSaleBackfillState.hasContinuationCursor) {
+      const linkedSaleBackfill =
+        await runPipedriveLinkedSaleBackfillContinuation({
+          fileMaxPages: integerQuery(request, "linkedSaleFileMaxPages", {
+            max: 10,
+            min: 1,
+          }),
+          limit: integerQuery(request, "linkedSaleLimit", { max: 25, min: 1 }),
+          recordBackgroundJob: true,
+          trigger: `${jobTrigger(request)}-linked-sale-backfill`,
+        });
+
+      return NextResponse.json(
+        {
+          adaptive: true,
+          ok: linkedSaleBackfill.status !== "ERROR",
+          skipped: true,
+          result: {
+            ...compactAdaptiveSkipResult(adaptiveDecision),
+            linkedSaleBackfill: compactLinkedSaleBackfillResult(
+              linkedSaleBackfill,
+            ),
+            linkedSaleBackfillContinuation: true,
+            recordsRead: linkedSaleBackfill.recordsRead,
+            recordsWritten: linkedSaleBackfill.recordsWritten,
+          },
+        },
+        { status: linkedSaleBackfill.status === "ERROR" ? 502 : 200 },
+      );
+    }
+
+    return NextResponse.json({
+      adaptive: true,
+      ok: true,
+      skipped: true,
+      result: {
+        ...compactAdaptiveSkipResult(adaptiveDecision),
+        linkedSaleBackfillContinuation: false,
+      },
+    });
+  }
+
   const result = await runPipedriveLeadPull({
     recordBackgroundJob: true,
     trigger: jobTrigger(request),
@@ -235,6 +300,32 @@ function compactLinkedSaleBackfillResult(
     recordsWritten: result.recordsWritten,
     status: result.status,
     warningCount: result.warningCount,
+  };
+}
+
+function compactAdaptiveSkipResult(
+  decision: Awaited<ReturnType<typeof readPipedriveScheduledLeadPullDecision>>,
+) {
+  return {
+    adaptive: true,
+    created: 0,
+    hasContinuationCursor: decision.hasContinuationCursor,
+    lastLeadImportAt: decision.lastLeadImportAt,
+    linkedExisting: 0,
+    maxSkipMinutes: decision.maxSkipMinutes,
+    message: decision.message,
+    mode: "adaptive-skip",
+    moreAvailable: false,
+    pagesRead: 0,
+    pullOnly: true,
+    recentProviderWebhookAt: decision.recentProviderWebhookAt,
+    recordsRead: 0,
+    recordsWritten: 0,
+    skipped: 1,
+    skipReason: decision.skipReason,
+    status: "SUCCESS",
+    warningCount: 0,
+    webhookWindowMinutes: decision.webhookWindowMinutes,
   };
 }
 

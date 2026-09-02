@@ -136,6 +136,15 @@ Optional:
   Netlify function pull Pipedrive leads into CRM.
 - `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN`: set to `true` to let the scheduled
   function verify readiness without importing CRM lead records.
+- `PIPEDRIVE_LEAD_IMPORT_CRON_ADAPTIVE`: defaults to `true`. When enabled,
+  scheduled lead imports can skip a run if recent real Pipedrive webhooks were
+  received, no continuation cursor is pending and the last full fallback import
+  is still within the max-skip window.
+- `PIPEDRIVE_LEAD_IMPORT_ADAPTIVE_WEBHOOK_WINDOW_MINUTES`: default `90`;
+  controls how recent a real provider webhook must be before an adaptive skip
+  is allowed.
+- `PIPEDRIVE_LEAD_IMPORT_ADAPTIVE_MAX_SKIP_MINUTES`: default `180`; forces a
+  full fallback import after this many minutes even if webhooks remain active.
 - `PIPEDRIVE_CONTACT_IMPORT_SECRET`: shared secret for
   `/api/maintenance/pipedrive-contact-import`; `PIPEDRIVE_LEAD_IMPORT_SECRET`
   or `CRON_SECRET` can be used instead.
@@ -297,11 +306,18 @@ history visible in Settings > System.
 The repository also includes
 `netlify/functions/pull-pipedrive-leads.mjs`, scheduled every 30 minutes. It is
 disabled unless `PIPEDRIVE_LEAD_IMPORT_CRON_ENABLED=true` is set. When enabled,
-it calls `/api/maintenance/pipedrive-lead-import` with
+it calls `/api/maintenance/pipedrive-lead-import` with adaptive scheduling on by
+default, using
 `PIPEDRIVE_LEAD_IMPORT_SECRET` or `CRON_SECRET` and runs the same pull-only,
 bounded Pipedrive lead import helper as the manual settings action. Webhooks
 remain the near-real-time path; the scheduled job is a conservative fallback
-and backfill path. Start with `PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
+and backfill path. Adaptive scheduled runs first check recent provider webhook
+activity and continuation cursor state; when recent real webhooks are healthy,
+no continuation is pending and the last fallback import is still recent, the
+route returns a compact skipped result without reading Pipedrive pages. If a
+linked-sale backfill continuation is pending, the route can still skip the lead
+page pull while draining that backfill cursor. Start with
+`PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN=true` to verify
 credentials/readiness before allowing CRM lead records to be imported. API
 and scheduled runs also sweep updated Pipedrive notes into linked CRM sales
 using a separate note cursor, advance a mailbox-thread cursor across inbox,

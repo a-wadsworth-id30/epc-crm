@@ -9,6 +9,14 @@ function booleanEnv(name, defaultValue = false) {
   return ["1", "true", "yes", "on"].includes(value);
 }
 
+function numberEnv(name, defaultValue) {
+  const value = Number(process.env[name]);
+
+  return Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : defaultValue;
+}
+
 function crmBaseUrl() {
   const candidates = [
     ["APP_BASE_URL", process.env.APP_BASE_URL],
@@ -46,6 +54,7 @@ function compactImportResult(body) {
       : {};
 
   return {
+    adaptive: typeof record.adaptive === "boolean" ? record.adaptive : false,
     created: Number.isFinite(record.created) ? record.created : null,
     linkedExisting: Number.isFinite(record.linkedExisting)
       ? record.linkedExisting
@@ -59,6 +68,8 @@ function compactImportResult(body) {
       ? record.recordsWritten
       : null,
     skipped: Number.isFinite(record.skipped) ? record.skipped : null,
+    skipReason:
+      typeof record.skipReason === "string" ? record.skipReason : null,
     status: typeof record.status === "string" ? record.status : null,
     warningCount: Number.isFinite(record.warningCount)
       ? record.warningCount
@@ -166,6 +177,20 @@ export default async function handler() {
     "dryRun",
     booleanEnv("PIPEDRIVE_LEAD_IMPORT_CRON_DRY_RUN") ? "1" : "0",
   );
+  url.searchParams.set(
+    "adaptive",
+    booleanEnv("PIPEDRIVE_LEAD_IMPORT_CRON_ADAPTIVE", true) ? "1" : "0",
+  );
+  url.searchParams.set(
+    "adaptiveWebhookWindowMinutes",
+    String(
+      numberEnv("PIPEDRIVE_LEAD_IMPORT_ADAPTIVE_WEBHOOK_WINDOW_MINUTES", 90),
+    ),
+  );
+  url.searchParams.set(
+    "adaptiveMaxSkipMinutes",
+    String(numberEnv("PIPEDRIVE_LEAD_IMPORT_ADAPTIVE_MAX_SKIP_MINUTES", 180)),
+  );
 
   const response = await fetch(url, {
     method: "POST",
@@ -181,6 +206,8 @@ export default async function handler() {
   });
   const body = await response.json().catch(() => null);
   const summary = {
+    adaptive: url.searchParams.get("adaptive") === "1",
+    adaptiveSkipped: body?.skipped === true,
     baseUrlSource: baseUrl.source,
     dryRun: url.searchParams.get("dryRun") === "1",
     endpoint: url.pathname,
