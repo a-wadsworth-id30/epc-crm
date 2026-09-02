@@ -172,6 +172,7 @@ function writeBridgeResponse(response, statusCode, payload, origin) {
     "Access-Control-Allow-Origin": origin && allowedBridgeOrigin(origin) ? origin : softphoneOrigin,
     "Access-Control-Allow-Headers": "Content-Type, Accept",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Private-Network": "true",
     "Vary": "Origin",
   });
   response.end(JSON.stringify(payload));
