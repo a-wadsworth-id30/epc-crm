@@ -157,6 +157,12 @@ The deploy-version guard checks the DB-free public `/api/build-version`
 fingerprint every five minutes while visible, with immediate checks retained
 for asset load errors. Authenticated `/api/build-info` remains available for
 manual operator diagnostics rather than routine tab polling.
+Settings > System now defaults to a light admin view that does not run optional
+database diagnostics. Full system diagnostics remain available at
+`/settings/system?diagnostics=1`, which runs the database ping, migration
+readiness, background job history, integration rows, operational activity,
+retention dry-run preview and marketing rollup dry-run preview only when an
+admin explicitly requests them.
 Normal CRM tabs also pause desktop-softphone presence checks while hidden; the
 standalone `/softphone-window` heartbeat continues so live browser routing
 presence is not marked offline just because the dashboard tab is inactive.

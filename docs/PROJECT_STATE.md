@@ -401,7 +401,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   schema migration readiness, background job history, session/audit summaries,
   process-local database query timing and implementation guardrails. Database
   query timing is opt-in and stores only safe Prisma model operation labels,
-  counts and durations.
+  counts and durations. The default System page is a light view that skips
+  optional database diagnostics; admins can open `/settings/system?diagnostics=1`
+  when they need the full database ping, migration, background job, integration,
+  operational activity, retention preview and marketing rollup summaries.
 - Operational data retention is available through
   `/api/maintenance/retention` and an optional disabled-by-default Netlify
   scheduled function. It purges old operational history only, keeps core CRM
