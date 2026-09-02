@@ -12,11 +12,7 @@ const LoadedAddSaleModal = dynamic<AddSaleModalProps>(
   {
     ssr: false,
     loading: () => (
-      <AddSaleTrigger
-        disabled
-        label="Loading..."
-        onOpen={() => undefined}
-      />
+      <AddSaleTrigger disabled label="Loading..." onOpen={() => undefined} />
     ),
   },
 );
@@ -49,15 +45,25 @@ function SalesPipelineFiltersLoading() {
           <div className="h-5 w-14 rounded-full bg-gray-100 dark:bg-white/[0.08]" />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-1.5 xl:block xl:space-y-1.5">
-          {["enquiries", "opportunities", "projects", "lost"].map((item) => (
+          {["all", "enquiries", "opportunities", "projects"].map((item) => (
             <div
               key={item}
               className="h-8 rounded-lg border border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.04]"
             />
           ))}
         </div>
+        <div className="mt-4 grid grid-cols-2 gap-1.5 xl:block xl:space-y-1.5">
+          {["lead", "qualified", "proposal", "negotiation", "won", "lost"].map(
+            (item) => (
+              <div
+                key={item}
+                className="h-8 rounded-lg border border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.04]"
+              />
+            ),
+          )}
+        </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:block xl:space-y-3">
-          {["search", "stage", "owner", "sort"].map((item) => (
+          {["search", "status", "stage", "owner", "sort"].map((item) => (
             <div key={item}>
               <div className="h-3 w-12 rounded bg-gray-100 dark:bg-white/[0.08]" />
               <div className="mt-2 h-9 rounded-lg bg-gray-50 dark:bg-white/[0.05]" />
@@ -73,11 +79,12 @@ function SalesTableFrameLoading() {
   return (
     <div>
       <div className="overflow-x-auto">
-        <div className="min-w-[1180px] divide-y divide-gray-100 dark:divide-gray-800">
-          <div className="grid grid-cols-[40px_250px_170px_135px_110px_250px_145px_100px_100px] gap-3 bg-gray-50/80 px-3 py-2 dark:bg-white/[0.02]">
+        <div className="min-w-[1300px] divide-y divide-gray-100 dark:divide-gray-800">
+          <div className="grid grid-cols-[40px_250px_130px_170px_135px_110px_250px_145px_100px_100px] gap-3 bg-gray-50/80 px-3 py-2 dark:bg-white/[0.02]">
             {[
               "select",
               "lead",
+              "status",
               "sources",
               "attribution",
               "stage",
@@ -95,13 +102,14 @@ function SalesTableFrameLoading() {
           {["one", "two", "three", "four"].map((item) => (
             <div
               key={item}
-              className="grid grid-cols-[40px_250px_170px_135px_110px_250px_145px_100px_100px] gap-3 px-3 py-3"
+              className="grid grid-cols-[40px_250px_130px_170px_135px_110px_250px_145px_100px_100px] gap-3 px-3 py-3"
             >
               <div className="h-4 w-4 rounded border border-gray-200 dark:border-gray-800" />
               <div>
                 <div className="h-4 w-40 rounded bg-gray-100 dark:bg-white/[0.08]" />
                 <div className="mt-2 h-3 w-32 rounded bg-gray-50 dark:bg-white/[0.05]" />
               </div>
+              <div className="h-6 w-24 rounded-full bg-gray-50 dark:bg-white/[0.05]" />
               <div className="h-7 w-32 rounded-lg bg-gray-50 dark:bg-white/[0.05]" />
               <div className="h-6 w-24 rounded-full bg-gray-50 dark:bg-white/[0.05]" />
               <div className="h-6 w-20 rounded-full bg-gray-50 dark:bg-white/[0.05]" />
@@ -116,7 +124,7 @@ function SalesTableFrameLoading() {
           ))}
         </div>
       </div>
-      <div className="flex flex-col gap-2 border-t border-gray-100 px-4 py-2 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 border-t border-gray-100 px-4 py-2 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
         <div className="h-3 w-32 rounded bg-gray-50 dark:bg-white/[0.05]" />
         <div className="flex items-center gap-2">
           <div className="h-8 w-20 rounded-lg bg-gray-50 dark:bg-white/[0.05]" />
@@ -132,7 +140,10 @@ export function DeferredAddSaleModal(props: AddSaleModalProps) {
   return (
     <DeferredActionLoader
       renderTrigger={(open) => (
-        <AddSaleTrigger label={props.triggerLabel ?? "Add sale"} onOpen={open} />
+        <AddSaleTrigger
+          label={props.triggerLabel ?? "Add sale"}
+          onOpen={open}
+        />
       )}
     >
       {(autoOpen) => <LoadedAddSaleModal {...props} autoOpen={autoOpen} />}

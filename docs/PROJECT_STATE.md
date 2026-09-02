@@ -67,11 +67,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   pipeline stage and stale lead review window. Manual sales, tracked website
   leads, phone-call generated leads and stale-sales header notifications use
   these defaults.
-- EPC's customer-facing sales pipeline stages are Enquiries, Opportunities and
-  Projects, with Lost retained for closed-lost reporting. These are stored as
-  `SalesPipelineStage` rows over the stable legacy buckets `LEAD`, `PROPOSAL`,
-  `WON` and `LOST`; the old Qualified and Negotiation default rows are kept
-  inactive for historical compatibility rather than deleted.
+- EPC's customer sales categories are Enquiries, Opportunities and Projects.
+  They are stored separately from pipeline stages on
+  `SalesOpportunity.customerSalesCategory`. Granular `SalesPipelineStage` rows
+  such as Lead, Qualified, Proposal and Negotiation sit under those categories
+  and still map to the stable `SalesStage` reporting buckets.
 - Header quick-create Lead and Deal use the normal sale modal with a required
   linked-contact step. Users can search recent accessible contacts or create a
   new contact inline, optionally linking or creating an organisation before the
@@ -1346,11 +1346,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   current user.
 - Sales pipeline stages now have a custom-stage model foundation. The legacy
   `SalesStage` enum remains the reporting/conversion bucket, while
-  `SalesPipelineStage` stores configurable stage records mapped to those
-  buckets. Opportunities and lifecycle events can link to the custom stage;
-  default rows matching the legacy stages are seeded and backfilled. Admins can
-  manage active custom stages, reporting buckets, order, probability, colour,
-  descriptions, stage goals, AI context, SLA days, movement policy and
+  `SalesOpportunity.customerSalesCategory` stores the customer status
+  (Enquiry, Opportunity or Project) and `SalesPipelineStage` stores configurable
+  stage records mapped to both a customer category and reporting bucket.
+  Opportunities and lifecycle events can link to the custom stage; default rows
+  matching the legacy stages are seeded and backfilled. Admins can manage active
+  custom stages, customer category, reporting bucket, order, probability,
+  colour, descriptions, stage goals, AI context, SLA days, movement policy and
   required-data gate mode under `Settings > Sales Pipeline`. Discovery
   templates can be linked to a
   pipeline stage; required questions from matching lead/product/category
@@ -1363,8 +1365,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `FileAsset.documentUploadType`, while older files still satisfy exact
   document-type checks through their configured folder slug where possible.
   Sales creation, bulk stage updates, sales filters and sale/detail stage
-  labels now use those custom stage records while keeping the legacy bucket in
-  sync. Sale detail includes a stage control that previews required-data
+  labels now use those custom stage records while keeping the customer status
+  and legacy bucket in sync. Sale detail includes a stage control that previews
+  required-data
   blockers/warnings before movement and writes lifecycle/automation history when
   the stage changes. Sales Quality now
   includes a Pipeline Stage Performance rollup grouped by custom stage with the

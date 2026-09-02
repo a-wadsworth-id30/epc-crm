@@ -10,6 +10,10 @@ import {
 } from "@/lib/document-library";
 import { prisma } from "@/lib/prisma";
 import {
+  customerSalesCategoryForStage,
+  customerSalesCategoryValues,
+} from "@/lib/sales/customer-sales-category";
+import {
   salesKanbanCardFieldValues,
   salesKanbanSettingsToJson,
 } from "@/lib/sales/kanban-settings";
@@ -86,6 +90,7 @@ const bucketDefaults: Record<
 const stageSchema = z.object({
   name: z.string().trim().min(2, "Stage name is required.").max(80),
   bucket: z.enum(salesStages),
+  customerSalesCategory: z.enum(customerSalesCategoryValues).optional(),
   sortOrder: z.coerce
     .number()
     .int("Sort order must be a whole number.")
@@ -167,6 +172,7 @@ function stagePayloadFromForm(formData: FormData) {
   return stageSchema.safeParse({
     name: formData.get("name"),
     bucket: formData.get("bucket"),
+    customerSalesCategory: formData.get("customerSalesCategory") ?? undefined,
     sortOrder: formData.get("sortOrder"),
     defaultProbability: formData.get("defaultProbability"),
     color: formData.get("color"),
@@ -190,7 +196,10 @@ function safeJson(value: unknown): Prisma.InputJsonValue {
 
 function metadataObject(value: unknown): Record<string, Prisma.InputJsonValue> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return JSON.parse(JSON.stringify(value)) as Record<string, Prisma.InputJsonValue>;
+  return JSON.parse(JSON.stringify(value)) as Record<
+    string,
+    Prisma.InputJsonValue
+  >;
 }
 
 function stageMetadataWithRequiredActions({
@@ -294,12 +303,16 @@ export async function createSalesPipelineStageAction(
 
   const slug = await uniqueStageSlug(parsed.data.name);
   const defaults = bucketDefaults[parsed.data.bucket];
+  const customerSalesCategory =
+    parsed.data.customerSalesCategory ??
+    customerSalesCategoryForStage(parsed.data.bucket);
 
   await prisma.salesPipelineStage.create({
     data: {
       name: parsed.data.name,
       slug,
       bucket: parsed.data.bucket,
+      customerSalesCategory,
       sortOrder: parsed.data.sortOrder,
       defaultProbability: normalizeProbability(
         parsed.data.bucket,
@@ -320,7 +333,9 @@ export async function createSalesPipelineStageAction(
         requiredDocumentTypes: stageRequiredDocumentTypesToJson(
           parsed.data.requiredDocumentTypes,
         ),
-        requiredActions: stageRequiredActionsToJson(parsed.data.requiredActions),
+        requiredActions: stageRequiredActionsToJson(
+          parsed.data.requiredActions,
+        ),
       } satisfies Prisma.InputJsonObject,
     },
   });
@@ -394,32 +409,43 @@ export async function updateSalesPipelineStageAction(
     }
   }
 
-  await prisma.salesPipelineStage.update({
-    where: { id: stageId },
-    data: {
-      name: parsed.data.name,
-      bucket: parsed.data.bucket,
-      sortOrder: parsed.data.sortOrder,
-      defaultProbability: normalizeProbability(
-        parsed.data.bucket,
-        parsed.data.defaultProbability,
-      ),
-      isActive: parsed.data.isActive,
-      ...normalizeStageFlags(parsed.data.bucket),
-      color: parsed.data.color ?? bucketDefaults[parsed.data.bucket].color,
-      description: parsed.data.description,
-      goal: parsed.data.goal,
-      aiContext: parsed.data.aiContext,
-      slaDays: parsed.data.slaDays,
-      movementPolicy: parsed.data.movementPolicy,
-      gateMode: parsed.data.gateMode,
-      metadata: stageMetadataWithRequiredActions({
-        metadata: existingStage.metadata,
-        requiredDocumentTypes: parsed.data.requiredDocumentTypes,
-        requiredActions: parsed.data.requiredActions,
-      }),
-    },
-  });
+  const customerSalesCategory =
+    parsed.data.customerSalesCategory ??
+    customerSalesCategoryForStage(parsed.data.bucket);
+
+  await prisma.$transaction([
+    prisma.salesPipelineStage.update({
+      where: { id: stageId },
+      data: {
+        name: parsed.data.name,
+        bucket: parsed.data.bucket,
+        customerSalesCategory,
+        sortOrder: parsed.data.sortOrder,
+        defaultProbability: normalizeProbability(
+          parsed.data.bucket,
+          parsed.data.defaultProbability,
+        ),
+        isActive: parsed.data.isActive,
+        ...normalizeStageFlags(parsed.data.bucket),
+        color: parsed.data.color ?? bucketDefaults[parsed.data.bucket].color,
+        description: parsed.data.description,
+        goal: parsed.data.goal,
+        aiContext: parsed.data.aiContext,
+        slaDays: parsed.data.slaDays,
+        movementPolicy: parsed.data.movementPolicy,
+        gateMode: parsed.data.gateMode,
+        metadata: stageMetadataWithRequiredActions({
+          metadata: existingStage.metadata,
+          requiredDocumentTypes: parsed.data.requiredDocumentTypes,
+          requiredActions: parsed.data.requiredActions,
+        }),
+      },
+    }),
+    prisma.salesOpportunity.updateMany({
+      where: { salesPipelineStageId: stageId },
+      data: { customerSalesCategory },
+    }),
+  ]);
 
   revalidatePath("/settings/sales-pipeline");
   revalidatePath("/sales");

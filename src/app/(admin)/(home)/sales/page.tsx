@@ -1,9 +1,10 @@
-import type { Prisma, SalesStage } from "@prisma/client";
+import type { CustomerSalesCategory, Prisma, SalesStage } from "@prisma/client";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Columns3, Table2 } from "lucide-react";
 import { AIActionButton, AILabel } from "@/components/crm-boilerplate/AITheme";
+import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSalesCategoryBadge";
 import EmptyState from "@/components/crm-boilerplate/EmptyState";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
 import SalesKanbanDragBoard from "@/components/crm-boilerplate/SalesKanbanDragBoard";
@@ -38,9 +39,15 @@ import {
 } from "@/lib/sales/kanban-settings";
 import { saleOwnerOptionsForUser } from "@/lib/sales/owner-assignment";
 import {
+  customerSalesCategoryOptions,
+  isCustomerSalesCategoryValue,
+  type CustomerSalesCategoryValue,
+} from "@/lib/sales/customer-sales-category";
+import {
   DEFAULT_SALES_SORT,
   fallbackStageColors,
   openStages,
+  parseCustomerCategoryFilter,
   parseSalesPipelineView,
   parseSalesSort,
   parseStageFilter,
@@ -97,10 +104,7 @@ function formatMoney(
   return formatDisplayMoney(valueCents, currency, formatting);
 }
 
-function formatDate(
-  date: Date | null,
-  formatting: DisplayFormattingContext,
-) {
+function formatDate(date: Date | null, formatting: DisplayFormattingContext) {
   return formatDisplayDate(date, formatting);
 }
 
@@ -259,12 +263,14 @@ function OwnerBadge({ name }: { name: string | null }) {
 }
 
 function salesHref({
+  customerCategory,
   owner,
   query,
   sort,
   stage,
   view,
 }: {
+  customerCategory: string;
   owner: string;
   query: string;
   sort: string;
@@ -275,6 +281,9 @@ function salesHref({
 
   if (view === "kanban") params.set("view", "kanban");
   if (query) params.set("q", query);
+  if (customerCategory !== "all") {
+    params.set("customerCategory", customerCategory);
+  }
   if (stage !== "all") params.set("stage", stage);
   if (owner !== "all") params.set("owner", owner);
   if (sort !== DEFAULT_SALES_SORT) params.set("sort", sort);
@@ -448,8 +457,13 @@ function excludeOpportunityIdsWhere(
   return ids.length ? { id: { notIn: ids } } : undefined;
 }
 
-function salesSearchWhere(query: string): Prisma.SalesOpportunityWhereInput | undefined {
-  const terms = query.split(/\s+/).map((term) => term.trim()).filter(Boolean);
+function salesSearchWhere(
+  query: string,
+): Prisma.SalesOpportunityWhereInput | undefined {
+  const terms = query
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
 
   if (!terms.length) {
     return undefined;
@@ -463,6 +477,14 @@ function salesSearchWhere(query: string): Prisma.SalesOpportunityWhereInput | un
           stage.toLowerCase().includes(normalizedTerm) ||
           formatStage(stage).toLowerCase().includes(normalizedTerm),
       ) as SalesStage[];
+      const matchingCustomerCategories = customerSalesCategoryOptions
+        .filter(
+          (option) =>
+            option.value.toLowerCase().includes(normalizedTerm) ||
+            option.label.toLowerCase().includes(normalizedTerm) ||
+            option.pluralLabel.toLowerCase().includes(normalizedTerm),
+        )
+        .map((option) => option.value as CustomerSalesCategory);
       const or: Prisma.SalesOpportunityWhereInput[] = [
         { title: contains(term) },
         { source: contains(term) },
@@ -480,6 +502,11 @@ function salesSearchWhere(query: string): Prisma.SalesOpportunityWhereInput | un
       if (matchingStages.length) {
         or.push({ stage: { in: matchingStages } });
       }
+      if (matchingCustomerCategories.length) {
+        or.push({
+          customerSalesCategory: { in: matchingCustomerCategories },
+        });
+      }
 
       return { OR: or };
     }),
@@ -487,12 +514,14 @@ function salesSearchWhere(query: string): Prisma.SalesOpportunityWhereInput | un
 }
 
 function salesWhere({
+  activeCustomerCategory,
   activeOwner,
   activeStage,
   pipelineStageById,
   pipelineStageIds,
   query,
 }: {
+  activeCustomerCategory: CustomerSalesCategoryValue | "all";
   activeOwner: string;
   activeStage: string;
   pipelineStageById: Map<string, { bucket: SalesStageValue }>;
@@ -500,6 +529,13 @@ function salesWhere({
   query: string;
 }): Prisma.SalesOpportunityWhereInput | undefined {
   const filters: Prisma.SalesOpportunityWhereInput[] = [];
+
+  if (
+    activeCustomerCategory !== "all" &&
+    isCustomerSalesCategoryValue(activeCustomerCategory)
+  ) {
+    filters.push({ customerSalesCategory: activeCustomerCategory });
+  }
 
   if (activeStage === "open") {
     filters.push({
@@ -543,7 +579,9 @@ function salesWhere({
   return filters.length ? { AND: filters } : undefined;
 }
 
-function salesOrderBy(sort: string): Prisma.SalesOpportunityOrderByWithRelationInput[] {
+function salesOrderBy(
+  sort: string,
+): Prisma.SalesOpportunityOrderByWithRelationInput[] {
   if (sort === "updated-desc") {
     return [{ updatedAt: "desc" }, { createdAt: "desc" }];
   }
@@ -585,6 +623,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const queryInput = (singleParam(params.q) ?? "").trim();
   const activeSort = parseSalesSort(params.sort);
   const activeView = parseSalesPipelineView(params.view);
+  const activeCustomerCategory = parseCustomerCategoryFilter(
+    params.customerCategory,
+  );
   const ownerFilterInput = singleParam(params.owner) ?? "all";
   const requestedPage = parsePositiveInteger(params.page, 1);
   const pageSize = parsePageSize({
@@ -615,9 +656,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const pipedriveDealExclusionWhere = excludeOpportunityIdsWhere(
     pipedriveDealOpportunityIds,
   );
-  const visibleOpportunityWhere = (
-    where?: Prisma.SalesOpportunityWhereInput,
-  ) =>
+  const visibleOpportunityWhere = (where?: Prisma.SalesOpportunityWhereInput) =>
     salesOpportunityWhereWithAccess(
       currentUser,
       combineSalesOpportunityWhere(pipedriveDealExclusionWhere, where),
@@ -631,6 +670,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     activeUsers,
     pipelineStages,
     allOpportunityCount,
+    customerCategoryRows,
     unassignedOpportunityCount,
     unlinkedStageRows,
     pipelineStageRows,
@@ -650,6 +690,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         id: true,
         name: true,
         bucket: true,
+        customerSalesCategory: true,
         color: true,
         sortOrder: true,
         isActive: true,
@@ -657,6 +698,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     }),
     prisma.salesOpportunity.count({
       where: visibleAccessWhere,
+    }),
+    prisma.salesOpportunity.groupBy({
+      by: ["customerSalesCategory"],
+      where: visibleAccessWhere,
+      _count: { _all: true },
     }),
     prisma.salesOpportunity.count({
       where: visibleOpportunityWhere({ ownerId: null }),
@@ -716,6 +762,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     .filter((stage) => stage.isActive)
     .map((stage) => ({
       bucket: stage.bucket,
+      customerSalesCategory: stage.customerSalesCategory,
       color: stage.color,
       label: stage.name,
       sortOrder: stage.sortOrder,
@@ -740,6 +787,24 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     );
   });
   const stageValuesWithSales = new Set(stageCountByValue.keys());
+  const customerCategoryCountByValue = new Map(
+    customerCategoryRows.map((row) => [
+      row.customerSalesCategory,
+      row._count._all,
+    ]),
+  );
+  const customerCategoryFilterOptions = [
+    { label: "All customer statuses", value: "all", color: null },
+    ...customerSalesCategoryOptions.map((option) => ({
+      color: option.color,
+      label: option.pluralLabel,
+      value: option.value,
+    })),
+  ];
+  const customerCategoryCounts = customerSalesCategoryOptions.map((option) => ({
+    category: option.value,
+    count: customerCategoryCountByValue.get(option.value) ?? 0,
+  }));
   const opportunityStageView = (opportunity: {
     salesPipelineStage: { color: string | null; name: string } | null;
     stage: string;
@@ -808,6 +873,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     ? ownerFilterInput
     : "all";
   const activeSalesWhere = salesWhere({
+    activeCustomerCategory,
     activeOwner,
     activeStage,
     pipelineStageById,
@@ -821,7 +887,10 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const filteredOpportunityCount = activeSalesWhere
     ? await prisma.salesOpportunity.count({ where: opportunityWhere })
     : allOpportunityCount;
-  const totalPages = Math.max(1, Math.ceil(filteredOpportunityCount / pageSize));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredOpportunityCount / pageSize),
+  );
   const currentPage = Math.min(requestedPage, totalPages);
   const opportunities = await prisma.salesOpportunity.findMany({
     where: opportunityWhere,
@@ -848,6 +917,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           id: true,
           name: true,
           bucket: true,
+          customerSalesCategory: true,
           color: true,
           sortOrder: true,
           isActive: true,
@@ -874,10 +944,14 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     (hasKanbanField(kanbanCardFieldSet, "nextScheduledActivity") ||
       hasKanbanField(kanbanCardFieldSet, "outstandingTasks"));
   const linkedContactIds = Array.from(
-    new Set(opportunities.map((opportunity) => opportunity.contactId).filter(Boolean)),
+    new Set(
+      opportunities.map((opportunity) => opportunity.contactId).filter(Boolean),
+    ),
   ) as string[];
   const linkedCompanyIds = Array.from(
-    new Set(opportunities.map((opportunity) => opportunity.companyId).filter(Boolean)),
+    new Set(
+      opportunities.map((opportunity) => opportunity.companyId).filter(Boolean),
+    ),
   ) as string[];
   const linkedTaskWhere: Prisma.TaskWhereInput[] = [];
   if (linkedContactIds.length) {
@@ -924,7 +998,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       ]);
     }
   });
-  const openTasksForOpportunity = (opportunity: (typeof opportunities)[number]) => {
+  const openTasksForOpportunity = (
+    opportunity: (typeof opportunities)[number],
+  ) => {
     const tasks = [
       ...(opportunity.contactId
         ? (openTasksByContactId.get(opportunity.contactId) ?? [])
@@ -977,12 +1053,15 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       count: stageCountByValue.get(option.value) ?? 0,
     }));
   const paginationParams = {
+    customerCategory:
+      activeCustomerCategory === "all" ? null : activeCustomerCategory,
     owner: activeOwner === "all" ? null : activeOwner,
     q: queryInput || null,
     sort: activeSort === DEFAULT_SALES_SORT ? null : activeSort,
     stage: activeStage === "all" ? null : activeStage,
   };
   const tableViewHref = salesHref({
+    customerCategory: activeCustomerCategory,
     owner: activeOwner,
     query: queryInput,
     sort: activeSort,
@@ -990,6 +1069,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     view: "table",
   });
   const kanbanViewHref = salesHref({
+    customerCategory: activeCustomerCategory,
     owner: activeOwner,
     query: queryInput,
     sort: activeSort,
@@ -1043,7 +1123,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     <>
       <PageHeader
         title="Sales Pipeline"
-        description="Pipeline for enquiries, opportunities and confirmed projects."
+        description="Track customer status separately from the granular sales stages used to work each record."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -1082,7 +1162,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           accent="purple"
           icon={<PieChartIcon />}
           label="Weighted pipeline"
-          value={formatMoney(weightedPipelineValue, currency, displayFormatting)}
+          value={formatMoney(
+            weightedPipelineValue,
+            currency,
+            displayFormatting,
+          )}
           meta={`${weightedCoverage}% weighted`}
           detail="Probability adjusted"
         />
@@ -1110,9 +1194,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-gray-800 dark:text-white/90">
-                  Opportunities
+                  Sales records
                 </h2>
-                <SalesHelpCue content="Shows each sales opportunity with value, stage, lead source touchpoints, attribution quality, AI next step, owner and linked activity count." />
+                <SalesHelpCue content="Shows each sales record with customer status, stage, value, lead source touchpoints, attribution quality, AI next step, owner and linked activity count." />
               </div>
               <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
                 {filteredOpportunityCount} of {allOpportunityCount} matching
@@ -1135,8 +1219,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           {allOpportunityCount ? (
             <div className="grid xl:grid-cols-[250px_minmax(0,1fr)]">
               <LazySalesPipelineFilters
+                customerCategoryCounts={customerCategoryCounts}
+                customerCategoryOptions={customerCategoryFilterOptions}
                 ownerOptions={ownerOptions}
                 query={queryInput}
+                selectedCustomerCategory={activeCustomerCategory}
                 selectedOwner={activeOwner}
                 selectedSort={activeSort}
                 selectedStage={activeStage}
@@ -1156,8 +1243,8 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                         {filteredOpportunityCount > kanbanOpportunityLimit ? (
                           <div className="border-b border-warning-200 bg-warning-50 px-4 py-2 text-xs font-medium text-warning-800 dark:border-warning-900/40 dark:bg-warning-900/20 dark:text-warning-200">
                             Showing the first {kanbanOpportunityLimit} matching
-                            opportunities. Narrow the filters to review the
-                            rest on the board.
+                            opportunities. Narrow the filters to review the rest
+                            on the board.
                           </div>
                         ) : null}
                         <SalesKanbanDragBoard>
@@ -1170,240 +1257,249 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                                   aria-label={`${column.label} stage`}
                                   className="flex max-h-[760px] min-w-0 flex-col rounded-xl border border-gray-200 bg-gray-50 transition data-[kanban-drop-active=true]:border-brand-300 data-[kanban-drop-active=true]:bg-brand-50/40 md:w-[292px] md:shrink-0 dark:border-gray-800 dark:bg-white/[0.02] dark:data-[kanban-drop-active=true]:border-brand-700/70 dark:data-[kanban-drop-active=true]:bg-brand-500/10"
                                 >
-                                <div
-                                  className="h-1 rounded-t-xl"
-                                  style={{
-                                    backgroundColor:
-                                      column.color ??
-                                      fallbackStageColors[column.value] ??
-                                      "#98A2B3",
-                                  }}
-                                />
-                                <div className="border-b border-gray-200 px-3 py-3 dark:border-gray-800">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <h3 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
-                                      {column.label}
-                                    </h3>
-                                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-600 ring-1 ring-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:ring-gray-800">
-                                      {column.opportunities.length}
-                                    </span>
-                                  </div>
-                                  <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                                    {formatMoney(
-                                      column.totalValueCents,
-                                      currency,
-                                      displayFormatting,
-                                    )}
-                                  </p>
-                                </div>
-                                <div className="min-h-[220px] flex-1 space-y-3 overflow-y-auto p-3">
-                                  {column.opportunities.length ? (
-                                    column.opportunities.map((opportunity) => {
-                                      const customerName = contactName(
-                                        opportunity.contact,
-                                      );
-                                      const linkedName = [
-                                        customerName,
-                                        opportunity.company?.name,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" · ");
-                                      const latestCommunication =
-                                        opportunity.communications[
-                                          opportunity.communications.length - 1
-                                        ];
-                                      const sourceJourney =
-                                        buildSourceJourney(opportunity);
-                                      const confidence =
-                                        attributionHealth(opportunity);
-                                      const openTasks =
-                                        openTasksForOpportunity(opportunity);
-                                      const nextTask = openTasks[0] ?? null;
-                                      const productNames = opportunity.products
-                                        .map((item) => item.product.name)
-                                        .filter(Boolean);
-                                      const nextActivity = nextTask
-                                        ? `${nextTask.title}${
-                                            nextTask.dueDate
-                                              ? ` · ${formatDate(
-                                                  nextTask.dueDate,
-                                                  displayFormatting,
-                                                )}`
-                                              : ""
-                                          }`
-                                        : opportunity.nextStep;
-                                      const showSalesperson = hasKanbanField(
-                                        kanbanCardFieldSet,
-                                        "salesperson",
-                                      );
-
-                                      return (
-                                        <Link
-                                          key={opportunity.id}
-                                          href={`/sales/${opportunity.id}`}
-                                          draggable
-                                          data-kanban-card-id={opportunity.id}
-                                          data-kanban-card-stage-id={
-                                            column.value
-                                          }
-                                          className="block cursor-grab rounded-lg border border-gray-200 bg-white p-3 shadow-theme-xs transition active:cursor-grabbing data-[kanban-card-dragging=true]:opacity-50 hover:border-brand-200 hover:shadow-theme-sm dark:border-gray-800 dark:bg-gray-950 dark:hover:border-brand-900/60"
-                                        >
-                                          <div className="min-w-0">
-                                            <h4 className="line-clamp-2 text-sm leading-5 font-semibold text-gray-800 dark:text-white/90">
-                                              {opportunity.title}
-                                            </h4>
-                                            {hasKanbanField(
-                                              kanbanCardFieldSet,
-                                              "customerName",
-                                            ) && linkedName ? (
-                                              <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
-                                                {linkedName}
-                                              </p>
-                                            ) : null}
-                                          </div>
-                                          {hasKanbanField(
-                                            kanbanCardFieldSet,
-                                            "dealValue",
-                                          ) ? (
-                                            <div className="mt-3 flex items-center justify-between gap-3">
-                                              <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                                                {formatMoney(
-                                                  opportunity.valueCents,
-                                                  opportunity.currency,
-                                                  displayFormatting,
-                                                )}
-                                              </span>
-                                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
-                                                {opportunity.probability}%
-                                              </span>
-                                            </div>
-                                          ) : null}
-                                          {hasKanbanField(
-                                            kanbanCardFieldSet,
-                                            "leadSource",
-                                          ) ? (
-                                            <>
-                                              <div className="mt-3">
-                                                <SalesSourceJourney
-                                                  items={sourceJourney}
-                                                  compact
-                                                  variant="table"
-                                                />
-                                              </div>
-                                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                                <span
-                                                  title={
-                                                    confidence.clientSummary
-                                                  }
-                                                  className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${attributionHealthClasses(
-                                                    confidence.level,
-                                                  )}`}
-                                                >
-                                                  {confidence.level}
-                                                </span>
-                                                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
-                                                  {
-                                                    opportunity._count
-                                                      .communications
-                                                  }{" "}
-                                                  events
-                                                </span>
-                                              </div>
-                                            </>
-                                          ) : null}
-                                          <div className="mt-3 space-y-2">
-                                            {hasKanbanField(
-                                              kanbanCardFieldSet,
-                                              "productsQuoted",
-                                            ) ? (
-                                              <KanbanFact label="Products">
-                                                {productNames.length
-                                                  ? productNames.join(", ")
-                                                  : "Not assigned"}
-                                              </KanbanFact>
-                                            ) : null}
-                                            {hasKanbanField(
-                                              kanbanCardFieldSet,
-                                              "nextScheduledActivity",
-                                            ) && nextActivity ? (
-                                              <KanbanFact
-                                                label={
-                                                  nextTask
-                                                    ? "Next task"
-                                                    : "Next step"
-                                                }
-                                              >
-                                                {nextActivity}
-                                              </KanbanFact>
-                                            ) : null}
-                                            {hasKanbanField(
-                                              kanbanCardFieldSet,
-                                              "estimatedCloseDate",
-                                            ) ? (
-                                              <KanbanFact label="Close date">
-                                                {opportunity.expectedCloseDate
-                                                  ? formatDate(
-                                                      opportunity.expectedCloseDate,
-                                                      displayFormatting,
-                                                    )
-                                                  : "Not set"}
-                                              </KanbanFact>
-                                            ) : null}
-                                            {hasKanbanField(
-                                              kanbanCardFieldSet,
-                                              "servicePlanStatus",
-                                            ) ? (
-                                              <KanbanFact label="Service plan">
-                                                {servicePlanStatusLabel(
-                                                  opportunity.leadScope,
-                                                )}
-                                              </KanbanFact>
-                                            ) : null}
-                                            {hasKanbanField(
-                                              kanbanCardFieldSet,
-                                              "outstandingTasks",
-                                            ) ? (
-                                              <KanbanFact label="Open tasks">
-                                                {openTasks.length}
-                                              </KanbanFact>
-                                            ) : null}
-                                          </div>
-                                          <div
-                                            className={`mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-gray-800 ${
-                                              showSalesperson
-                                                ? "justify-between"
-                                                : "justify-end"
-                                            }`}
-                                          >
-                                            {showSalesperson ? (
-                                              <OwnerBadge
-                                                name={
-                                                  opportunity.owner?.name ??
-                                                  null
-                                                }
-                                              />
-                                            ) : null}
-                                            <span className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400">
-                                              {latestCommunication
-                                                ? formatDate(
-                                                    latestCommunication.occurredAt,
-                                                    displayFormatting,
-                                                  )
-                                                : formatDate(
-                                                    opportunity.updatedAt,
-                                                    displayFormatting,
-                                                  )}
-                                            </span>
-                                          </div>
-                                        </Link>
-                                      );
-                                    })
-                                  ) : (
-                                    <div className="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-center text-xs font-medium text-gray-400 dark:border-gray-800">
-                                      No opportunities
+                                  <div
+                                    className="h-1 rounded-t-xl"
+                                    style={{
+                                      backgroundColor:
+                                        column.color ??
+                                        fallbackStageColors[column.value] ??
+                                        "#98A2B3",
+                                    }}
+                                  />
+                                  <div className="border-b border-gray-200 px-3 py-3 dark:border-gray-800">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <h3 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
+                                        {column.label}
+                                      </h3>
+                                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-600 ring-1 ring-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:ring-gray-800">
+                                        {column.opportunities.length}
+                                      </span>
                                     </div>
-                                  )}
-                                </div>
+                                    <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                      {formatMoney(
+                                        column.totalValueCents,
+                                        currency,
+                                        displayFormatting,
+                                      )}
+                                    </p>
+                                  </div>
+                                  <div className="min-h-[220px] flex-1 space-y-3 overflow-y-auto p-3">
+                                    {column.opportunities.length ? (
+                                      column.opportunities.map(
+                                        (opportunity) => {
+                                          const customerName = contactName(
+                                            opportunity.contact,
+                                          );
+                                          const linkedName = [
+                                            customerName,
+                                            opportunity.company?.name,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ");
+                                          const latestCommunication =
+                                            opportunity.communications[
+                                              opportunity.communications
+                                                .length - 1
+                                            ];
+                                          const sourceJourney =
+                                            buildSourceJourney(opportunity);
+                                          const confidence =
+                                            attributionHealth(opportunity);
+                                          const openTasks =
+                                            openTasksForOpportunity(
+                                              opportunity,
+                                            );
+                                          const nextTask = openTasks[0] ?? null;
+                                          const productNames =
+                                            opportunity.products
+                                              .map((item) => item.product.name)
+                                              .filter(Boolean);
+                                          const nextActivity = nextTask
+                                            ? `${nextTask.title}${
+                                                nextTask.dueDate
+                                                  ? ` · ${formatDate(
+                                                      nextTask.dueDate,
+                                                      displayFormatting,
+                                                    )}`
+                                                  : ""
+                                              }`
+                                            : opportunity.nextStep;
+                                          const showSalesperson =
+                                            hasKanbanField(
+                                              kanbanCardFieldSet,
+                                              "salesperson",
+                                            );
+
+                                          return (
+                                            <Link
+                                              key={opportunity.id}
+                                              href={`/sales/${opportunity.id}`}
+                                              draggable
+                                              data-kanban-card-id={
+                                                opportunity.id
+                                              }
+                                              data-kanban-card-stage-id={
+                                                column.value
+                                              }
+                                              className="block cursor-grab rounded-lg border border-gray-200 bg-white p-3 shadow-theme-xs transition hover:border-brand-200 hover:shadow-theme-sm active:cursor-grabbing data-[kanban-card-dragging=true]:opacity-50 dark:border-gray-800 dark:bg-gray-950 dark:hover:border-brand-900/60"
+                                            >
+                                              <div className="min-w-0">
+                                                <h4 className="line-clamp-2 text-sm leading-5 font-semibold text-gray-800 dark:text-white/90">
+                                                  {opportunity.title}
+                                                </h4>
+                                                {hasKanbanField(
+                                                  kanbanCardFieldSet,
+                                                  "customerName",
+                                                ) && linkedName ? (
+                                                  <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
+                                                    {linkedName}
+                                                  </p>
+                                                ) : null}
+                                              </div>
+                                              {hasKanbanField(
+                                                kanbanCardFieldSet,
+                                                "dealValue",
+                                              ) ? (
+                                                <div className="mt-3 flex items-center justify-between gap-3">
+                                                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                    {formatMoney(
+                                                      opportunity.valueCents,
+                                                      opportunity.currency,
+                                                      displayFormatting,
+                                                    )}
+                                                  </span>
+                                                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
+                                                    {opportunity.probability}%
+                                                  </span>
+                                                </div>
+                                              ) : null}
+                                              {hasKanbanField(
+                                                kanbanCardFieldSet,
+                                                "leadSource",
+                                              ) ? (
+                                                <>
+                                                  <div className="mt-3">
+                                                    <SalesSourceJourney
+                                                      items={sourceJourney}
+                                                      compact
+                                                      variant="table"
+                                                    />
+                                                  </div>
+                                                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                    <span
+                                                      title={
+                                                        confidence.clientSummary
+                                                      }
+                                                      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${attributionHealthClasses(
+                                                        confidence.level,
+                                                      )}`}
+                                                    >
+                                                      {confidence.level}
+                                                    </span>
+                                                    <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                                                      {
+                                                        opportunity._count
+                                                          .communications
+                                                      }{" "}
+                                                      events
+                                                    </span>
+                                                  </div>
+                                                </>
+                                              ) : null}
+                                              <div className="mt-3 space-y-2">
+                                                {hasKanbanField(
+                                                  kanbanCardFieldSet,
+                                                  "productsQuoted",
+                                                ) ? (
+                                                  <KanbanFact label="Products">
+                                                    {productNames.length
+                                                      ? productNames.join(", ")
+                                                      : "Not assigned"}
+                                                  </KanbanFact>
+                                                ) : null}
+                                                {hasKanbanField(
+                                                  kanbanCardFieldSet,
+                                                  "nextScheduledActivity",
+                                                ) && nextActivity ? (
+                                                  <KanbanFact
+                                                    label={
+                                                      nextTask
+                                                        ? "Next task"
+                                                        : "Next step"
+                                                    }
+                                                  >
+                                                    {nextActivity}
+                                                  </KanbanFact>
+                                                ) : null}
+                                                {hasKanbanField(
+                                                  kanbanCardFieldSet,
+                                                  "estimatedCloseDate",
+                                                ) ? (
+                                                  <KanbanFact label="Close date">
+                                                    {opportunity.expectedCloseDate
+                                                      ? formatDate(
+                                                          opportunity.expectedCloseDate,
+                                                          displayFormatting,
+                                                        )
+                                                      : "Not set"}
+                                                  </KanbanFact>
+                                                ) : null}
+                                                {hasKanbanField(
+                                                  kanbanCardFieldSet,
+                                                  "servicePlanStatus",
+                                                ) ? (
+                                                  <KanbanFact label="Service plan">
+                                                    {servicePlanStatusLabel(
+                                                      opportunity.leadScope,
+                                                    )}
+                                                  </KanbanFact>
+                                                ) : null}
+                                                {hasKanbanField(
+                                                  kanbanCardFieldSet,
+                                                  "outstandingTasks",
+                                                ) ? (
+                                                  <KanbanFact label="Open tasks">
+                                                    {openTasks.length}
+                                                  </KanbanFact>
+                                                ) : null}
+                                              </div>
+                                              <div
+                                                className={`mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-gray-800 ${
+                                                  showSalesperson
+                                                    ? "justify-between"
+                                                    : "justify-end"
+                                                }`}
+                                              >
+                                                {showSalesperson ? (
+                                                  <OwnerBadge
+                                                    name={
+                                                      opportunity.owner?.name ??
+                                                      null
+                                                    }
+                                                  />
+                                                ) : null}
+                                                <span className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                  {latestCommunication
+                                                    ? formatDate(
+                                                        latestCommunication.occurredAt,
+                                                        displayFormatting,
+                                                      )
+                                                    : formatDate(
+                                                        opportunity.updatedAt,
+                                                        displayFormatting,
+                                                      )}
+                                                </span>
+                                              </div>
+                                            </Link>
+                                          );
+                                        },
+                                      )
+                                    ) : (
+                                      <div className="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-center text-xs font-medium text-gray-400 dark:border-gray-800">
+                                        No opportunities
+                                      </div>
+                                    )}
+                                  </div>
                                 </section>
                               ))}
                             </div>
@@ -1414,7 +1510,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                       <>
                         <div className="hidden xl:block">
                           <LazySalesTableFrame
-                            key={`${currentPage}:${pageSize}:${activeStage}:${activeOwner}:${activeSort}:${queryInput}`}
+                            key={`${currentPage}:${pageSize}:${activeCustomerCategory}:${activeStage}:${activeOwner}:${activeSort}:${queryInput}`}
                             canDeleteSales={currentUser.role === "ADMIN"}
                             ownerOptions={saleOwnerOptions}
                             page={currentPage}
@@ -1423,7 +1519,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                             totalCount={filteredOpportunityCount}
                           >
                             <div className="overflow-x-auto">
-                              <table className="min-w-[1180px] divide-y divide-gray-100 dark:divide-gray-800">
+                              <table className="min-w-[1300px] divide-y divide-gray-100 dark:divide-gray-800">
                                 <thead className="bg-gray-50/80 dark:bg-white/[0.02]">
                                   <tr>
                                     <th
@@ -1439,6 +1535,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                                     </th>
                                     {[
                                       "Lead",
+                                      "Customer status",
                                       "Lead sources",
                                       "Attribution",
                                       "Stage",
@@ -1514,6 +1611,13 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                                             ) : null}
                                           </Link>
                                         </td>
+                                        <td className="w-[130px] px-3 py-2.5">
+                                          <CustomerSalesCategoryBadge
+                                            category={
+                                              opportunity.customerSalesCategory
+                                            }
+                                          />
+                                        </td>
                                         <td className="w-[170px] px-3 py-2.5">
                                           <SalesSourceJourney
                                             items={sourceJourney}
@@ -1531,7 +1635,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                                             {confidence.level}
                                           </span>
                                           <p className="max-w-[120px] truncate text-[11px] text-gray-500 dark:text-gray-400">
-                                            {attributionHealthSummary(confidence)}
+                                            {attributionHealthSummary(
+                                              confidence,
+                                            )}
                                           </p>
                                         </td>
                                         <td className="w-[110px] px-3 py-2.5">
@@ -1628,10 +1734,17 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                                       </p>
                                     )}
                                   </div>
-                                  <SalesPipelineStageBadge
-                                    color={stageView.color}
-                                    label={stageView.label}
-                                  />
+                                  <div className="flex shrink-0 flex-col items-end gap-2">
+                                    <CustomerSalesCategoryBadge
+                                      category={
+                                        opportunity.customerSalesCategory
+                                      }
+                                    />
+                                    <SalesPipelineStageBadge
+                                      color={stageView.color}
+                                      label={stageView.label}
+                                    />
+                                  </div>
                                 </div>
 
                                 <div className="mt-4">

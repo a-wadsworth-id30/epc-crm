@@ -78,6 +78,12 @@ enum SalesStage {
   LOST
 }
 
+enum CustomerSalesCategory {
+  ENQUIRY
+  OPPORTUNITY
+  PROJECT
+}
+
 enum SalesLifecycleEventType {
   CREATED
   STAGE_CHANGED
@@ -614,6 +620,7 @@ model SalesOpportunity {
   id                    String                       @id @default(cuid())
   title                 String
   stage                 SalesStage                   @default(LEAD)
+  customerSalesCategory CustomerSalesCategory        @default(ENQUIRY)
   salesPipelineStageId  String?
   salesPipelineStage    SalesPipelineStage?          @relation(fields: [salesPipelineStageId], references: [id], onDelete: SetNull)
   valueCents            Int                          @default(0)
@@ -667,6 +674,7 @@ model SalesOpportunity {
   @@index([ownerId, createdAt])
   @@index([companyId, createdAt])
   @@index([contactId, createdAt])
+  @@index([customerSalesCategory, updatedAt])
 }
 
 model ProductCategory {
@@ -946,26 +954,27 @@ model SalesLifecycleEvent {
 }
 
 model SalesPipelineStage {
-  id                 String              @id @default(cuid())
-  name               String
-  slug               String              @unique
-  bucket             SalesStage
-  sortOrder          Int
-  defaultProbability Int
-  goal               String?
-  aiContext          String?
-  slaDays            Int?
-  movementPolicy     StageMovementPolicy @default(MANUAL)
-  gateMode           StageGateMode       @default(WARN)
-  isActive           Boolean             @default(true)
-  isClosed           Boolean             @default(false)
-  isWon              Boolean             @default(false)
-  isLost             Boolean             @default(false)
-  color              String?
-  description        String?
-  metadata           Json?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                    String                @id @default(cuid())
+  name                  String
+  slug                  String                @unique
+  bucket                SalesStage
+  customerSalesCategory CustomerSalesCategory @default(ENQUIRY)
+  sortOrder             Int
+  defaultProbability    Int
+  goal                  String?
+  aiContext             String?
+  slaDays               Int?
+  movementPolicy        StageMovementPolicy   @default(MANUAL)
+  gateMode              StageGateMode         @default(WARN)
+  isActive              Boolean               @default(true)
+  isClosed              Boolean               @default(false)
+  isWon                 Boolean               @default(false)
+  isLost                Boolean               @default(false)
+  color                 String?
+  description           String?
+  metadata              Json?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   opportunities       SalesOpportunity[]
   discoveryTemplates  DiscoveryTemplate[]
@@ -975,6 +984,7 @@ model SalesPipelineStage {
 
   @@index([bucket, sortOrder])
   @@index([isActive, sortOrder])
+  @@index([customerSalesCategory, isActive, sortOrder])
 }
 
 model LeadScoreEvent {

@@ -17,12 +17,15 @@ type FilterOption = {
 };
 
 export type SalesPipelineFiltersProps = {
+  customerCategoryCounts?: Array<{ category: string; count: number }>;
+  customerCategoryOptions?: FilterOption[];
   defaultSortValue?: string;
   openStageValues?: string[];
   ownerOptions: FilterOption[];
   selectedOwner: string;
   selectedSort: string;
   selectedStage: string;
+  selectedCustomerCategory?: string;
   resetHref?: string;
   sortOptions: FilterOption[];
   stageCounts?: Array<{ stage: string; count: number }>;
@@ -65,12 +68,15 @@ const compactSelectClassName =
   "h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-800 outline-none transition focus:border-brand-500 dark:border-gray-800 dark:bg-gray-950 dark:text-white/90";
 
 export default function SalesPipelineFilters({
+  customerCategoryCounts = [],
+  customerCategoryOptions = [],
   defaultSortValue = "close-asc",
   openStageValues = defaultOpenStageValues,
   ownerOptions,
   selectedOwner,
   selectedSort,
   selectedStage,
+  selectedCustomerCategory = "all",
   resetHref = "/sales",
   sortOptions,
   stageCounts = [],
@@ -121,27 +127,48 @@ export default function SalesPipelineFilters({
     return () => window.clearTimeout(timer);
   }, [applyFilter, currentParams, searchValue]);
 
-  const { openCount, stageButtonOptions, totalCount } = useMemo(() => {
-    const stageCountByValue = new Map(
-      stageCounts.map((item) => [item.stage, item.count]),
-    );
-    const openStageValueSet = new Set(openStageValues);
-
-    return {
-      openCount: stageCounts.reduce(
-        (total, item) =>
-          openStageValueSet.has(item.stage) ? total + item.count : total,
+  const { categoryButtonOptions, openCount, stageButtonOptions, totalCount } =
+    useMemo(() => {
+      const stageCountByValue = new Map(
+        stageCounts.map((item) => [item.stage, item.count]),
+      );
+      const categoryCountByValue = new Map(
+        customerCategoryCounts.map((item) => [item.category, item.count]),
+      );
+      const openStageValueSet = new Set(openStageValues);
+      const categoryTotalCount = customerCategoryCounts.reduce(
+        (total, item) => total + item.count,
         0,
-      ),
-      stageButtonOptions: stageOptions
-        .filter((option) => option.value !== "all" && option.value !== "open")
-        .map((option) => ({
+      );
+
+      return {
+        categoryButtonOptions: customerCategoryOptions.map((option) => ({
           ...option,
-          count: stageCountByValue.get(option.value) ?? 0,
+          count:
+            option.value === "all"
+              ? categoryTotalCount
+              : (categoryCountByValue.get(option.value) ?? 0),
         })),
-      totalCount: stageCounts.reduce((total, item) => total + item.count, 0),
-    };
-  }, [openStageValues, stageCounts, stageOptions]);
+        openCount: stageCounts.reduce(
+          (total, item) =>
+            openStageValueSet.has(item.stage) ? total + item.count : total,
+          0,
+        ),
+        stageButtonOptions: stageOptions
+          .filter((option) => option.value !== "all" && option.value !== "open")
+          .map((option) => ({
+            ...option,
+            count: stageCountByValue.get(option.value) ?? 0,
+          })),
+        totalCount: stageCounts.reduce((total, item) => total + item.count, 0),
+      };
+    }, [
+      customerCategoryCounts,
+      customerCategoryOptions,
+      openStageValues,
+      stageCounts,
+      stageOptions,
+    ]);
 
   if (variant === "rail") {
     return (
@@ -153,7 +180,7 @@ export default function SalesPipelineFilters({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
-                Pipeline stages
+                Sales filters
               </h3>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                 {totalCount} total opportunities
@@ -164,48 +191,101 @@ export default function SalesPipelineFilters({
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-1.5 xl:block xl:space-y-1.5">
-            {stageButtonOptions.map((option) => {
-              const isActive = selectedStage === option.value;
-              const dotClass = option.color
-                ? ""
-                : option.value === "all" || option.value === "open"
-                  ? "bg-gray-400"
-                  : (stageDotClasses[option.value] ?? "bg-gray-400");
-              const dotStyle = option.color
-                ? { backgroundColor: option.color }
-                : undefined;
+          {categoryButtonOptions.length ? (
+            <div className="mt-3">
+              <div className="mb-1.5 text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
+                Customer status
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 xl:block xl:space-y-1.5">
+                {categoryButtonOptions.map((option) => {
+                  const isActive = selectedCustomerCategory === option.value;
+                  const dotStyle = option.color
+                    ? { backgroundColor: option.color }
+                    : undefined;
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => applyFilter("stage", option.value)}
-                  className={`flex h-8 w-full items-center justify-between gap-2 rounded-lg border px-2.5 text-left text-xs font-semibold transition ${
-                    isActive
-                      ? "border-brand-100 bg-brand-50 text-brand-700 shadow-theme-xs dark:border-brand-900/50 dark:bg-brand-500/10 dark:text-brand-300"
-                      : "border-gray-100 bg-white text-gray-700 hover:border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={`h-2 w-2 rounded-full ${dotClass}`}
-                      style={dotStyle}
-                    />
-                    <span className="truncate">{option.label}</span>
-                  </span>
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        applyFilter("customerCategory", option.value)
+                      }
+                      className={`flex h-8 w-full items-center justify-between gap-2 rounded-lg border px-2.5 text-left text-xs font-semibold transition ${
+                        isActive
+                          ? "border-brand-100 bg-brand-50 text-brand-700 shadow-theme-xs dark:border-brand-900/50 dark:bg-brand-500/10 dark:text-brand-300"
+                          : "border-gray-100 bg-white text-gray-700 hover:border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="h-2 w-2 rounded-full bg-gray-400"
+                          style={dotStyle}
+                        />
+                        <span className="truncate">{option.label}</span>
+                      </span>
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                          isActive
+                            ? "bg-white text-brand-700 dark:bg-white/[0.08] dark:text-brand-200"
+                            : "bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-400"
+                        }`}
+                      >
+                        {option.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-3">
+            <div className="mb-1.5 text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
+              Pipeline stage
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 xl:block xl:space-y-1.5">
+              {stageButtonOptions.map((option) => {
+                const isActive = selectedStage === option.value;
+                const dotClass = option.color
+                  ? ""
+                  : option.value === "all" || option.value === "open"
+                    ? "bg-gray-400"
+                    : (stageDotClasses[option.value] ?? "bg-gray-400");
+                const dotStyle = option.color
+                  ? { backgroundColor: option.color }
+                  : undefined;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => applyFilter("stage", option.value)}
+                    className={`flex h-8 w-full items-center justify-between gap-2 rounded-lg border px-2.5 text-left text-xs font-semibold transition ${
                       isActive
-                        ? "bg-white text-brand-700 dark:bg-white/[0.08] dark:text-brand-200"
-                        : "bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-400"
+                        ? "border-brand-100 bg-brand-50 text-brand-700 shadow-theme-xs dark:border-brand-900/50 dark:bg-brand-500/10 dark:text-brand-300"
+                        : "border-gray-100 bg-white text-gray-700 hover:border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.04]"
                     }`}
                   >
-                    {option.count}
-                  </span>
-                </button>
-              );
-            })}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-2 w-2 rounded-full ${dotClass}`}
+                        style={dotStyle}
+                      />
+                      <span className="truncate">{option.label}</span>
+                    </span>
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                        isActive
+                          ? "bg-white text-brand-700 dark:bg-white/[0.08] dark:text-brand-200"
+                          : "bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-400"
+                      }`}
+                    >
+                      {option.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:block xl:space-y-3">
@@ -220,6 +300,28 @@ export default function SalesPipelineFilters({
                 className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-800 transition outline-none focus:border-brand-500 dark:border-gray-800 dark:bg-gray-950 dark:text-white/90"
               />
             </label>
+
+            {customerCategoryOptions.length ? (
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
+                  Customer status
+                </span>
+                <select
+                  name="customerCategory"
+                  value={selectedCustomerCategory}
+                  onChange={(event) =>
+                    applyFilter("customerCategory", event.target.value)
+                  }
+                  className={compactSelectClassName}
+                >
+                  {customerCategoryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
 
             <label className="block">
               <span className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
@@ -290,7 +392,7 @@ export default function SalesPipelineFilters({
   return (
     <div
       aria-busy={isPending}
-      className="grid gap-2 border-b border-gray-100 p-3 xl:grid-cols-[minmax(280px,1fr)_170px_170px_180px_auto] xl:items-end dark:border-gray-800"
+      className="grid gap-2 border-b border-gray-100 p-3 xl:grid-cols-[minmax(280px,1fr)_170px_170px_170px_180px_auto] xl:items-end dark:border-gray-800"
     >
       <label className="block">
         <span className="sr-only">Search</span>
@@ -301,6 +403,26 @@ export default function SalesPipelineFilters({
           className="h-9 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 transition outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white/90"
         />
       </label>
+
+      {customerCategoryOptions.length ? (
+        <label className="block">
+          <span className="sr-only">Customer status</span>
+          <select
+            name="customerCategory"
+            value={selectedCustomerCategory}
+            onChange={(event) =>
+              applyFilter("customerCategory", event.target.value)
+            }
+            className={selectClassName}
+          >
+            {customerCategoryOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <label className="block">
         <span className="sr-only">Stage</span>

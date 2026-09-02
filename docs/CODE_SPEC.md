@@ -307,14 +307,14 @@ Sales is intentionally generic enough for bespoke builds:
 - `SalesOpportunity` is the wrapper for communication and follow-up attached to a specific sale.
 - `/sales/[id]` uses the exact opaque `SalesOpportunity.id`; do not put descriptive customer or enquiry text in sales URLs.
 - Stage enum: `LEAD`, `QUALIFIED`, `PROPOSAL`, `NEGOTIATION`, `WON`, `LOST`.
-- EPC's current customer-facing pipeline is Enquiries -> Opportunities ->
-  Projects, with Lost retained for closed-lost reporting. These are represented
-  by the existing `LEAD`, `PROPOSAL`, `WON` and `LOST` buckets so attribution,
-  automation and reporting logic can stay stable; `QUALIFIED` and
-  `NEGOTIATION` are legacy buckets unless explicitly reactivated.
-- Custom lifecycle stages use `SalesPipelineStage`, which maps each configurable
-  stage to the stable `SalesStage` enum bucket for reporting and conversion
-  upload compatibility. Keep both fields in sync until the later cleanup phase.
+- EPC's customer statuses are Enquiries, Opportunities and Projects. Store
+  these on `SalesOpportunity.customerSalesCategory`; do not model them by
+  renaming pipeline stages.
+- Custom lifecycle stages use `SalesPipelineStage`. Each configurable stage
+  belongs to a customer category and maps to the stable `SalesStage` enum bucket
+  for reporting and conversion upload compatibility. Keep
+  `customerSalesCategory`, `salesPipelineStageId` and `stage` in sync when a
+  sale moves stages.
 - Money is stored as integer minor units in `valueCents`.
 - `currency` defaults to `GBP`.
 - `probability` is an integer percentage.
@@ -323,16 +323,17 @@ Sales is intentionally generic enough for bespoke builds:
 - Opportunities also store lifecycle metric foundations: `stageChangedAt`,
   `firstContactedAt`, `closedAt`, `lostReason` and `lostReasonNotes`.
 - Opportunities can link to `SalesPipelineStage` through
-  `salesPipelineStageId`; the legacy `stage` field remains the bucket.
+  `salesPipelineStageId`; the legacy `stage` field remains the reporting
+  bucket and `customerSalesCategory` remains the customer status.
 - Admins manage custom sales stages under `/settings/sales-pipeline`. Stage
-  management edits the display name, reporting bucket, active state, sort
-  order, default probability, colour, description, movement gate mode and
-  configured stage-progression requirements. Do not hard-delete linked stages;
-  inactive stages remain available for historical records.
+  management edits the display name, customer category, reporting bucket,
+  active state, sort order, default probability, colour, description, movement
+  gate mode and configured stage-progression requirements. Do not hard-delete
+  linked stages; inactive stages remain available for historical records.
 - `/sales` uses active `SalesPipelineStage` rows for manual sale creation,
   bulk stage updates, filtering, sorting and stage display. Server actions must
-  still write the matching legacy `SalesStage` bucket alongside
-  `salesPipelineStageId`.
+  still write the matching customer category and legacy `SalesStage` bucket
+  alongside `salesPipelineStageId`.
 - Manual lead/deal creation can receive an inline contact draft from
   quick-create. The server action creates the contact and sale in one
   transaction, copies the sale lead source onto the new contact, links the
@@ -361,7 +362,7 @@ Sales is intentionally generic enough for bespoke builds:
 - Phone calls write to `CallLog` first and only write to `SalesCommunication` when sale context is explicit or unambiguous.
 - The default `/sales` surface is an overview with a compact pipeline stage rail,
   clickable sales cards and a table/Kanban view switch. The Kanban board is
-  URL-backed through `view=kanban`, keeps the same search/stage/owner/sort
+  URL-backed through `view=kanban`, keeps the same search/customer-status/stage/owner/sort
   filters, groups opportunities by configured pipeline stages and uses a bounded
   server-side row limit rather than loading the whole pipeline. Admins can
   choose which Kanban card fields are shown from `Settings > Sales Pipeline`;
