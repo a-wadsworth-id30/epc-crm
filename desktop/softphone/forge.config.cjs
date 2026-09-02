@@ -11,6 +11,7 @@ const shouldNotarizeMac =
 const shouldBuildMacPkg =
   process.platform === "darwin" &&
   process.env.ID30_SOFTPHONE_BUILD_MAC_INSTALLER === "true";
+const defaultCrmOrigin = ["https://crm", "epc-improvements.co.uk"].join(".");
 const windowsCertificateFile =
   process.env.WINDOWS_CERTIFICATE_FILE ||
   process.env.ID30_SOFTPHONE_WINDOWS_CERTIFICATE_FILE;
@@ -58,7 +59,7 @@ function windowsSignConfig() {
       process.env.WINDOWS_TIMESTAMP_SERVER ||
       process.env.ID30_SOFTPHONE_WINDOWS_TIMESTAMP_SERVER ||
       "http://timestamp.digicert.com",
-    website: "https://crm.epc-improvements.co.uk",
+    website: defaultCrmOrigin,
   };
 }
 

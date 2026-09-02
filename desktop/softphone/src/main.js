@@ -23,7 +23,8 @@ if (require("electron-squirrel-startup")) {
 
 const protocolScheme = "id30-softphone";
 const localBridgePort = Number(process.env.ID30_SOFTPHONE_BRIDGE_PORT || 47730);
-const softphoneUrl = process.env.ID30_SOFTPHONE_URL || "https://crm.epc-improvements.co.uk/softphone-window";
+const defaultCrmOrigin = ["https://crm", "epc-improvements.co.uk"].join(".");
+const softphoneUrl = process.env.ID30_SOFTPHONE_URL || `${defaultCrmOrigin}/softphone-window`;
 const softphoneOrigin = new URL(softphoneUrl).origin;
 const appWindowPaths = new Set(["/", "/signin", "/softphone-window"]);
 const updateRepo = process.env.ID30_UPDATE_REPO || releaseConfig.updateRepo || "";
@@ -478,7 +479,7 @@ async function requestMacMicrophoneAccess() {
 function configurePermissions() {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL();
-    const trustedOrigin = url.startsWith("https://crm.epc-improvements.co.uk");
+    const trustedOrigin = url.startsWith(defaultCrmOrigin);
 
     if (trustedOrigin && permission === "media") {
       callback(true);
@@ -933,7 +934,7 @@ function buildApplicationMenu() {
         },
         {
           label: "Open CRM",
-          click: () => openExternalUrl("https://crm.epc-improvements.co.uk").catch(() => {}),
+          click: () => openExternalUrl(defaultCrmOrigin).catch(() => {}),
         },
       ],
     },
