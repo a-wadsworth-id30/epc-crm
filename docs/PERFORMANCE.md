@@ -75,6 +75,13 @@ hosting. Use it to find candidate hot paths, then fix those routes with
 explicit `select`, indexed lookup fields, pagination or grouped aggregate
 queries.
 
+PostgreSQL statement-level diagnostics are available through
+`pg_stat_statements` after migration
+`20260902094000_enable_pg_stat_statements` is applied. `npm run neon:advisor`
+reads the normalized statistics and reports the top total-time and highest-call
+statement IDs so repeated-query tuning can be based on measured database work
+rather than process-local samples alone.
+
 ## Database Payload Controls
 
 High-volume list routes should use explicit Prisma `select` payloads and lazy

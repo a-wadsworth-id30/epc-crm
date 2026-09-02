@@ -101,6 +101,12 @@ missing-schema errors and fall back deliberately. Do not catch broad database
 errors around new queries; operator/type mistakes and permission failures
 should still fail loudly.
 
+The migration `20260902094000_enable_pg_stat_statements` enables the
+PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
+It does not change application tables or data. After it is applied, run
+`npm run neon:advisor` to identify high-call or high-total-time query patterns
+for separate, reviewed tuning work.
+
 ## Common Errors
 
 ### Authentication failed

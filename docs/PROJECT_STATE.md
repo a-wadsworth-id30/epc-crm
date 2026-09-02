@@ -452,8 +452,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `npm run neon:advisor`. The first milestone is read-only: it inspects local
   runtime configuration, safe PostgreSQL statistics views and optional Neon API
   telemetry, then writes a sanitized JSON audit report under `.neon-advisor/`.
-  It does not change Neon settings, schema, indexes, data or retention rules.
-  See `docs/NEON_OPTIMIZATION_ADVISOR.md`.
+  It does not change Neon settings, indexes, data or retention rules. The
+  committed migration `20260902094000_enable_pg_stat_statements` enables
+  normalized PostgreSQL statement statistics so the advisor can surface top
+  total-time and high-call query patterns for separate reviewed tuning work. See
+  `docs/NEON_OPTIMIZATION_ADVISOR.md`.
 - Production env checks now classify `DATABASE_URL` and `MIGRATE_DATABASE_URL`
   without printing hostnames or credentials. Netlify builds run the sanitized
   check before migrations/build, Settings > System shows whether the runtime is

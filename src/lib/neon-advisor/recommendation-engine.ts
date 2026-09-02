@@ -46,7 +46,12 @@ export function buildRecommendations({
   addStatementRecommendations({ config, costModel, postgres, recommendations });
   addTableRecommendations({ config, costModel, postgres, recommendations });
   addIndexRecommendations({ config, costModel, postgres, recommendations });
-  addDatabaseStatRecommendations({ config, costModel, postgres, recommendations });
+  addDatabaseStatRecommendations({
+    config,
+    costModel,
+    postgres,
+    recommendations,
+  });
 
   if (!recommendations.length) {
     recommendations.push(
@@ -73,7 +78,8 @@ export function buildRecommendations({
         expectedSavings:
           "Savings are unknown until more Neon usage history and query statistics are available.",
         id: "continue-read-only-baselining",
-        issue: "The safe next step is to collect a wider baseline before changing capacity, schema or application code.",
+        issue:
+          "The safe next step is to collect a wider baseline before changing capacity, schema or application code.",
         proposedOptimization:
           "Run the advisor over multiple representative traffic windows and enable optional read-only Neon telemetry.",
         reversibility: 1,
@@ -392,9 +398,14 @@ function addBranchRecommendations({
 }) {
   const branches = recordsFrom(neon.branches.data, "branches");
   const staleBranches = branches.filter((branch) => {
-    if (booleanField(branch, ["primary", "default", "is_primary"])) return false;
+    if (booleanField(branch, ["primary", "default", "is_primary"]))
+      return false;
 
-    const updatedAt = dateField(branch, ["updated_at", "last_active_at", "created_at"]);
+    const updatedAt = dateField(branch, [
+      "updated_at",
+      "last_active_at",
+      "created_at",
+    ]);
     if (!updatedAt) return false;
 
     const ageDays = (Date.now() - updatedAt.getTime()) / 86_400_000;
@@ -547,7 +558,8 @@ function addConnectionRecommendations({
         expectedSavings:
           "Lower idle connection pressure and possible compute active-time reduction.",
         id: "reduce-idle-database-connections",
-        issue: "Idle database connections exceed the configured advisory threshold.",
+        issue:
+          "Idle database connections exceed the configured advisory threshold.",
         proposedOptimization:
           "Audit runtime connection pooling, hidden browser polling and background jobs that may keep connections open.",
         reversibility: 0.85,
@@ -630,16 +642,17 @@ function addPgStatStatementsRecommendation({
       expectedSavings:
         "Indirect. Enables targeted query, index and caching recommendations with stronger evidence.",
       id: "enable-pg-stat-statements",
-      issue: "`pg_stat_statements` is not installed or is not visible to this user.",
+      issue:
+        "`pg_stat_statements` is not installed or is not visible to this user.",
       proposedOptimization:
-        "Enable `pg_stat_statements` only after approval and confirm the extension is supported in the Neon branch.",
+        "Apply the committed `pg_stat_statements` extension migration, then rerun the advisor to rank normalized statements by total time, call volume and temporary block writes.",
       reversibility: 0.8,
       riskLevel: "low",
       savingsScore: 35,
       title: "Enable normalized query statistics",
       validationProcedure: [
-        "Enable on staging first if available.",
-        "Run the advisor and confirm normalized statements appear without sensitive literals.",
+        "Run `npm run db:migrate:status` and confirm the extension migration is applied.",
+        "Run `npm run neon:advisor` and confirm normalized statements appear without sensitive literals.",
         "Check for measurable overhead under representative load.",
       ],
     }),
@@ -659,11 +672,13 @@ function addStatementRecommendations({
 }) {
   const statements = postgres.statementStats.data ?? [];
   const slowStatements = statements.filter(
-    (statement) => statement.mean_exec_time_ms >= config.thresholds.queryDurationMs,
+    (statement) =>
+      statement.mean_exec_time_ms >= config.thresholds.queryDurationMs,
   );
   const repeatedStatements = statements.filter(
     (statement) =>
-      Number(statement.calls) >= config.thresholds.minQueryCallsForNPlusOneSignal &&
+      Number(statement.calls) >=
+        config.thresholds.minQueryCallsForNPlusOneSignal &&
       statement.mean_exec_time_ms < config.thresholds.queryDurationMs,
   );
   const tempHeavyStatements = statements.filter(
@@ -685,7 +700,10 @@ function addStatementRecommendations({
           currentMonthlyComputeCost: costModel.currentMonthlyComputeCost,
           percent: 0.1,
         }),
-        evidence: statementEvidence(slowStatements.slice(0, 3), "Slow statement"),
+        evidence: statementEvidence(
+          slowStatements.slice(0, 3),
+          "Slow statement",
+        ),
         expectedSavings:
           "Lower query duration, lower compute load and lower p95 latency on affected routes.",
         id: "optimize-slow-statements",
@@ -814,7 +832,10 @@ function addTableRecommendations({
           currentMonthlyComputeCost: costModel.currentMonthlyComputeCost,
           percent: 0.08,
         }),
-        evidence: tableEvidence(seqScanTables.slice(0, 5), "Sequential scan table"),
+        evidence: tableEvidence(
+          seqScanTables.slice(0, 5),
+          "Sequential scan table",
+        ),
         expectedSavings:
           "Lower read IO and query duration on affected list/report routes.",
         id: "review-large-sequential-scans",
@@ -845,7 +866,10 @@ function addTableRecommendations({
           currentMonthlyStorageCost: costModel.currentMonthlyStorageCost,
           percent: 0.05,
         }),
-        evidence: tableEvidence(deadTupleTables.slice(0, 5), "Dead-tuple table"),
+        evidence: tableEvidence(
+          deadTupleTables.slice(0, 5),
+          "Dead-tuple table",
+        ),
         expectedSavings:
           "Reduced bloat pressure and lower scan cost if vacuum lag is the cause.",
         id: "review-autovacuum-dead-tuples",
@@ -963,7 +987,8 @@ function addDatabaseStatRecommendations({
         expectedSavings:
           "Lower read IO and more stable query latency if the root cause is query or index shape.",
         id: "review-cache-hit-ratio",
-        issue: "Database block cache hit ratio is below the advisory threshold.",
+        issue:
+          "Database block cache hit ratio is below the advisory threshold.",
         proposedOptimization:
           "Review largest read-heavy tables, query plans and indexes before changing compute size.",
         reversibility: 0.7,
@@ -1001,7 +1026,8 @@ function addDatabaseStatRecommendations({
         expectedSavings:
           "Lower temporary IO and less memory pressure for large reports or exports.",
         id: "review-temporary-file-usage",
-        issue: "PostgreSQL has written significant temporary files in the current stats window.",
+        issue:
+          "PostgreSQL has written significant temporary files in the current stats window.",
         proposedOptimization:
           "Use `pg_stat_statements`, query plans and route profiling to locate temp-heavy workloads.",
         reversibility: 0.7,
@@ -1106,7 +1132,8 @@ function recommendation({
 
   return {
     approval,
-    automaticActionAllowed: automaticActionAllowed && config.mode === "SAFE_AUTOMATION",
+    automaticActionAllowed:
+      automaticActionAllowed && config.mode === "SAFE_AUTOMATION",
     confidence,
     engineeringEffort,
     estimatedImpact,
@@ -1120,7 +1147,9 @@ function recommendation({
     reversibility,
     riskLevel,
     rollbackProcedure,
-    score: round((safeSavingsScore * confidence * reversibility) / (risk * effort)),
+    score: round(
+      (safeSavingsScore * confidence * reversibility) / (risk * effort),
+    ),
     title,
     validationProcedure,
   };
@@ -1145,7 +1174,10 @@ function statementEvidence(
   );
 }
 
-function tableEvidence(tables: PgTableStats[], label: string): AdvisorEvidence[] {
+function tableEvidence(
+  tables: PgTableStats[],
+  label: string,
+): AdvisorEvidence[] {
   return tables.map((table, index) =>
     evidence({
       detail: `${table.table_name}: seq_scan=${table.seq_scan.toString()}, idx_scan=${table.idx_scan.toString()}, live=${table.n_live_tup.toString()}, dead=${table.n_dead_tup.toString()}`,
@@ -1169,7 +1201,10 @@ function indexEvidence(indexes: PgIndexStats[]): AdvisorEvidence[] {
   );
 }
 
-function recordsFrom(data: unknown, collectionKey: string): Record<string, unknown>[] {
+function recordsFrom(
+  data: unknown,
+  collectionKey: string,
+): Record<string, unknown>[] {
   if (Array.isArray(data)) return data.filter(isRecord);
   if (!isRecord(data)) return [];
 

@@ -2,8 +2,14 @@
 
 The Neon Optimization Advisor is a read-only cost and performance review tool
 for the CRM database. The first milestone only collects telemetry and produces
-recommendations. It does not change Neon, PostgreSQL, schema, data, indexes or
-application code.
+recommendations. It does not change Neon capacity, data, indexes or application
+query behaviour.
+
+The CRM also ships a one-time Prisma migration that enables the PostgreSQL
+`pg_stat_statements` extension when the database role is allowed to create it.
+That extension stores normalized statement statistics so the advisor can rank
+top total-time, high-call and temporary-block query patterns without collecting
+raw query parameters.
 
 ## Operating Mode
 
@@ -58,6 +64,25 @@ PostgreSQL read-only views:
 - `pg_settings`
 - `pg_stat_wal` where available
 - `pg_stat_statements` where installed and visible
+
+## Statement Statistics
+
+Migration `20260902094000_enable_pg_stat_statements` runs:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+```
+
+After the migration is applied, rerun:
+
+```bash
+npm run neon:advisor
+```
+
+The report's cost-driver section includes the top normalized statement by total
+execution time and, when different, the highest-call repeated statement. The
+recommendations still require human review before query rewrites, new indexes
+or cache changes are made.
 
 Neon API, when configured:
 
@@ -145,8 +170,9 @@ Use the least privileged credentials available:
 
 - Neon API key with project/org read access only.
 - PostgreSQL role that can read PostgreSQL catalog and statistics views.
-- No write, DDL, extension creation, branch deletion or production admin
-  permissions are required for the first milestone.
+- Extension creation is only required for applying
+  `20260902094000_enable_pg_stat_statements`; routine advisor runs do not need
+  write, DDL, branch deletion or production admin permissions.
 
 ## Safety Assumptions
 
@@ -178,4 +204,5 @@ For any future approved change:
 
 This milestone is intentionally advisory-only. Schema changes, Neon endpoint
 changes, branch deletion, index changes, SQL rewrites and retention changes all
-require separate human approval and a purpose-built implementation.
+require separate human approval and a purpose-built implementation, except for
+the committed `pg_stat_statements` extension migration described above.

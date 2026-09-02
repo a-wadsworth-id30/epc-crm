@@ -65,7 +65,9 @@ function postgresProfileLines(report: NeonOptimizationReport) {
 
   if (overview) {
     lines.push(`- PostgreSQL version: ${overview.server_version}`);
-    lines.push(`- Database size: ${formatBytes(Number(overview.database_size_bytes))}`);
+    lines.push(
+      `- Database size: ${formatBytes(Number(overview.database_size_bytes))}`,
+    );
   }
 
   if (connections) {
@@ -75,8 +77,12 @@ function postgresProfileLines(report: NeonOptimizationReport) {
   }
 
   if (databaseStats) {
-    lines.push(`- Cache hit ratio: ${formatPercent(cacheHitRatio(databaseStats))}`);
-    lines.push(`- Temp bytes in stats window: ${formatBytes(Number(databaseStats.temp_bytes))}`);
+    lines.push(
+      `- Cache hit ratio: ${formatPercent(cacheHitRatio(databaseStats))}`,
+    );
+    lines.push(
+      `- Temp bytes in stats window: ${formatBytes(Number(databaseStats.temp_bytes))}`,
+    );
   }
 
   lines.push(
@@ -108,6 +114,11 @@ function costDriverLines(report: NeonOptimizationReport) {
   ];
   const connections = report.postgres.connectionSummary.data;
   const topTables = report.postgres.tableStats.data?.slice(0, 3) ?? [];
+  const statementStats = report.postgres.statementStats.data ?? [];
+  const topTotalStatement = statementStats[0];
+  const topRepeatedStatement = [...statementStats].sort(
+    (left, right) => Number(right.calls) - Number(left.calls),
+  )[0];
 
   if (connections) {
     lines.push(
@@ -121,10 +132,27 @@ function costDriverLines(report: NeonOptimizationReport) {
     );
   }
 
+  if (topTotalStatement) {
+    lines.push(
+      `- Top statement time: queryid ${topTotalStatement.queryid} used ${formatMs(topTotalStatement.total_exec_time_ms)} across ${Number(topTotalStatement.calls).toLocaleString("en-GB")} calls`,
+    );
+  }
+
+  if (
+    topRepeatedStatement &&
+    topRepeatedStatement.queryid !== topTotalStatement?.queryid
+  ) {
+    lines.push(
+      `- Top repeated statement: queryid ${topRepeatedStatement.queryid} ran ${Number(topRepeatedStatement.calls).toLocaleString("en-GB")} times with ${formatMs(topRepeatedStatement.mean_exec_time_ms)} mean execution`,
+    );
+  }
+
   return lines;
 }
 
-function recommendationLines(recommendations: NeonOptimizationReport["recommendations"]) {
+function recommendationLines(
+  recommendations: NeonOptimizationReport["recommendations"],
+) {
   if (!recommendations.length) return ["- No recommendations generated."];
 
   return recommendations.flatMap((recommendation, index) => [
@@ -185,7 +213,9 @@ function formatCostEstimate(estimate: AdvisorCostEstimate) {
       ? "unavailable"
       : `${estimate.currency} ${estimate.amount.toFixed(2)}/month`;
   const certainty = estimate.exact ? "exact" : "estimate";
-  const measured = estimate.measured ? "measured input" : "configured/unknown input";
+  const measured = estimate.measured
+    ? "measured input"
+    : "configured/unknown input";
 
   return `${amount} (${certainty}, ${measured}; ${estimate.basis})`;
 }
@@ -214,13 +244,21 @@ function yesNo(value: boolean) {
   return value ? "yes" : "no";
 }
 
-function highestRisk(recommendations: NeonOptimizationReport["recommendations"]) {
-  if (recommendations.some((recommendation) => recommendation.riskLevel === "high")) {
+function highestRisk(
+  recommendations: NeonOptimizationReport["recommendations"],
+) {
+  if (
+    recommendations.some(
+      (recommendation) => recommendation.riskLevel === "high",
+    )
+  ) {
     return "high";
   }
 
   if (
-    recommendations.some((recommendation) => recommendation.riskLevel === "medium")
+    recommendations.some(
+      (recommendation) => recommendation.riskLevel === "medium",
+    )
   ) {
     return "medium";
   }
@@ -266,6 +304,10 @@ function formatBytes(bytes: number) {
   }
 
   return `${round(value)} ${units[unitIndex]}`;
+}
+
+function formatMs(value: number) {
+  return `${round(value).toLocaleString("en-GB")}ms`;
 }
 
 function round(value: number) {

@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readAdvisorConfig } from "../src/lib/neon-advisor/config";
 import { sumMetricValue } from "../src/lib/neon-advisor/cost-model";
+import { formatNeonOptimizationReport } from "../src/lib/neon-advisor/report";
 import { buildRecommendations } from "../src/lib/neon-advisor/recommendation-engine";
 import type {
   AdvisorCapability,
   CostModelContext,
   NeonApiSnapshot,
+  NeonOptimizationReport,
   PgDatabaseStats,
   PostgresAnalysisSnapshot,
   RepositoryProfile,
@@ -163,7 +165,8 @@ describe("Neon optimization advisor", () => {
     });
 
     const suspend = recommendations.find(
-      (recommendation) => recommendation.id === "review-endpoint-suspend-settings",
+      (recommendation) =>
+        recommendation.id === "review-endpoint-suspend-settings",
     );
 
     assert.ok(suspend);
@@ -172,6 +175,80 @@ describe("Neon optimization advisor", () => {
       suspend.evidence.some(
         (item) => item.label === "Target suspend timeout" && item.value === 300,
       ),
+    );
+  });
+
+  it("prints normalized statement drivers when pg_stat_statements is available", () => {
+    const config = readAdvisorConfig({} as NodeJS.ProcessEnv);
+    const postgres = postgresFixture({
+      active_connections: 1,
+      current_database_connections: 2,
+      idle_connections: 1,
+      idle_in_transaction_connections: 0,
+      max_connections: 100,
+      waiting_connections: 0,
+    });
+    postgres.pgStatStatementsInstalled = capability(
+      "pg-stat-statements-capability",
+      true,
+    );
+    postgres.statementStats = capability("pg-stat-statements", [
+      {
+        calls: BigInt(25),
+        max_exec_time_ms: 250,
+        mean_exec_time_ms: 120,
+        query: "SELECT * FROM example WHERE id = $1",
+        queryid: "statement-total-time",
+        rows: BigInt(25),
+        shared_blks_hit: BigInt(120),
+        shared_blks_read: BigInt(5),
+        temp_blks_written: BigInt(0),
+        total_exec_time_ms: 3_000,
+      },
+      {
+        calls: BigInt(2_500),
+        max_exec_time_ms: 5,
+        mean_exec_time_ms: 1,
+        query: "SELECT * FROM repeated WHERE owner_id = $1",
+        queryid: "statement-call-volume",
+        rows: BigInt(2_500),
+        shared_blks_hit: BigInt(300),
+        shared_blks_read: BigInt(0),
+        temp_blks_written: BigInt(0),
+        total_exec_time_ms: 2_500,
+      },
+    ]);
+
+    const output = formatNeonOptimizationReport({
+      changeExecution: {
+        allowListedActions: [],
+        enabled: false,
+        mode: config.mode,
+        reason: "test",
+      },
+      config,
+      costModel: costModelFixture(config.costRates.currency),
+      generatedAt: "2026-09-02T00:00:00.000Z",
+      mode: config.mode,
+      neon: neonFixture(),
+      postgres,
+      recommendations: [],
+      repository: repositoryFixture("neon-pooler"),
+      rollback: {
+        ready: true,
+        requirements: [],
+      },
+      validation: {
+        automaticRollbackRule: "test",
+        guardrails: config.thresholds,
+        monitor: [],
+      },
+    } satisfies NeonOptimizationReport);
+
+    assert.match(output, /Top statement time: queryid statement-total-time/);
+    assert.match(
+      output,
+      /Top repeated statement: queryid statement-call-volume ran 2,500 times/,
     );
   });
 });
@@ -217,12 +294,20 @@ function neonFixture({
   endpoints?: Record<string, unknown>[];
 } = {}): NeonApiSnapshot {
   return {
-    branchConsumption: capability("branch-consumption-history", null, "skipped"),
+    branchConsumption: capability(
+      "branch-consumption-history",
+      null,
+      "skipped",
+    ),
     branches: capability("branches", { branches: [] }),
     endpoints: capability("endpoints", { endpoints }),
     operations: capability("operations", null, "skipped"),
     project: capability("project", null, "skipped"),
-    projectConsumption: capability("project-consumption-history", null, "skipped"),
+    projectConsumption: capability(
+      "project-consumption-history",
+      null,
+      "skipped",
+    ),
   };
 }
 
@@ -265,15 +350,16 @@ function postgresFixture(
       max_wait_ms: null,
       waiting_locks: 0,
     }),
-    pgStatStatementsInstalled: capability("pg-stat-statements-capability", false),
+    pgStatStatementsInstalled: capability(
+      "pg-stat-statements-capability",
+      false,
+    ),
     settings: capability("database-settings", []),
     statementStats: capability("pg-stat-statements", []),
     tableStats: capability("table-statistics", []),
-    walStats: capability<NonNullable<PostgresAnalysisSnapshot["walStats"]["data"]>>(
-      "wal-statistics",
-      null,
-      "skipped",
-    ),
+    walStats: capability<
+      NonNullable<PostgresAnalysisSnapshot["walStats"]["data"]>
+    >("wal-statistics", null, "skipped"),
   };
 
   postgres.capabilities = [
