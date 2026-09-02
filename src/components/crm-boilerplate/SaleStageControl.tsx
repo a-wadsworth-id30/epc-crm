@@ -110,7 +110,7 @@ export default function SaleStageControl({
             Stage control
           </h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Move the lead when the stage requirements are ready.
+            Move the sale when the stage requirements are ready.
           </p>
         </div>
         <SalesPipelineStageBadge

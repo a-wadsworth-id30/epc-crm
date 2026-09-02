@@ -60,23 +60,27 @@ const bucketOptions: Array<{
   label: string;
   description: string;
 }> = [
-  { value: "LEAD", label: "Lead", description: "New or unqualified enquiries" },
+  {
+    value: "LEAD",
+    label: "Enquiries",
+    description: "Marketed leads being nurtured",
+  },
   {
     value: "QUALIFIED",
     label: "Qualified",
-    description: "Qualified sales opportunities",
+    description: "Legacy reporting bucket",
   },
   {
     value: "PROPOSAL",
-    label: "Proposal",
-    description: "Quoted or proposal issued",
+    label: "Opportunities",
+    description: "Engaged enquiries being quoted",
   },
   {
     value: "NEGOTIATION",
     label: "Negotiation",
-    description: "Commercial terms in progress",
+    description: "Legacy reporting bucket",
   },
-  { value: "WON", label: "Won", description: "Closed won opportunities" },
+  { value: "WON", label: "Projects", description: "Confirmed orders" },
   { value: "LOST", label: "Lost", description: "Closed lost opportunities" },
 ];
 

@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-28
+Last updated: 2026-09-02
 
 ## Current Product Shape
 
@@ -67,6 +67,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   pipeline stage and stale lead review window. Manual sales, tracked website
   leads, phone-call generated leads and stale-sales header notifications use
   these defaults.
+- EPC's customer-facing sales pipeline stages are Enquiries, Opportunities and
+  Projects, with Lost retained for closed-lost reporting. These are stored as
+  `SalesPipelineStage` rows over the stable legacy buckets `LEAD`, `PROPOSAL`,
+  `WON` and `LOST`; the old Qualified and Negotiation default rows are kept
+  inactive for historical compatibility rather than deleted.
 - Header quick-create Lead and Deal use the normal sale modal with a required
   linked-contact step. Users can search recent accessible contacts or create a
   new contact inline, optionally linking or creating an organisation before the

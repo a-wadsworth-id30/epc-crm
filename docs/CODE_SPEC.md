@@ -303,6 +303,11 @@ Sales is intentionally generic enough for bespoke builds:
 - `SalesOpportunity` is the wrapper for communication and follow-up attached to a specific sale.
 - `/sales/[id]` uses the exact opaque `SalesOpportunity.id`; do not put descriptive customer or enquiry text in sales URLs.
 - Stage enum: `LEAD`, `QUALIFIED`, `PROPOSAL`, `NEGOTIATION`, `WON`, `LOST`.
+- EPC's current customer-facing pipeline is Enquiries -> Opportunities ->
+  Projects, with Lost retained for closed-lost reporting. These are represented
+  by the existing `LEAD`, `PROPOSAL`, `WON` and `LOST` buckets so attribution,
+  automation and reporting logic can stay stable; `QUALIFIED` and
+  `NEGOTIATION` are legacy buckets unless explicitly reactivated.
 - Custom lifecycle stages use `SalesPipelineStage`, which maps each configurable
   stage to the stable `SalesStage` enum bucket for reporting and conversion
   upload compatibility. Keep both fields in sync until the later cleanup phase.

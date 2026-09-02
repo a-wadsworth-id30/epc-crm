@@ -1043,14 +1043,14 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     <>
       <PageHeader
         title="Sales Pipeline"
-        description="Pipeline for leads, opportunities and sales follow-up."
+        description="Pipeline for enquiries, opportunities and confirmed projects."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/marketing/visitors"
               className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
-              Review captured leads
+              Review captured enquiries
             </Link>
             <DeferredAddSaleModal
               owners={saleOwnerOptions}
@@ -1089,9 +1089,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         <SalesStatCard
           accent="success"
           icon={<CheckCircleIcon />}
-          label="Won revenue"
+          label="Project revenue"
           value={formatMoney(wonValue, currency, displayFormatting)}
-          meta={`${wonCount} won`}
+          meta={`${wonCount} project${wonCount === 1 ? "" : "s"}`}
           detail="Closed value"
         />
         <SalesStatCard
@@ -1100,7 +1100,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           label="Communications"
           value={totalCommunications.toString()}
           meta={`${communicationAverage} avg`}
-          detail="Events per lead"
+          detail="Events per sale"
         />
       </div>
 
