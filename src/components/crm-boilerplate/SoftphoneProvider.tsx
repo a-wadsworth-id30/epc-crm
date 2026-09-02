@@ -29,9 +29,10 @@ import {
   UsersIcon,
   XIcon,
 } from "@/components/crm-boilerplate/SoftphoneIcons";
-import type {
-  SoftphoneDialDetail,
-  SoftphoneDialEvent,
+import {
+  fetchLocalDesktopSoftphoneActive,
+  type SoftphoneDialDetail,
+  type SoftphoneDialEvent,
 } from "@/lib/telephony/softphone-dial";
 
 type SoftphoneStatus =
@@ -44,13 +45,6 @@ type SoftphoneStatus =
   | "in-call"
   | "ended"
   | "error";
-
-type DesktopSoftphoneCommand = {
-  id: string;
-  type: "dial";
-  createdAt: string;
-  payload: SoftphoneDialDetail;
-};
 
 type SoftphonePosition = {
   x: number;
@@ -468,7 +462,7 @@ function softphoneErrorMessage(error: unknown) {
     const detail = candidate.message ?? candidate.description;
 
     if (candidate.code === 20101 || String(candidate.code) === "20101") {
-      return "Twilio rejected the voice token. Check the Twilio API key SID and Client Secret belong to the same account as the Account SID.";
+      return "Twilio rejected the voice token. Check the API Key SID and API Key Secret belong to the same account as the Account SID.";
     }
 
     if (detail) {
@@ -851,7 +845,7 @@ export default function SoftphoneProvider({
     };
 
     sendPresence(true);
-    const interval = window.setInterval(() => sendPresence(true), 60000);
+    const interval = window.setInterval(() => sendPresence(true), 5 * 60 * 1000);
 
     return () => {
       window.clearInterval(interval);
@@ -866,18 +860,9 @@ export default function SoftphoneProvider({
     }
 
     let cancelled = false;
-    let interval: number | null = null;
 
-    function isVisible() {
-      return document.visibilityState === "visible";
-    }
-
-    const checkPresence = () => {
-      if (!isVisible()) {
-        return;
-      }
-
-      fetch("/api/telephony/desktop-presence", {
+    const checkServerPresence = () => {
+      return fetch("/api/telephony/desktop-presence", {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
       })
@@ -898,43 +883,43 @@ export default function SoftphoneProvider({
         });
     };
 
-    function stopInterval() {
-      if (interval === null) return;
+    const checkPresence = async (includeServerFallback = false) => {
+      const active = await fetchLocalDesktopSoftphoneActive();
 
-      window.clearInterval(interval);
-      interval = null;
-    }
-
-    function startInterval() {
-      if (interval !== null || !isVisible()) return;
-
-      interval = window.setInterval(checkPresence, 60000);
-    }
-
-    function syncVisibility({ checkNow = true } = {}) {
-      if (isVisible()) {
-        startInterval();
-        if (checkNow) checkPresence();
+      if (cancelled) {
         return;
       }
 
-      stopInterval();
-    }
+      if (active) {
+        setDesktopSoftphoneActive(true);
+        return;
+      }
 
-    const handleVisibilityChange = () => syncVisibility();
+      if (includeServerFallback) {
+        await checkServerPresence();
+        return;
+      }
 
-    syncVisibility();
-    window.addEventListener("focus", checkPresence);
-    window.addEventListener("online", checkPresence);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+      window.__id30DesktopSoftphoneActive = false;
+      setDesktopSoftphoneActive(false);
+    };
+
+    void checkPresence(true);
+
+    const handleFocus = () => {
+      void checkPresence(true);
+    };
+    const interval = window.setInterval(() => {
+      void checkPresence(false);
+    }, 30000);
+
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       cancelled = true;
       window.__id30DesktopSoftphoneActive = false;
-      stopInterval();
-      window.removeEventListener("focus", checkPresence);
-      window.removeEventListener("online", checkPresence);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [isStandaloneMode]);
 
@@ -1702,60 +1687,6 @@ export default function SoftphoneProvider({
       status,
     ],
   );
-
-  useEffect(() => {
-    if (!isStandaloneMode || hasCallInProgress) {
-      return;
-    }
-
-    let cancelled = false;
-    let polling = false;
-
-    const pollDesktopCommand = async () => {
-      if (polling) {
-        return;
-      }
-
-      polling = true;
-
-      try {
-        const response = await fetch("/api/telephony/desktop-command", {
-          headers: { Accept: "application/json" },
-          credentials: "same-origin",
-          cache: "no-store",
-        });
-
-        if (!response.ok || cancelled) {
-          return;
-        }
-
-        const payload = (await response.json().catch(() => null)) as {
-          command?: DesktopSoftphoneCommand | null;
-        } | null;
-        const command = payload?.command;
-
-        if (command?.type !== "dial" || !command.payload?.phone) {
-          return;
-        }
-
-        void startCall(command.payload.phone, command.payload.contactName, {
-          contextName: command.payload.contextName,
-          opportunityId: command.payload.opportunityId,
-          contactId: command.payload.contactId,
-        });
-      } finally {
-        polling = false;
-      }
-    };
-
-    void pollDesktopCommand();
-    const interval = window.setInterval(pollDesktopCommand, 1500);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [hasCallInProgress, isStandaloneMode, startCall]);
 
   const answerIncoming = useCallback(() => {
     const incomingCall = incomingCallRef.current;

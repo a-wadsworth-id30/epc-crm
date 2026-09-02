@@ -174,12 +174,18 @@ a per-agent modal.
 
 Non-browser routes use SIP, landline or mobile depending on `voiceRoutingMode`.
 
+Desktop softphone click-to-call should use the local Electron bridge on
+`127.0.0.1:47730` or the `id30-softphone://` protocol. Do not reintroduce
+short-interval polling of `/api/telephony/desktop-command`; that path exists
+only as a legacy fallback for older desktop builds.
+
 Browser softphones should not be marked offline merely because the CRM dashboard
 tab is hidden. The `/softphone-window` route can keep the browser heartbeat
 alive while it remains open; unload/page exit is what sends `OFFLINE`.
-Normal CRM tabs pause passive desktop-softphone presence reads while hidden and
-resume on focus/visibility. The standalone softphone window still sends its
-presence heartbeat while open so routing can continue to see the desktop client.
+Normal CRM tabs check for the local desktop bridge without hitting Netlify, and
+only fall back to server-side desktop presence when focused. The standalone
+softphone window still sends its presence heartbeat while open so routing can
+continue to see the desktop client.
 The main admin shell mounts the browser softphone provider only for active
 users whose routing mode is `BROWSER` or `FLEX` and who have a voice extension.
 Other users can still use the CRM normally without loading the Twilio Voice SDK

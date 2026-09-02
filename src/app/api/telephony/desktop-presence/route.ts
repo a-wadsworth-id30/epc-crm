@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBrowserSoftphoneUser } from "@/lib/telephony/authorization";
 
-const desktopPresenceTtlMs = 90_000;
-const desktopPresenceWriteGuardMs = 45_000;
+const desktopPresenceTtlMs = 10 * 60_000;
+const desktopPresenceWriteGuardMs = 4 * 60_000;
 
 function isActive(lastSeenAt: Date | null | undefined) {
   return Boolean(

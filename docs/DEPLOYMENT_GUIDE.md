@@ -199,12 +199,12 @@ the Netlify build. Optional tuning:
 
 Desktop softphone downloads:
 
-- `ID30_SOFTPHONE_DOWNLOAD_BASE_URL` should point at the public folder used by
-  the `Desktop Softphone Release` GitHub Actions workflow, for example
-  `https://downloads.example.com/desktop-softphone`.
-- The current macOS fallback is hosted in the dedicated public R2 bucket
+- The CRM defaults desktop softphone downloads to the dedicated public R2 bucket
   `id30-softphone-downloads` at
   `https://pub-dd0c50b7d886446ea973dd80b6ea38f6.r2.dev`.
+- `ID30_SOFTPHONE_DOWNLOAD_BASE_URL` can override the public folder used by
+  the `Desktop Softphone Release` GitHub Actions workflow, for example
+  `https://downloads.example.com/desktop-softphone`.
 - `/api/desktop-softphone/download` is the authenticated staff download path.
   `/api/desktop-softphone/install-macos` is also authenticated and retained only
   as a legacy script route; do not advertise public curl installer commands.
@@ -450,6 +450,9 @@ static auto-update layout under `{ID30_SOFTPHONE_DOWNLOAD_BASE_URL}/updates`.
 Packaged desktop apps show their installed version in the softphone Settings
 panel, download updates in the background, and install automatically once no
 call is active.
+Desktop app versions from `0.1.28` onward receive click-to-call through the
+local bridge on `127.0.0.1:47730` or the `id30-softphone://` protocol, avoiding
+high-frequency Netlify command polling.
 
 GitHub repository variable:
 
@@ -465,6 +468,19 @@ DESKTOP_SOFTPHONE_R2_ACCESS_KEY_ID
 DESKTOP_SOFTPHONE_R2_SECRET_ACCESS_KEY
 DESKTOP_SOFTPHONE_R2_BUCKET
 ```
+
+Optional Windows code-signing secrets:
+
+```text
+DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_BASE64
+DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_PASSWORD
+DESKTOP_SOFTPHONE_WINDOWS_SIGN_WITH_PARAMS
+```
+
+`DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_BASE64` should contain a base64-encoded
+`.pfx` Authenticode certificate. Alternatively, use
+`DESKTOP_SOFTPHONE_WINDOWS_SIGN_WITH_PARAMS` for a SignTool-compatible signing
+provider such as hardware-token or cloud signing.
 
 For normal double-click macOS installation, configure Developer ID signing and
 notarization before publishing the mac artifact. The desktop Forge config reads:

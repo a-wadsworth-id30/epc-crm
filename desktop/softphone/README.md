@@ -5,7 +5,7 @@ Small Electron wrapper for the iD30 CRM softphone.
 The app loads:
 
 ```text
-https://crm.id30.com/softphone-window
+https://crm.epc-improvements.co.uk/softphone-window
 ```
 
 It keeps the softphone outside the browser so agents can switch tabs without
@@ -69,6 +69,18 @@ DESKTOP_SOFTPHONE_R2_SECRET_ACCESS_KEY
 DESKTOP_SOFTPHONE_R2_BUCKET
 ```
 
+Optional Windows signing secrets:
+
+```text
+DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_BASE64
+DESKTOP_SOFTPHONE_WINDOWS_CERTIFICATE_PASSWORD
+DESKTOP_SOFTPHONE_WINDOWS_SIGN_WITH_PARAMS
+```
+
+Unsigned Windows installers can trigger Chrome/SmartScreen warnings. Add either
+a base64-encoded `.pfx` certificate plus password, or SignTool parameters for a
+hardware-token/cloud signing provider, before wider Windows rollout.
+
 Optional repository variable:
 
 ```text
@@ -83,6 +95,17 @@ latest/iD30-Softphone-Windows-x64.exe
 versions/<version>/...
 updates/darwin/arm64/...
 updates/win32/x64/...
+```
+
+The publish step sets `Content-Disposition` metadata on `latest` and `versions`
+installer downloads so browsers use stable filenames.
+To repair metadata on already-published objects without rebuilding installers,
+run the workflow manually with `repair_metadata_only=true`, or push a metadata
+repair tag for the current package version:
+
+```bash
+git tag desktop-softphone-metadata-v0.1.28
+git push origin desktop-softphone-metadata-v0.1.28
 ```
 
 Set the CRM runtime env var to activate the settings-page download buttons:
