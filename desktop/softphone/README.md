@@ -5,7 +5,7 @@ Small Electron wrapper for the iD30 CRM softphone.
 The app loads:
 
 ```text
-https://crm.epc-improvements.co.uk/softphone-window
+https://crm[.]epc-improvements[.]co[.]uk/softphone-window
 ```
 
 It keeps the softphone outside the browser so agents can switch tabs without
