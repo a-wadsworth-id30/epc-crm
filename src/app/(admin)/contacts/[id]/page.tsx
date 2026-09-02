@@ -994,16 +994,6 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   const categoryOption = contactCategoryOption(
     contact.category ?? defaultContactCategory,
   );
-  const hasHeaderDetails = Boolean(
-    contactHeaderAddress ||
-    companyName ||
-    contact.role ||
-    companyHeaderAddress ||
-    categoryOption.label,
-  );
-  const headerDescription =
-    [companyName, contact.role].filter(Boolean).join(" / ") ||
-    "People workspace";
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const relationshipStatus = (contact.relationshipProfile?.status ??
     defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
@@ -1207,7 +1197,6 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     <>
       <PageHeader
         title={name}
-        description={headerDescription}
         descriptionContent={
           <div className="flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-1.5">
             {contactHeaderAddress ? (
@@ -1244,7 +1233,6 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             <ContactHeaderDetailRow Icon={UserRound}>
               <p>{categoryOption.label}</p>
             </ContactHeaderDetailRow>
-            {!hasHeaderDetails ? <p>People workspace</p> : null}
           </div>
         }
         actions={
@@ -1328,11 +1316,6 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               }
             : null
         }
-        summary={{
-          companyName,
-          leadSource: contact.leadSource,
-          role: contact.role,
-        }}
       />
     </>
   );

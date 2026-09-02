@@ -7,15 +7,6 @@ function ContactConversationWorkspaceSkeleton() {
   return (
     <div className="min-w-0 space-y-4">
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gray-100 dark:bg-white/[0.08]" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-4 w-40 rounded bg-gray-100 dark:bg-white/[0.08]" />
-              <div className="h-3 w-72 max-w-full rounded bg-gray-50 dark:bg-white/[0.05]" />
-            </div>
-          </div>
-        </div>
         <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {["email", "phone", "relationship", "leads", "documents"].map(
             (item) => (

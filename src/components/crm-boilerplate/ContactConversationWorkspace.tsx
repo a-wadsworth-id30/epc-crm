@@ -72,11 +72,6 @@ export type ContactConversationWorkspaceProps = {
   recipientPhone: string | null;
   recipientPhones: ContactSummaryMethod[];
   replyTarget: ReplyTarget;
-  summary: {
-    companyName: string | null;
-    leadSource: string | null;
-    role: string | null;
-  };
 };
 
 type ContactWorkspaceTab = {
@@ -219,26 +214,20 @@ function saveStoredKeys<T extends string>(storageKey: string, keys: T[]) {
 
 function ContactWorkspaceSummary({
   closedLeadCount,
-  communicationCount,
-  contactName,
   documentCount,
   openLeadCount,
   recipientEmails,
   recipientPhones,
   relationshipStatusLabel,
   relationshipTechnologyCount,
-  summary,
 }: {
   closedLeadCount: number;
-  communicationCount: number;
-  contactName: string;
   documentCount: number;
   openLeadCount: number;
   recipientEmails: ContactSummaryMethod[];
   recipientPhones: ContactSummaryMethod[];
   relationshipStatusLabel: string;
   relationshipTechnologyCount: number;
-  summary: ContactConversationWorkspaceProps["summary"];
 }) {
   const metrics = [
     {
@@ -280,29 +269,6 @@ function ContactWorkspaceSummary({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-900/40">
-            <UserRound className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                People workspace
-              </h2>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-900/40">
-                Live
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              {contactName} | {communicationCount} conversation item
-              {communicationCount === 1 ? "" : "s"}
-              {summary.leadSource ? ` | ${summary.leadSource}` : ""}
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         {metrics.map((metric) => {
           const Icon = metric.Icon;
@@ -460,7 +426,6 @@ export default function ContactConversationWorkspace({
   recipientPhone,
   recipientPhones,
   replyTarget,
-  summary,
 }: ContactConversationWorkspaceProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] =
@@ -761,15 +726,12 @@ export default function ContactConversationWorkspace({
 
       <ContactWorkspaceSummary
         closedLeadCount={closedLeadCount}
-        communicationCount={totalCommunicationCount}
-        contactName={contactName}
         documentCount={documentCount}
         openLeadCount={openLeadCount}
         recipientEmails={recipientEmails}
         recipientPhones={recipientPhones}
         relationshipStatusLabel={relationshipStatusLabel}
         relationshipTechnologyCount={relationshipTechnologyCount}
-        summary={summary}
       />
 
       <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px] 3xl:grid-cols-[minmax(0,1fr)_390px]">
@@ -778,7 +740,7 @@ export default function ContactConversationWorkspace({
             <div className="grid min-w-0 lg:grid-cols-[184px_minmax(0,1fr)]">
               <nav
                 className="flex min-w-0 overflow-x-auto border-b border-gray-200 bg-gray-50/80 p-1.5 lg:block lg:overflow-visible lg:border-r lg:border-b-0 lg:p-0 dark:border-gray-800 dark:bg-white/[0.02]"
-                aria-label="People workspace sections"
+                aria-label="Contact workspace sections"
               >
                 {orderedTabs.map((tab) => {
                   const isActive = activeTab === tab.key;
