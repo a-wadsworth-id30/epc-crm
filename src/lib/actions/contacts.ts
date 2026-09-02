@@ -19,9 +19,14 @@ import {
   type ContactCategoryValue,
 } from "@/lib/contacts/categories";
 import {
+  customerRelationshipStatusValues,
+  defaultCustomerRelationshipStatus,
+} from "@/lib/customer-relationship";
+import {
   companyIdAccessWhere,
   companyWhereWithAccess,
   contactIdAccessWhere,
+  salesOpportunityAccessWhere,
 } from "@/lib/crm-resource-access";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { importPipedrivePersonIds } from "@/lib/integrations/pipedrive-import";
@@ -39,6 +44,8 @@ export type ContactActionState = {
 export type ContactMergeActionState = ContactActionState & {
   primaryContactId?: string;
 };
+
+export type CustomerRelationshipActionState = ContactActionState;
 
 const contactSchema = z
   .object({
@@ -130,6 +137,60 @@ const contactTagNamesSchema = z.array(z.string().trim().min(1).max(40)).max(20);
 const mergeContactsSchema = z.object({
   primaryContactId: z.string().trim().min(1, "Primary contact is missing."),
   duplicateContactId: z.string().trim().min(1, "Choose a contact to merge."),
+});
+
+const customerTechnologyCoverageSchema = z
+  .array(
+    z.object({
+      technologyName: z
+        .string()
+        .trim()
+        .min(1, "Technology name is required.")
+        .max(80, "Technology name cannot exceed 80 characters."),
+      installed: z.boolean().default(false),
+      covered: z.boolean().default(false),
+      opportunityId: z
+        .string()
+        .trim()
+        .optional()
+        .transform((value) => (value ? value : null)),
+      notes: z
+        .string()
+        .trim()
+        .max(500, "Technology notes cannot exceed 500 characters.")
+        .optional()
+        .transform((value) => (value ? value : null)),
+    }),
+  )
+  .max(30, "Track up to 30 technologies for one contact.");
+
+const customerRelationshipSchema = z.object({
+  contactId: z.string().trim().min(1, "Contact is required."),
+  relationshipStatus: z
+    .enum(customerRelationshipStatusValues)
+    .default(defaultCustomerRelationshipStatus),
+  summary: z
+    .string()
+    .trim()
+    .max(1000, "Relationship summary cannot exceed 1000 characters.")
+    .optional()
+    .transform((value) => (value ? value : null)),
+  nextReviewAt: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value ? value : null))
+    .refine(
+      (value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value),
+      "Choose a valid review date.",
+    )
+    .transform((value) => (value ? new Date(`${value}T00:00:00.000Z`) : null)),
+  notes: z
+    .string()
+    .trim()
+    .max(2000, "Relationship notes cannot exceed 2000 characters.")
+    .optional()
+    .transform((value) => (value ? value : null)),
 });
 
 class ContactActionError extends Error {}
@@ -231,6 +292,49 @@ function parseContactTags(formData: FormData) {
   }
 
   return { ok: true as const, tagNames };
+}
+
+function parseCustomerTechnologies(formData: FormData) {
+  const raw = formString(formData, "technologies") ?? "[]";
+  let decoded: unknown;
+
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    return { ok: false as const, message: "Check the technology rows." };
+  }
+
+  const parsed = customerTechnologyCoverageSchema.safeParse(decoded);
+
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      message: parsed.error.issues[0]?.message ?? "Check the technology rows.",
+    };
+  }
+
+  const seen = new Set<string>();
+  const items = parsed.data
+    .map((technology) => ({
+      covered: technology.covered,
+      installed: technology.installed,
+      notes: technology.notes,
+      opportunityId: technology.opportunityId,
+      technologyName: technology.technologyName.replace(/\s+/g, " ").trim(),
+    }))
+    .filter((technology) => {
+      if (!technology.technologyName) return false;
+      const key = [
+        technology.technologyName.toLowerCase(),
+        technology.opportunityId ?? "",
+      ].join("|");
+
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return { ok: true as const, items };
 }
 
 async function resolveCompanyData(
@@ -580,6 +684,117 @@ export async function updateContactAction(
   return { ok: true, message: "Person updated." };
 }
 
+export async function updateCustomerRelationshipAction(
+  _: CustomerRelationshipActionState,
+  formData: FormData,
+): Promise<CustomerRelationshipActionState> {
+  const user = await requireUser();
+  const parsed = customerRelationshipSchema.safeParse({
+    contactId: formString(formData, "contactId"),
+    relationshipStatus:
+      formString(formData, "relationshipStatus") ??
+      defaultCustomerRelationshipStatus,
+    summary: formString(formData, "summary"),
+    nextReviewAt: formString(formData, "nextReviewAt"),
+    notes: formString(formData, "notes"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message:
+        parsed.error.issues[0]?.message ?? "Check the relationship details.",
+    };
+  }
+
+  const parsedTechnologies = parseCustomerTechnologies(formData);
+  if (!parsedTechnologies.ok) {
+    return { ok: false, message: parsedTechnologies.message };
+  }
+
+  const contact = await prisma.contact.findFirst({
+    where: contactIdAccessWhere(parsed.data.contactId, user),
+    select: { id: true },
+  });
+
+  if (!contact) {
+    return { ok: false, message: "Contact not found." };
+  }
+
+  const linkedOpportunityIds = [
+    ...new Set(
+      parsedTechnologies.items
+        .map((technology) => technology.opportunityId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+
+  if (linkedOpportunityIds.length) {
+    const accessibleOpportunities = await prisma.salesOpportunity.findMany({
+      where: {
+        AND: [
+          salesOpportunityAccessWhere(user),
+          { contactId: contact.id, id: { in: linkedOpportunityIds } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (accessibleOpportunities.length !== linkedOpportunityIds.length) {
+      return {
+        ok: false,
+        message: "Choose only opportunities linked to this contact.",
+      };
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const profile = await tx.customerRelationshipProfile.upsert({
+      where: { contactId: contact.id },
+      update: {
+        nextReviewAt: parsed.data.nextReviewAt,
+        notes: parsed.data.notes,
+        status: parsed.data.relationshipStatus,
+        summary: parsed.data.summary,
+      },
+      create: {
+        contactId: contact.id,
+        nextReviewAt: parsed.data.nextReviewAt,
+        notes: parsed.data.notes,
+        status: parsed.data.relationshipStatus,
+        summary: parsed.data.summary,
+      },
+      select: { id: true },
+    });
+
+    await tx.customerTechnologyCoverage.deleteMany({
+      where: { profileId: profile.id },
+    });
+
+    if (parsedTechnologies.items.length) {
+      await tx.customerTechnologyCoverage.createMany({
+        data: parsedTechnologies.items.map((technology) => ({
+          covered: technology.covered,
+          installed: technology.installed,
+          notes: technology.notes,
+          opportunityId: technology.opportunityId,
+          profileId: profile.id,
+          technologyName: technology.technologyName,
+        })),
+      });
+    }
+  });
+
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${contact.id}`);
+
+  return {
+    contactId: contact.id,
+    ok: true,
+    message: "Customer relationship saved.",
+  };
+}
+
 export async function syncPipedriveContactDetailsAction(
   _: ContactActionState,
   formData: FormData,
@@ -916,6 +1131,67 @@ export async function mergeContactsAction(
       mergedAdditionalEmails,
       mergedAdditionalPhones,
     );
+
+    const [primaryRelationship, duplicateRelationship] = await Promise.all([
+      tx.customerRelationshipProfile.findUnique({
+        where: { contactId: primaryContactId },
+        select: {
+          id: true,
+          nextReviewAt: true,
+          notes: true,
+          status: true,
+          summary: true,
+        },
+      }),
+      tx.customerRelationshipProfile.findUnique({
+        where: { contactId: duplicateContactId },
+        select: {
+          id: true,
+          nextReviewAt: true,
+          notes: true,
+          status: true,
+          summary: true,
+        },
+      }),
+    ]);
+
+    if (duplicateRelationship) {
+      if (primaryRelationship) {
+        await tx.customerTechnologyCoverage.updateMany({
+          where: { profileId: duplicateRelationship.id },
+          data: { profileId: primaryRelationship.id },
+        });
+        await tx.customerRelationshipProfile.update({
+          where: { id: primaryRelationship.id },
+          data: {
+            nextReviewAt: optionalMergeValue(
+              primaryRelationship.nextReviewAt,
+              duplicateRelationship.nextReviewAt,
+            ),
+            notes: optionalMergeValue(
+              primaryRelationship.notes,
+              duplicateRelationship.notes,
+            ),
+            status:
+              primaryRelationship.status === defaultCustomerRelationshipStatus
+                ? duplicateRelationship.status
+                : primaryRelationship.status,
+            summary: optionalMergeValue(
+              primaryRelationship.summary,
+              duplicateRelationship.summary,
+            ),
+          },
+        });
+        await tx.customerRelationshipProfile.delete({
+          where: { id: duplicateRelationship.id },
+        });
+      } else {
+        await tx.customerRelationshipProfile.update({
+          where: { id: duplicateRelationship.id },
+          data: { contactId: primaryContactId },
+        });
+      }
+    }
 
     await tx.contact.delete({ where: { id: duplicateContactId } });
   });

@@ -910,6 +910,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Company and role are grouped together in the header and profile panel, and
   are not duplicated in the workspace summary strip. The user-facing workspace
   label follows the People section wording.
+- Contact detail includes a Relationship workspace tab backed by
+  `CustomerRelationshipProfile` and `CustomerTechnologyCoverage`. Users can
+  manually track the customer's relationship status, relationship summary,
+  next review date, installed technologies, covered technologies and optional
+  links from each technology row to that contact's opportunities. This is
+  customer-level context and does not rename or replace sales pipeline stages.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain
@@ -924,9 +930,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Contact detail pages expose explicit Create lead, Edit, Merge and Delete
   actions in the page header. Contact merge keeps the current record, moves the
   duplicate contact's leads, conversations, calls, notes, tasks, files,
-  attribution records and tags across, fills missing primary contact fields
-  from the duplicate, keeps non-primary email/phone values as secondary contact
-  methods, then removes the duplicate record.
+  attribution records, relationship profile, technology coverage rows and tags
+  across, fills missing primary contact fields from the duplicate, keeps
+  non-primary email/phone values as secondary contact methods, then removes the
+  duplicate record.
 - Contacts support reusable tags. The contact create/edit modal suggests
   existing tags as users type and stores assignments through canonical
   `ContactTag` records to reduce duplicate misspellings.

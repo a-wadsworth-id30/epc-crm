@@ -16,6 +16,7 @@ import {
   DeferredContactMergeModal,
 } from "@/components/crm-boilerplate/ContactModalLoaders";
 import type { ContactFormValues } from "@/components/crm-boilerplate/ContactForm";
+import CustomerRelationshipSection from "@/components/crm-boilerplate/CustomerRelationshipSection";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LazyContactConversationWorkspace from "@/components/crm-boilerplate/LazyContactConversationWorkspace";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
@@ -34,6 +35,11 @@ import {
   contactCategoryOption,
   defaultContactCategory,
 } from "@/lib/contacts/categories";
+import {
+  customerRelationshipStatusOption,
+  defaultCustomerRelationshipStatus,
+  type CustomerRelationshipStatusValue,
+} from "@/lib/customer-relationship";
 import {
   companyAccessWhere,
   contactAccessWhere,
@@ -396,6 +402,25 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             valueCents: true,
             owner: { select: { name: true } },
             salesPipelineStage: { select: { name: true, color: true } },
+          },
+        },
+        relationshipProfile: {
+          select: {
+            nextReviewAt: true,
+            notes: true,
+            status: true,
+            summary: true,
+            technologies: {
+              orderBy: [{ technologyName: "asc" }, { createdAt: "asc" }],
+              select: {
+                covered: true,
+                id: true,
+                installed: true,
+                notes: true,
+                opportunityId: true,
+                technologyName: true,
+              },
+            },
           },
         },
       },
@@ -980,6 +1005,30 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     [companyName, contact.role].filter(Boolean).join(" / ") ||
     "People workspace";
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
+  const relationshipStatus = (contact.relationshipProfile?.status ??
+    defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
+  const relationshipStatusLabel =
+    customerRelationshipStatusOption(relationshipStatus).label;
+  const relationshipTechnologies =
+    contact.relationshipProfile?.technologies.map((technology) => ({
+      covered: technology.covered,
+      id: technology.id,
+      installed: technology.installed,
+      notes: technology.notes,
+      opportunityId: technology.opportunityId,
+      technologyName: technology.technologyName,
+    })) ?? [];
+  const relationshipOpportunityOptions = contact.opportunities.map(
+    (opportunity) => ({
+      id: opportunity.id,
+      stageLabel:
+        opportunity.salesPipelineStage?.name ??
+        formatEnumLabel(opportunity.stage),
+      title: opportunity.title,
+      updatedLabel: formatJourneyDate(opportunity.updatedAt),
+      valueLabel: formatMoney(opportunity.valueCents, opportunity.currency),
+    }),
+  );
   const contactProfilePanel = (
     <div className="p-5">
       <div className="flex items-center gap-2">
@@ -1122,6 +1171,21 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       />
     </div>
   );
+  const contactRelationshipPanel = (
+    <CustomerRelationshipSection
+      contactId={contact.id}
+      opportunityOptions={relationshipOpportunityOptions}
+      relationship={{
+        nextReviewAt: contact.relationshipProfile?.nextReviewAt
+          ? contact.relationshipProfile.nextReviewAt.toISOString().slice(0, 10)
+          : null,
+        notes: contact.relationshipProfile?.notes ?? null,
+        status: relationshipStatus,
+        summary: contact.relationshipProfile?.summary ?? null,
+        technologies: relationshipTechnologies,
+      }}
+    />
+  );
   const contactDocumentsPanel = (
     <div className="p-4 sm:p-5">
       <RecordDocumentLibrary
@@ -1247,6 +1311,9 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         leadsPanel={contactLeadsPanel}
         openLeadCount={openOpportunities.length}
         profilePanel={contactProfilePanel}
+        relationshipPanel={contactRelationshipPanel}
+        relationshipStatusLabel={relationshipStatusLabel}
+        relationshipTechnologyCount={relationshipTechnologies.length}
         recipientEmail={recipientEmail}
         recipientEmails={summaryEmailMethods}
         recipientPhone={recipientPhone}
