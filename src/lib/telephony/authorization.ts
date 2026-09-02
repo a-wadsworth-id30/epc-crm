@@ -3,8 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-const browserSoftphoneRoutingModes = new Set(["BROWSER", "FLEX"]);
+import { usesBrowserSoftphoneRoutingMode } from "@/lib/telephony/softphone-capability";
 
 export type BrowserSoftphoneUser = {
   id: string;
@@ -55,7 +54,7 @@ export async function requireBrowserSoftphoneUser(): Promise<BrowserSoftphoneAut
     };
   }
 
-  if (!browserSoftphoneRoutingModes.has(user.voiceRoutingMode)) {
+  if (!usesBrowserSoftphoneRoutingMode(user.voiceRoutingMode)) {
     return {
       ok: false,
       response: NextResponse.json(

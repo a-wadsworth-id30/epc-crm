@@ -14,6 +14,10 @@ export default async function SoftphoneWindowPage() {
     redirect("/signin?next=/softphone-window");
   }
 
+  if (!currentUser.browserSoftphoneEnabled) {
+    redirect("/");
+  }
+
   return (
     <>
       <style

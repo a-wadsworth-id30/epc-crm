@@ -15,6 +15,7 @@ const fallbackUser: CurrentUser = {
   mobile: null,
   email: "user@example.com",
   role: "USER",
+  browserSoftphoneEnabled: false,
 };
 
 const UserDropdownMenu = dynamic<UserDropdownMenuProps>(

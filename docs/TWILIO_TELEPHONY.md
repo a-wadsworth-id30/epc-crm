@@ -180,6 +180,10 @@ alive while it remains open; unload/page exit is what sends `OFFLINE`.
 Normal CRM tabs pause passive desktop-softphone presence reads while hidden and
 resume on focus/visibility. The standalone softphone window still sends its
 presence heartbeat while open so routing can continue to see the desktop client.
+The main admin shell mounts the browser softphone provider only for active
+users whose routing mode is `BROWSER` or `FLEX` and who have a voice extension.
+Other users can still use the CRM normally without loading the Twilio Voice SDK
+bundle or polling softphone APIs.
 Agents can manually select `BUSY` when they are unavailable at their desk; the
 softphone must not treat manually selected busy as stale call state or
 immediately reset it to available.

@@ -1765,6 +1765,10 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   runtime start time from `/api/build-info`. Use `npm run deploy:check` after
   Netlify deploys.
 - Browser softphone heartbeats continue while `/softphone-window` is open, including when the dashboard tab is closed; the stale browser-agent window is ten minutes.
+- The main admin shell mounts the browser softphone provider only for active
+  users with `BROWSER` or `FLEX` routing and an assigned voice extension.
+  Non-phone users do not load the Twilio Voice SDK bundle or run softphone
+  polling in normal CRM tabs.
 - Desktop softphone packaging is separate from CRM deployment. Use
   `desktop/softphone` for Electron development and package signing/release
   work; do not add Electron dependencies to the root Hostinger app.

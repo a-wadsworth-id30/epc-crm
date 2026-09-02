@@ -58,6 +58,8 @@ export default function AdminShell({
     : isExpanded || isHovered
       ? "xl:ml-[240px]"
       : "xl:ml-[72px]";
+  const shouldMountSoftphone =
+    moduleToggles.telephony && currentUser.browserSoftphoneEnabled === true;
 
   return (
     <>
@@ -86,8 +88,10 @@ export default function AdminShell({
           <main className="min-w-0 p-4 md:p-6">{children}</main>
         </div>
       </div>
-      {moduleToggles.telephony ? (
-        <SoftphoneProvider currentUserId={currentUser.id}>{null}</SoftphoneProvider>
+      {shouldMountSoftphone ? (
+        <SoftphoneProvider currentUserId={currentUser.id}>
+          {null}
+        </SoftphoneProvider>
       ) : null}
       <RouteChangeProgress />
       <DeployVersionGuard currentCommit={buildCommit} />

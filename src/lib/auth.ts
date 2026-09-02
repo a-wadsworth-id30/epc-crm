@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { isBrowserSoftphoneCapable } from "@/lib/telephony/softphone-capability";
 
 export type CurrentUser = {
   id: string;
@@ -15,6 +16,7 @@ export type CurrentUser = {
   mobile: string | null;
   email: string;
   role: "ADMIN" | "USER";
+  browserSoftphoneEnabled?: boolean;
 };
 
 export const sessionCookieName =
@@ -169,6 +171,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
             name: true,
             role: true,
             status: true,
+            voiceExtension: true,
+            voiceRoutingMode: true,
           },
         },
       },
@@ -204,6 +208,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     mobile: session.user.mobile,
     email: session.user.email,
     role: session.user.role,
+    browserSoftphoneEnabled: isBrowserSoftphoneCapable(session.user),
   };
 }
 
