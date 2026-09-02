@@ -4,6 +4,10 @@ import type { Prisma, SalesStage } from "@prisma/client";
 import { z } from "zod";
 import type { CurrentUser } from "@/lib/auth";
 import {
+  contactCategoryLabel,
+  contactCategoryValues,
+} from "@/lib/contacts/categories";
+import {
   contactWhereWithAccess,
   salesOpportunityWhereWithAccess,
 } from "@/lib/crm-resource-access";
@@ -11,7 +15,14 @@ import { getOpenAIRuntimeConfig } from "@/lib/integrations/openai";
 import { prisma } from "@/lib/prisma";
 
 const maxSegmentPromptChars = 1200;
-const segmentStages = ["LEAD", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"] as const;
+const segmentStages = [
+  "LEAD",
+  "QUALIFIED",
+  "PROPOSAL",
+  "NEGOTIATION",
+  "WON",
+  "LOST",
+] as const;
 
 const baseRuleSchema = z.object({
   label: z.string().trim().min(1).max(120),
@@ -35,14 +46,28 @@ const segmentRuleSchema = z.discriminatedUnion("type", [
     values: z.array(z.enum(segmentStages)).min(1).max(8),
   }),
   baseRuleSchema.extend({
+    type: z.literal("contact_category_in"),
+    values: z.array(z.enum(contactCategoryValues)).min(1).max(4),
+  }),
+  baseRuleSchema.extend({
     type: z.literal("product_name_contains"),
     value: z.string().trim().min(1).max(80),
-    opportunityCreatedWithinDays: z.coerce.number().int().min(1).max(3650).optional(),
+    opportunityCreatedWithinDays: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3650)
+      .optional(),
   }),
   baseRuleSchema.extend({
     type: z.literal("product_category_contains"),
     value: z.string().trim().min(1).max(80),
-    opportunityCreatedWithinDays: z.coerce.number().int().min(1).max(3650).optional(),
+    opportunityCreatedWithinDays: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3650)
+      .optional(),
   }),
   baseRuleSchema.extend({
     type: z.literal("role_contains"),
@@ -71,7 +96,9 @@ export const contactSegmentCriteriaSchema = z.object({
   rules: z.array(segmentRuleSchema).min(1).max(12),
 });
 
-export type ContactSegmentCriteria = z.infer<typeof contactSegmentCriteriaSchema>;
+export type ContactSegmentCriteria = z.infer<
+  typeof contactSegmentCriteriaSchema
+>;
 export type ContactSegmentRule = ContactSegmentCriteria["rules"][number];
 
 const aiSegmentPlanSchema = z.object({
@@ -124,6 +151,14 @@ const segmentPlanJsonSchema = {
                   items: { type: "string", enum: [...segmentStages] },
                 },
               }),
+              ruleSchema("contact_category_in", {
+                values: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 4,
+                  items: { type: "string", enum: [...contactCategoryValues] },
+                },
+              }),
               ruleSchema("product_name_contains", {
                 value: { type: "string", minLength: 1, maxLength: 80 },
                 opportunityCreatedWithinDays: {
@@ -168,11 +203,20 @@ const segmentPlanJsonSchema = {
   },
 };
 
-function ruleSchema(type: ContactSegmentRule["type"], properties: Record<string, unknown>) {
+function ruleSchema(
+  type: ContactSegmentRule["type"],
+  properties: Record<string, unknown>,
+) {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["type", "label", ...Object.keys(properties).filter((key) => key !== "opportunityCreatedWithinDays")],
+    required: [
+      "type",
+      "label",
+      ...Object.keys(properties).filter(
+        (key) => key !== "opportunityCreatedWithinDays",
+      ),
+    ],
     properties: {
       type: { type: "string", const: type },
       label: { type: "string", minLength: 1, maxLength: 120 },
@@ -193,7 +237,9 @@ function contains(value: string) {
   return { contains: value, mode: "insensitive" as const };
 }
 
-function opportunityWindow(days: number | undefined): Prisma.SalesOpportunityWhereInput {
+function opportunityWindow(
+  days: number | undefined,
+): Prisma.SalesOpportunityWhereInput {
   return days ? { createdAt: { gte: daysAgo(days) } } : {};
 }
 
@@ -231,6 +277,8 @@ function ruleToWhere(
           ),
         },
       };
+    case "contact_category_in":
+      return { category: { in: rule.values } };
     case "product_name_contains":
       return {
         opportunities: {
@@ -299,7 +347,8 @@ export function contactWhereForSegment(
   user?: CurrentUser,
 ): Prisma.ContactWhereInput {
   const rules = criteria.rules.map((rule) => ruleToWhere(rule, user));
-  const segmentWhere = criteria.match === "any" ? { OR: rules } : { AND: rules };
+  const segmentWhere =
+    criteria.match === "any" ? { OR: rules } : { AND: rules };
 
   return user ? contactWhereWithAccess(user, segmentWhere) : segmentWhere;
 }
@@ -308,7 +357,9 @@ export async function countContactsForSegment(
   criteria: ContactSegmentCriteria,
   user?: CurrentUser,
 ) {
-  return prisma.contact.count({ where: contactWhereForSegment(criteria, user) });
+  return prisma.contact.count({
+    where: contactWhereForSegment(criteria, user),
+  });
 }
 
 export function ruleLabel(rule: ContactSegmentRule) {
@@ -321,7 +372,9 @@ function extractQuotedPhrase(prompt: string) {
 
 function timeframeDays(prompt: string) {
   const lower = prompt.toLowerCase();
-  const number = lower.match(/last\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)/);
+  const number = lower.match(
+    /last\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)/,
+  );
 
   if (number) {
     const amount = Number(number[1]);
@@ -333,16 +386,22 @@ function timeframeDays(prompt: string) {
   }
 
   if (lower.includes("last year") || lower.includes("past year")) return 365;
-  if (lower.includes("last 12 months") || lower.includes("past 12 months")) return 365;
-  if (lower.includes("last 6 months") || lower.includes("past 6 months")) return 186;
-  if (lower.includes("last 90 days") || lower.includes("past 90 days")) return 90;
+  if (lower.includes("last 12 months") || lower.includes("past 12 months"))
+    return 365;
+  if (lower.includes("last 6 months") || lower.includes("past 6 months"))
+    return 186;
+  if (lower.includes("last 90 days") || lower.includes("past 90 days"))
+    return 90;
   if (lower.includes("last month") || lower.includes("past month")) return 31;
   return null;
 }
 
 function cleanSubject(prompt: string) {
   return prompt
-    .replace(/people|contacts|companies|customers|that|who|have|has|with|in the last \d+ \w+|over the last \d+ \w+|past \d+ \w+|last \d+ \w+/gi, " ")
+    .replace(
+      /people|contacts|companies|customers|that|who|have|has|with|in the last \d+ \w+|over the last \d+ \w+|past \d+ \w+|last \d+ \w+/gi,
+      " ",
+    )
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -372,6 +431,31 @@ function deterministicSegmentPlan(prompt: string) {
       type: "has_phone",
       value: true,
       label: "Has a phone number",
+    });
+  }
+
+  const categoryValues = contactCategoryValues.filter((category) => {
+    const label = contactCategoryLabel(category).toLowerCase();
+    return (
+      lower.includes(label) ||
+      lower.includes(label.replace(/y$/, "ies")) ||
+      (category === "TRADE" && lower.includes("trades")) ||
+      (category === "INSTALLER" && lower.includes("installers")) ||
+      (category === "COMPANY" &&
+        (lower.includes("companies") ||
+          lower.includes("organisation") ||
+          lower.includes("organization") ||
+          lower.includes("supplier")))
+    );
+  });
+
+  if (categoryValues.length) {
+    rules.push({
+      type: "contact_category_in",
+      values: categoryValues,
+      label: `Category is ${categoryValues
+        .map((category) => contactCategoryLabel(category))
+        .join(" or ")}`,
     });
   }
 
@@ -447,10 +531,12 @@ function titleFromPrompt(prompt: string) {
   return title.charAt(0).toUpperCase() + title.slice(1, 80);
 }
 
-function extractOutputText(payload: {
-  output_text?: string;
-  output?: Array<{ content?: Array<{ text?: string }> }>;
-} | null) {
+function extractOutputText(
+  payload: {
+    output_text?: string;
+    output?: Array<{ content?: Array<{ text?: string }> }>;
+  } | null,
+) {
   return (
     payload?.output_text ??
     payload?.output
@@ -500,7 +586,7 @@ export async function buildContactSegmentDraft(
         {
           role: "system",
           content:
-            "You translate CRM contact segment requests into safe structured criteria. Use only the allowed rule types. Prefer conservative rules. Do not generate SQL. If the user mentions a service/product such as digital marketing, use product_name_contains. If they mention a period, put it on opportunityCreatedWithinDays when product purchase/start context is implied. Return JSON only.",
+            "You translate CRM contact segment requests into safe structured criteria. Use only the allowed rule types. Prefer conservative rules. Do not generate SQL. Use contact_category_in for Consumer, Trade, Installer or Company contact type requests. If the user mentions a service/product such as digital marketing, use product_name_contains. If they mention a period, put it on opportunityCreatedWithinDays when product purchase/start context is implied. Return JSON only.",
         },
         {
           role: "user",

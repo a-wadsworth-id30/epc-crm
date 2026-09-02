@@ -4,6 +4,7 @@ import {
   companyWhereWithAccess,
   contactWhereWithAccess,
 } from "@/lib/crm-resource-access";
+import { defaultContactCategory } from "@/lib/contacts/categories";
 import { isGeoapifyAddressLookupEnabled } from "@/lib/integrations/geoapify";
 import { prisma } from "@/lib/prisma";
 import {
@@ -51,6 +52,7 @@ export async function GET() {
           companyId: true,
           companyName: true,
           email: true,
+          category: true,
           firstName: true,
           id: true,
           lastName: true,
@@ -84,6 +86,7 @@ export async function GET() {
       companyId: contact.companyId,
       companyName: contact.company?.name ?? contact.companyName,
       email: contact.email,
+      category: contact.category ?? defaultContactCategory,
       id: contact.id,
       leadSource: contact.leadSource,
       name: `${contact.firstName} ${contact.lastName}`.trim(),

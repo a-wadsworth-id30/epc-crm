@@ -882,6 +882,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   or company details. Successful manual contact creation now navigates directly
   to the newly created contact record instead of leaving the user on the people
   list.
+- People records now have a first-class `Contact.category` value for Consumer,
+  Trade, Installer or Company. The People list shows category tabs and summary
+  cards, category counts respect the current user's contact access policy, and
+  category search terms match the stored enum. Company-type people can leave
+  last name blank so organisation-style records can use their organisation name
+  as the display name. Tags remain reusable secondary labels.
 - Contacts keep one primary email and one primary phone for compatibility with
   existing sales, search and softphone flows, plus optional secondary email
   addresses in `ContactEmailAddress` and secondary phone numbers in
@@ -891,18 +897,19 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   cramped modal rows. Search, MCP search, inbound email matching, website lead
   matching, telephony caller context and privacy export read these secondary
   methods.
-- Contact create/edit places Company and Role / job title together in the main
-  contact grid, with the lead source field spanning the full width underneath.
+- Contact create/edit places Person type at the top, Company and Role / job
+  title together in the main contact grid, with the lead source field spanning
+  the full width underneath.
 - Contacts > People rows surface stored postal context inline: the contact
   address appears under the person name and the linked company address appears
   under the company name when available.
 - Contact detail uses the same postal context in the page header and profile
   panel, showing the contact address below the person name and the linked
   company address below the company name. The page header presents address,
-  company and role details inline with compact contextual icons. Company and
-  role are grouped together in the header and profile panel, and are not
-  duplicated in the workspace summary strip. The user-facing workspace label
-  follows the People section wording.
+  company, category and role details inline with compact contextual icons.
+  Company and role are grouped together in the header and profile panel, and
+  are not duplicated in the workspace summary strip. The user-facing workspace
+  label follows the People section wording.
 - When Companies is enabled, contact create/edit uses a searchable company
   selector that can link an existing organisation or create a new linked
   organisation by name. When Companies is disabled, contact forms keep a plain
@@ -924,8 +931,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   existing tags as users type and stores assignments through canonical
   `ContactTag` records to reduce duplicate misspellings.
 - People segment counts, generated draft counts and member rows are evaluated
-  through the current user's contact/opportunity access policy. Non-admins can
-  only refresh or delete segments they created.
+  through the current user's contact/opportunity access policy. Segment rules
+  can include Consumer, Trade, Installer and Company category filters.
+  Non-admins can only refresh or delete segments they created.
 - Contacts can store a manual postal address with address line 1, address line
   2, city, county, postcode and country fields. The People list exposes a
   combined Address column as an optional table column.

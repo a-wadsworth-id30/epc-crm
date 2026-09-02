@@ -40,9 +40,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   for sign-in, two-factor and password-reset attempt limits across app
   instances.
 - `Company`: account/company record.
-- `Contact`: customer/person record, including one primary email, one primary
-  phone and optional manual postal address fields for address line 1, address
-  line 2, city, county, postcode and country.
+- `Contact`: customer/person record, including a first-class category
+  (`Consumer`, `Trade`, `Installer` or `Company`), one primary email, one
+  primary phone and optional manual postal address fields for address line 1,
+  address line 2, city, county, postcode and country.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `ContactEmailAddress` / `ContactPhoneNumber`: labelled secondary contact
@@ -53,7 +54,8 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `ContactSegment`: saved dynamic people/company segment definition. The first
   runtime supports people segments backed by safe JSON criteria rather than
   arbitrary SQL. Segment counts and member rows are evaluated through the
-  current user's CRM contact/opportunity access policy.
+  current user's CRM contact/opportunity access policy and can filter by the
+  contact category enum.
 - `ContactTag` / `ContactTagAssignment`: reusable contact tags with canonical
   slugs and many-to-many contact assignment.
 - `SalesOpportunity`: sale/enquiry pipeline wrapper, including current lead

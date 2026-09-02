@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { requireApiUser } from "@/lib/api-auth";
+import { defaultContactCategory } from "@/lib/contacts/categories";
 import { contactWhereWithAccess } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +15,10 @@ function contains(value: string) {
 }
 
 function contactSearchWhere(query: string): Prisma.ContactWhereInput {
-  const terms = query.split(/\s+/).map((term) => term.trim()).filter(Boolean);
+  const terms = query
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
   const normalizedPhone = normalizedContactPhone(query);
   const digitQuery = query.replace(/\D/g, "");
   const filters: Prisma.ContactWhereInput[] = [];
@@ -35,7 +39,11 @@ function contactSearchWhere(query: string): Prisma.ContactWhereInput {
   if (normalizedPhone) {
     filters.push(
       { phoneNormalized: { contains: normalizedPhone } },
-      { additionalPhones: { some: { phoneNormalized: { contains: normalizedPhone } } } },
+      {
+        additionalPhones: {
+          some: { phoneNormalized: { contains: normalizedPhone } },
+        },
+      },
     );
   }
 
@@ -44,7 +52,11 @@ function contactSearchWhere(query: string): Prisma.ContactWhereInput {
       { phone: { contains: digitQuery } },
       { phoneNormalized: { contains: digitQuery } },
       { additionalPhones: { some: { phone: { contains: digitQuery } } } },
-      { additionalPhones: { some: { phoneNormalized: { contains: digitQuery } } } },
+      {
+        additionalPhones: {
+          some: { phoneNormalized: { contains: digitQuery } },
+        },
+      },
     );
   }
 
@@ -72,6 +84,7 @@ export async function GET(request: NextRequest) {
       companyId: true,
       companyName: true,
       email: true,
+      category: true,
       firstName: true,
       id: true,
       lastName: true,
@@ -87,6 +100,7 @@ export async function GET(request: NextRequest) {
       companyId: contact.companyId,
       companyName: contact.company?.name ?? contact.companyName,
       email: contact.email,
+      category: contact.category ?? defaultContactCategory,
       id: contact.id,
       leadSource: contact.leadSource,
       name: `${contact.firstName} ${contact.lastName}`.trim(),

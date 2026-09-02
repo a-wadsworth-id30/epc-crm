@@ -4,6 +4,7 @@ import {
   BriefcaseBusiness,
   Building2,
   MapPin,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,6 +30,10 @@ import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
 } from "@/lib/contact-methods";
+import {
+  contactCategoryOption,
+  defaultContactCategory,
+} from "@/lib/contacts/categories";
 import {
   companyAccessWhere,
   contactAccessWhere,
@@ -76,7 +81,7 @@ function ContactHeaderDetailRow({
   Icon: LucideIcon;
 }) {
   return (
-    <div className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+    <div className="inline-flex max-w-full min-w-0 items-center gap-1.5">
       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-gray-400 dark:text-gray-500">
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
@@ -351,6 +356,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         firstName: true,
         id: true,
         lastName: true,
+        category: true,
         leadSource: true,
         phone: true,
         postcode: true,
@@ -445,6 +451,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         firstName: true,
         id: true,
         lastName: true,
+        category: true,
         phone: true,
         company: {
           select: { name: true },
@@ -734,6 +741,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     firstName: contact.firstName,
     id: contact.id,
     lastName: contact.lastName,
+    category: contact.category ?? defaultContactCategory,
     leadSource: contact.leadSource,
     phone: contact.phone,
     postcode: contact.postcode,
@@ -758,6 +766,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
 
     return {
       companyName: candidate.company?.name ?? candidate.companyName,
+      category: candidate.category ?? defaultContactCategory,
       email: candidateEmail,
       id: candidate.id,
       name: contactName(candidate) || candidateEmail || "Unnamed contact",
@@ -957,8 +966,15 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     ? formatAddress(contact.company)
     : [];
   const companyHeaderAddress = companyAddressLines.join(", ");
+  const categoryOption = contactCategoryOption(
+    contact.category ?? defaultContactCategory,
+  );
   const hasHeaderDetails = Boolean(
-    contactHeaderAddress || companyName || contact.role || companyHeaderAddress,
+    contactHeaderAddress ||
+    companyName ||
+    contact.role ||
+    companyHeaderAddress ||
+    categoryOption.label,
   );
   const headerDescription =
     [companyName, contact.role].filter(Boolean).join(" / ") ||
@@ -973,6 +989,12 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         <LazyHelpTooltip content="Stores the main email, phone and role details users need before contacting this person." />
       </div>
       <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+        <div>
+          <dt className="text-gray-500 dark:text-gray-400">Category</dt>
+          <dd className="mt-1">
+            <StatusBadge>{categoryOption.label}</StatusBadge>
+          </dd>
+        </div>
         <div>
           <dt className="text-gray-500 dark:text-gray-400">Email</dt>
           <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
@@ -1155,9 +1177,10 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
                 <p>{companyHeaderAddress}</p>
               </ContactHeaderDetailRow>
             ) : null}
-            {!hasHeaderDetails ? (
-              <p>People workspace</p>
-            ) : null}
+            <ContactHeaderDetailRow Icon={UserRound}>
+              <p>{categoryOption.label}</p>
+            </ContactHeaderDetailRow>
+            {!hasHeaderDetails ? <p>People workspace</p> : null}
           </div>
         }
         actions={

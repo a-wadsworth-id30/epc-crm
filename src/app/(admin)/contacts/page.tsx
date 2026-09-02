@@ -16,6 +16,13 @@ import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
 } from "@/lib/contact-methods";
+import {
+  contactCategoryOptions,
+  contactCategoryValues,
+  defaultContactCategory,
+  isContactCategoryValue,
+  type ContactCategoryValue,
+} from "@/lib/contacts/categories";
 import { requireUser } from "@/lib/auth";
 import {
   companyWhereWithAccess,
@@ -33,6 +40,7 @@ type ContactsPageProps = {
     pageSize?: string | string[];
     q?: string | string[];
     sort?: string | string[];
+    category?: string | string[];
   }>;
 };
 
@@ -41,6 +49,7 @@ const defaultContactPageSize = 25;
 const contactSortKeys = [
   "name",
   "company",
+  "category",
   "source",
   "role",
   "email",
@@ -49,6 +58,7 @@ const contactSortKeys = [
 ] as const;
 type ContactSortKey = (typeof contactSortKeys)[number];
 type SortDirection = "asc" | "desc";
+type ContactCategoryFilter = "all" | ContactCategoryValue;
 
 function parseSortKey(value: string | string[] | undefined): ContactSortKey {
   const parsed = singleParam(value);
@@ -57,50 +67,83 @@ function parseSortKey(value: string | string[] | undefined): ContactSortKey {
     : "name";
 }
 
-function parseSortDirection(value: string | string[] | undefined): SortDirection {
+function parseSortDirection(
+  value: string | string[] | undefined,
+): SortDirection {
   return singleParam(value) === "desc" ? "desc" : "asc";
+}
+
+function parseCategoryFilter(
+  value: string | string[] | undefined,
+): ContactCategoryFilter {
+  const parsed = singleParam(value);
+  return isContactCategoryValue(parsed) ? parsed : "all";
 }
 
 function contains(term: string) {
   return { contains: term, mode: "insensitive" as const };
 }
 
+function hasContactWhere(
+  value: Prisma.ContactWhereInput | undefined,
+): value is Prisma.ContactWhereInput {
+  return Boolean(value && Object.keys(value).length > 0);
+}
+
 function contactWhere(query: string): Prisma.ContactWhereInput | undefined {
-  const terms = query.split(/\s+/).map((term) => term.trim()).filter(Boolean);
+  const terms = query
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
 
   if (!terms.length) {
     return undefined;
   }
 
   return {
-    AND: terms.map((term) => ({
-      OR: [
-        { firstName: contains(term) },
-        { lastName: contains(term) },
-        { email: contains(term) },
-        { phone: contains(term) },
-        { additionalEmails: { some: { email: contains(term) } } },
-        { additionalPhones: { some: { phone: contains(term) } } },
-        { additionalPhones: { some: { phoneNormalized: contains(term) } } },
-        { leadSource: contains(term) },
-        { role: contains(term) },
-        { addressLine1: contains(term) },
-        { addressLine2: contains(term) },
-        { city: contains(term) },
-        { county: contains(term) },
-        { postcode: contains(term) },
-        { country: contains(term) },
-        { companyName: contains(term) },
-        { company: { name: contains(term) } },
-        { company: { addressLine1: contains(term) } },
-        { company: { addressLine2: contains(term) } },
-        { company: { city: contains(term) } },
-        { company: { county: contains(term) } },
-        { company: { postcode: contains(term) } },
-        { company: { country: contains(term) } },
-        { tagAssignments: { some: { tag: { name: contains(term) } } } },
-      ],
-    })),
+    AND: terms.map((term) => {
+      const normalizedTerm = term.toLowerCase();
+      const matchingCategories = contactCategoryOptions
+        .filter(
+          (option) =>
+            option.value.toLowerCase().includes(normalizedTerm) ||
+            option.label.toLowerCase().includes(normalizedTerm) ||
+            option.pluralLabel.toLowerCase().includes(normalizedTerm),
+        )
+        .map((option) => option.value);
+
+      return {
+        OR: [
+          { firstName: contains(term) },
+          { lastName: contains(term) },
+          { email: contains(term) },
+          { phone: contains(term) },
+          { additionalEmails: { some: { email: contains(term) } } },
+          { additionalPhones: { some: { phone: contains(term) } } },
+          { additionalPhones: { some: { phoneNormalized: contains(term) } } },
+          { leadSource: contains(term) },
+          { role: contains(term) },
+          { addressLine1: contains(term) },
+          { addressLine2: contains(term) },
+          { city: contains(term) },
+          { county: contains(term) },
+          { postcode: contains(term) },
+          { country: contains(term) },
+          { companyName: contains(term) },
+          { company: { name: contains(term) } },
+          { company: { addressLine1: contains(term) } },
+          { company: { addressLine2: contains(term) } },
+          { company: { city: contains(term) } },
+          { company: { county: contains(term) } },
+          { company: { postcode: contains(term) } },
+          { company: { country: contains(term) } },
+          { tagAssignments: { some: { tag: { name: contains(term) } } } },
+          ...(matchingCategories.length
+            ? [{ category: { in: matchingCategories } }]
+            : []),
+        ],
+      };
+    }),
   };
 }
 
@@ -112,6 +155,12 @@ function contactOrderBy(
     case "company":
       return [
         { companyName: direction },
+        { lastName: "asc" },
+        { firstName: "asc" },
+      ];
+    case "category":
+      return [
+        { category: direction },
         { lastName: "asc" },
         { firstName: "asc" },
       ];
@@ -140,12 +189,15 @@ function contactOrderBy(
   }
 }
 
-export default async function ContactsPage({ searchParams }: ContactsPageProps) {
+export default async function ContactsPage({
+  searchParams,
+}: ContactsPageProps) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const query = (singleParam(params.q) ?? "").trim();
   const sortKey = parseSortKey(params.sort);
   const sortDirection = parseSortDirection(params.direction);
+  const activeCategory = parseCategoryFilter(params.category);
   const requestedPage = parsePositiveInteger(params.page, 1);
   const settings = await getCrmSettings();
   const interfaceDefaults = parseInterfaceDefaults(settings.interfaceDefaults);
@@ -158,7 +210,14 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
     options: contactPageSizes,
     value: params.pageSize,
   });
-  const where = contactWhereWithAccess(user, contactWhere(query));
+  const searchWhere = contactWhere(query);
+  const categoryWhere: Prisma.ContactWhereInput | undefined =
+    activeCategory === "all" ? undefined : { category: activeCategory };
+  const whereFilters = [categoryWhere, searchWhere].filter(hasContactWhere);
+  const where = contactWhereWithAccess(
+    user,
+    whereFilters.length ? { AND: whereFilters } : undefined,
+  );
   const allContactsWhere = contactWhereWithAccess(user);
   const contactTagsWhere: Prisma.ContactTagWhereInput =
     user.role === "ADMIN"
@@ -167,12 +226,18 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
   const [
     totalCount,
     allContactCount,
+    categoryRows,
     companies,
     availableTags,
     addressLookupEnabled,
   ] = await Promise.all([
     prisma.contact.count({ where }),
     prisma.contact.count({ where: allContactsWhere }),
+    prisma.contact.groupBy({
+      by: ["category"],
+      where: allContactsWhere,
+      _count: { _all: true },
+    }),
     settings.companiesEnabled
       ? prisma.company.findMany({
           where: companyWhereWithAccess(user),
@@ -214,6 +279,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
       firstName: true,
       id: true,
       lastName: true,
+      category: true,
       leadSource: true,
       phone: true,
       postcode: true,
@@ -243,8 +309,8 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
   return (
     <>
       <PageHeader
-        title="Contacts"
-        description="Contact records linked to client companies."
+        title="People"
+        description="Manage consumers, trade contacts, installers and company-type people."
         actions={
           <DeferredContactCreateModal
             companies={companies}
@@ -266,6 +332,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           lastName: contact.lastName,
           email: contact.email,
           phone: contact.phone,
+          category: contact.category ?? defaultContactCategory,
           additionalEmails: normalizeContactEmailMethods(
             contact.additionalEmails,
             contact.email,
@@ -295,6 +362,16 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
             name: assignment.tag.name,
           })),
         }))}
+        activeCategory={activeCategory}
+        categoryCounts={
+          Object.fromEntries(
+            contactCategoryValues.map((category) => [
+              category,
+              categoryRows.find((row) => row.category === category)?._count
+                ._all ?? 0,
+            ]),
+          ) as Record<ContactCategoryValue, number>
+        }
         page={currentPage}
         pageSize={pageSize}
         query={query}

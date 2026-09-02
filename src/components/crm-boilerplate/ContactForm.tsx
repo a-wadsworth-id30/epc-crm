@@ -27,6 +27,12 @@ import type {
   ContactEmailMethod,
   ContactPhoneMethod,
 } from "@/lib/contact-methods";
+import {
+  contactCategoryOption,
+  contactCategoryOptions,
+  defaultContactCategory,
+  type ContactCategoryValue,
+} from "@/lib/contacts/categories";
 import { leadSourceOptions } from "@/lib/sales/lead-sources";
 
 type CompanyOption = {
@@ -36,6 +42,7 @@ type CompanyOption = {
 
 export type ContactFormValues = {
   id?: string;
+  category?: ContactCategoryValue | null;
   firstName?: string;
   lastName?: string;
   email?: string | null;
@@ -80,9 +87,14 @@ export default function ContactForm({
   const [isDirty, setIsDirty] = useState(false);
   const [tagResetSignal, setTagResetSignal] = useState(0);
   const [methodResetSignal, setMethodResetSignal] = useState(0);
+  const [selectedCategory, setSelectedCategory] =
+    useState<ContactCategoryValue>(contact?.category ?? defaultContactCategory);
   const { showToast } = useToast();
   const action = mode === "create" ? createContactAction : updateContactAction;
-  const [state, formAction, isPending] = useActionState<ContactActionState, FormData>(action, {
+  const [state, formAction, isPending] = useActionState<
+    ContactActionState,
+    FormData
+  >(action, {
     ok: false,
     message: "",
   });
@@ -108,11 +120,15 @@ export default function ContactForm({
     if (mode === "create") {
       formRef.current?.reset();
     }
-    showToast(state.message || (mode === "create" ? "Contact created." : "Contact updated."));
+    showToast(
+      state.message ||
+        (mode === "create" ? "Person created." : "Person updated."),
+    );
     queueMicrotask(() => {
       if (mode === "create") {
         setTagResetSignal((current) => current + 1);
         setMethodResetSignal((current) => current + 1);
+        setSelectedCategory(defaultContactCategory);
       }
       setIsDirty(false);
       onSuccess?.();
@@ -120,14 +136,47 @@ export default function ContactForm({
         router.push(`/contacts/${state.contactId}`);
       }
     });
-  }, [mode, onSuccess, router, showToast, state.contactId, state.message, state.ok]);
+  }, [
+    mode,
+    onSuccess,
+    router,
+    showToast,
+    state.contactId,
+    state.message,
+    state.ok,
+  ]);
 
   return (
     <form ref={formRef} action={formAction} onChangeCapture={handleFormChange}>
       {contact?.id && <input type="hidden" name="id" value={contact.id} />}
       <div className="grid gap-4 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <Label htmlFor={`${mode}-contact-category`}>Person type</Label>
+          <select
+            id={`${mode}-contact-category`}
+            name="category"
+            value={selectedCategory}
+            onChange={(event) =>
+              setSelectedCategory(event.target.value as ContactCategoryValue)
+            }
+            className={selectClassName}
+          >
+            {contactCategoryOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
+            {contactCategoryOption(selectedCategory).description}
+          </p>
+        </div>
         <div>
-          <Label htmlFor={`${mode}-contact-first-name`}>First name</Label>
+          <Label htmlFor={`${mode}-contact-first-name`}>
+            {selectedCategory === "COMPANY"
+              ? "Organisation name"
+              : "First name"}
+          </Label>
           <Input
             id={`${mode}-contact-first-name`}
             name="firstName"
@@ -136,12 +185,16 @@ export default function ContactForm({
           />
         </div>
         <div>
-          <Label htmlFor={`${mode}-contact-last-name`}>Last name</Label>
+          <Label htmlFor={`${mode}-contact-last-name`}>
+            {selectedCategory === "COMPANY"
+              ? "Primary contact / descriptor"
+              : "Last name"}
+          </Label>
           <Input
             id={`${mode}-contact-last-name`}
             name="lastName"
             defaultValue={contact?.lastName ?? ""}
-            required
+            required={selectedCategory !== "COMPANY"}
           />
         </div>
         <div>
@@ -237,7 +290,9 @@ export default function ContactForm({
             onDirty={() => setIsDirty(true)}
           />
           <div className="md:col-span-2">
-            <Label htmlFor={`${mode}-contact-address-line-1`}>Address line 1</Label>
+            <Label htmlFor={`${mode}-contact-address-line-1`}>
+              Address line 1
+            </Label>
             <Input
               id={`${mode}-contact-address-line-1`}
               name="addressLine1"
@@ -246,7 +301,9 @@ export default function ContactForm({
             />
           </div>
           <div className="md:col-span-2">
-            <Label htmlFor={`${mode}-contact-address-line-2`}>Address line 2</Label>
+            <Label htmlFor={`${mode}-contact-address-line-2`}>
+              Address line 2
+            </Label>
             <Input
               id={`${mode}-contact-address-line-2`}
               name="addressLine2"
@@ -296,7 +353,11 @@ export default function ContactForm({
           disabled={isPending || !isDirty}
           className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isPending ? "Saving..." : mode === "create" ? "Create contact" : "Save changes"}
+          {isPending
+            ? "Saving..."
+            : mode === "create"
+              ? "Create person"
+              : "Save changes"}
         </button>
       </div>
     </form>

@@ -4,6 +4,7 @@ import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
 } from "@/lib/contact-methods";
+import { defaultContactCategory } from "@/lib/contacts/categories";
 import { contactWhereWithAccess } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
 
@@ -30,6 +31,7 @@ export async function GET() {
       },
       firstName: true,
       lastName: true,
+      category: true,
       email: true,
       phone: true,
       role: true,
@@ -58,6 +60,7 @@ export async function GET() {
       displayName: `${contact.firstName} ${contact.lastName}`.trim(),
       firstName: contact.firstName,
       lastName: contact.lastName,
+      category: contact.category ?? defaultContactCategory,
       email: contact.email,
       phone: contact.phone,
       additionalEmails: normalizeContactEmailMethods(
