@@ -496,7 +496,9 @@ Sales is intentionally generic enough for bespoke builds:
   email/phone methods in the existing Email and Phone summary cells so users
   can choose the correct method without opening the profile tab. Company and
   role stay in the page header/profile area rather than being duplicated in the
-  workspace summary strip.
+  workspace summary strip. Do not show ambiguous contact-detail status badges
+  such as "Live" unless they represent a real customer or system state that a
+  user can act on.
 - Contact detail has a Relationship tab for manual customer context: customer
   relationship status, summary, next review date, notes and technologies
   installed/covered. Each technology row can optionally link to one of that

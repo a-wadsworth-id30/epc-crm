@@ -908,8 +908,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   company address below the company name. The page header presents address,
   company, category and role details inline with compact contextual icons.
   Company and role are grouped together in the header and profile panel, and
-  are not duplicated in the workspace summary strip. The user-facing workspace
-  label follows the People section wording.
+  are not duplicated in the workspace summary strip. Contact detail relies on
+  the page header for the person name/context, so the workspace summary avoids
+  ambiguous status badges and only shows useful contact metrics.
 - Contact detail includes a Relationship workspace tab backed by
   `CustomerRelationshipProfile` and `CustomerTechnologyCoverage`. Users can
   manually track the customer's relationship status, relationship summary,
