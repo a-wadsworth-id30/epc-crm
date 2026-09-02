@@ -46,6 +46,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   address line 2, city, county, postcode and country.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
+- `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level
+  relationship context. A contact can have one profile with manual customer
+  status, summary, next-review date and notes, plus technology rows that track
+  whether each technology is installed, covered and optionally linked to one of
+  the contact's sales opportunities.
 - `ContactEmailAddress` / `ContactPhoneNumber`: labelled secondary contact
   methods linked to `Contact`. Primary values remain on `Contact` for existing
   sales, search, MCP and telephony compatibility; secondary rows are used for
@@ -59,7 +64,9 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `ContactTag` / `ContactTagAssignment`: reusable contact tags with canonical
   slugs and many-to-many contact assignment.
 - `SalesOpportunity`: sale/enquiry pipeline wrapper, including current customer
-  sales category, lead score and score timestamp.
+  sales category, lead score and score timestamp. Opportunity records can be
+  referenced by contact relationship technology rows without making those rows
+  part of the sales stage model.
 - `SalesPipelineStage`: configurable sales stage mapped to the stable
   `SalesStage` reporting/conversion bucket and a customer sales category, with
   stage goal, AI context, movement policy, required-data gate mode and

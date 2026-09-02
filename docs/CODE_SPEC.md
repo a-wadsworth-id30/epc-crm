@@ -319,6 +319,10 @@ Sales is intentionally generic enough for bespoke builds:
 - `currency` defaults to `GBP`.
 - `probability` is an integer percentage.
 - Opportunities can link to `Company`, `Contact` and owner `User`.
+- Contact-level customer relationship tracking belongs to
+  `CustomerRelationshipProfile` and `CustomerTechnologyCoverage`, not to
+  `SalesPipelineStage`. Technology rows may link back to a `SalesOpportunity`
+  when the relationship creates or supports a specific opportunity.
 - Each opportunity has optional `source`, `nextStep` and `expectedCloseDate`.
 - Opportunities also store lifecycle metric foundations: `stageChangedAt`,
   `firstContactedAt`, `closedAt`, `lostReason` and `lostReasonNotes`.
@@ -493,6 +497,11 @@ Sales is intentionally generic enough for bespoke builds:
   can choose the correct method without opening the profile tab. Company and
   role stay in the page header/profile area rather than being duplicated in the
   workspace summary strip.
+- Contact detail has a Relationship tab for manual customer context: customer
+  relationship status, summary, next review date, notes and technologies
+  installed/covered. Each technology row can optionally link to one of that
+  contact's opportunities so future automation can update the section from
+  sales journey events without changing the current manual workflow.
 - Contact segments live at `/contacts/segments`. Segment criteria must be
   stored as validated JSON rules and evaluated through Prisma filters; do not
   generate or execute raw SQL from AI prompts. Segment rules can filter by

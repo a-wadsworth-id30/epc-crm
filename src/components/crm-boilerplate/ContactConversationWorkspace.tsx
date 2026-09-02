@@ -5,6 +5,7 @@ import {
   ClipboardList,
   FolderOpen,
   GripVertical,
+  HeartHandshake,
   Mail,
   MessageSquareText,
   Phone,
@@ -42,6 +43,7 @@ type ReplyTarget = {
 type ContactWorkspaceTabKey =
   | "conversation"
   | "profile"
+  | "relationship"
   | "leads"
   | "documents";
 
@@ -62,6 +64,9 @@ export type ContactConversationWorkspaceProps = {
   leadsPanel: ReactNode;
   openLeadCount: number;
   profilePanel: ReactNode;
+  relationshipPanel: ReactNode;
+  relationshipStatusLabel: string;
+  relationshipTechnologyCount: number;
   recipientEmail: string | null;
   recipientEmails: ContactSummaryMethod[];
   recipientPhone: string | null;
@@ -128,6 +133,12 @@ const workspaceTabs: ContactWorkspaceTab[] = [
     label: "Contact Profile",
     description: "Email, phone, company, role and address",
     Icon: UserRound,
+  },
+  {
+    key: "relationship",
+    label: "Relationship",
+    description: "Customer status, technologies and opportunity links",
+    Icon: HeartHandshake,
   },
   {
     key: "leads",
@@ -214,6 +225,8 @@ function ContactWorkspaceSummary({
   openLeadCount,
   recipientEmails,
   recipientPhones,
+  relationshipStatusLabel,
+  relationshipTechnologyCount,
   summary,
 }: {
   closedLeadCount: number;
@@ -223,6 +236,8 @@ function ContactWorkspaceSummary({
   openLeadCount: number;
   recipientEmails: ContactSummaryMethod[];
   recipientPhones: ContactSummaryMethod[];
+  relationshipStatusLabel: string;
+  relationshipTechnologyCount: number;
   summary: ContactConversationWorkspaceProps["summary"];
 }) {
   const metrics = [
@@ -245,6 +260,11 @@ function ContactWorkspaceSummary({
           methods={recipientPhones}
         />
       ),
+    },
+    {
+      Icon: HeartHandshake,
+      label: "Relationship",
+      value: `${relationshipStatusLabel} / ${relationshipTechnologyCount} tech`,
     },
     {
       Icon: ClipboardList,
@@ -283,7 +303,7 @@ function ContactWorkspaceSummary({
         </div>
       </div>
 
-      <div className="grid gap-0 sm:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         {metrics.map((metric) => {
           const Icon = metric.Icon;
 
@@ -432,6 +452,9 @@ export default function ContactConversationWorkspace({
   leadsPanel,
   openLeadCount,
   profilePanel,
+  relationshipPanel,
+  relationshipStatusLabel,
+  relationshipTechnologyCount,
   recipientEmail,
   recipientEmails,
   recipientPhone,
@@ -744,6 +767,8 @@ export default function ContactConversationWorkspace({
         openLeadCount={openLeadCount}
         recipientEmails={recipientEmails}
         recipientPhones={recipientPhones}
+        relationshipStatusLabel={relationshipStatusLabel}
+        relationshipTechnologyCount={relationshipTechnologyCount}
         summary={summary}
       />
 
@@ -812,6 +837,7 @@ export default function ContactConversationWorkspace({
                   />
                 ) : null}
                 {activeTab === "profile" ? profilePanel : null}
+                {activeTab === "relationship" ? relationshipPanel : null}
                 {activeTab === "leads" ? leadsPanel : null}
                 {activeTab === "documents" ? documentPanel : null}
               </div>

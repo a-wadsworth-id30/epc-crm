@@ -17,7 +17,7 @@ function ContactConversationWorkspaceSkeleton() {
           </div>
         </div>
         <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-          {["email", "phone", "company-role", "leads", "documents"].map(
+          {["email", "phone", "relationship", "leads", "documents"].map(
             (item) => (
               <div
                 key={item}
@@ -40,7 +40,13 @@ function ContactConversationWorkspaceSkeleton() {
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="grid min-w-0 lg:grid-cols-[184px_minmax(0,1fr)]">
             <div className="flex min-w-0 overflow-x-auto border-b border-gray-200 bg-gray-50/80 p-1.5 lg:block lg:overflow-visible lg:border-r lg:border-b-0 lg:p-0 dark:border-gray-800 dark:bg-white/[0.02]">
-              {["conversation", "profile", "leads", "documents"].map((item) => (
+              {[
+                "conversation",
+                "profile",
+                "relationship",
+                "leads",
+                "documents",
+              ].map((item) => (
                 <div
                   key={item}
                   className="flex min-w-[148px] items-center gap-3 px-3 py-3 lg:min-w-0 lg:border-b lg:border-gray-200 dark:lg:border-gray-800"
