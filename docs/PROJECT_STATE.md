@@ -512,10 +512,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   visitor sessions, attribution records, form/phone leads and imported
   platform spend/click/conversion metrics. A protected maintenance endpoint and
   disabled-by-default scheduled Netlify function refresh the rollups. Dashboard
-  marketing summary reads rollups when the full 30-day window is covered and
-  falls back to raw attribution/spend aggregates until coverage exists.
-  Settings > System shows rollup readiness, latest real refresh status and
-  30-day dry-run totals without writing summary rows or preview job history.
+  marketing summary, Marketing report pages and the executive client-pack
+  export read rollups when the requested window is fully covered and fall back
+  to raw attribution/spend aggregates until coverage exists. Settings > System
+  shows rollup readiness, latest real refresh status and 30-day dry-run totals
+  without writing summary rows or preview job history.
 - `BackgroundJobRun` stores compact history for retention, marketing rollups,
   marketing conversion upload preparation/processing and advertising spend
   imports. Recent runs are visible in Settings > System with status, trigger,

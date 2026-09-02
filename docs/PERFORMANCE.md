@@ -139,11 +139,11 @@ prompts and recent activity lists remain uncached so permission-sensitive and
 actionable rows stay fresh.
 Daily `MarketingDailyRollup` rows can now be refreshed through
 `/api/maintenance/marketing-rollups` or the disabled-by-default scheduled
-Netlify function. The Dashboard marketing summary reads those compact rows when
-the full 30-day window is covered, then falls back to raw attribution/spend
-aggregates until rollups are populated. Settings > System shows rollup
-readiness, the latest real refresh and 30-day dry-run totals without writing
-summary rows.
+Netlify function. The Dashboard marketing summary, Marketing report pages and
+the executive client-pack export read those compact rows when the requested
+window is fully covered, then fall back to raw attribution/spend aggregates
+until rollups are populated. Settings > System shows rollup readiness, the
+latest real refresh and 30-day dry-run totals without writing summary rows.
 
 Realtime page refresh helpers close SSE connections and pause fallback timers
 when the browser tab is hidden, then reconnect and refresh when the tab becomes

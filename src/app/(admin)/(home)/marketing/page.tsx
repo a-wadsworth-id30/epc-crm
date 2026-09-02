@@ -37,6 +37,11 @@ import {
   type MarketingOpportunityTotals,
 } from "@/lib/marketing/opportunity-totals";
 import {
+  marketingDailyRollupRangeFromWindow,
+  readMarketingDailyRollupSummary,
+  type MarketingDailyRollupSummary,
+} from "@/lib/marketing/daily-rollups";
+import {
   attributionModelHref,
   attributionModelOptions,
   executiveReportDownloadHref,
@@ -108,6 +113,17 @@ function microsToCents(value: bigint | number | null | undefined) {
   return Math.round(Number(value) / 10_000);
 }
 
+function campaignSpendSummaryFromRollup(summary: MarketingDailyRollupSummary) {
+  return {
+    _sum: {
+      clicks: summary.totals.clicks,
+      conversions: summary.totals.conversions,
+      costMicros: BigInt(summary.totals.costMicros),
+      impressions: summary.totals.impressions,
+    },
+  };
+}
+
 function formatRatio(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "Not available";
   return `${value.toFixed(1)}x`;
@@ -151,7 +167,11 @@ function formatDurationDays(value: number | null) {
 }
 
 function sourceFromAttribution(attribution: unknown) {
-  if (!attribution || typeof attribution !== "object" || Array.isArray(attribution)) {
+  if (
+    !attribution ||
+    typeof attribution !== "object" ||
+    Array.isArray(attribution)
+  ) {
     return "Unattributed";
   }
 
@@ -168,7 +188,11 @@ function sourceFromAttribution(attribution: unknown) {
   const source = (params as Record<string, unknown>).utm_source;
   const medium = (params as Record<string, unknown>).utm_medium;
 
-  return [source, medium].filter((value) => typeof value === "string" && value).join(" / ") || "Unattributed";
+  return (
+    [source, medium]
+      .filter((value) => typeof value === "string" && value)
+      .join(" / ") || "Unattributed"
+  );
 }
 
 function jsonObject(value: unknown): Record<string, unknown> | null {
@@ -204,7 +228,10 @@ function referrerHost(referrer: unknown) {
   }
 }
 
-function attributionDimensions(attribution: unknown, fallbackSource?: string | null) {
+function attributionDimensions(
+  attribution: unknown,
+  fallbackSource?: string | null,
+) {
   const params = attributionTouchParams(attribution);
   const referrer = referrerHost(jsonObject(attribution)?.referrer);
   const source =
@@ -233,7 +260,9 @@ function attributionDimensions(attribution: unknown, fallbackSource?: string | n
   };
 }
 
-function attributionDimensionKey(dimensions: ReturnType<typeof attributionDimensions>) {
+function attributionDimensionKey(
+  dimensions: ReturnType<typeof attributionDimensions>,
+) {
   return [dimensions.source, dimensions.medium, dimensions.campaign].join("::");
 }
 
@@ -241,7 +270,10 @@ function dimensionsFromTouch(touch: unknown, fallbackSource?: string | null) {
   return attributionDimensions({ lastTouch: touch }, fallbackSource);
 }
 
-function attributionJourneyDimensions(attribution: unknown, fallbackSource?: string | null) {
+function attributionJourneyDimensions(
+  attribution: unknown,
+  fallbackSource?: string | null,
+) {
   const data = jsonObject(attribution);
   if (!data) return [attributionDimensions(attribution, fallbackSource)];
 
@@ -261,7 +293,9 @@ function attributionJourneyDimensions(attribution: unknown, fallbackSource?: str
     previousKey = key;
   }
 
-  return rows.length ? rows : [attributionDimensions(attribution, fallbackSource)];
+  return rows.length
+    ? rows
+    : [attributionDimensions(attribution, fallbackSource)];
 }
 
 function linearWeights(count: number) {
@@ -297,7 +331,9 @@ function creditWeightedModel(
     valueCents?: number;
     wonCents?: number;
   },
-  ensureRow: (dimensions: ReturnType<typeof attributionDimensions>) => AttributionReportRow,
+  ensureRow: (
+    dimensions: ReturnType<typeof attributionDimensions>,
+  ) => AttributionReportRow,
   model: "linear" | "position-based" | "time-decay",
 ) {
   journey.forEach((dimensions, index) => {
@@ -344,7 +380,10 @@ function addModelCredit(
   row.timeDecayWonCents += values.wonCents;
 }
 
-function attributionModelValues(row: AttributionReportRow, model: AttributionModel) {
+function attributionModelValues(
+  row: AttributionReportRow,
+  model: AttributionModel,
+) {
   if (model === "first-touch") {
     return {
       journeys: row.firstTouchJourneys,
@@ -415,9 +454,12 @@ function confidenceForAttribution(
     landingPage: stringParam(data?.landingPage),
     currentPage: stringParam(data?.currentPage),
     referrer: stringParam(data?.referrer),
-    attributionSource: stringParam(params.utm_source) ?? overrides.attributionSource ?? null,
-    attributionMedium: stringParam(params.utm_medium) ?? overrides.attributionMedium ?? null,
-    attributionCampaign: stringParam(params.utm_campaign) ?? overrides.attributionCampaign ?? null,
+    attributionSource:
+      stringParam(params.utm_source) ?? overrides.attributionSource ?? null,
+    attributionMedium:
+      stringParam(params.utm_medium) ?? overrides.attributionMedium ?? null,
+    attributionCampaign:
+      stringParam(params.utm_campaign) ?? overrides.attributionCampaign ?? null,
     attributionClickId:
       stringParam(params.gclid) ??
       stringParam(params.gbraid) ??
@@ -452,16 +494,23 @@ function addConfidenceSample(
   accumulator.percentages.push(confidence.percentage);
 
   for (const factor of confidence.missingFactors) {
-    accumulator.gaps.set(factor.label, (accumulator.gaps.get(factor.label) ?? 0) + 1);
+    accumulator.gaps.set(
+      factor.label,
+      (accumulator.gaps.get(factor.label) ?? 0) + 1,
+    );
   }
 }
 
-function confidenceRollup(accumulator: AttributionConfidenceAccumulator): AttributionConfidenceRollup {
+function confidenceRollup(
+  accumulator: AttributionConfidenceAccumulator,
+): AttributionConfidenceRollup {
   const sampleSize = accumulator.percentages.length;
   const average = sampleSize
     ? Math.round(
-        accumulator.percentages.reduce((total, percentage) => total + percentage, 0) /
-          sampleSize,
+        accumulator.percentages.reduce(
+          (total, percentage) => total + percentage,
+          0,
+        ) / sampleSize,
       )
     : 0;
   const level = confidenceLevelFromAverage(average, sampleSize);
@@ -499,7 +548,9 @@ function confidenceRollupSummary(
   if (!sampleSize) return "No scored attribution evidence yet.";
 
   const evidence = `${average}% average confidence across ${sampleSize} scored item${sampleSize === 1 ? "" : "s"}.`;
-  const gaps = topGaps.length ? ` Main gaps: ${topGaps.join(", ")}.` : " No major gaps.";
+  const gaps = topGaps.length
+    ? ` Main gaps: ${topGaps.join(", ")}.`
+    : " No major gaps.";
   return `${level} confidence. ${evidence}${gaps}`;
 }
 
@@ -507,14 +558,34 @@ function offlineMediaChannel(source: string, campaign: string) {
   const value = `${source} ${campaign}`.toLowerCase();
 
   if (value.includes("radio")) return "Radio";
-  if (value.includes("print") || value.includes("press") || value.includes("newspaper") || value.includes("magazine")) {
+  if (
+    value.includes("print") ||
+    value.includes("press") ||
+    value.includes("newspaper") ||
+    value.includes("magazine")
+  ) {
     return "Print";
   }
-  if (value.includes("event") || value.includes("expo") || value.includes("show")) return "Event";
-  if (value.includes("direct mail") || value.includes("door drop") || value.includes("leaflet") || value.includes("flyer")) {
+  if (
+    value.includes("event") ||
+    value.includes("expo") ||
+    value.includes("show")
+  )
+    return "Event";
+  if (
+    value.includes("direct mail") ||
+    value.includes("door drop") ||
+    value.includes("leaflet") ||
+    value.includes("flyer")
+  ) {
     return "Direct mail";
   }
-  if (value.includes("qr") || value.includes("poster") || value.includes("outdoor") || value.includes("billboard")) {
+  if (
+    value.includes("qr") ||
+    value.includes("poster") ||
+    value.includes("outdoor") ||
+    value.includes("billboard")
+  ) {
     return "Outdoor / QR";
   }
   if (value.includes("offline") || value.includes("manual")) return "Offline";
@@ -543,7 +614,11 @@ function offlineCampaignChannelLabel(channel: OfflineCampaignChannelValue) {
   return offlineCampaignChannelLabels[channel] ?? "Offline";
 }
 
-function offlineCampaignCode(channel: string, source: string, campaign: string) {
+function offlineCampaignCode(
+  channel: string,
+  source: string,
+  campaign: string,
+) {
   const base = [channel, source, campaign]
     .map((value) =>
       value
@@ -577,11 +652,17 @@ function offlineScheduleStatus(startDate: Date | null, endDate: Date | null) {
   }
 
   if (startDate && now < startDate) {
-    return { detail: `Starts ${dateFormatter.format(startDate)}`, status: "Planned" };
+    return {
+      detail: `Starts ${dateFormatter.format(startDate)}`,
+      status: "Planned",
+    };
   }
 
   if (endDate && now > endDate) {
-    return { detail: `Ended ${dateFormatter.format(endDate)}`, status: "Ended" };
+    return {
+      detail: `Ended ${dateFormatter.format(endDate)}`,
+      status: "Ended",
+    };
   }
 
   if (startDate && endDate) {
@@ -591,7 +672,10 @@ function offlineScheduleStatus(startDate: Date | null, endDate: Date | null) {
     );
     const elapsedDays = Math.min(
       totalDays,
-      Math.max(0, Math.ceil((now.getTime() - startDate.getTime()) / 86_400_000)),
+      Math.max(
+        0,
+        Math.ceil((now.getTime() - startDate.getTime()) / 86_400_000),
+      ),
     );
     const remainingDays = Math.max(0, totalDays - elapsedDays);
 
@@ -602,13 +686,22 @@ function offlineScheduleStatus(startDate: Date | null, endDate: Date | null) {
   }
 
   if (startDate) {
-    return { detail: `Started ${dateFormatter.format(startDate)}`, status: "Active" };
+    return {
+      detail: `Started ${dateFormatter.format(startDate)}`,
+      status: "Active",
+    };
   }
 
-  return { detail: `Ends ${dateFormatter.format(endDate as Date)}`, status: "Active" };
+  return {
+    detail: `Ends ${dateFormatter.format(endDate as Date)}`,
+    status: "Active",
+  };
 }
 
-function offlineBudgetStatus(budgetCents: number | null, actualCostCents: number | null) {
+function offlineBudgetStatus(
+  budgetCents: number | null,
+  actualCostCents: number | null,
+) {
   if (budgetCents === null && actualCostCents === null) {
     return { detail: "Add campaign budget", status: "No budget" };
   }
@@ -621,10 +714,14 @@ function offlineBudgetStatus(budgetCents: number | null, actualCostCents: number
   }
 
   if (actualCostCents === null) {
-    return { detail: `${formatMoney(budgetCents)} planned`, status: "Budget set" };
+    return {
+      detail: `${formatMoney(budgetCents)} planned`,
+      status: "Budget set",
+    };
   }
 
-  const usedPercent = budgetCents > 0 ? (actualCostCents / budgetCents) * 100 : null;
+  const usedPercent =
+    budgetCents > 0 ? (actualCostCents / budgetCents) * 100 : null;
 
   if (usedPercent !== null && usedPercent > 110) {
     return {
@@ -641,7 +738,10 @@ function offlineBudgetStatus(budgetCents: number | null, actualCostCents: number
   }
 
   return {
-    detail: usedPercent === null ? "No planned budget" : `${formatPercent(usedPercent)} used`,
+    detail:
+      usedPercent === null
+        ? "No planned budget"
+        : `${formatPercent(usedPercent)} used`,
     status: "On budget",
   };
 }
@@ -688,12 +788,15 @@ function offlineMediaNextAction(row: OfflineMediaRow) {
 
 function providerLabel(provider: string) {
   return (
-    marketingIntegrationProviderDefinitions.find((definition) => definition.provider === provider)
-      ?.name ?? provider
+    marketingIntegrationProviderDefinitions.find(
+      (definition) => definition.provider === provider,
+    )?.name ?? provider
   );
 }
 
-function conversionUploadClassification(upload: ConversionUploadRow): ConversionUploadClassification {
+function conversionUploadClassification(
+  upload: ConversionUploadRow,
+): ConversionUploadClassification {
   const message = upload.message?.toLowerCase() ?? "";
 
   if (upload.status === "SENT") {
@@ -720,7 +823,10 @@ function conversionUploadClassification(upload: ConversionUploadRow): Conversion
     };
   }
 
-  if (message.includes("connected provider") || message.includes("provider configuration")) {
+  if (
+    message.includes("connected provider") ||
+    message.includes("provider configuration")
+  ) {
     return {
       action: `Connect and enable ${providerLabel(upload.provider)} conversion uploads.`,
       category: "Provider setup",
@@ -758,7 +864,8 @@ function conversionUploadClassification(upload: ConversionUploadRow): Conversion
 
   if (upload.status === "FAILED" && message.includes("rejected")) {
     return {
-      action: "Check the provider response and retry after correcting the mapping.",
+      action:
+        "Check the provider response and retry after correcting the mapping.",
       category: "Provider response",
       label: "Provider rejected",
       severity: "error",
@@ -794,7 +901,8 @@ function conversionUploadClassification(upload: ConversionUploadRow): Conversion
 
   if (upload.status === "PENDING" && upload.attemptCount > 0) {
     return {
-      action: upload.message ?? "Review the previous attempt before sending again.",
+      action:
+        upload.message ?? "Review the previous attempt before sending again.",
       category: "Attempt state",
       label: "Waiting after attempt",
       severity: "warning",
@@ -890,13 +998,19 @@ function conversionUploadMetricsFor({
     providerRows: providerSummary
       .map((row) => ({
         matched: row._count.clickIdSource,
-        matchRate: row._count._all ? (row._count.clickIdSource / row._count._all) * 100 : null,
+        matchRate: row._count._all
+          ? (row._count.clickIdSource / row._count._all) * 100
+          : null,
         mapped: row._count.conversionName,
-        mappingRate: row._count._all ? (row._count.conversionName / row._count._all) * 100 : null,
+        mappingRate: row._count._all
+          ? (row._count.conversionName / row._count._all) * 100
+          : null,
         provider: row.provider,
         total: row._count._all,
       }))
-      .sort((a, b) => b.total - a.total || a.provider.localeCompare(b.provider)),
+      .sort(
+        (a, b) => b.total - a.total || a.provider.localeCompare(b.provider),
+      ),
     sentRate: total ? (counts.SENT / total) * 100 : null,
     uploadedRate: attempted ? (counts.SENT / attempted) * 100 : null,
   };
@@ -1210,30 +1324,47 @@ type SalesLifecycleEventForRollup = {
   toStage: string | null;
 };
 
-function leadChannelFromDimensions(dimensions: ReturnType<typeof attributionDimensions>): LeadChannel {
+function leadChannelFromDimensions(
+  dimensions: ReturnType<typeof attributionDimensions>,
+): LeadChannel {
   const source = dimensions.source.toLowerCase();
   const medium = dimensions.medium.toLowerCase();
 
-  if (source.includes("meta") || source.includes("facebook") || source.includes("instagram")) {
+  if (
+    source.includes("meta") ||
+    source.includes("facebook") ||
+    source.includes("instagram")
+  ) {
     return "meta";
   }
-  if (source.includes("linkedin") || dimensions.clickIdSource === "li_fat_id") return "linkedin";
-  if (source.includes("google") || dimensions.clickIdSource === "gclid") return "google";
-  if (source.includes("bing") || source.includes("microsoft") || dimensions.clickIdSource === "msclkid") {
+  if (source.includes("linkedin") || dimensions.clickIdSource === "li_fat_id")
+    return "linkedin";
+  if (source.includes("google") || dimensions.clickIdSource === "gclid")
+    return "google";
+  if (
+    source.includes("bing") ||
+    source.includes("microsoft") ||
+    dimensions.clickIdSource === "msclkid"
+  ) {
     return "bing";
   }
   if (source.includes("email") || medium.includes("email")) return "email";
   if (source.includes("sms") || medium.includes("sms")) return "sms";
   if (source === "direct" || medium === "direct") return "direct";
-  if (medium.includes("organic") || source.includes("organic")) return "organic";
-  if (source !== "unattributed" || medium.includes("referral")) return "referral";
+  if (medium.includes("organic") || source.includes("organic"))
+    return "organic";
+  if (source !== "unattributed" || medium.includes("referral"))
+    return "referral";
   return "direct";
 }
 
 function leadLandingPage(attribution: unknown) {
   const data = jsonObject(attribution);
   const touch = jsonObject(data?.lastTouch) ?? jsonObject(data?.firstTouch);
-  const page = stringParam(data?.landingPage) || stringParam(touch?.landingPage) || stringParam(touch?.url);
+  const page =
+    stringParam(data?.landingPage) ||
+    stringParam(touch?.landingPage) ||
+    stringParam(touch?.url);
 
   if (!page) return "/";
 
@@ -1252,12 +1383,14 @@ function stageLabel(stage: string) {
 }
 
 function initials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "L";
+  return (
+    value
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "L"
+  );
 }
 
 const lifecycleStageRank: Record<string, number> = {
@@ -1341,7 +1474,9 @@ function buildLifecycleFunnelRows({
   return rows.map((row, index) => {
     const previous = rows[index - 1];
     const conversionRate =
-      previous && previous.count > 0 ? (row.count / previous.count) * 100 : null;
+      previous && previous.count > 0
+        ? (row.count / previous.count) * 100
+        : null;
 
     return {
       ...row,
@@ -1350,7 +1485,8 @@ function buildLifecycleFunnelRows({
           ? Math.round(spendCents / row.count)
           : null,
       conversionRate,
-      dropOffRate: conversionRate === null ? null : Math.max(0, 100 - conversionRate),
+      dropOffRate:
+        conversionRate === null ? null : Math.max(0, 100 - conversionRate),
     };
   });
 }
@@ -1385,8 +1521,16 @@ function buildSalesLifecycleTransitionRows(
     const fromLabel =
       event.eventType === "CREATED"
         ? "Created"
-        : lifecycleTransitionLabel(event.fromStage, event.fromPipelineStage, "Unknown");
-    const toLabel = lifecycleTransitionLabel(event.toStage, event.toPipelineStage, "Unknown");
+        : lifecycleTransitionLabel(
+            event.fromStage,
+            event.fromPipelineStage,
+            "Unknown",
+          );
+    const toLabel = lifecycleTransitionLabel(
+      event.toStage,
+      event.toPipelineStage,
+      "Unknown",
+    );
     const key = `${fromLabel}::${toLabel}`;
     const current = rows.get(key) ?? {
       count: 0,
@@ -1403,7 +1547,10 @@ function buildSalesLifecycleTransitionRows(
 
     current.count += 1;
     current.valueCents += event.opportunity?.valueCents ?? 0;
-    current.sourceCounts.set(source, (current.sourceCounts.get(source) ?? 0) + 1);
+    current.sourceCounts.set(
+      source,
+      (current.sourceCounts.get(source) ?? 0) + 1,
+    );
 
     if (event.toStage === "LOST") {
       const lostReason = event.lostReason?.trim() || "No reason recorded";
@@ -1414,7 +1561,9 @@ function buildSalesLifecycleTransitionRows(
     }
 
     current.latest =
-      !current.latest || event.occurredAt > current.latest ? event.occurredAt : current.latest;
+      !current.latest || event.occurredAt > current.latest
+        ? event.occurredAt
+        : current.latest;
     rows.set(key, current);
   }
 
@@ -1436,7 +1585,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const activeView = parseMarketingView(params.view);
   const activeRange = parseMarketingRange(params.range);
-  const executivePrintMode = activeView === "executive-report" && flagValue(params.print);
+  const executivePrintMode =
+    activeView === "executive-report" && flagValue(params.print);
   const activeAttributionModel = parseAttributionModel(params.model);
   const activeLeadChannel = parseLeadChannel(params.channel);
   const activeLeadStatus = parseLeadStatus(params.status);
@@ -1447,6 +1597,11 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   const activeDateWhere = activeRangeWindow.startDate
     ? { gte: activeRangeWindow.startDate, lte: activeRangeWindow.endDate }
     : undefined;
+  const marketingRollupRange =
+    marketingDailyRollupRangeFromWindow(activeRangeWindow);
+  const marketingRollupSummary = marketingRollupRange
+    ? await readMarketingDailyRollupSummary(marketingRollupRange)
+    : null;
   const offlineCampaignWhere = activeRangeWindow.startDate
     ? {
         OR: [
@@ -1588,12 +1743,16 @@ export default async function MarketingPage({ searchParams }: PageProps) {
         toNumber: true,
         attribution: true,
         contact: { select: { firstName: true, lastName: true } },
-        opportunity: { select: { title: true, source: true, valueCents: true } },
+        opportunity: {
+          select: { title: true, source: true, valueCents: true },
+        },
       },
     }),
-    prisma.attributionSnapshot.count({
-      where: activeDateWhere ? { updatedAt: activeDateWhere } : undefined,
-    }),
+    marketingRollupSummary
+      ? Promise.resolve(marketingRollupSummary.totals.sessions)
+      : prisma.attributionSnapshot.count({
+          where: activeDateWhere ? { updatedAt: activeDateWhere } : undefined,
+        }),
     prisma.attributionRecord.findMany({
       where: activeDateWhere ? { createdAt: activeDateWhere } : undefined,
       orderBy: { createdAt: "desc" },
@@ -1646,15 +1805,17 @@ export default async function MarketingPage({ searchParams }: PageProps) {
         },
       },
     }),
-    prisma.marketingCampaignSpend.aggregate({
-      where: activeDateWhere ? { date: activeDateWhere } : undefined,
-      _sum: {
-        costMicros: true,
-        clicks: true,
-        impressions: true,
-        conversions: true,
-      },
-    }),
+    marketingRollupSummary
+      ? Promise.resolve(campaignSpendSummaryFromRollup(marketingRollupSummary))
+      : prisma.marketingCampaignSpend.aggregate({
+          where: activeDateWhere ? { date: activeDateWhere } : undefined,
+          _sum: {
+            costMicros: true,
+            clicks: true,
+            impressions: true,
+            conversions: true,
+          },
+        }),
     prisma.marketingCampaignSpend.findMany({
       where: activeDateWhere ? { date: activeDateWhere } : undefined,
       orderBy: { date: "desc" },
@@ -1729,7 +1890,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     prisma.integrationConnection.findMany({
       where: {
         provider: {
-          in: marketingIntegrationProviderDefinitions.map((provider) => provider.provider),
+          in: marketingIntegrationProviderDefinitions.map(
+            (provider) => provider.provider,
+          ),
         },
       },
       select: {
@@ -1750,13 +1913,17 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   const pipelineValue = opportunityTotals.pipelineValueCents;
   const weightedPipelineValue = opportunityTotals.weightedPipelineValueCents;
   const attributedCalls = callLogs.filter((call) => call.attribution).length;
-  const totalCalls = callLogs.filter((call) => call.direction === "INBOUND").length;
+  const totalCalls = callLogs.filter(
+    (call) => call.direction === "INBOUND",
+  ).length;
   const totalSpendCents = microsToCents(campaignSpendSummary._sum.costMicros);
   const totalClicks = campaignSpendSummary._sum.clicks ?? 0;
   const totalImpressions = campaignSpendSummary._sum.impressions ?? 0;
   const totalConversions = campaignSpendSummary._sum.conversions ?? 0;
   const costPerLeadCents =
-    totalSpendCents > 0 && totalLeads > 0 ? Math.round(totalSpendCents / totalLeads) : null;
+    totalSpendCents > 0 && totalLeads > 0
+      ? Math.round(totalSpendCents / totalLeads)
+      : null;
   const costPerConversionCents =
     totalSpendCents > 0 && totalConversions > 0
       ? Math.round(totalSpendCents / totalConversions)
@@ -1786,7 +1953,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   >();
 
   for (const opportunity of opportunities) {
-    const source = opportunity.source || sourceFromAttribution(opportunity.attribution);
+    const source =
+      opportunity.source || sourceFromAttribution(opportunity.attribution);
     const current = sourceMap.get(source) ?? {
       leads: 0,
       qualified: 0,
@@ -1828,7 +1996,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
         (opportunity.valueCents * opportunity.probability) / 100,
       );
     }
-    current.wonCents += opportunity.stage === "WON" ? opportunity.valueCents : 0;
+    current.wonCents +=
+      opportunity.stage === "WON" ? opportunity.valueCents : 0;
     current.latest =
       !current.latest || opportunity.createdAt > current.latest
         ? opportunity.createdAt
@@ -1837,7 +2006,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   }
 
   for (const call of callLogs) {
-    const source = call.opportunity?.source || sourceFromAttribution(call.attribution);
+    const source =
+      call.opportunity?.source || sourceFromAttribution(call.attribution);
     const current = sourceMap.get(source) ?? {
       leads: 0,
       qualified: 0,
@@ -1862,7 +2032,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
 
     current.calls += 1;
     current.latest =
-      !current.latest || call.startedAt > current.latest ? call.startedAt : current.latest;
+      !current.latest || call.startedAt > current.latest
+        ? call.startedAt
+        : current.latest;
     sourceMap.set(source, current);
   }
 
@@ -1871,9 +2043,13 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       source,
       ...metrics,
       avgLeadValueCents:
-        metrics.leads > 0 ? Math.round(metrics.valueCents / metrics.leads) : null,
+        metrics.leads > 0
+          ? Math.round(metrics.valueCents / metrics.leads)
+          : null,
       avgDealValueCents:
-        metrics.wonDeals > 0 ? Math.round(metrics.wonCents / metrics.wonDeals) : null,
+        metrics.wonDeals > 0
+          ? Math.round(metrics.wonCents / metrics.wonDeals)
+          : null,
       closeRate: percentOf(metrics.wonDeals, metrics.opportunities),
       confidence: confidenceRollup(metrics.confidence),
       costPerLeadCents:
@@ -1901,7 +2077,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   const offlineCampaignByCode = new Map(
     offlineCampaigns.map((campaign) => [campaign.code.toLowerCase(), campaign]),
   );
-  const offlineCampaignByDimensions = new Map<string, (typeof offlineCampaigns)[number]>();
+  const offlineCampaignByDimensions = new Map<
+    string,
+    (typeof offlineCampaigns)[number]
+  >();
 
   for (const campaign of offlineCampaigns) {
     const key = offlineMediaDimensionKey(campaign.source, campaign.campaign);
@@ -1914,8 +2093,14 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     campaign: (typeof offlineCampaigns)[number],
   ) => {
     const key = `campaign:${campaign.id}`;
-    const budgetStatus = offlineBudgetStatus(campaign.budgetCents, campaign.actualCostCents);
-    const scheduleStatus = offlineScheduleStatus(campaign.startDate, campaign.endDate);
+    const budgetStatus = offlineBudgetStatus(
+      campaign.budgetCents,
+      campaign.actualCostCents,
+    );
+    const scheduleStatus = offlineScheduleStatus(
+      campaign.startDate,
+      campaign.endDate,
+    );
     const current = offlineMediaMap.get(key) ?? {
       budgetDetail: budgetStatus.detail,
       budgetStatus: budgetStatus.status,
@@ -2039,8 +2224,12 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   }) => {
     const registeredCampaign =
       (campaignId ? offlineCampaignById.get(campaignId) : null) ??
-      (attribution ? offlineCampaignForAttribution(attribution, source) : null) ??
-      offlineCampaignByDimensions.get(offlineMediaDimensionKey(source, campaign));
+      (attribution
+        ? offlineCampaignForAttribution(attribution, source)
+        : null) ??
+      offlineCampaignByDimensions.get(
+        offlineMediaDimensionKey(source, campaign),
+      );
 
     return registeredCampaign
       ? ensureCampaignOfflineMediaRow(registeredCampaign)
@@ -2061,7 +2250,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       null;
 
     if (linkedCampaignId && record.opportunityId) {
-      offlineCampaignIdByOpportunityId.set(record.opportunityId, linkedCampaignId);
+      offlineCampaignIdByOpportunityId.set(
+        record.opportunityId,
+        linkedCampaignId,
+      );
     }
     if (linkedCampaignId && record.callLogId) {
       offlineCampaignIdByCallLogId.set(record.callLogId, linkedCampaignId);
@@ -2069,7 +2261,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   }
 
   for (const opportunity of opportunities) {
-    const dimensions = attributionDimensions(opportunity.attribution, opportunity.source);
+    const dimensions = attributionDimensions(
+      opportunity.attribution,
+      opportunity.source,
+    );
     const source = opportunity.source || dimensions.source;
     const row = offlineMediaRowForDimensions({
       attribution: opportunity.attribution,
@@ -2081,7 +2276,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
 
     row.leads += 1;
     row.valueCents += opportunity.valueCents;
-    if (isAtLeastLifecycleStage(opportunity.stage, "PROPOSAL")) row.proposals += 1;
+    if (isAtLeastLifecycleStage(opportunity.stage, "PROPOSAL"))
+      row.proposals += 1;
     if (opportunity.stage === "WON") {
       row.wonDeals += 1;
       row.wonCents += opportunity.valueCents;
@@ -2093,11 +2289,16 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       );
     }
     row.latest =
-      !row.latest || opportunity.createdAt > row.latest ? opportunity.createdAt : row.latest;
+      !row.latest || opportunity.createdAt > row.latest
+        ? opportunity.createdAt
+        : row.latest;
   }
 
   for (const call of callLogs) {
-    const dimensions = attributionDimensions(call.attribution, call.opportunity?.source);
+    const dimensions = attributionDimensions(
+      call.attribution,
+      call.opportunity?.source,
+    );
     const source = call.opportunity?.source || dimensions.source;
     const row = offlineMediaRowForDimensions({
       attribution: call.attribution,
@@ -2108,7 +2309,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     if (!row) continue;
 
     if (call.direction === "INBOUND") row.calls += 1;
-    row.latest = !row.latest || call.startedAt > row.latest ? call.startedAt : row.latest;
+    row.latest =
+      !row.latest || call.startedAt > row.latest ? call.startedAt : row.latest;
   }
 
   for (const record of attributionRecords) {
@@ -2142,7 +2344,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     if (!row) continue;
 
     row.responseRecords += 1;
-    row.latest = !row.latest || record.createdAt > row.latest ? record.createdAt : row.latest;
+    row.latest =
+      !row.latest || record.createdAt > row.latest
+        ? record.createdAt
+        : row.latest;
   }
 
   const offlineMediaRows = Array.from(offlineMediaMap.values()).sort(
@@ -2160,7 +2365,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       : 0;
   for (const row of offlineMediaRows) {
     row.estimatedCostCents =
-      row.estimatedCostCents ?? (estimatedOfflineCostCents > 0 ? estimatedOfflineCostCents : null);
+      row.estimatedCostCents ??
+      (estimatedOfflineCostCents > 0 ? estimatedOfflineCostCents : null);
     row.costPerLeadCents =
       row.estimatedCostCents !== null && row.leads > 0
         ? Math.round(row.estimatedCostCents / row.leads)
@@ -2182,9 +2388,15 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   const salesQualityMap = new Map<string, SalesQualityAccumulator>();
 
   for (const opportunity of opportunities) {
-    const dimensions = attributionDimensions(opportunity.attribution, opportunity.source);
+    const dimensions = attributionDimensions(
+      opportunity.attribution,
+      opportunity.source,
+    );
     const ownerName =
-      [opportunity.owner?.firstName, opportunity.owner?.lastName].filter(Boolean).join(" ").trim() ||
+      [opportunity.owner?.firstName, opportunity.owner?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
       opportunity.owner?.name ||
       "Unassigned";
     const source = opportunity.source || dimensions.source;
@@ -2219,13 +2431,18 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       wonDeals: 0,
     };
     const firstContactedAt =
-      opportunity.firstContactedAt ?? opportunity.communications[0]?.occurredAt ?? null;
+      opportunity.firstContactedAt ??
+      opportunity.communications[0]?.occurredAt ??
+      null;
     const responseMinutes = durationMinutesBetween(
       firstContactedAt,
       opportunity.createdAt,
     );
     const closedAt = opportunity.closedAt;
-    const timeToCloseMinutes = durationMinutesBetween(closedAt, opportunity.createdAt);
+    const timeToCloseMinutes = durationMinutesBetween(
+      closedAt,
+      opportunity.createdAt,
+    );
 
     row.leads += 1;
     row.probabilityTotal += opportunity.probability;
@@ -2234,8 +2451,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       row.responseMinutesCount += 1;
       row.responseMinutesTotal += responseMinutes;
     }
-    if (isAtLeastLifecycleStage(opportunity.stage, "QUALIFIED")) row.qualified += 1;
-    if (isAtLeastLifecycleStage(opportunity.stage, "PROPOSAL")) row.proposals += 1;
+    if (isAtLeastLifecycleStage(opportunity.stage, "QUALIFIED"))
+      row.qualified += 1;
+    if (isAtLeastLifecycleStage(opportunity.stage, "PROPOSAL"))
+      row.proposals += 1;
     if (opportunity.stage === "WON") {
       row.wonDeals += 1;
       row.wonCents += opportunity.valueCents;
@@ -2271,7 +2490,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
 
   const salesQualityRows = Array.from(salesQualityMap.values())
     .map((row) => {
-      const incomplete = row.missingNextStep + row.missingCloseDate + row.staleOpen;
+      const incomplete =
+        row.missingNextStep + row.missingCloseDate + row.staleOpen;
       const {
         lostReasonCounts,
         probabilityTotal,
@@ -2285,33 +2505,45 @@ export default async function MarketingPage({ searchParams }: PageProps) {
         lostReasonCounts.get("No reason recorded") ?? 0;
       const lifecycleScore =
         row.leads > 0
-          ? ((row.qualified + row.proposals + row.wonDeals) / (row.leads * 3)) * 55
+          ? ((row.qualified + row.proposals + row.wonDeals) / (row.leads * 3)) *
+            55
           : 0;
       const hygieneScore =
         row.leads > 0
           ? ((row.leads * 3 - incomplete) / (row.leads * 3)) * 25
           : 0;
-      const contactScore =
-        row.leads > 0 ? (row.contacted / row.leads) * 15 : 0;
+      const contactScore = row.leads > 0 ? (row.contacted / row.leads) * 15 : 0;
       const lostReasonScore =
         row.lostDeals > 0
           ? ((row.lostDeals - missingLostReasonCount) / row.lostDeals) * 5
           : 5;
       const qualityScore =
         row.leads > 0
-          ? Math.max(0, Math.round(lifecycleScore + hygieneScore + contactScore + lostReasonScore))
+          ? Math.max(
+              0,
+              Math.round(
+                lifecycleScore + hygieneScore + contactScore + lostReasonScore,
+              ),
+            )
           : 0;
       const lostReasons = Array.from(lostReasonCounts.entries())
         .map(([reason, count]) => ({ count, reason }))
-        .sort((left, right) => right.count - left.count || left.reason.localeCompare(right.reason));
+        .sort(
+          (left, right) =>
+            right.count - left.count || left.reason.localeCompare(right.reason),
+        );
 
       return {
         ...resultRow,
         avgProbability: row.leads > 0 ? probabilityTotal / row.leads : null,
         avgResponseMinutes:
-          responseMinutesCount > 0 ? responseMinutesTotal / responseMinutesCount : null,
+          responseMinutesCount > 0
+            ? responseMinutesTotal / responseMinutesCount
+            : null,
         avgTimeToCloseDays:
-          timeToCloseDaysCount > 0 ? timeToCloseDaysTotal / timeToCloseDaysCount : null,
+          timeToCloseDaysCount > 0
+            ? timeToCloseDaysTotal / timeToCloseDaysCount
+            : null,
         contactedRate: percentOf(row.contacted, row.leads),
         closeRate: percentOf(row.wonDeals, row.qualified),
         lostReasons,
@@ -2351,8 +2583,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
 
     current.leads += 1;
     current.probabilityTotal += opportunity.probability;
-    if (isAtLeastLifecycleStage(opportunity.stage, "QUALIFIED")) current.qualified += 1;
-    if (isAtLeastLifecycleStage(opportunity.stage, "PROPOSAL")) current.proposals += 1;
+    if (isAtLeastLifecycleStage(opportunity.stage, "QUALIFIED"))
+      current.qualified += 1;
+    if (isAtLeastLifecycleStage(opportunity.stage, "PROPOSAL"))
+      current.proposals += 1;
     if (opportunity.stage === "WON") {
       current.wonDeals += 1;
       current.wonCents += opportunity.valueCents;
@@ -2384,14 +2618,23 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       { firstTouch: jsonObject(opportunity.attribution)?.firstTouch },
       opportunity.source,
     );
-    const lastTouch = attributionDimensions(opportunity.attribution, opportunity.source);
+    const lastTouch = attributionDimensions(
+      opportunity.attribution,
+      opportunity.source,
+    );
     const channel = leadChannelFromDimensions(lastTouch);
-    const contactName = [opportunity.contact?.firstName, opportunity.contact?.lastName]
+    const contactName = [
+      opportunity.contact?.firstName,
+      opportunity.contact?.lastName,
+    ]
       .filter(Boolean)
       .join(" ")
       .trim();
     const ownerName =
-      [opportunity.owner?.firstName, opportunity.owner?.lastName].filter(Boolean).join(" ").trim() ||
+      [opportunity.owner?.firstName, opportunity.owner?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
       opportunity.owner?.name ||
       "Unassigned";
 
@@ -2399,7 +2642,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       id: opportunity.id,
       campaign: lastTouch.campaign,
       channel,
-      company: opportunity.contact?.company?.name ?? opportunity.contact?.companyName ?? null,
+      company:
+        opportunity.contact?.company?.name ??
+        opportunity.contact?.companyName ??
+        null,
       createdAt: opportunity.createdAt,
       email: opportunity.contact?.email ?? "No email recorded",
       firstTouch,
@@ -2414,8 +2660,12 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     } satisfies LeadAttributionRow;
   });
   const filteredLeadAttributionRows = leadAttributionRows
-    .filter((row) => activeLeadChannel === "all" || row.channel === activeLeadChannel)
-    .filter((row) => activeLeadStatus === "All" || row.stage === activeLeadStatus)
+    .filter(
+      (row) => activeLeadChannel === "all" || row.channel === activeLeadChannel,
+    )
+    .filter(
+      (row) => activeLeadStatus === "All" || row.stage === activeLeadStatus,
+    )
     .filter((row) => {
       if (!leadSearchQuery) return true;
 
@@ -2436,10 +2686,13 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       id: `call-${call.id}`,
       type: "Call",
       title:
-        [call.contact?.firstName, call.contact?.lastName].filter(Boolean).join(" ") ||
+        [call.contact?.firstName, call.contact?.lastName]
+          .filter(Boolean)
+          .join(" ") ||
         call.fromNumber ||
         "Unknown caller",
-      source: call.opportunity?.source || sourceFromAttribution(call.attribution),
+      source:
+        call.opportunity?.source || sourceFromAttribution(call.attribution),
       date: call.startedAt,
       status: call.status,
     })),
@@ -2490,25 +2743,31 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     current.conversions += row.conversions;
     current.campaigns.add(row.campaignId);
     current.latestDate =
-      !current.latestDate || row.date > current.latestDate ? row.date : current.latestDate;
+      !current.latestDate || row.date > current.latestDate
+        ? row.date
+        : current.latestDate;
     spendByProvider.set(row.provider, current);
   }
 
-  const providerRows = marketingIntegrationProviderDefinitions.map((provider) => {
-    const state = getMarketingIntegrationProviderState(
-      provider,
-      providerConnectionMap.get(provider.provider),
-    );
-    const spend = spendByProvider.get(provider.provider);
-    const latestLog = latestSyncLogs.find((log) => log.provider === provider.provider) ?? null;
+  const providerRows = marketingIntegrationProviderDefinitions.map(
+    (provider) => {
+      const state = getMarketingIntegrationProviderState(
+        provider,
+        providerConnectionMap.get(provider.provider),
+      );
+      const spend = spendByProvider.get(provider.provider);
+      const latestLog =
+        latestSyncLogs.find((log) => log.provider === provider.provider) ??
+        null;
 
-    return {
-      provider,
-      state,
-      spend,
-      latestLog,
-    };
-  });
+      return {
+        provider,
+        state,
+        spend,
+        latestLog,
+      };
+    },
+  );
   const conversionUploadLogs = latestSyncLogs.filter((log) => {
     const syncType = log.syncType.toLowerCase();
     return syncType.includes("conversion") || syncType.includes("upload");
@@ -2516,8 +2775,12 @@ export default async function MarketingPage({ searchParams }: PageProps) {
   const pendingConversionUploads = conversionUploads.filter(
     (upload) => upload.status === "PENDING",
   );
-  const trackedCallRecords = attributionRecords.filter((record) => record.source === "PHONE");
-  const trackedFormRecords = attributionRecords.filter((record) => record.source !== "PHONE");
+  const trackedCallRecords = attributionRecords.filter(
+    (record) => record.source === "PHONE",
+  );
+  const trackedFormRecords = attributionRecords.filter(
+    (record) => record.source !== "PHONE",
+  );
   const conversionUploadCounts: ConversionUploadCounts = {
     FAILED: 0,
     PENDING: 0,
@@ -2543,7 +2806,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     process.env.MARKETING_UPLOAD_CRON_DRY_RUN === "true";
   const attributionReportMap = new Map<string, AttributionReportRow>();
   const reportCallLogIds = new Set(callLogs.map((call) => call.id));
-  const ensureAttributionReportRow = (dimensions: ReturnType<typeof attributionDimensions>) => {
+  const ensureAttributionReportRow = (
+    dimensions: ReturnType<typeof attributionDimensions>,
+  ) => {
     const key = attributionDimensionKey(dimensions);
     const current = attributionReportMap.get(key) ?? {
       assistedCalls: 0,
@@ -2585,7 +2850,8 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       wonCents: 0,
     };
 
-    if (dimensions.clickIdSource) current.clickIds.add(dimensions.clickIdSource);
+    if (dimensions.clickIdSource)
+      current.clickIds.add(dimensions.clickIdSource);
     attributionReportMap.set(key, current);
     return current;
   };
@@ -2610,10 +2876,13 @@ export default async function MarketingPage({ searchParams }: PageProps) {
         .filter((key) => key !== firstKey && key !== lastKey),
     );
 
-    ensureAttributionReportRow(journey[0]).firstTouchJourneys += values.journeys ?? 0;
+    ensureAttributionReportRow(journey[0]).firstTouchJourneys +=
+      values.journeys ?? 0;
     ensureAttributionReportRow(journey[0]).firstTouchLeads += values.leads ?? 0;
-    ensureAttributionReportRow(journey[0]).firstTouchValueCents += values.valueCents ?? 0;
-    ensureAttributionReportRow(journey[0]).firstTouchWonCents += values.wonCents ?? 0;
+    ensureAttributionReportRow(journey[0]).firstTouchValueCents +=
+      values.valueCents ?? 0;
+    ensureAttributionReportRow(journey[0]).firstTouchWonCents +=
+      values.wonCents ?? 0;
 
     const lastRow = ensureAttributionReportRow(journey[journey.length - 1]);
     lastRow.lastTouchJourneys += values.journeys ?? 0;
@@ -2632,7 +2901,13 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       assistedRow.assistedWonCents += values.wonCents ?? 0;
     }
 
-    creditWeightedModel(journey, linearWeights(journey.length), values, ensureAttributionReportRow, "linear");
+    creditWeightedModel(
+      journey,
+      linearWeights(journey.length),
+      values,
+      ensureAttributionReportRow,
+      "linear",
+    );
     creditWeightedModel(
       journey,
       positionBasedWeights(journey.length),
@@ -2690,7 +2965,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
       row.forms += 1;
     }
     row.latest =
-      !row.latest || record.createdAt > row.latest ? record.createdAt : row.latest;
+      !row.latest || record.createdAt > row.latest
+        ? record.createdAt
+        : row.latest;
     recordJourneyRoles(
       {
         firstTouch: record.firstTouch,
@@ -2744,20 +3021,25 @@ export default async function MarketingPage({ searchParams }: PageProps) {
         recordsCount: call.direction === "INBOUND" ? 1 : 0,
       }),
     );
-    row.latest = !row.latest || call.startedAt > row.latest ? call.startedAt : row.latest;
+    row.latest =
+      !row.latest || call.startedAt > row.latest ? call.startedAt : row.latest;
     recordJourneyRoles(call.attribution, call.opportunity?.source, {
       calls: call.direction === "INBOUND" ? 1 : 0,
       journeys: 1,
     });
   }
 
-  const attributionReportRows = Array.from(attributionReportMap.values()).sort((a, b) => {
-    const activityA = a.records + a.leads + a.calls;
-    const activityB = b.records + b.leads + b.calls;
+  const attributionReportRows = Array.from(attributionReportMap.values()).sort(
+    (a, b) => {
+      const activityA = a.records + a.leads + a.calls;
+      const activityB = b.records + b.leads + b.calls;
 
-    return activityB - activityA || b.wonCents - a.wonCents;
-  });
-  const matchedClickIdRows = attributionReportRows.filter((row) => row.clickIds.size > 0).length;
+      return activityB - activityA || b.wonCents - a.wonCents;
+    },
+  );
+  const matchedClickIdRows = attributionReportRows.filter(
+    (row) => row.clickIds.size > 0,
+  ).length;
   const attributedCampaignRows = attributionReportRows.filter(
     (row) => row.campaign !== "Not set",
   ).length;
@@ -2832,8 +3114,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
     0,
   );
   const selectedAttributionModel =
-    attributionModelOptions.find((option) => option.value === activeAttributionModel) ??
-    attributionModelOptions[1];
+    attributionModelOptions.find(
+      (option) => option.value === activeAttributionModel,
+    ) ?? attributionModelOptions[1];
 
   return (
     <>
@@ -2858,7 +3141,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             }
           />
 
-          <MarketingRouteShell activeRange={activeRange} activeView={activeView} />
+          <MarketingRouteShell
+            activeRange={activeRange}
+            activeView={activeView}
+          />
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric
@@ -2878,7 +3164,11 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             />
             <Metric
               label="Cost per lead"
-              value={costPerLeadCents === null ? "Spend needed" : formatMoney(costPerLeadCents)}
+              value={
+                costPerLeadCents === null
+                  ? "Spend needed"
+                  : formatMoney(costPerLeadCents)
+              }
               detail={
                 totalSpendCents > 0
                   ? `${formatMoney(totalSpendCents)} spend imported`
@@ -2922,7 +3212,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
             <Metric
               label="Imported ad spend"
-              value={totalSpendCents > 0 ? formatMoney(totalSpendCents) : "No spend"}
+              value={
+                totalSpendCents > 0 ? formatMoney(totalSpendCents) : "No spend"
+              }
               detail={`${totalClicks} clicks / ${Math.round(totalConversions)} conversions`}
               muted={totalSpendCents === 0}
             />
@@ -2934,8 +3226,14 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             />
             <Metric
               label="Sync health"
-              value={latestSyncLogs.length ? latestSyncLogs[0].status : "No syncs"}
-              detail={latestSyncLogs.length ? `${providerLabel(latestSyncLogs[0].provider)} ${latestSyncLogs[0].syncType}` : "No provider jobs have run"}
+              value={
+                latestSyncLogs.length ? latestSyncLogs[0].status : "No syncs"
+              }
+              detail={
+                latestSyncLogs.length
+                  ? `${providerLabel(latestSyncLogs[0].provider)} ${latestSyncLogs[0].syncType}`
+                  : "No provider jobs have run"
+              }
               muted={!latestSyncLogs.length}
             />
           </div>
@@ -2980,7 +3278,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
 
       {activeView === "attribution-reports" && (
         <>
-          <AttributionModelSwitcher activeModel={activeAttributionModel} activeRange={activeRange} />
+          <AttributionModelSwitcher
+            activeModel={activeAttributionModel}
+            activeRange={activeRange}
+          />
 
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <Metric
@@ -3032,7 +3333,9 @@ export default async function MarketingPage({ searchParams }: PageProps) {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
             <Metric
               label="Imported spend"
-              value={totalSpendCents > 0 ? formatMoney(totalSpendCents) : "No spend"}
+              value={
+                totalSpendCents > 0 ? formatMoney(totalSpendCents) : "No spend"
+              }
               detail={`${totalImpressions} impressions / ${totalClicks} clicks`}
               muted={totalSpendCents === 0}
             />
@@ -3043,7 +3346,11 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             />
             <Metric
               label="Cost per conversion"
-              value={costPerConversionCents === null ? "Spend needed" : formatMoney(costPerConversionCents)}
+              value={
+                costPerConversionCents === null
+                  ? "Spend needed"
+                  : formatMoney(costPerConversionCents)
+              }
               detail={`${Math.round(totalConversions)} imported conversions`}
               muted={costPerConversionCents === null}
             />
@@ -3067,7 +3374,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             />
             <div className="grid gap-4 p-5 xl:grid-cols-4">
               {providerRows.map((row) => (
-                <ProviderPerformanceCard key={row.provider.provider} row={row} />
+                <ProviderPerformanceCard
+                  key={row.provider.provider}
+                  row={row}
+                />
               ))}
             </div>
           </section>
@@ -3090,14 +3400,19 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             />
             <Metric
               label="Offline leads"
-              value={offlineMediaRows.reduce((total, row) => total + row.leads, 0).toString()}
+              value={offlineMediaRows
+                .reduce((total, row) => total + row.leads, 0)
+                .toString()}
               detail={`${offlineMediaRows.reduce((total, row) => total + row.calls, 0)} tracked calls`}
               muted={!offlineMediaRows.some((row) => row.leads || row.calls)}
             />
             <Metric
               label="Weighted pipeline"
               value={formatMoney(
-                offlineMediaRows.reduce((total, row) => total + row.weightedPipelineCents, 0),
+                offlineMediaRows.reduce(
+                  (total, row) => total + row.weightedPipelineCents,
+                  0,
+                ),
               )}
               detail="Open offline campaign pipeline"
               muted={!offlineMediaRows.some((row) => row.weightedPipelineCents)}
@@ -3105,7 +3420,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             <Metric
               label="Won revenue"
               value={formatMoney(
-                offlineMediaRows.reduce((total, row) => total + row.wonCents, 0),
+                offlineMediaRows.reduce(
+                  (total, row) => total + row.wonCents,
+                  0,
+                ),
               )}
               detail={`${offlineMediaRows.reduce((total, row) => total + row.wonDeals, 0)} won deals`}
               muted={!offlineMediaRows.some((row) => row.wonCents)}
@@ -3127,14 +3445,19 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             />
             <Metric
               label="Qualified leads"
-              value={salesQualityRows.reduce((total, row) => total + row.qualified, 0).toString()}
+              value={salesQualityRows
+                .reduce((total, row) => total + row.qualified, 0)
+                .toString()}
               detail={`${salesQualityRows.reduce((total, row) => total + row.proposals, 0)} proposals`}
               muted={!salesQualityRows.some((row) => row.qualified)}
             />
             <Metric
               label="Weighted pipeline"
               value={formatMoney(
-                salesQualityRows.reduce((total, row) => total + row.weightedPipelineCents, 0),
+                salesQualityRows.reduce(
+                  (total, row) => total + row.weightedPipelineCents,
+                  0,
+                ),
               )}
               detail="Open weighted pipeline"
               muted={!salesQualityRows.some((row) => row.weightedPipelineCents)}
@@ -3142,10 +3465,24 @@ export default async function MarketingPage({ searchParams }: PageProps) {
             <Metric
               label="Missing follow-up"
               value={salesQualityRows
-                .reduce((total, row) => total + row.missingNextStep + row.missingCloseDate + row.staleOpen, 0)
+                .reduce(
+                  (total, row) =>
+                    total +
+                    row.missingNextStep +
+                    row.missingCloseDate +
+                    row.staleOpen,
+                  0,
+                )
                 .toString()}
               detail="Next step, close date or stale open issues"
-              muted={!salesQualityRows.some((row) => row.missingNextStep || row.missingCloseDate || row.staleOpen)}
+              muted={
+                !salesQualityRows.some(
+                  (row) =>
+                    row.missingNextStep ||
+                    row.missingCloseDate ||
+                    row.staleOpen,
+                )
+              }
             />
           </div>
 
@@ -3250,7 +3587,10 @@ export default async function MarketingPage({ searchParams }: PageProps) {
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
             <ConversionEvidence records={attributionRecords.slice(0, 12)} />
-            <ConversionUploadReadiness logs={conversionUploadLogs} providers={providerRows} />
+            <ConversionUploadReadiness
+              logs={conversionUploadLogs}
+              providers={providerRows}
+            />
           </div>
 
           <ConversionUploadSummary
@@ -3283,7 +3623,7 @@ function LifecycleFunnel({ rows }: { rows: LifecycleFunnelRow[] }) {
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
                   {row.label}
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-gray-800 dark:text-white/90">
@@ -3297,25 +3637,39 @@ function LifecycleFunnel({ rows }: { rows: LifecycleFunnelRow[] }) {
             <div className="mt-4 h-2 rounded-full bg-white dark:bg-gray-900">
               <div
                 className="h-2 rounded-full bg-brand-500"
-                style={{ width: `${Math.max(6, Math.round((row.count / maxCount) * 100))}%` }}
+                style={{
+                  width: `${Math.max(6, Math.round((row.count / maxCount) * 100))}%`,
+                }}
               />
             </div>
             <dl className="mt-4 space-y-2 text-xs">
               <FunnelFact
                 label="Conversion"
-                value={row.conversionRate === null ? "Start" : formatPercent(row.conversionRate)}
+                value={
+                  row.conversionRate === null
+                    ? "Start"
+                    : formatPercent(row.conversionRate)
+                }
               />
               <FunnelFact
                 label="Drop-off"
-                value={row.dropOffRate === null ? "-" : formatPercent(row.dropOffRate)}
+                value={
+                  row.dropOffRate === null
+                    ? "-"
+                    : formatPercent(row.dropOffRate)
+                }
               />
               <FunnelFact
                 label="Value"
-                value={row.valueCents === null ? "-" : formatMoney(row.valueCents)}
+                value={
+                  row.valueCents === null ? "-" : formatMoney(row.valueCents)
+                }
               />
               <FunnelFact
                 label="Cost"
-                value={row.costCents === null ? "-" : formatMoney(row.costCents)}
+                value={
+                  row.costCents === null ? "-" : formatMoney(row.costCents)
+                }
               />
             </dl>
             <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
@@ -3418,7 +3772,9 @@ function FunnelFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <dt className="text-gray-500 dark:text-gray-400">{label}</dt>
-      <dd className="font-semibold text-gray-700 dark:text-gray-200">{value}</dd>
+      <dd className="font-semibold text-gray-700 dark:text-gray-200">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -3440,13 +3796,21 @@ function LeadSourcesWorkspace({
   sourceRows: LeadSourceRow[];
   totalRows: number;
 }) {
-  const paidSearch = rows.filter((row) => row.channel === "google" || row.channel === "bing");
-  const paidSocial = rows.filter((row) => row.channel === "meta" || row.channel === "linkedin");
+  const paidSearch = rows.filter(
+    (row) => row.channel === "google" || row.channel === "bing",
+  );
+  const paidSocial = rows.filter(
+    (row) => row.channel === "meta" || row.channel === "linkedin",
+  );
   const organic = rows.filter((row) => row.channel === "organic");
   const referral = rows.filter((row) => row.channel === "referral");
   const totalValue = rows.reduce((total, row) => total + row.valueCents, 0);
-  const qualifiedRows = rows.filter((row) => isAtLeastLifecycleStage(row.stage, "QUALIFIED"));
-  const proposalRows = rows.filter((row) => isAtLeastLifecycleStage(row.stage, "PROPOSAL"));
+  const qualifiedRows = rows.filter((row) =>
+    isAtLeastLifecycleStage(row.stage, "QUALIFIED"),
+  );
+  const proposalRows = rows.filter((row) =>
+    isAtLeastLifecycleStage(row.stage, "PROPOSAL"),
+  );
   const wonRows = rows.filter((row) => row.stage === "WON");
   const wonValue = wonRows.reduce((total, row) => total + row.valueCents, 0);
 
@@ -3498,7 +3862,9 @@ function LeadSourcesWorkspace({
         />
         <LeadQualityMetric
           label="Proposal rate"
-          value={formatPercent(percentOf(proposalRows.length, qualifiedRows.length))}
+          value={formatPercent(
+            percentOf(proposalRows.length, qualifiedRows.length),
+          )}
           detail={`${proposalRows.length} proposal-stage lead${proposalRows.length === 1 ? "" : "s"}`}
         />
         <LeadQualityMetric
@@ -3517,15 +3883,19 @@ function LeadSourcesWorkspace({
         <div className="border-b border-gray-100 p-4 dark:border-gray-800">
           <form className="grid gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_auto] xl:items-center">
             <input type="hidden" name="view" value="lead-sources" />
-            {activeRange !== "30d" ? <input type="hidden" name="range" value={activeRange} /> : null}
-            {activeChannel !== "all" ? <input type="hidden" name="channel" value={activeChannel} /> : null}
+            {activeRange !== "30d" ? (
+              <input type="hidden" name="range" value={activeRange} />
+            ) : null}
+            {activeChannel !== "all" ? (
+              <input type="hidden" name="channel" value={activeChannel} />
+            ) : null}
             <label className="relative block">
               <span className="sr-only">Search leads</span>
               <input
                 name="q"
                 defaultValue={query}
                 placeholder="Search leads, campaign or landing page..."
-                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent py-2.5 pr-11 pl-4 text-sm text-gray-800 outline-none transition focus:border-brand-500 dark:border-gray-700 dark:text-white/90"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent py-2.5 pr-11 pl-4 text-sm text-gray-800 transition outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white/90"
               />
               <span className="pointer-events-none absolute top-1/2 right-3 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-400">
                 <LeadIcon icon="organic" />
@@ -3613,7 +3983,7 @@ function LeadAttributionTable({ rows }: { rows: LeadAttributionRow[] }) {
       renderCard={(row) => <LeadAttributionCard row={row} />}
       table={
         <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-          <table className="min-w-[1280px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <table className="w-full min-w-[1280px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
             <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3">Lead</th>
@@ -3631,82 +4001,90 @@ function LeadAttributionTable({ rows }: { rows: LeadAttributionRow[] }) {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {visibleRows.length ? (
                 visibleRows.map((row) => (
-              <tr key={row.id} className="hover:bg-gray-50/70 dark:hover:bg-white/[0.03]">
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600 dark:bg-brand-900/20 dark:text-brand-300">
-                      {initials(row.leadName)}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="max-w-[180px] truncate font-semibold text-gray-800 dark:text-white/90">
-                        {row.leadName}
+                  <tr
+                    key={row.id}
+                    className="hover:bg-gray-50/70 dark:hover:bg-white/[0.03]"
+                  >
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600 dark:bg-brand-900/20 dark:text-brand-300">
+                          {initials(row.leadName)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="max-w-[180px] truncate font-semibold text-gray-800 dark:text-white/90">
+                            {row.leadName}
+                          </p>
+                          <p className="mt-1 max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
+                            {row.email}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <StatusBadge>{stageLabel(row.stage)}</StatusBadge>
+                    </td>
+                    <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
+                      <p>{leadDateFormatter.format(row.createdAt)}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {leadTimeFormatter.format(row.createdAt)}
                       </p>
-                      <p className="mt-1 max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
-                        {row.email}
+                    </td>
+                    <td className="px-4 py-4">
+                      <TouchCell dimensions={row.firstTouch} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <TouchCell dimensions={row.lastTouch} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <JourneyPills row={row} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <p className="max-w-[170px] truncate font-medium text-gray-800 dark:text-white/90">
+                        {row.campaign}
                       </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-4">
-                  <StatusBadge>{stageLabel(row.stage)}</StatusBadge>
-                </td>
-                <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
-                  <p>{leadDateFormatter.format(row.createdAt)}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {leadTimeFormatter.format(row.createdAt)}
-                  </p>
-                </td>
-                <td className="px-4 py-4">
-                  <TouchCell dimensions={row.firstTouch} />
-                </td>
-                <td className="px-4 py-4">
-                  <TouchCell dimensions={row.lastTouch} />
-                </td>
-                <td className="px-4 py-4">
-                  <JourneyPills row={row} />
-                </td>
-                <td className="px-4 py-4">
-                  <p className="max-w-[170px] truncate font-medium text-gray-800 dark:text-white/90">
-                    {row.campaign}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {row.lastTouch.medium}
-                  </p>
-                </td>
-                <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
-                  <span className="block max-w-[160px] truncate">{row.landingPage}</span>
-                </td>
-                <td className="px-4 py-4 font-medium text-gray-800 dark:text-white/90">
-                  {formatMoney(row.valueCents)}
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-2">
-                    {row.ownerAvatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={row.ownerAvatarUrl}
-                        alt=""
-                        className="h-7 w-7 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                        {initials(row.ownerName)}
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {row.lastTouch.medium}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
+                      <span className="block max-w-[160px] truncate">
+                        {row.landingPage}
                       </span>
-                    )}
-                    <span className="max-w-[130px] truncate text-gray-700 dark:text-gray-300">
-                      {row.ownerName}
-                    </span>
-                  </div>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={10} className="px-5 py-10 text-center text-sm text-gray-500">
-                No leads match these filters yet.
-              </td>
-            </tr>
-          )}
+                    </td>
+                    <td className="px-4 py-4 font-medium text-gray-800 dark:text-white/90">
+                      {formatMoney(row.valueCents)}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        {row.ownerAvatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={row.ownerAvatarUrl}
+                            alt=""
+                            className="h-7 w-7 rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                            {initials(row.ownerName)}
+                          </span>
+                        )}
+                        <span className="max-w-[130px] truncate text-gray-700 dark:text-gray-300">
+                          {row.ownerName}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={10}
+                    className="px-5 py-10 text-center text-sm text-gray-500"
+                  >
+                    No leads match these filters yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -3752,13 +4130,13 @@ function LeadAttributionCard({ row }: { row: LeadAttributionRow }) {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="mb-1 text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
             First touch
           </p>
           <TouchCell dimensions={row.firstTouch} />
         </div>
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="mb-1 text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
             Last touch
           </p>
           <TouchCell dimensions={row.lastTouch} />
@@ -3775,7 +4153,11 @@ function LeadAttributionCard({ row }: { row: LeadAttributionRow }) {
   );
 }
 
-function TouchCell({ dimensions }: { dimensions: ReturnType<typeof attributionDimensions> }) {
+function TouchCell({
+  dimensions,
+}: {
+  dimensions: ReturnType<typeof attributionDimensions>;
+}) {
   const channel = leadChannelFromDimensions(dimensions);
 
   return (
@@ -3809,7 +4191,11 @@ function JourneyPills({ row }: { row: LeadAttributionRow }) {
   );
 }
 
-function JourneyStep({ icon }: { icon: ReturnType<typeof attributionDimensions> }) {
+function JourneyStep({
+  icon,
+}: {
+  icon: ReturnType<typeof attributionDimensions>;
+}) {
   return (
     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
       <LeadIcon icon={leadChannelFromDimensions(icon)} />
@@ -3817,10 +4203,16 @@ function JourneyStep({ icon }: { icon: ReturnType<typeof attributionDimensions> 
   );
 }
 
-function ConfidenceRollupBadge({ rollup }: { rollup: AttributionConfidenceRollup }) {
+function ConfidenceRollupBadge({
+  rollup,
+}: {
+  rollup: AttributionConfidenceRollup;
+}) {
   return (
     <div className="max-w-[180px]" title={rollup.summary}>
-      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${confidenceRollupClasses(rollup.level)}`}>
+      <span
+        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${confidenceRollupClasses(rollup.level)}`}
+      >
         {rollup.level} · {rollup.average}%
       </span>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -3873,11 +4265,15 @@ function LeadSourceMetric({
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
       <div className="flex items-center gap-3">
-        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${toneClasses}`}>
+        <span
+          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${toneClasses}`}
+        >
           <LeadIcon icon={icon} />
         </span>
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            {label}
+          </p>
           <p className="mt-1 text-2xl font-semibold text-gray-800 dark:text-white/90">
             {value}
           </p>
@@ -3901,7 +4297,9 @@ function LeadQualityMetric({
 }) {
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
       <p className="mt-2 text-2xl font-semibold text-gray-800 dark:text-white/90">
         {value}
       </p>
@@ -3917,8 +4315,13 @@ function shareLabel(value: number, total: number) {
   return `${Math.round((value / total) * 100)}%`;
 }
 
-function LeadIcon({ icon }: { icon: LeadChannel | "leads" | "search" | "social" }) {
-  if (icon === "meta" || icon === "social") return <span className="text-base font-bold">f</span>;
+function LeadIcon({
+  icon,
+}: {
+  icon: LeadChannel | "leads" | "search" | "social";
+}) {
+  if (icon === "meta" || icon === "social")
+    return <span className="text-base font-bold">f</span>;
   if (icon === "linkedin") return <span className="text-sm font-bold">in</span>;
   if (icon === "google") return <span className="font-bold">G</span>;
   if (icon === "bing") return <span className="font-bold">b</span>;
@@ -3948,7 +4351,8 @@ function LeadSourceTable({ rows }: { rows: LeadSourceRow[] }) {
         cardListClassName="divide-y divide-gray-100 dark:divide-gray-800"
         empty={
           <p className="px-5 py-10 text-center text-sm text-gray-500">
-            Marketing attribution will appear here as forms and calls are captured.
+            Marketing attribution will appear here as forms and calls are
+            captured.
           </p>
         }
         getKey={(row) => row.source}
@@ -3958,8 +4362,8 @@ function LeadSourceTable({ rows }: { rows: LeadSourceRow[] }) {
         )}
         table={
           <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-            <table className="min-w-[1440px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+            <table className="w-full min-w-[1440px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+              <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3">Source</th>
                   <th className="px-5 py-3">Leads</th>
@@ -3980,60 +4384,77 @@ function LeadSourceTable({ rows }: { rows: LeadSourceRow[] }) {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {rows.length ? (
                   rows.map((row) => (
-                <tr key={row.source}>
-                  <td className="px-5 py-4 font-medium text-gray-800 dark:text-white/90">
-                    <p>{row.source}</p>
-                    <p className="mt-1 text-xs font-normal text-gray-500 dark:text-gray-400">
-                      {totalActivity > 0
-                        ? `${Math.round(((row.leads + row.calls) / totalActivity) * 100)}% activity`
-                        : "No activity"}{" "}
-                      / {row.latest ? dateFormatter.format(row.latest) : "No recent activity"}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">{row.leads}</td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.qualified}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.proposals}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.wonDeals}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatPercent(row.closeRate)}
-                  </td>
-                  <td className="px-5 py-4">
-                    <ConfidenceRollupBadge rollup={row.confidence} />
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">{row.calls}</td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.openPipelineCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.weightedPipelineCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.wonCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.avgLeadValueCents === null ? "-" : formatMoney(row.avgLeadValueCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.costPerQualifiedCents === null ? "-" : formatMoney(row.costPerQualifiedCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.costPerWonCents === null ? "-" : formatMoney(row.costPerWonCents)}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-              <td colSpan={14} className="px-5 py-10 text-center text-sm text-gray-500">
-                Marketing attribution will appear here as forms and calls are captured.
-              </td>
-            </tr>
-          )}
+                    <tr key={row.source}>
+                      <td className="px-5 py-4 font-medium text-gray-800 dark:text-white/90">
+                        <p>{row.source}</p>
+                        <p className="mt-1 text-xs font-normal text-gray-500 dark:text-gray-400">
+                          {totalActivity > 0
+                            ? `${Math.round(((row.leads + row.calls) / totalActivity) * 100)}% activity`
+                            : "No activity"}{" "}
+                          /{" "}
+                          {row.latest
+                            ? dateFormatter.format(row.latest)
+                            : "No recent activity"}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.leads}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.qualified}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.proposals}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.wonDeals}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatPercent(row.closeRate)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <ConfidenceRollupBadge rollup={row.confidence} />
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.calls}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.openPipelineCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.weightedPipelineCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.wonCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.avgLeadValueCents === null
+                          ? "-"
+                          : formatMoney(row.avgLeadValueCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.costPerQualifiedCents === null
+                          ? "-"
+                          : formatMoney(row.costPerQualifiedCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.costPerWonCents === null
+                          ? "-"
+                          : formatMoney(row.costPerWonCents)}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={14}
+                      className="px-5 py-10 text-center text-sm text-gray-500"
+                    >
+                      Marketing attribution will appear here as forms and calls
+                      are captured.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -4061,7 +4482,10 @@ function LeadSourceCard({
             {totalActivity > 0
               ? `${Math.round(((row.leads + row.calls) / totalActivity) * 100)}% activity`
               : "No activity"}{" "}
-            / {row.latest ? dateFormatter.format(row.latest) : "No recent activity"}
+            /{" "}
+            {row.latest
+              ? dateFormatter.format(row.latest)
+              : "No recent activity"}
           </p>
         </div>
         <StatusBadge>{`${row.leads + row.calls} touches`}</StatusBadge>
@@ -4073,8 +4497,12 @@ function LeadSourceCard({
 
       <dl className="mt-4 grid grid-cols-2 gap-3">
         <ResponsiveDataField label="Leads">{row.leads}</ResponsiveDataField>
-        <ResponsiveDataField label="Qualified">{row.qualified}</ResponsiveDataField>
-        <ResponsiveDataField label="Proposals">{row.proposals}</ResponsiveDataField>
+        <ResponsiveDataField label="Qualified">
+          {row.qualified}
+        </ResponsiveDataField>
+        <ResponsiveDataField label="Proposals">
+          {row.proposals}
+        </ResponsiveDataField>
         <ResponsiveDataField label="Won">{row.wonDeals}</ResponsiveDataField>
         <ResponsiveDataField label="Close rate">
           {formatPercent(row.closeRate)}
@@ -4107,7 +4535,10 @@ function SourceBreakdown({ rows }: { rows: LeadSourceRow[] }) {
       <div className="mt-4 space-y-3">
         {rows.length ? (
           rows.map((row) => (
-            <div key={row.source} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+            <div
+              key={row.source}
+              className="rounded-xl border border-gray-200 p-3 dark:border-gray-800"
+            >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
                   {row.source}
@@ -4115,14 +4546,27 @@ function SourceBreakdown({ rows }: { rows: LeadSourceRow[] }) {
                 <StatusBadge>{`${row.leads + row.calls} touches`}</StatusBadge>
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <MiniFact label="Qualified" value={`${row.qualified}/${row.leads}`} />
+                <MiniFact
+                  label="Qualified"
+                  value={`${row.qualified}/${row.leads}`}
+                />
                 <MiniFact label="Proposals" value={row.proposals.toString()} />
-                <MiniFact label="Close rate" value={formatPercent(row.closeRate)} />
+                <MiniFact
+                  label="Close rate"
+                  value={formatPercent(row.closeRate)}
+                />
                 <MiniFact label="Won" value={formatMoney(row.wonCents)} />
-                <MiniFact label="Weighted" value={formatMoney(row.weightedPipelineCents)} />
+                <MiniFact
+                  label="Weighted"
+                  value={formatMoney(row.weightedPipelineCents)}
+                />
                 <MiniFact
                   label="CPQL"
-                  value={row.costPerQualifiedCents === null ? "-" : formatMoney(row.costPerQualifiedCents)}
+                  value={
+                    row.costPerQualifiedCents === null
+                      ? "-"
+                      : formatMoney(row.costPerQualifiedCents)
+                  }
                 />
               </dl>
             </div>
@@ -4141,7 +4585,9 @@ function MiniFact({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="font-medium text-gray-400 dark:text-gray-500">{label}</dt>
-      <dd className="mt-0.5 font-semibold text-gray-700 dark:text-gray-200">{value}</dd>
+      <dd className="mt-0.5 font-semibold text-gray-700 dark:text-gray-200">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -4153,7 +4599,9 @@ function AttributionModelSwitcher({
   activeModel: AttributionModel;
   activeRange: MarketingRange;
 }) {
-  const active = attributionModelOptions.find((option) => option.value === activeModel);
+  const active = attributionModelOptions.find(
+    (option) => option.value === activeModel,
+  );
 
   return (
     <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -4166,10 +4614,11 @@ function AttributionModelSwitcher({
             <LazyHelpTooltip content="Switches the primary Attribution Reports ranking between first-touch, last-touch, assisted, linear, position-based and time-decay attribution models." />
           </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {active?.description ?? "Choose how the report gives journey credit."}
+            {active?.description ??
+              "Choose how the report gives journey credit."}
           </p>
         </div>
-        <div className="grid w-full min-w-0 grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-white/[0.03] sm:inline-flex sm:w-auto">
+        <div className="grid w-full min-w-0 grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 sm:inline-flex sm:w-auto dark:border-gray-800 dark:bg-white/[0.03]">
           {attributionModelOptions.map((option) => {
             const isActive = option.value === activeModel;
 
@@ -4202,8 +4651,8 @@ function AssistedJourneyReport({ rows }: { rows: AssistedJourneyRow[] }) {
         help="Version one uses captured first touch, timeline and last touch evidence. Assisted credit is given to middle journey touchpoints that helped before the final touch."
       />
       <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-        <table className="min-w-[1120px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+        <table className="w-full min-w-[1120px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
             <tr>
               <th className="px-5 py-3">Source / medium</th>
               <th className="px-5 py-3">Campaign</th>
@@ -4261,8 +4710,12 @@ function AssistedJourneyReport({ rows }: { rows: AssistedJourneyRow[] }) {
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">
-                  Assisted journey reporting will populate once journeys contain more than first and last touchpoints.
+                <td
+                  colSpan={8}
+                  className="px-5 py-10 text-center text-sm text-gray-500"
+                >
+                  Assisted journey reporting will populate once journeys contain
+                  more than first and last touchpoints.
                 </td>
               </tr>
             )}
@@ -4281,8 +4734,8 @@ function AttributionReportTable({
   rows: AttributionModelReportRow[];
 }) {
   const modelLabel =
-    attributionModelOptions.find((option) => option.value === activeModel)?.label ??
-    "Selected model";
+    attributionModelOptions.find((option) => option.value === activeModel)
+      ?.label ?? "Selected model";
 
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -4296,7 +4749,8 @@ function AttributionReportTable({
         cardListClassName="divide-y divide-gray-100 dark:divide-gray-800"
         empty={
           <p className="px-5 py-10 text-center text-sm text-gray-500">
-            Attribution reports will populate once tracked forms, calls or CRM leads are captured.
+            Attribution reports will populate once tracked forms, calls or CRM
+            leads are captured.
           </p>
         }
         getKey={(row) => `${row.source}-${row.medium}-${row.campaign}`}
@@ -4306,8 +4760,8 @@ function AttributionReportTable({
         )}
         table={
           <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-            <table className="min-w-[1600px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+            <table className="w-full min-w-[1600px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+              <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3">Source / medium</th>
                   <th className="px-5 py-3">Campaign</th>
@@ -4330,84 +4784,90 @@ function AttributionReportTable({
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {rows.length ? (
                   rows.map((row) => (
-                <tr key={`${row.source}-${row.medium}-${row.campaign}`}>
-                  <td className="px-5 py-4">
-                    <p className="font-medium text-gray-800 dark:text-white/90">
-                      {row.source}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.medium}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.campaign}
-                  </td>
-                  <td className="px-5 py-4 font-medium text-gray-800 dark:text-white/90">
-                    {formatAttributionCount(row.modelLeads)}
-                    <span className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">
-                      {formatAttributionCount(row.modelJourneys)} journeys
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.modelValueCents)}
-                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                      {formatMoney(row.modelRevenueCents)} revenue
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <ConfidenceRollupBadge rollup={row.confidenceRollup} />
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.records}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.forms}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.calls}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.leads}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.valueCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.wonCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.firstTouchLeads} leads
-                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                      {row.firstTouchJourneys} journeys
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.lastTouchLeads} leads
-                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                      {row.lastTouchJourneys} journeys
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.assistedLeads} leads
-                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                      {formatMoney(row.assistedValueCents)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
-                    {row.clickIds.size ? Array.from(row.clickIds).join(", ") : "None"}
-                  </td>
-                  <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
-                    {row.latest ? dateFormatter.format(row.latest) : "None"}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-              <td colSpan={16} className="px-5 py-10 text-center text-sm text-gray-500">
-                Attribution reports will populate once tracked forms, calls or CRM leads are captured.
-              </td>
-            </tr>
-          )}
+                    <tr key={`${row.source}-${row.medium}-${row.campaign}`}>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-gray-800 dark:text-white/90">
+                          {row.source}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.medium}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.campaign}
+                      </td>
+                      <td className="px-5 py-4 font-medium text-gray-800 dark:text-white/90">
+                        {formatAttributionCount(row.modelLeads)}
+                        <span className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">
+                          {formatAttributionCount(row.modelJourneys)} journeys
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.modelValueCents)}
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                          {formatMoney(row.modelRevenueCents)} revenue
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <ConfidenceRollupBadge rollup={row.confidenceRollup} />
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.records}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.forms}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.calls}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.leads}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.valueCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.wonCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.firstTouchLeads} leads
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                          {row.firstTouchJourneys} journeys
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.lastTouchLeads} leads
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                          {row.lastTouchJourneys} journeys
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.assistedLeads} leads
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                          {formatMoney(row.assistedValueCents)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
+                        {row.clickIds.size
+                          ? Array.from(row.clickIds).join(", ")
+                          : "None"}
+                      </td>
+                      <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
+                        {row.latest ? dateFormatter.format(row.latest) : "None"}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={16}
+                      className="px-5 py-10 text-center text-sm text-gray-500"
+                    >
+                      Attribution reports will populate once tracked forms,
+                      calls or CRM leads are captured.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -4467,7 +4927,8 @@ function AttributionReportCard({
 
       <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
         <p className="line-clamp-2">
-          Click IDs: {row.clickIds.size ? Array.from(row.clickIds).join(", ") : "None"}
+          Click IDs:{" "}
+          {row.clickIds.size ? Array.from(row.clickIds).join(", ") : "None"}
         </p>
         <p className="mt-1">
           Latest: {row.latest ? dateFormatter.format(row.latest) : "None"}
@@ -4516,7 +4977,8 @@ function AttributionReportQuality({
               </div>
               <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
                 {row.campaign} / {row.confidenceRollup.average}% confidence /{" "}
-                {row.records} journeys / {row.leads} leads / {formatMoney(row.wonCents)} won
+                {row.records} journeys / {row.leads} leads /{" "}
+                {formatMoney(row.wonCents)} won
               </p>
               {row.confidenceRollup.topGaps.length ? (
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -4548,16 +5010,20 @@ function OfflineMediaReport({ rows }: { rows: OfflineMediaRow[] }) {
         cardListClassName="divide-y divide-gray-100 dark:divide-gray-800"
         empty={
           <p className="px-5 py-10 text-center text-sm text-gray-500">
-            Offline media rows will appear when Offline Campaign records exist or source/campaign metadata contains offline markers such as radio, print, event, direct mail, leaflet, QR, poster, offline or manual.
+            Offline media rows will appear when Offline Campaign records exist
+            or source/campaign metadata contains offline markers such as radio,
+            print, event, direct mail, leaflet, QR, poster, offline or manual.
           </p>
         }
-        getKey={(row) => row.campaignId ?? `${row.channel}-${row.source}-${row.campaign}`}
+        getKey={(row) =>
+          row.campaignId ?? `${row.channel}-${row.source}-${row.campaign}`
+        }
         items={rows}
         renderCard={(row) => <OfflineMediaCard row={row} />}
         table={
           <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-            <table className="min-w-[1620px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+            <table className="w-full min-w-[1620px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+              <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3">Channel</th>
                   <th className="px-5 py-3">Source / campaign</th>
@@ -4578,102 +5044,129 @@ function OfflineMediaReport({ rows }: { rows: OfflineMediaRow[] }) {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {rows.length ? (
                   rows.map((row) => (
-                <tr key={row.campaignId ?? `${row.channel}-${row.source}-${row.campaign}`}>
-                  <td className="px-5 py-4">
-                    <div className="space-y-1.5">
-                      <StatusBadge>{row.channel}</StatusBadge>
-                      {row.campaignStatus ? (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {row.campaignStatus.toLowerCase()}
+                    <tr
+                      key={
+                        row.campaignId ??
+                        `${row.channel}-${row.source}-${row.campaign}`
+                      }
+                    >
+                      <td className="px-5 py-4">
+                        <div className="space-y-1.5">
+                          <StatusBadge>{row.channel}</StatusBadge>
+                          {row.campaignStatus ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {row.campaignStatus.toLowerCase()}
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-gray-800 dark:text-white/90">
+                          {row.source}
                         </p>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="font-medium text-gray-800 dark:text-white/90">
-                      {row.source}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.campaign}
-                    </p>
-                    <p className="mt-1 max-w-[240px] truncate text-xs text-gray-500 dark:text-gray-400">
-                      Code: {row.campaignCode}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      <OfflineCueBadge active={row.isRegisteredCampaign} label="Campaign" />
-                      <OfflineCueBadge active={row.hasQrCue} label="QR" />
-                      <OfflineCueBadge active={row.hasPhoneCue} label="Phone" />
-                    </div>
-                    {row.isRegisteredCampaign ? (
-                      <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                        {row.trackingNumbers} numbers / {row.responseRecords} records /{" "}
-                        {row.touchpoints} touchpoints
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
-                      <div>
-                        <p className="font-semibold text-gray-700 dark:text-gray-300">
-                          {row.scheduleStatus}
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.campaign}
                         </p>
-                        <p className="mt-1">{row.scheduleDetail}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-700 dark:text-gray-300">
-                          {row.budgetStatus}
+                        <p className="mt-1 max-w-[240px] truncate text-xs text-gray-500 dark:text-gray-400">
+                          Code: {row.campaignCode}
                         </p>
-                        <p className="mt-1">{row.budgetDetail}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.leads}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.calls}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.proposals}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    <p>{row.estimatedCostCents === null ? "-" : formatMoney(row.estimatedCostCents)}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      CPL {row.costPerLeadCents === null ? "-" : formatMoney(row.costPerLeadCents)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.openPipelineCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.weightedPipelineCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    <p>{formatMoney(row.wonCents)}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.wonDeals} deals
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatRatio(row.estimatedRoi)}
-                  </td>
-                  <td className="max-w-[190px] px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {row.nextAction}
-                  </td>
-                  <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
-                    {row.latest ? dateFormatter.format(row.latest) : "No activity"}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-              <td colSpan={14} className="px-5 py-10 text-center text-sm text-gray-500">
-                Offline media rows will appear when Offline Campaign records exist or source/campaign metadata contains offline markers such as radio, print, event, direct mail, leaflet, QR, poster, offline or manual.
-              </td>
-            </tr>
-          )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          <OfflineCueBadge
+                            active={row.isRegisteredCampaign}
+                            label="Campaign"
+                          />
+                          <OfflineCueBadge active={row.hasQrCue} label="QR" />
+                          <OfflineCueBadge
+                            active={row.hasPhoneCue}
+                            label="Phone"
+                          />
+                        </div>
+                        {row.isRegisteredCampaign ? (
+                          <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                            {row.trackingNumbers} numbers /{" "}
+                            {row.responseRecords} records / {row.touchpoints}{" "}
+                            touchpoints
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300">
+                              {row.scheduleStatus}
+                            </p>
+                            <p className="mt-1">{row.scheduleDetail}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300">
+                              {row.budgetStatus}
+                            </p>
+                            <p className="mt-1">{row.budgetDetail}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.leads}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.calls}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.proposals}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        <p>
+                          {row.estimatedCostCents === null
+                            ? "-"
+                            : formatMoney(row.estimatedCostCents)}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          CPL{" "}
+                          {row.costPerLeadCents === null
+                            ? "-"
+                            : formatMoney(row.costPerLeadCents)}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.openPipelineCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.weightedPipelineCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        <p>{formatMoney(row.wonCents)}</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.wonDeals} deals
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatRatio(row.estimatedRoi)}
+                      </td>
+                      <td className="max-w-[190px] px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.nextAction}
+                      </td>
+                      <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
+                        {row.latest
+                          ? dateFormatter.format(row.latest)
+                          : "No activity"}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={14}
+                      className="px-5 py-10 text-center text-sm text-gray-500"
+                    >
+                      Offline media rows will appear when Offline Campaign
+                      records exist or source/campaign metadata contains offline
+                      markers such as radio, print, event, direct mail, leaflet,
+                      QR, poster, offline or manual.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -4724,9 +5217,13 @@ function OfflineMediaCard({ row }: { row: OfflineMediaRow }) {
       <dl className="mt-4 grid grid-cols-2 gap-3">
         <ResponsiveDataField label="Leads">{row.leads}</ResponsiveDataField>
         <ResponsiveDataField label="Calls">{row.calls}</ResponsiveDataField>
-        <ResponsiveDataField label="Proposals">{row.proposals}</ResponsiveDataField>
+        <ResponsiveDataField label="Proposals">
+          {row.proposals}
+        </ResponsiveDataField>
         <ResponsiveDataField label="Est. cost">
-          {row.estimatedCostCents === null ? "-" : formatMoney(row.estimatedCostCents)}
+          {row.estimatedCostCents === null
+            ? "-"
+            : formatMoney(row.estimatedCostCents)}
         </ResponsiveDataField>
         <ResponsiveDataField label="Weighted pipeline">
           {formatMoney(row.weightedPipelineCents)}
@@ -4734,15 +5231,19 @@ function OfflineMediaCard({ row }: { row: OfflineMediaRow }) {
         <ResponsiveDataField label="Won">
           {formatMoney(row.wonCents)} / {row.wonDeals} deals
         </ResponsiveDataField>
-        <ResponsiveDataField label="ROI">{formatRatio(row.estimatedRoi)}</ResponsiveDataField>
+        <ResponsiveDataField label="ROI">
+          {formatRatio(row.estimatedRoi)}
+        </ResponsiveDataField>
         <ResponsiveDataField label="CPL">
-          {row.costPerLeadCents === null ? "-" : formatMoney(row.costPerLeadCents)}
+          {row.costPerLeadCents === null
+            ? "-"
+            : formatMoney(row.costPerLeadCents)}
         </ResponsiveDataField>
       </dl>
 
-      <div className="mt-4 grid gap-3 border-t border-gray-100 pt-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-300 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 border-t border-gray-100 pt-3 text-sm text-gray-600 sm:grid-cols-2 dark:border-gray-800 dark:text-gray-300">
         <div>
-          <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
             Pacing
           </p>
           <p className="mt-1 font-medium text-gray-800 dark:text-white/90">
@@ -4753,7 +5254,7 @@ function OfflineMediaCard({ row }: { row: OfflineMediaRow }) {
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
             Next action
           </p>
           <p className="mt-1">{row.nextAction}</p>
@@ -4763,7 +5264,13 @@ function OfflineMediaCard({ row }: { row: OfflineMediaRow }) {
   );
 }
 
-function OfflineCueBadge({ active, label }: { active: boolean; label: string }) {
+function OfflineCueBadge({
+  active,
+  label,
+}: {
+  active: boolean;
+  label: string;
+}) {
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -4799,7 +5306,8 @@ function SalesQualityReport({ rows }: { rows: SalesQualityRow[] }) {
         cardListClassName="divide-y divide-gray-100 dark:divide-gray-800"
         empty={
           <p className="px-5 py-10 text-center text-sm text-gray-500">
-            Sales quality rows will appear once opportunities exist in the selected range.
+            Sales quality rows will appear once opportunities exist in the
+            selected range.
           </p>
         }
         getKey={(row) => `${row.source}-${row.ownerName}`}
@@ -4807,8 +5315,8 @@ function SalesQualityReport({ rows }: { rows: SalesQualityRow[] }) {
         renderCard={(row) => <SalesQualityCard row={row} />}
         table={
           <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-            <table className="min-w-[1720px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+            <table className="w-full min-w-[1720px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+              <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3">Source / owner</th>
                   <th className="px-5 py-3">Quality</th>
@@ -4829,71 +5337,84 @@ function SalesQualityReport({ rows }: { rows: SalesQualityRow[] }) {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {rows.length ? (
                   rows.map((row) => (
-                <tr key={`${row.source}-${row.ownerName}`}>
-                  <td className="px-5 py-4">
-                    <p className="font-medium text-gray-800 dark:text-white/90">
-                      {row.source}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.ownerName}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${qualityScoreClasses(row.qualityScore)}`}>
-                      {row.qualityScore}%
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">{row.leads}</td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    <p>{row.contacted}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {formatPercent(row.contactedRate)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">{row.qualified}</td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">{row.proposals}</td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatPercent(row.closeRate)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatDurationMinutes(row.avgResponseMinutes)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatPercent(row.avgProbability)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatMoney(row.weightedPipelineCents)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    <p>{formatMoney(row.wonCents)}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.wonDeals} deals
-                    </p>
-                  </td>
-                  <td className="max-w-[220px] px-5 py-4 text-gray-600 dark:text-gray-300">
-                    <p>{row.lostDeals} lost</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {lostReasonSummary(row.lostReasons)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {formatDurationDays(row.avgTimeToCloseDays)}
-                  </td>
-                  <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    <p>{row.missingNextStep} no next step</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.missingCloseDate} no close date / {row.staleOpen} stale
-                    </p>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-              <td colSpan={14} className="px-5 py-10 text-center text-sm text-gray-500">
-                Sales quality rows will appear once opportunities exist in the selected range.
-              </td>
-            </tr>
-          )}
+                    <tr key={`${row.source}-${row.ownerName}`}>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-gray-800 dark:text-white/90">
+                          {row.source}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.ownerName}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${qualityScoreClasses(row.qualityScore)}`}
+                        >
+                          {row.qualityScore}%
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.leads}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        <p>{row.contacted}</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {formatPercent(row.contactedRate)}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.qualified}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {row.proposals}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatPercent(row.closeRate)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatDurationMinutes(row.avgResponseMinutes)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatPercent(row.avgProbability)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatMoney(row.weightedPipelineCents)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        <p>{formatMoney(row.wonCents)}</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.wonDeals} deals
+                        </p>
+                      </td>
+                      <td className="max-w-[220px] px-5 py-4 text-gray-600 dark:text-gray-300">
+                        <p>{row.lostDeals} lost</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {lostReasonSummary(row.lostReasons)}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        {formatDurationDays(row.avgTimeToCloseDays)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                        <p>{row.missingNextStep} no next step</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {row.missingCloseDate} no close date / {row.staleOpen}{" "}
+                          stale
+                        </p>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={14}
+                      className="px-5 py-10 text-center text-sm text-gray-500"
+                    >
+                      Sales quality rows will appear once opportunities exist in
+                      the selected range.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -4915,7 +5436,9 @@ function SalesQualityCard({ row }: { row: SalesQualityRow }) {
             {row.ownerName}
           </p>
         </div>
-        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${qualityScoreClasses(row.qualityScore)}`}>
+        <span
+          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${qualityScoreClasses(row.qualityScore)}`}
+        >
           {row.qualityScore}%
         </span>
       </div>
@@ -4925,8 +5448,12 @@ function SalesQualityCard({ row }: { row: SalesQualityRow }) {
         <ResponsiveDataField label="Contacted">
           {row.contacted} / {formatPercent(row.contactedRate)}
         </ResponsiveDataField>
-        <ResponsiveDataField label="Qualified">{row.qualified}</ResponsiveDataField>
-        <ResponsiveDataField label="Proposals">{row.proposals}</ResponsiveDataField>
+        <ResponsiveDataField label="Qualified">
+          {row.qualified}
+        </ResponsiveDataField>
+        <ResponsiveDataField label="Proposals">
+          {row.proposals}
+        </ResponsiveDataField>
         <ResponsiveDataField label="Close rate">
           {formatPercent(row.closeRate)}
         </ResponsiveDataField>
@@ -4941,9 +5468,9 @@ function SalesQualityCard({ row }: { row: SalesQualityRow }) {
         </ResponsiveDataField>
       </dl>
 
-      <div className="mt-4 grid gap-3 border-t border-gray-100 pt-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-300 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 border-t border-gray-100 pt-3 text-sm text-gray-600 sm:grid-cols-2 dark:border-gray-800 dark:text-gray-300">
         <div>
-          <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
             Lost reasons
           </p>
           <p className="mt-1">
@@ -4951,7 +5478,7 @@ function SalesQualityCard({ row }: { row: SalesQualityRow }) {
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase dark:text-gray-400">
             Follow-up gaps
           </p>
           <p className="mt-1">
@@ -4972,8 +5499,8 @@ function CustomStageRollupReport({ rows }: { rows: CustomStageRollupRow[] }) {
         help="Groups opportunities by the custom Sales Pipeline stage where available, with legacy stage buckets used only as a fallback."
       />
       <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-        <table className="min-w-[1120px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+        <table className="w-full min-w-[1120px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
             <tr>
               <th className="px-5 py-3">Pipeline stage</th>
               <th className="px-5 py-3">Bucket</th>
@@ -5026,8 +5553,12 @@ function CustomStageRollupReport({ rows }: { rows: CustomStageRollupRow[] }) {
               ))
             ) : (
               <tr>
-                <td colSpan={9} className="px-5 py-10 text-center text-sm text-gray-500">
-                  Pipeline stage rows will appear once opportunities exist in the selected range.
+                <td
+                  colSpan={9}
+                  className="px-5 py-10 text-center text-sm text-gray-500"
+                >
+                  Pipeline stage rows will appear once opportunities exist in
+                  the selected range.
                 </td>
               </tr>
             )}
@@ -5051,8 +5582,8 @@ function SalesLifecycleTransitionReport({
         help="Groups created and stage-change events by their from/to pipeline labels so Sales Quality can show movement history, value and lost-reason context."
       />
       <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-        <table className="min-w-[1060px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+        <table className="w-full min-w-[1060px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
             <tr>
               <th className="px-5 py-3">Movement</th>
               <th className="px-5 py-3">Events</th>
@@ -5087,14 +5618,20 @@ function SalesLifecycleTransitionReport({
                     {row.lostReason ?? "-"}
                   </td>
                   <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
-                    {row.latest ? dateFormatter.format(row.latest) : "No activity"}
+                    {row.latest
+                      ? dateFormatter.format(row.latest)
+                      : "No activity"}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">
-                  Lifecycle transition rows will appear once stage movement is recorded in the selected range.
+                <td
+                  colSpan={6}
+                  className="px-5 py-10 text-center text-sm text-gray-500"
+                >
+                  Lifecycle transition rows will appear once stage movement is
+                  recorded in the selected range.
                 </td>
               </tr>
             )}
@@ -5118,7 +5655,7 @@ function ExecutiveClientPackHeader({
     <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03] print:border-gray-300 print:shadow-none">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase text-brand-600 dark:text-brand-300 print:text-gray-700">
+          <p className="text-sm font-semibold text-brand-600 uppercase dark:text-brand-300 print:text-gray-700">
             iD30 CRM client pack
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-gray-900 dark:text-white print:text-black">
@@ -5128,7 +5665,11 @@ function ExecutiveClientPackHeader({
             Reporting range: {activeRangeLabel}
           </p>
         </div>
-        <ExecutiveReportExportActions downloadHref={downloadHref} packHref={packHref} printMode />
+        <ExecutiveReportExportActions
+          downloadHref={downloadHref}
+          packHref={packHref}
+          printMode
+        />
       </div>
     </section>
   );
@@ -5166,7 +5707,9 @@ function ExecutiveReport({
   const downloadHref = executiveReportDownloadHref(activeRange);
 
   return (
-    <section className={printMode ? "space-y-6 print:text-black" : "mt-4 space-y-6"}>
+    <section
+      className={printMode ? "space-y-6 print:text-black" : "mt-4 space-y-6"}
+    >
       {printMode ? (
         <style>{`
           @page { margin: 16mm; }
@@ -5181,14 +5724,17 @@ function ExecutiveReport({
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03] print:border-gray-300 print:shadow-none">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase text-brand-600 dark:text-brand-300">
+            <p className="text-sm font-semibold text-brand-600 uppercase dark:text-brand-300">
               {activeRangeLabel} commercial attribution summary
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-              Marketing is measured against qualified pipeline and revenue, not just lead volume.
+              Marketing is measured against qualified pipeline and revenue, not
+              just lead volume.
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500 dark:text-gray-400">
-              This client-facing view summarises the commercial outcome from captured attribution, lead quality and pipeline movement. It avoids internal confidence factors and queue diagnostics.
+              This client-facing view summarises the commercial outcome from
+              captured attribution, lead quality and pipeline movement. It
+              avoids internal confidence factors and queue diagnostics.
             </p>
           </div>
           <div className="flex flex-col items-start gap-3 lg:items-end">
@@ -5202,10 +5748,28 @@ function ExecutiveReport({
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <ExecutiveMetric label="Leads" value={totalLeads.toString()} detail={`${attributedLeads} attributed`} />
-          <ExecutiveMetric label="Qualified pipeline" value={(qualified?.count ?? 0).toString()} detail={formatMoney(qualified?.valueCents ?? 0)} />
-          <ExecutiveMetric label="Proposals" value={(proposals?.count ?? 0).toString()} detail={formatMoney(proposals?.valueCents ?? 0)} />
-          <ExecutiveMetric label="Revenue" value={formatMoney(wonRevenue)} detail={roas === null ? "ROAS unavailable" : `${formatRatio(roas)} ROAS`} />
+          <ExecutiveMetric
+            label="Leads"
+            value={totalLeads.toString()}
+            detail={`${attributedLeads} attributed`}
+          />
+          <ExecutiveMetric
+            label="Qualified pipeline"
+            value={(qualified?.count ?? 0).toString()}
+            detail={formatMoney(qualified?.valueCents ?? 0)}
+          />
+          <ExecutiveMetric
+            label="Proposals"
+            value={(proposals?.count ?? 0).toString()}
+            detail={formatMoney(proposals?.valueCents ?? 0)}
+          />
+          <ExecutiveMetric
+            label="Revenue"
+            value={formatMoney(wonRevenue)}
+            detail={
+              roas === null ? "ROAS unavailable" : `${formatRatio(roas)} ROAS`
+            }
+          />
         </div>
       </div>
 
@@ -5213,15 +5777,23 @@ function ExecutiveReport({
         <ExecutivePanel title="Lifecycle Progress">
           <div className="space-y-3">
             {lifecycleRows.slice(1).map((row) => (
-              <div key={row.key} className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+              <div
+                key={row.key}
+                className="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-gray-800 dark:text-white/90">{row.label}</p>
+                  <p className="font-semibold text-gray-800 dark:text-white/90">
+                    {row.label}
+                  </p>
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     {row.count}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {formatMoney(row.valueCents ?? 0)} / {row.conversionRate === null ? "Baseline" : `${formatPercent(row.conversionRate ?? null)} from previous stage`}
+                  {formatMoney(row.valueCents ?? 0)} /{" "}
+                  {row.conversionRate === null
+                    ? "Baseline"
+                    : `${formatPercent(row.conversionRate ?? null)} from previous stage`}
                 </p>
               </div>
             ))}
@@ -5232,18 +5804,26 @@ function ExecutiveReport({
           <div className="space-y-3">
             {sourceRows.length ? (
               sourceRows.map((row) => (
-                <div key={row.source} className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+                <div
+                  key={row.source}
+                  className="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-gray-800 dark:text-white/90">{row.source}</p>
+                    <p className="font-semibold text-gray-800 dark:text-white/90">
+                      {row.source}
+                    </p>
                     <StatusBadge>{formatPercent(row.closeRate)}</StatusBadge>
                   </div>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {row.qualified} qualified / {row.proposals} proposals / {formatMoney(row.wonCents)} won
+                    {row.qualified} qualified / {row.proposals} proposals /{" "}
+                    {formatMoney(row.wonCents)} won
                   </p>
                 </div>
               ))
             ) : (
-              <EmptyReportText>No source quality rows in this range.</EmptyReportText>
+              <EmptyReportText>
+                No source quality rows in this range.
+              </EmptyReportText>
             )}
           </div>
         </ExecutivePanel>
@@ -5253,17 +5833,28 @@ function ExecutiveReport({
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {salesQualityRows.length ? (
             salesQualityRows.map((row) => (
-              <div key={`${row.source}-${row.ownerName}`} className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
-                <p className="text-sm font-semibold text-gray-800 dark:text-white/90">{row.source}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{row.ownerName}</p>
-                <p className="mt-3 text-2xl font-semibold text-gray-900 dark:text-white">{row.qualityScore}%</p>
+              <div
+                key={`${row.source}-${row.ownerName}`}
+                className="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
+              >
+                <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
+                  {row.source}
+                </p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {row.ownerName}
+                </p>
+                <p className="mt-3 text-2xl font-semibold text-gray-900 dark:text-white">
+                  {row.qualityScore}%
+                </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {formatMoney(row.weightedPipelineCents)} weighted
                 </p>
               </div>
             ))
           ) : (
-            <EmptyReportText>No sales quality rows in this range.</EmptyReportText>
+            <EmptyReportText>
+              No sales quality rows in this range.
+            </EmptyReportText>
           )}
         </div>
       </ExecutivePanel>
@@ -5282,8 +5873,12 @@ function ExecutiveMetric({
 }) {
   return (
     <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{value}</p>
+      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+        {value}
+      </p>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{detail}</p>
     </div>
   );
@@ -5298,7 +5893,9 @@ function ExecutivePanel({
 }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-      <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">{title}</h2>
+      <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+        {title}
+      </h2>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -5405,7 +6002,8 @@ function RecentSpendRows({
                   {row.campaignName || row.campaignId}
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {providerLabel(row.provider)} / {dateFormatter.format(row.date)} / {row.clicks} clicks
+                  {providerLabel(row.provider)} /{" "}
+                  {dateFormatter.format(row.date)} / {row.clicks} clicks
                 </p>
               </div>
               <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
@@ -5459,10 +6057,13 @@ function ProviderSyncHealth({
                 <StatusBadge>{log.status}</StatusBadge>
               </div>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {dateFormatter.format(log.startedAt)} / {log.recordsWritten}/{log.recordsRead} records
+                {dateFormatter.format(log.startedAt)} / {log.recordsWritten}/
+                {log.recordsRead} records
               </p>
               {log.message ? (
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{log.message}</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {log.message}
+                </p>
               ) : null}
             </div>
           ))
@@ -5493,13 +6094,11 @@ function ProviderPerformanceCard({
           currency: string;
         }
       | undefined;
-    latestLog:
-      | {
-          status: string;
-          syncType: string;
-          startedAt: Date;
-        }
-      | null;
+    latestLog: {
+      status: string;
+      syncType: string;
+      startedAt: Date;
+    } | null;
   };
 }) {
   return (
@@ -5517,7 +6116,9 @@ function ProviderPerformanceCard({
             />
           </span>
           <div>
-            <h3 className="font-semibold text-gray-800 dark:text-white/90">{row.provider.name}</h3>
+            <h3 className="font-semibold text-gray-800 dark:text-white/90">
+              {row.provider.name}
+            </h3>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {row.state.status}
             </p>
@@ -5526,10 +6127,26 @@ function ProviderPerformanceCard({
         <StatusBadge>{row.latestLog?.status ?? "No sync"}</StatusBadge>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <MiniMetric label="Spend" value={row.spend ? formatMoney(row.spend.costCents, row.spend.currency) : "None"} />
-        <MiniMetric label="Campaigns" value={(row.spend?.campaigns.size ?? 0).toString()} />
-        <MiniMetric label="Clicks" value={(row.spend?.clicks ?? 0).toString()} />
-        <MiniMetric label="Conversions" value={Math.round(row.spend?.conversions ?? 0).toString()} />
+        <MiniMetric
+          label="Spend"
+          value={
+            row.spend
+              ? formatMoney(row.spend.costCents, row.spend.currency)
+              : "None"
+          }
+        />
+        <MiniMetric
+          label="Campaigns"
+          value={(row.spend?.campaigns.size ?? 0).toString()}
+        />
+        <MiniMetric
+          label="Clicks"
+          value={(row.spend?.clicks ?? 0).toString()}
+        />
+        <MiniMetric
+          label="Conversions"
+          value={Math.round(row.spend?.conversions ?? 0).toString()}
+        />
       </div>
       <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">
         {row.latestLog
@@ -5567,7 +6184,7 @@ function ConversionEvidence({
       />
       <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
         <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+          <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
             <tr>
               <th className="px-5 py-3">Type</th>
               <th className="px-5 py-3">Evidence</th>
@@ -5580,13 +6197,19 @@ function ConversionEvidence({
               records.map((record) => (
                 <tr key={record.id}>
                   <td className="px-5 py-4 font-medium text-gray-800 dark:text-white/90">
-                    {record.source === "PHONE" ? "Tracked call" : "Tracked form"}
+                    {record.source === "PHONE"
+                      ? "Tracked call"
+                      : "Tracked form"}
                   </td>
                   <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
                     {record.trackingPhoneNumber || "Website attribution"}
                   </td>
                   <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                    {record.opportunityId ? "Opportunity" : record.callLogId ? "Call log" : "Attribution only"}
+                    {record.opportunityId
+                      ? "Opportunity"
+                      : record.callLogId
+                        ? "Call log"
+                        : "Attribution only"}
                   </td>
                   <td className="px-5 py-4 text-gray-500 dark:text-gray-400">
                     {dateFormatter.format(record.createdAt)}
@@ -5595,8 +6218,12 @@ function ConversionEvidence({
               ))
             ) : (
               <tr>
-                <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
-                  Conversion evidence will appear once forms or tracked calls are captured.
+                <td
+                  colSpan={4}
+                  className="px-5 py-10 text-center text-sm text-gray-500"
+                >
+                  Conversion evidence will appear once forms or tracked calls
+                  are captured.
                 </td>
               </tr>
             )}
@@ -5636,7 +6263,10 @@ function ConversionUploadReadiness({
       </div>
       <div className="mt-4 space-y-3">
         {providers.map((row) => (
-          <div key={row.provider.provider} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+          <div
+            key={row.provider.provider}
+            className="rounded-xl border border-gray-200 p-3 dark:border-gray-800"
+          >
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
                 {row.provider.name}
@@ -5650,13 +6280,16 @@ function ConversionUploadReadiness({
         ))}
       </div>
       <div className="mt-5 border-t border-gray-100 pt-4 dark:border-gray-800">
-        <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+        <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
           Recent upload jobs
         </p>
         <div className="mt-3 space-y-2">
           {logs.length ? (
             logs.map((log) => (
-              <div key={log.id} className="rounded-lg bg-gray-50 p-3 text-sm dark:bg-white/[0.03]">
+              <div
+                key={log.id}
+                className="rounded-lg bg-gray-50 p-3 text-sm dark:bg-white/[0.03]"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-gray-800 dark:text-white/90">
                     {providerLabel(log.provider)}
@@ -5664,7 +6297,8 @@ function ConversionUploadReadiness({
                   <StatusBadge>{log.status}</StatusBadge>
                 </div>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {log.syncType} / {log.recordsRead} read / {log.recordsWritten} written / {dateFormatter.format(log.startedAt)}
+                  {log.syncType} / {log.recordsRead} read / {log.recordsWritten}{" "}
+                  written / {dateFormatter.format(log.startedAt)}
                 </p>
                 {log.message ? (
                   <p className="mt-2 text-xs leading-5 text-gray-600 dark:text-gray-300">
@@ -5693,9 +6327,16 @@ function ConversionUploadSummary({
   metrics: ConversionUploadMetrics;
   total: number;
 }) {
-  const mappedRows = metrics.providerRows.reduce((sum, row) => sum + row.mapped, 0);
-  const totalProviderRows = metrics.providerRows.reduce((sum, row) => sum + row.total, 0);
-  const mappingRate = totalProviderRows > 0 ? (mappedRows / totalProviderRows) * 100 : null;
+  const mappedRows = metrics.providerRows.reduce(
+    (sum, row) => sum + row.mapped,
+    0,
+  );
+  const totalProviderRows = metrics.providerRows.reduce(
+    (sum, row) => sum + row.total,
+    0,
+  );
+  const mappingRate =
+    totalProviderRows > 0 ? (mappedRows / totalProviderRows) * 100 : null;
 
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -5708,22 +6349,33 @@ function ConversionUploadSummary({
             <LazyHelpTooltip content="Summarises the current conversion upload queue and highlights the setup or provider issues that need operator attention before uploads can be trusted." />
           </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Queue status across the selected reporting range, with issue categories from the most recent upload rows.
+            Queue status across the selected reporting range, with issue
+            categories from the most recent upload rows.
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-800">
           <span className="font-semibold text-gray-800 dark:text-white/90">
             {formatPercent(metrics.uploadedRate)}
           </span>{" "}
-          <span className="text-gray-500 dark:text-gray-400">attempt success</span>
+          <span className="text-gray-500 dark:text-gray-400">
+            attempt success
+          </span>
         </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <UploadStatusMetric label="Pending" value={counts.PENDING} tone="neutral" />
+        <UploadStatusMetric
+          label="Pending"
+          value={counts.PENDING}
+          tone="neutral"
+        />
         <UploadStatusMetric label="Sent" value={counts.SENT} tone="success" />
         <UploadStatusMetric label="Failed" value={counts.FAILED} tone="error" />
-        <UploadStatusMetric label="Skipped" value={counts.SKIPPED} tone="warning" />
+        <UploadStatusMetric
+          label="Skipped"
+          value={counts.SKIPPED}
+          tone="warning"
+        />
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -5764,20 +6416,25 @@ function ConversionUploadSummary({
 
       {metrics.providerRows.length ? (
         <div className="mt-5 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
-          <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+          <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
             Provider match coverage
           </p>
           <div className="mt-3 grid gap-2 lg:grid-cols-3">
             {metrics.providerRows.map((row) => (
-              <div key={row.provider} className="rounded-lg bg-gray-50 p-3 dark:bg-white/[0.03]">
+              <div
+                key={row.provider}
+                className="rounded-lg bg-gray-50 p-3 dark:bg-white/[0.03]"
+              >
                 <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
                   {providerLabel(row.provider)}
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {formatPercent(row.matchRate)} matched / {formatPercent(row.mappingRate)} mapped
+                  {formatPercent(row.matchRate)} matched /{" "}
+                  {formatPercent(row.mappingRate)} mapped
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {row.matched} click IDs, {row.mapped} mappings, {row.total} rows
+                  {row.matched} click IDs, {row.mapped} mappings, {row.total}{" "}
+                  rows
                 </p>
               </div>
             ))}
@@ -5786,13 +6443,16 @@ function ConversionUploadSummary({
       ) : null}
 
       <div className="mt-5 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
-        <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+        <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
           Attention categories
         </p>
         {metrics.issueRows.length ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {metrics.issueRows.map((row) => (
-              <div key={`${row.category}-${row.label}`} className="rounded-lg bg-gray-50 p-3 dark:bg-white/[0.03]">
+              <div
+                key={`${row.category}-${row.label}`}
+                className="rounded-lg bg-gray-50 p-3 dark:bg-white/[0.03]"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
@@ -5860,15 +6520,13 @@ function ConversionRateCard({
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.03]">
-      <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+      <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
         {label}
       </p>
       <p className="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">
         {value}
       </p>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {detail}
-      </p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
     </div>
   );
 }
@@ -5896,7 +6554,9 @@ function ConversionSeverityBadge({
           : "bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-300";
 
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${classes}`}>
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${classes}`}
+    >
       {label}
     </span>
   );
@@ -5905,7 +6565,8 @@ function ConversionSeverityBadge({
 function ConversionIssueBadge({ upload }: { upload: ConversionUploadRow }) {
   const classification = conversionUploadClassification(upload);
 
-  if (classification.severity === "ready") return <ConversionSeverityBadge severity="ready" />;
+  if (classification.severity === "ready")
+    return <ConversionSeverityBadge severity="ready" />;
 
   return (
     <div className="space-y-1">
@@ -5930,8 +6591,8 @@ function ConversionUploadQueue({
         help="This queue is the hand-off point between CRM attribution and provider APIs. Rows are deduplicated per provider, lifecycle event and CRM record."
       />
       <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain">
-        <table className="min-w-[1300px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+        <table className="w-full min-w-[1300px] divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase dark:bg-white/[0.03] dark:text-gray-400">
             <tr>
               <th className="px-5 py-3">Provider</th>
               <th className="px-5 py-3">Lifecycle event</th>
@@ -5958,7 +6619,9 @@ function ConversionUploadQueue({
                       {upload.conversionType.replaceAll("_", " ")}
                     </span>
                     <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                      {upload.conversionName || upload.message || `${upload.entityType} ${upload.entityId}`}
+                      {upload.conversionName ||
+                        upload.message ||
+                        `${upload.entityType} ${upload.entityId}`}
                     </span>
                   </td>
                   <td className="px-5 py-4">
@@ -5996,7 +6659,10 @@ function ConversionUploadQueue({
               ))
             ) : (
               <tr>
-                <td colSpan={11} className="px-5 py-10 text-center text-sm text-gray-500">
+                <td
+                  colSpan={11}
+                  className="px-5 py-10 text-center text-sm text-gray-500"
+                >
                   No lifecycle upload rows have been prepared yet.
                 </td>
               </tr>
@@ -6024,12 +6690,14 @@ function SectionHeading({
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start gap-2">
-            <h2 className="min-w-0 break-words text-base font-semibold text-gray-800 dark:text-white/90">
+            <h2 className="min-w-0 text-base font-semibold break-words text-gray-800 dark:text-white/90">
               {title}
             </h2>
             <LazyHelpTooltip content={help} />
           </div>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500 dark:text-gray-400">{detail}</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500 dark:text-gray-400">
+            {detail}
+          </p>
         </div>
         {action ? (
           <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">
@@ -6044,65 +6712,156 @@ function SectionHeading({
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-gray-50 p-3 dark:bg-white/[0.03]">
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-gray-800 dark:text-white/90">{value}</p>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-gray-800 dark:text-white/90">
+        {value}
+      </p>
     </div>
   );
 }
 
 function SearchIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M7.25 12.5a5.25 5.25 0 1 0 0-10.5 5.25 5.25 0 0 0 0 10.5ZM11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M7.25 12.5a5.25 5.25 0 1 0 0-10.5 5.25 5.25 0 0 0 0 10.5ZM11 11l3 3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
 
 function UsersIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M6 7.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM1.5 14.25c.5-2.55 2-4 4.5-4s4 1.45 4.5 4M10.75 7.25a2 2 0 0 0 0-4M12.1 10.25c1.25.45 2.05 1.8 2.4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 7.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM1.5 14.25c.5-2.55 2-4 4.5-4s4 1.45 4.5 4M10.75 7.25a2 2 0 0 0 0-4M12.1 10.25c1.25.45 2.05 1.8 2.4 4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
 function LinkIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M6.6 9.4 9.4 6.6M7 4.25l.8-.8a3 3 0 0 1 4.25 4.24l-.8.81M9 11.75l-.8.8a3 3 0 0 1-4.25-4.24l.8-.81" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M6.6 9.4 9.4 6.6M7 4.25l.8-.8a3 3 0 0 1 4.25 4.24l-.8.81M9 11.75l-.8.8a3 3 0 0 1-4.25-4.24l.8-.81"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
 
 function MailIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M2.5 4.25h11v7.5h-11v-7.5ZM3 4.75l5 4 5-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M2.5 4.25h11v7.5h-11v-7.5ZM3 4.75l5 4 5-4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
 function ChatIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M3 3.25h10v7.25H8.5L4.75 13v-2.5H3V3.25Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5.5 6.75h.01M8 6.75h.01M10.5 6.75h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3 3.25h10v7.25H8.5L4.75 13v-2.5H3V3.25Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.5 6.75h.01M8 6.75h.01M10.5 6.75h.01"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
 
 function CursorIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M4 2.5 12.25 8l-3.5 1-1 3.5L4 2.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M4 2.5 12.25 8l-3.5 1-1 3.5L4 2.5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="m3.5 7.25 2.2 2.2 4.8-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m3.5 7.25 2.2 2.2 4.8-5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -6125,7 +6884,9 @@ function Metric({
       muted={muted}
       value={value}
       valueClassName={`mt-2 text-2xl font-semibold ${
-        muted ? "text-gray-500 dark:text-gray-400" : "text-gray-800 dark:text-white/90"
+        muted
+          ? "text-gray-500 dark:text-gray-400"
+          : "text-gray-800 dark:text-white/90"
       }`}
     />
   );

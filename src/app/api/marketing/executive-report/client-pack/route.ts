@@ -3,6 +3,11 @@ import {
   getMarketingOpportunityTotals,
   type MarketingOpportunityTotals,
 } from "@/lib/marketing/opportunity-totals";
+import {
+  marketingDailyRollupRangeFromWindow,
+  readMarketingDailyRollupSummary,
+  type MarketingDailyRollupSummary,
+} from "@/lib/marketing/daily-rollups";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -46,9 +51,14 @@ type SalesQualityRow = {
   wonDeals: number;
 };
 
-type ExecutiveOpportunity = Awaited<ReturnType<typeof fetchExecutiveOpportunities>>[number];
+type ExecutiveOpportunity = Awaited<
+  ReturnType<typeof fetchExecutiveOpportunities>
+>[number];
 
-const rangeOptions: Record<MarketingRange, { days: number | null; label: string }> = {
+const rangeOptions: Record<
+  MarketingRange,
+  { days: number | null; label: string }
+> = {
   "7d": { days: 7, label: "Last 7 days" },
   "30d": { days: 30, label: "Last 30 days" },
   "90d": { days: 90, label: "Last 90 days" },
@@ -70,6 +80,14 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 
+function campaignSpendSummaryFromRollup(summary: MarketingDailyRollupSummary) {
+  return {
+    _sum: {
+      costMicros: BigInt(summary.totals.costMicros),
+    },
+  };
+}
+
 export async function GET(request: Request) {
   await requireAdmin();
 
@@ -79,19 +97,31 @@ export async function GET(request: Request) {
   const activeDateWhere = activeWindow.startDate
     ? { gte: activeWindow.startDate, lte: activeWindow.endDate }
     : undefined;
-  const [opportunityTotals, opportunities, sessionCount, campaignSpendSummary] = await Promise.all([
-    getMarketingOpportunityTotals(activeDateWhere),
-    fetchExecutiveOpportunities(activeDateWhere),
-    prisma.attributionSnapshot.count({
-      where: activeDateWhere ? { updatedAt: activeDateWhere } : undefined,
-    }),
-    prisma.marketingCampaignSpend.aggregate({
-      where: activeDateWhere ? { date: activeDateWhere } : undefined,
-      _sum: {
-        costMicros: true,
-      },
-    }),
-  ]);
+  const marketingRollupRange =
+    marketingDailyRollupRangeFromWindow(activeWindow);
+  const marketingRollupSummary = marketingRollupRange
+    ? await readMarketingDailyRollupSummary(marketingRollupRange)
+    : null;
+  const [opportunityTotals, opportunities, sessionCount, campaignSpendSummary] =
+    await Promise.all([
+      getMarketingOpportunityTotals(activeDateWhere),
+      fetchExecutiveOpportunities(activeDateWhere),
+      marketingRollupSummary
+        ? Promise.resolve(marketingRollupSummary.totals.sessions)
+        : prisma.attributionSnapshot.count({
+            where: activeDateWhere ? { updatedAt: activeDateWhere } : undefined,
+          }),
+      marketingRollupSummary
+        ? Promise.resolve(
+            campaignSpendSummaryFromRollup(marketingRollupSummary),
+          )
+        : prisma.marketingCampaignSpend.aggregate({
+            where: activeDateWhere ? { date: activeDateWhere } : undefined,
+            _sum: {
+              costMicros: true,
+            },
+          }),
+    ]);
 
   const totalLeads = opportunityTotals.totalLeads;
   const attributedLeads = opportunityTotals.attributedLeads;
@@ -276,7 +306,10 @@ function buildLifecycleFunnelRows({
     const previous = rows[index - 1];
     return {
       ...row,
-      conversionRate: previous && previous.count > 0 ? (row.count / previous.count) * 100 : null,
+      conversionRate:
+        previous && previous.count > 0
+          ? (row.count / previous.count) * 100
+          : null,
     };
   });
 }
@@ -285,7 +318,8 @@ function buildSourceRows(opportunities: ExecutiveOpportunity[]): SourceRow[] {
   const rows = new Map<string, SourceRow>();
 
   for (const opportunity of opportunities) {
-    const source = opportunity.source || sourceFromAttribution(opportunity.attribution);
+    const source =
+      opportunity.source || sourceFromAttribution(opportunity.attribution);
     const current = rows.get(source) ?? {
       closeRate: null,
       latest: null,
@@ -341,11 +375,14 @@ function buildSourceRows(opportunities: ExecutiveOpportunity[]): SourceRow[] {
     );
 }
 
-function buildSalesQualityRows(opportunities: ExecutiveOpportunity[]): SalesQualityRow[] {
+function buildSalesQualityRows(
+  opportunities: ExecutiveOpportunity[],
+): SalesQualityRow[] {
   const rows = new Map<string, SalesQualityRow>();
 
   for (const opportunity of opportunities) {
-    const source = opportunity.source || sourceFromAttribution(opportunity.attribution);
+    const source =
+      opportunity.source || sourceFromAttribution(opportunity.attribution);
     const ownerName = ownerLabel(opportunity.owner);
     const key = `${source}::${ownerName}`;
     const current = rows.get(key) ?? {
@@ -404,7 +441,10 @@ function buildSalesQualityRows(opportunities: ExecutiveOpportunity[]): SalesQual
         qualityScore: Math.min(
           100,
           Math.round(
-            qualifiedRate * 0.35 + proposalRate * 0.25 + wonRate * 0.25 + followUpRate * 0.15,
+            qualifiedRate * 0.35 +
+              proposalRate * 0.25 +
+              wonRate * 0.25 +
+              followUpRate * 0.15,
           ),
         ),
       };

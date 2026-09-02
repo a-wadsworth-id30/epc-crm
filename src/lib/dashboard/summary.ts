@@ -4,13 +4,10 @@ import type { SalesStage } from "@prisma/client";
 import { revalidateTag, unstable_cache } from "next/cache";
 import {
   addUtcDays,
-  marketingDailyRollupProviderAll,
-  marketingDailyRollupSourceAll,
+  readMarketingDailyRollupSummary,
   startOfUtcDay,
-  utcDaysBetween,
 } from "@/lib/marketing/daily-rollups";
 import { prisma } from "@/lib/prisma";
-import { isPrismaMissingSchemaError } from "@/lib/prisma-errors";
 
 export const dashboardSummaryCacheTag = "dashboard-summary";
 export const dashboardSummaryRevalidateSeconds = 60;
@@ -50,44 +47,25 @@ async function loadDashboardMarketingSummaryFromRollups({
   now: Date;
   windowStart: Date;
 }): Promise<DashboardMarketingSummary | null> {
-  const from = startOfUtcDay(windowStart);
-  const toExclusive = addUtcDays(startOfUtcDay(now), 1);
-  const expectedDays = utcDaysBetween(from, toExclusive);
-  const where = {
-    date: { gte: from, lt: toExclusive },
-    provider: marketingDailyRollupProviderAll,
-    source: marketingDailyRollupSourceAll,
-  };
-  const [coverage, aggregate] = await Promise.all([
-    prisma.marketingDailyRollup.count({ where }),
-    prisma.marketingDailyRollup.aggregate({
-      where,
-      _sum: {
-        attributionRecords: true,
-        clicks: true,
-        conversions: true,
-        costMicros: true,
-        formLeads: true,
-        phoneLeads: true,
-        sessions: true,
-      },
-    }),
-  ]);
+  const summary = await readMarketingDailyRollupSummary({
+    from: windowStart,
+    toExclusive: addUtcDays(startOfUtcDay(now), 1),
+  });
 
-  if (coverage < expectedDays) return null;
+  if (!summary) return null;
 
-  const formLeadCount = aggregate._sum.formLeads ?? 0;
-  const phoneLeadCount = aggregate._sum.phoneLeads ?? 0;
-  const importedCostMicros = Number(aggregate._sum.costMicros ?? BigInt(0));
+  const formLeadCount = summary.totals.formLeads;
+  const phoneLeadCount = summary.totals.phoneLeads;
+  const importedCostMicros = Number(summary.totals.costMicros);
 
   return {
     attributedLeadCount: formLeadCount + phoneLeadCount,
     formLeadCount,
-    importedClicks: aggregate._sum.clicks ?? 0,
-    importedConversions: aggregate._sum.conversions ?? 0,
+    importedClicks: summary.totals.clicks,
+    importedConversions: summary.totals.conversions,
     importedSpendCents: Math.round(importedCostMicros / 10000),
     phoneLeadCount,
-    sessions: aggregate._sum.sessions ?? 0,
+    sessions: summary.totals.sessions,
     windowDays: dashboardMarketingWindowDays,
   };
 }
@@ -142,27 +120,14 @@ async function loadDashboardMarketingSummary({
   now: Date;
   windowStart: Date;
 }) {
-  try {
-    const rollupSummary = await loadDashboardMarketingSummaryFromRollups({
-      now,
-      windowStart,
-    });
+  const rollupSummary = await loadDashboardMarketingSummaryFromRollups({
+    now,
+    windowStart,
+  });
 
-    if (rollupSummary) return rollupSummary;
-  } catch (error) {
-    if (!isOptionalRollupReadError(error)) {
-      throw error;
-    }
-  }
+  if (rollupSummary) return rollupSummary;
 
   return loadDashboardMarketingSummaryFromRaw({ windowStart });
-}
-
-function isOptionalRollupReadError(error: unknown) {
-  return isPrismaMissingSchemaError(error, {
-    modelName: "MarketingDailyRollup",
-    tableName: "MarketingDailyRollup",
-  });
 }
 
 async function loadDashboardSummary(): Promise<DashboardSummary> {

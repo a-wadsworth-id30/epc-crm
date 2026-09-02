@@ -7,6 +7,7 @@ import {
   warningStatusWhen,
 } from "@/lib/maintenance/background-jobs";
 import { prisma } from "@/lib/prisma";
+import { isPrismaMissingSchemaError } from "@/lib/prisma-errors";
 
 const dayMs = 24 * 60 * 60 * 1000;
 export const marketingDailyRollupSourceAll = "ALL";
@@ -57,6 +58,20 @@ export type MarketingDailyRollupRefreshResult = {
   windowDays: number;
 };
 
+export type MarketingDailyRollupSummary = {
+  complete: boolean;
+  expectedDays: number;
+  from: Date;
+  rowsMatched: number;
+  toExclusive: Date;
+  totals: MarketingDailyRollupRefreshResult["totals"];
+};
+
+export type MarketingDailyRollupReadRange = {
+  from: Date;
+  toExclusive: Date;
+};
+
 type RefreshMarketingDailyRollupsOptions = {
   actorId?: string | null;
   dryRun?: boolean;
@@ -84,22 +99,113 @@ export function addUtcDays(date: Date, days: number) {
 }
 
 export function utcDaysBetween(from: Date, toExclusive: Date) {
-  return Math.max(0, Math.round((toExclusive.getTime() - from.getTime()) / dayMs));
+  return Math.max(
+    0,
+    Math.round((toExclusive.getTime() - from.getTime()) / dayMs),
+  );
+}
+
+export function marketingDailyRollupRangeFromWindow({
+  endDate,
+  startDate,
+}: {
+  endDate: Date;
+  startDate: Date | null;
+}): MarketingDailyRollupReadRange | null {
+  if (!startDate) return null;
+
+  return {
+    from: startOfUtcDay(startDate),
+    toExclusive: addUtcDays(startOfUtcDay(endDate), 1),
+  };
+}
+
+export async function readMarketingDailyRollupSummary({
+  from,
+  requireCompleteCoverage = true,
+  toExclusive,
+}: MarketingDailyRollupReadRange & {
+  requireCompleteCoverage?: boolean;
+}): Promise<MarketingDailyRollupSummary | null> {
+  const rollupFrom = startOfUtcDay(from);
+  const rollupToExclusive = startOfUtcDay(toExclusive);
+  const expectedDays = utcDaysBetween(rollupFrom, rollupToExclusive);
+
+  if (expectedDays <= 0) return null;
+
+  const where = {
+    date: { gte: rollupFrom, lt: rollupToExclusive },
+    provider: marketingDailyRollupProviderAll,
+    source: marketingDailyRollupSourceAll,
+  };
+
+  try {
+    const [rowsMatched, aggregate] = await Promise.all([
+      prisma.marketingDailyRollup.count({ where }),
+      prisma.marketingDailyRollup.aggregate({
+        where,
+        _sum: {
+          attributionRecords: true,
+          clicks: true,
+          conversions: true,
+          costMicros: true,
+          formLeads: true,
+          impressions: true,
+          otherLeads: true,
+          phoneLeads: true,
+          sessions: true,
+        },
+      }),
+    ]);
+    const complete = rowsMatched >= expectedDays;
+
+    if (requireCompleteCoverage && !complete) return null;
+
+    return {
+      complete,
+      expectedDays,
+      from: rollupFrom,
+      rowsMatched,
+      toExclusive: rollupToExclusive,
+      totals: {
+        attributionRecords: aggregate._sum.attributionRecords ?? 0,
+        clicks: aggregate._sum.clicks ?? 0,
+        conversions: aggregate._sum.conversions ?? 0,
+        costMicros: bigintValue(aggregate._sum.costMicros).toString(),
+        formLeads: aggregate._sum.formLeads ?? 0,
+        impressions: aggregate._sum.impressions ?? 0,
+        otherLeads: aggregate._sum.otherLeads ?? 0,
+        phoneLeads: aggregate._sum.phoneLeads ?? 0,
+        sessions: aggregate._sum.sessions ?? 0,
+      },
+    };
+  } catch (error) {
+    if (
+      isPrismaMissingSchemaError(error, {
+        modelName: "MarketingDailyRollup",
+        tableName: "MarketingDailyRollup",
+      })
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 function boundedWindowDays(value: number | undefined) {
-  if (!value || !Number.isFinite(value)) return defaultMarketingRollupWindowDays;
+  if (!value || !Number.isFinite(value))
+    return defaultMarketingRollupWindowDays;
 
-  return Math.min(
-    Math.max(Math.floor(value), 1),
-    maxMarketingRollupWindowDays,
-  );
+  return Math.min(Math.max(Math.floor(value), 1), maxMarketingRollupWindowDays);
 }
 
 function rangeFromOptions(options: RefreshMarketingDailyRollupsOptions) {
   const now = new Date();
   const windowDays = boundedWindowDays(options.windowDays);
-  const from = startOfUtcDay(options.from ?? addUtcDays(now, -(windowDays - 1)));
+  const from = startOfUtcDay(
+    options.from ?? addUtcDays(now, -(windowDays - 1)),
+  );
   const requestedTo = startOfUtcDay(options.to ?? now);
   const toExclusive = addUtcDays(requestedTo, 1);
   const cappedToExclusive =
@@ -327,7 +433,9 @@ async function refreshMarketingDailyRollupsCore(
       attributionRecords: total.attributionRecords + row.attributionRecords,
       clicks: total.clicks + row.clicks,
       conversions: total.conversions + row.conversions,
-      costMicros: (BigInt(total.costMicros) + BigInt(row.costMicros)).toString(),
+      costMicros: (
+        BigInt(total.costMicros) + BigInt(row.costMicros)
+      ).toString(),
       formLeads: total.formLeads + row.formLeads,
       impressions: total.impressions + row.impressions,
       otherLeads: total.otherLeads + row.otherLeads,
