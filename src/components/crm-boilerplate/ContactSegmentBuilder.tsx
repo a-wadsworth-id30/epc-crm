@@ -20,9 +20,9 @@ const initialSaveState: SegmentActionState = {
 };
 
 const examples = [
-  "People that have started digital marketing in the last 12 months",
-  "Contacts with an open lead and a phone number",
-  "Won customers with an email address",
+  "Installers with a phone number",
+  "Trade contacts with an open lead",
+  "Consumers that have a won project and an email address",
 ];
 
 type SegmentCriteriaPreview = {
@@ -72,7 +72,7 @@ export default function ContactSegmentBuilder() {
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={3}
-                className="mt-2 w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
+                className="mt-2 w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 transition outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
                 placeholder="Describe the people you want to group..."
               />
             </div>
@@ -109,7 +109,7 @@ export default function ContactSegmentBuilder() {
           </form>
 
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.04]">
-            <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+            <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
               Current preview
             </p>
             {draft ? (
@@ -120,7 +120,9 @@ export default function ContactSegmentBuilder() {
                       {draft.matchCount}
                     </p>
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-white/[0.08] dark:text-gray-300">
-                      {draft.mode === "openai" ? "AI drafted" : "Fallback rules"}
+                      {draft.mode === "openai"
+                        ? "AI drafted"
+                        : "Fallback rules"}
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -153,7 +155,8 @@ export default function ContactSegmentBuilder() {
                 Criteria review
               </p>
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-white/[0.08] dark:text-gray-300">
-                {criteria?.rules?.length ?? 0} rule{criteria?.rules?.length === 1 ? "" : "s"}
+                {criteria?.rules?.length ?? 0} rule
+                {criteria?.rules?.length === 1 ? "" : "s"}
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -170,7 +173,7 @@ export default function ContactSegmentBuilder() {
               Match mode: {criteria?.match === "any" ? "Any rule" : "All rules"}
             </p>
             <label className="mt-4 block">
-              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
                 Editable criteria JSON
               </span>
               <textarea
@@ -179,7 +182,7 @@ export default function ContactSegmentBuilder() {
                 name="criteriaJson"
                 rows={10}
                 spellCheck={false}
-                className="mt-1 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-xs leading-5 text-gray-800 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
+                className="font-mono mt-1 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-5 text-gray-800 transition outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
               />
             </label>
             {criteriaError ? (
@@ -202,24 +205,24 @@ export default function ContactSegmentBuilder() {
             <input type="hidden" name="prompt" value={draft.prompt} />
             <input type="hidden" name="aiSummary" value={draft.summary} />
             <div>
-              <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              <label className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
                 Name
               </label>
               <input
                 name="name"
                 defaultValue={draft.name}
-                className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
+                className="mt-1 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 transition outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              <label className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
                 Description
               </label>
               <textarea
                 name="description"
                 defaultValue={draft.description ?? ""}
                 rows={2}
-                className="mt-1 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
+                className="mt-1 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 transition outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/[0.03] dark:text-white/90"
               />
             </div>
             <button

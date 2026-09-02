@@ -81,7 +81,11 @@ This document tracks the iD30 CRM live-test implementation copied from the iD30 
   Conditional show/require rules must be validated server-side against the
   submitted template questions and allowed operators.
 - Companies: account/company records. Visibility is controlled by General Settings.
-- Contacts: grouped into People, Companies and Segments. People use dynamic CRUD with table search, sorting, pagination, optional manual postal address fields and a customer conversation workspace across linked leads. Segments save dynamic people criteria with optional AI-assisted prompt drafting.
+- Contacts: grouped into People, Companies and Segments. People use dynamic
+  CRUD with first-class Consumer, Trade, Installer and Company categories,
+  table search, sorting, pagination, optional manual postal address fields and
+  a customer conversation workspace across linked leads. Segments save dynamic
+  people criteria with optional AI-assisted prompt drafting.
 - Header/global search should remain tolerant of practical client input:
   casing, punctuation, compact names, reversed names, phone formatting and small
   name typos should still find matching CRM records.
@@ -462,13 +466,20 @@ Sales is intentionally generic enough for bespoke builds:
   to the first secondary value when the primary is blank.
 - Contact create/edit keeps Company and Role / job title on the same row, with
   lead source as a full-width field below them.
+- Contact create/edit stores the People category in `Contact.category`.
+  Categories are Consumer, Trade, Installer and Company. Company-type people
+  can leave last name blank because the organisation name is stored as the
+  primary display name. Tags remain reusable secondary labels, not the primary
+  person type.
 - Delete uses a confirmation modal.
 - Contact tables include live search, sortable columns, page size control,
   icon-only previous/next pagination and the shared table column selector.
-  The People list defaults to the core contact columns while allowing optional
-  columns such as Address to be added or removed through URL-backed table state.
-  People rows show the contact postal address under the contact name and the
-  linked company postal address under the company name when those values exist.
+  The People list exposes Consumer, Trade, Installer and Company category tabs
+  and cards, defaults to the core contact columns while allowing optional
+  columns such as Address to be added or removed through URL-backed table
+  state. People rows show the contact postal address under the contact name and
+  the linked company postal address under the company name when those values
+  exist.
 - Table footer backgrounds use `bg-gray-50 dark:bg-white/[0.02]` and must preserve bottom border radius.
 - Contact detail shows a combined customer conversation across linked leads,
   using the same compact latest-open timeline and AI Reply composer pattern as
@@ -483,7 +494,8 @@ Sales is intentionally generic enough for bespoke builds:
   workspace summary strip.
 - Contact segments live at `/contacts/segments`. Segment criteria must be
   stored as validated JSON rules and evaluated through Prisma filters; do not
-  generate or execute raw SQL from AI prompts.
+  generate or execute raw SQL from AI prompts. Segment rules can filter by
+  `Contact.category` for Consumer, Trade, Installer and Company audiences.
 
 ## Save UX
 

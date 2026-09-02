@@ -14,6 +14,11 @@ import {
   type ContactPhoneMethod,
 } from "@/lib/contact-methods";
 import {
+  contactCategoryValues,
+  defaultContactCategory,
+  type ContactCategoryValue,
+} from "@/lib/contacts/categories";
+import {
   companyIdAccessWhere,
   companyWhereWithAccess,
   contactIdAccessWhere,
@@ -35,76 +40,90 @@ export type ContactMergeActionState = ContactActionState & {
   primaryContactId?: string;
 };
 
-const contactSchema = z.object({
-  id: z.string().optional(),
-  firstName: z.string().trim().min(1, "First name is required."),
-  lastName: z.string().trim().min(1, "Last name is required."),
-  email: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null))
-    .pipe(z.string().email().nullable()),
-  phone: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  leadSource: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null))
-    .refine(
-      (value) => value === null || isLeadSourceValue(value),
-      "Choose where the contact heard about us.",
-    ),
-  role: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  addressLine1: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  addressLine2: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  city: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  county: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  postcode: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  country: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  companyId: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-  companyName: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value ? value : null)),
-});
+const contactSchema = z
+  .object({
+    id: z.string().optional(),
+    category: z
+      .enum(contactCategoryValues)
+      .optional()
+      .default(defaultContactCategory),
+    firstName: z.string().trim().min(1, "First name is required."),
+    lastName: z.string().trim().optional().default(""),
+    email: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null))
+      .pipe(z.string().email().nullable()),
+    phone: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    leadSource: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null))
+      .refine(
+        (value) => value === null || isLeadSourceValue(value),
+        "Choose where the contact heard about us.",
+      ),
+    role: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    addressLine1: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    addressLine2: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    city: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    county: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    postcode: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    country: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    companyId: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+    companyName: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : null)),
+  })
+  .superRefine((contact, ctx) => {
+    if (contact.category !== "COMPANY" && !contact.lastName) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Last name is required.",
+        path: ["lastName"],
+      });
+    }
+  });
 
 const contactTagNamesSchema = z.array(z.string().trim().min(1).max(40)).max(20);
 
@@ -123,6 +142,7 @@ function formString(formData: FormData, key: string) {
 function parseContact(formData: FormData) {
   return contactSchema.safeParse({
     id: formString(formData, "id"),
+    category: formString(formData, "category"),
     firstName: formString(formData, "firstName"),
     lastName: formString(formData, "lastName"),
     email: formString(formData, "email"),
@@ -163,6 +183,14 @@ function optionalMergeJsonValue(
   return value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
 }
 
+function mergeContactCategory(
+  primary: ContactCategoryValue,
+  duplicate: ContactCategoryValue,
+) {
+  if (primary !== defaultContactCategory) return primary;
+  return duplicate;
+}
+
 function parseContactTags(formData: FormData) {
   const raw = formData.get("tagNames");
 
@@ -181,7 +209,10 @@ function parseContactTags(formData: FormData) {
   const parsed = contactTagNamesSchema.safeParse(decoded);
 
   if (!parsed.success) {
-    return { ok: false as const, message: "Use up to 20 tags, 40 characters each." };
+    return {
+      ok: false as const,
+      message: "Use up to 20 tags, 40 characters each.",
+    };
   }
 
   const seen = new Set<string>();
@@ -235,7 +266,10 @@ async function resolveCompanyData(
     });
 
     if (existingCompany) {
-      return { companyId: existingCompany.id, companyName: existingCompany.name };
+      return {
+        companyId: existingCompany.id,
+        companyName: existingCompany.name,
+      };
     }
 
     const company = await tx.company.create({
@@ -338,7 +372,10 @@ export async function createContactAction(
 
   const parsed = parseContact(formData);
   if (!parsed.success) {
-    return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the contact details." };
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Check the contact details.",
+    };
   }
   if (!parsed.data.leadSource) {
     return { ok: false, message: "Choose where the contact heard about us." };
@@ -384,6 +421,7 @@ export async function createContactAction(
         data: {
           firstName: parsed.data.firstName,
           lastName: parsed.data.lastName,
+          category: parsed.data.category,
           email: parsed.data.email,
           phone: parsed.data.phone,
           phoneNormalized: normalizedContactPhone(parsed.data.phone),
@@ -427,7 +465,7 @@ export async function createContactAction(
   return {
     contactId: createdContactId ?? undefined,
     ok: true,
-    message: "Contact created.",
+    message: "Person created.",
   };
 }
 
@@ -439,7 +477,12 @@ export async function updateContactAction(
 
   const parsed = parseContact(formData);
   if (!parsed.success || !parsed.data.id) {
-    return { ok: false, message: parsed.success ? "Contact ID is missing." : parsed.error.issues[0]?.message };
+    return {
+      ok: false,
+      message: parsed.success
+        ? "Contact ID is missing."
+        : parsed.error.issues[0]?.message,
+    };
   }
 
   const contactId = parsed.data.id;
@@ -492,6 +535,7 @@ export async function updateContactAction(
         data: {
           firstName: parsed.data.firstName,
           lastName: parsed.data.lastName,
+          category: parsed.data.category,
           email: parsed.data.email,
           phone: parsed.data.phone,
           phoneNormalized: normalizedContactPhone(parsed.data.phone),
@@ -533,7 +577,7 @@ export async function updateContactAction(
   if (linkedCompanyId) {
     revalidatePath(`/clients/${linkedCompanyId}`);
   }
-  return { ok: true, message: "Contact updated." };
+  return { ok: true, message: "Person updated." };
 }
 
 export async function syncPipedriveContactDetailsAction(
@@ -681,6 +725,7 @@ export async function mergeContactsAction(
         companyName: true,
         country: true,
         county: true,
+        category: true,
         email: true,
         firstName: true,
         id: true,
@@ -711,6 +756,7 @@ export async function mergeContactsAction(
         companyName: true,
         country: true,
         county: true,
+        category: true,
         email: true,
         firstName: true,
         id: true,
@@ -725,11 +771,20 @@ export async function mergeContactsAction(
   ]);
 
   if (!primaryContact || !duplicateContact) {
-    return { ok: false, message: "One of the selected contacts could not be found." };
+    return {
+      ok: false,
+      message: "One of the selected contacts could not be found.",
+    };
   }
 
-  const mergedEmail = optionalMergeValue(primaryContact.email, duplicateContact.email);
-  const mergedPhone = optionalMergeValue(primaryContact.phone, duplicateContact.phone);
+  const mergedEmail = optionalMergeValue(
+    primaryContact.email,
+    duplicateContact.email,
+  );
+  const mergedPhone = optionalMergeValue(
+    primaryContact.phone,
+    duplicateContact.phone,
+  );
   const mergedAdditionalEmails = mergeContactEmailMethods({
     duplicateEmail: duplicateContact.email,
     duplicateMethods: duplicateContact.additionalEmails,
@@ -817,13 +872,26 @@ export async function mergeContactsAction(
           duplicateContact.attribution,
         ),
         city: optionalMergeValue(primaryContact.city, duplicateContact.city),
-        companyId: optionalMergeValue(primaryContact.companyId, duplicateContact.companyId),
+        companyId: optionalMergeValue(
+          primaryContact.companyId,
+          duplicateContact.companyId,
+        ),
         companyName: optionalMergeValue(
           primaryContact.companyName,
           duplicateContact.companyName,
         ),
-        country: optionalMergeValue(primaryContact.country, duplicateContact.country),
-        county: optionalMergeValue(primaryContact.county, duplicateContact.county),
+        country: optionalMergeValue(
+          primaryContact.country,
+          duplicateContact.country,
+        ),
+        county: optionalMergeValue(
+          primaryContact.county,
+          duplicateContact.county,
+        ),
+        category: mergeContactCategory(
+          primaryContact.category,
+          duplicateContact.category,
+        ),
         email: mergedEmail,
         leadSource: optionalMergeValue(
           primaryContact.leadSource,
@@ -834,7 +902,10 @@ export async function mergeContactsAction(
           primaryContact.phoneNormalized,
           duplicateContact.phoneNormalized,
         ),
-        postcode: optionalMergeValue(primaryContact.postcode, duplicateContact.postcode),
+        postcode: optionalMergeValue(
+          primaryContact.postcode,
+          duplicateContact.postcode,
+        ),
         role: optionalMergeValue(primaryContact.role, duplicateContact.role),
       },
     });

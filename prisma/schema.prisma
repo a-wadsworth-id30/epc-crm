@@ -29,6 +29,13 @@ enum ContactSegmentAudience {
   COMPANIES
 }
 
+enum ContactCategory {
+  CONSUMER
+  TRADE
+  INSTALLER
+  COMPANY
+}
+
 enum IntegrationStatus {
   CONNECTED
   NOT_CONNECTED
@@ -491,6 +498,7 @@ model Contact {
   id                    String                 @id @default(cuid())
   firstName             String
   lastName              String
+  category              ContactCategory        @default(CONSUMER)
   email                 String?
   phone                 String?
   phoneNormalized       String?
@@ -526,6 +534,7 @@ model Contact {
 
   @@index([updatedAt])
   @@index([createdAt])
+  @@index([category, updatedAt])
   @@index([lastName, firstName])
   @@index([leadSource, createdAt])
   @@index([phoneNormalized])

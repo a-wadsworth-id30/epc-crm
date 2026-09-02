@@ -7,8 +7,14 @@ import { Modal } from "@/components/ui/modal";
 import { EditIcon, PlusIcon, TrashBinIcon } from "@/icons";
 import { useModal } from "@/hooks/useModal";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
-import ContactForm, { type ContactFormValues } from "@/components/crm-boilerplate/ContactForm";
+import ContactForm, {
+  type ContactFormValues,
+} from "@/components/crm-boilerplate/ContactForm";
 import type { ContactTagOption } from "@/components/crm-boilerplate/ContactTagInput";
+import {
+  contactCategoryOption,
+  type ContactCategoryValue,
+} from "@/lib/contacts/categories";
 import {
   deleteContactAction,
   mergeContactsAction,
@@ -48,6 +54,7 @@ export type ContactDeleteModalProps = {
 };
 
 export type ContactMergeCandidate = {
+  category: ContactCategoryValue;
   companyName: string | null;
   email: string | null;
   id: string;
@@ -94,20 +101,20 @@ export function ContactCreateModal({
     <>
       {hideTrigger ? null : (
         <Button size="sm" onClick={modal.openModal} startIcon={<PlusIcon />}>
-          Add contact
+          Add person
         </Button>
       )}
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[760px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[760px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-1 font-semibold text-gray-800 dark:text-white/90">
-            Add contact
+            Add person
           </h2>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Add a person and optionally link them to a client company.
+            Add a person, trade contact, installer or company-type record.
           </p>
           <ContactForm
             mode="create"
@@ -165,7 +172,7 @@ export function ContactEditModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[760px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[760px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-1 font-semibold text-gray-800 dark:text-white/90">
@@ -231,7 +238,7 @@ export function ContactDeleteModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[460px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[460px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-2 font-semibold text-gray-800 dark:text-white/90">
@@ -317,6 +324,7 @@ export function ContactMergeModal({
       .filter((candidate) =>
         [
           candidate.name,
+          contactCategoryOption(candidate.category).label,
           candidate.companyName,
           candidate.email,
           candidate.phone,
@@ -329,9 +337,11 @@ export function ContactMergeModal({
       .slice(0, 25);
   }, [candidates, query]);
 
-  const currentSelectedId = candidates.some((candidate) => candidate.id === selectedId)
+  const currentSelectedId = candidates.some(
+    (candidate) => candidate.id === selectedId,
+  )
     ? selectedId
-    : candidates[0]?.id ?? "";
+    : (candidates[0]?.id ?? "");
   const selectedCandidate =
     candidates.find((candidate) => candidate.id === currentSelectedId) ?? null;
 
@@ -348,20 +358,25 @@ export function ContactMergeModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[640px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[640px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-1 font-semibold text-gray-800 dark:text-white/90">
             Merge contact
           </h2>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Keep {contactName} and move another contact&apos;s activity into this record.
+            Keep {contactName} and move another contact&apos;s activity into
+            this record.
           </p>
         </div>
 
         <form action={formAction} className="space-y-5">
           <input type="hidden" name="primaryContactId" value={contactId} />
-          <input type="hidden" name="duplicateContactId" value={currentSelectedId} />
+          <input
+            type="hidden"
+            name="duplicateContactId"
+            value={currentSelectedId}
+          />
 
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -372,45 +387,60 @@ export function ContactMergeModal({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search by name, company, email or phone"
-              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 outline-none transition focus:border-brand-500 dark:border-gray-700 dark:text-white/90"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 transition outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white/90"
             />
           </label>
 
           <div className={mergeSelectClassName}>
             {filteredCandidates.length ? (
-              filteredCandidates.map((candidate) => (
-                <label
-                  key={candidate.id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition ${
-                    currentSelectedId === candidate.id
-                      ? "border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20"
-                      : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:hover:border-gray-700"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="candidate"
-                    value={candidate.id}
-                    checked={currentSelectedId === candidate.id}
-                    onChange={() => setSelectedId(candidate.id)}
-                    className="mt-1 h-4 w-4 border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-700"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-gray-800 dark:text-white/90">
-                      {candidate.name}
+              filteredCandidates.map((candidate) => {
+                const candidateCategory = contactCategoryOption(
+                  candidate.category,
+                );
+
+                return (
+                  <label
+                    key={candidate.id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition ${
+                      currentSelectedId === candidate.id
+                        ? "border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20"
+                        : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:hover:border-gray-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="candidate"
+                      value={candidate.id}
+                      checked={currentSelectedId === candidate.id}
+                      onChange={() => setSelectedId(candidate.id)}
+                      className="mt-1 h-4 w-4 border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-700"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2 font-semibold text-gray-800 dark:text-white/90">
+                        <span>{candidate.name}</span>
+                        <span
+                          className={`inline-flex h-5 items-center rounded-full px-1.5 text-[11px] font-semibold ${candidateCategory.tableClassName}`}
+                        >
+                          {candidateCategory.label}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                        {[
+                          candidate.companyName,
+                          candidate.email,
+                          candidate.phone,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "No contact details"}
+                      </span>
+                      <span className="mt-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {candidate.relatedCount} linked record
+                        {candidate.relatedCount === 1 ? "" : "s"}
+                      </span>
                     </span>
-                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                      {[candidate.companyName, candidate.email, candidate.phone]
-                        .filter(Boolean)
-                        .join(" · ") || "No contact details"}
-                    </span>
-                    <span className="mt-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
-                      {candidate.relatedCount} linked record
-                      {candidate.relatedCount === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                </label>
-              ))
+                  </label>
+                );
+              })
             ) : (
               <p className="p-3 text-sm text-gray-500 dark:text-gray-400">
                 No matching contacts found.
@@ -438,7 +468,7 @@ export function ContactMergeModal({
             </p>
           ) : null}
 
-          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 dark:border-gray-800 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end dark:border-gray-800">
             <button
               type="button"
               onClick={modal.closeModal}

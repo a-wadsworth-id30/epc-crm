@@ -4,6 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
+  BriefcaseBusiness,
+  Building2,
+  UserRound,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
+import {
   DeferredContactDeleteModal,
   DeferredContactEditModal,
 } from "@/components/crm-boilerplate/ContactModalLoaders";
@@ -19,6 +26,12 @@ import type {
   ContactEmailMethod,
   ContactPhoneMethod,
 } from "@/lib/contact-methods";
+import {
+  contactCategoryOption,
+  contactCategoryOptions,
+  defaultContactCategory,
+  type ContactCategoryValue,
+} from "@/lib/contacts/categories";
 import { triggerSoftphoneDial } from "@/lib/telephony/softphone-dial";
 
 type CompanyOption = {
@@ -34,6 +47,7 @@ type ContactRow = {
   phone: string | null;
   additionalEmails: ContactEmailMethod[];
   additionalPhones: ContactPhoneMethod[];
+  category: ContactCategoryValue;
   leadSource: string | null;
   role: string | null;
   addressLine1: string | null;
@@ -56,6 +70,7 @@ type ContactRow = {
 type SortKey =
   | "name"
   | "company"
+  | "category"
   | "source"
   | "role"
   | "email"
@@ -67,6 +82,7 @@ const pageSizes = [10, 25, 50, 100];
 const defaultContactColumnIds = [
   "name",
   "company",
+  "category",
   "role",
   "source",
   "email",
@@ -79,7 +95,7 @@ const contactColumnIdSet = new Set<string>(contactColumnIds);
 const defaultContactColumnIdSet = new Set<string>(defaultContactColumnIds);
 
 function contactName(contact: ContactRow) {
-  return `${contact.firstName} ${contact.lastName}`;
+  return `${contact.firstName} ${contact.lastName}`.trim();
 }
 
 function contactAddress(contact: ContactRow) {
@@ -139,6 +155,8 @@ function serializeVisibleContactColumns(columnIds: string[]) {
 
 export default function ContactsTable({
   addressLookupEnabled,
+  activeCategory,
+  categoryCounts,
   contacts,
   companies,
   companiesEnabled,
@@ -152,6 +170,8 @@ export default function ContactsTable({
   totalCount,
 }: {
   addressLookupEnabled: boolean;
+  activeCategory: "all" | ContactCategoryValue;
+  categoryCounts: Record<ContactCategoryValue, number>;
   contacts: ContactRow[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
@@ -171,6 +191,8 @@ export default function ContactsTable({
   const visibleColumnIds = parseVisibleContactColumns(
     searchParams.get("columns"),
   );
+  const activeCategoryOption =
+    activeCategory === "all" ? null : contactCategoryOption(activeCategory);
 
   const updateParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -207,8 +229,8 @@ export default function ContactsTable({
   if (!allContactCount) {
     return (
       <EmptyState
-        title="No contacts yet"
-        description="Use Add contact to create the first contact record."
+        title="No people yet"
+        description="Use Add person to create the first person record."
       />
     );
   }
@@ -256,6 +278,13 @@ export default function ContactsTable({
       ),
     },
     {
+      id: "category",
+      header: "Category",
+      sortable: true,
+      sortValue: (contact) => contact.category,
+      cell: (contact) => <ContactCategoryBadge category={contact.category} />,
+    },
+    {
       id: "role",
       header: "Role",
       sortable: true,
@@ -273,7 +302,8 @@ export default function ContactsTable({
       id: "email",
       header: "Email",
       sortable: true,
-      sortValue: (contact) => contact.email ?? contact.additionalEmails[0]?.email ?? "",
+      sortValue: (contact) =>
+        contact.email ?? contact.additionalEmails[0]?.email ?? "",
       cell: (contact) => <ContactEmailCell contact={contact} />,
     },
     {
@@ -299,51 +329,188 @@ export default function ContactsTable({
   ];
 
   return (
-    <CrmDataTable
-      data={contacts}
-      columns={columns}
-      getRowId={(contact) => contact.id}
-      searchPlaceholder="Search contacts..."
-      query={localQuery}
-      onQueryChange={setLocalQuery}
-      sort={{ columnId: sortKey, direction: sortDirection }}
-      onSortChange={(nextSort) => {
-        const nextKey = nextSort.columnId as SortKey;
-        const nextDirection = nextSort.direction as CrmDataTableSortDirection;
+    <div className="space-y-5">
+      <ContactCategoryOverview
+        activeCategory={activeCategory}
+        allContactCount={allContactCount}
+        categoryCounts={categoryCounts}
+        onSelect={(category) =>
+          updateParams({
+            category: category === "all" ? null : category,
+            page: null,
+          })
+        }
+      />
+      <CrmDataTable
+        data={contacts}
+        columns={columns}
+        getRowId={(contact) => contact.id}
+        title={
+          activeCategoryOption
+            ? `${activeCategoryOption.pluralLabel} (${totalCount})`
+            : `All People (${totalCount})`
+        }
+        searchPlaceholder="Search people..."
+        query={localQuery}
+        onQueryChange={setLocalQuery}
+        sort={{ columnId: sortKey, direction: sortDirection }}
+        onSortChange={(nextSort) => {
+          const nextKey = nextSort.columnId as SortKey;
+          const nextDirection = nextSort.direction as CrmDataTableSortDirection;
 
-        updateParams({
-          direction: nextKey === "name" && nextDirection === "asc" ? null : nextDirection,
-          page: null,
-          sort: nextKey === "name" && nextDirection === "asc" ? null : nextKey,
-        });
-      }}
-      page={page}
-      pageSize={pageSize}
-      totalCount={totalCount}
-      enableColumnSelection
-      visibleColumnIds={visibleColumnIds}
-      onVisibleColumnIdsChange={updateVisibleColumns}
-      onPageChange={(nextPage) =>
-        updateParams({ page: nextPage > 1 ? String(nextPage) : null })
-      }
-      onPageSizeChange={(nextPageSize) =>
-        updateParams({ page: null, pageSize: String(nextPageSize) })
-      }
-      pageSizeOptions={pageSizes}
-      manualFiltering
-      manualPagination
-      manualSorting
-      emptyState="No contacts match this search."
-      renderRowActions={(contact) => (
-        <ContactActions
-          availableTags={availableTags}
-          companies={companies}
-          companiesEnabled={companiesEnabled}
-          contact={contact}
-          addressLookupEnabled={addressLookupEnabled}
-        />
-      )}
-    />
+          updateParams({
+            direction:
+              nextKey === "name" && nextDirection === "asc"
+                ? null
+                : nextDirection,
+            page: null,
+            sort:
+              nextKey === "name" && nextDirection === "asc" ? null : nextKey,
+          });
+        }}
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        enableColumnSelection
+        visibleColumnIds={visibleColumnIds}
+        onVisibleColumnIdsChange={updateVisibleColumns}
+        onPageChange={(nextPage) =>
+          updateParams({ page: nextPage > 1 ? String(nextPage) : null })
+        }
+        onPageSizeChange={(nextPageSize) =>
+          updateParams({ page: null, pageSize: String(nextPageSize) })
+        }
+        pageSizeOptions={pageSizes}
+        manualFiltering
+        manualPagination
+        manualSorting
+        emptyState="No people match this search."
+        renderRowActions={(contact) => (
+          <ContactActions
+            availableTags={availableTags}
+            companies={companies}
+            companiesEnabled={companiesEnabled}
+            contact={contact}
+            addressLookupEnabled={addressLookupEnabled}
+          />
+        )}
+      />
+    </div>
+  );
+}
+
+const categoryIconByValue: Record<ContactCategoryValue, LucideIcon> = {
+  CONSUMER: UserRound,
+  TRADE: BriefcaseBusiness,
+  INSTALLER: Wrench,
+  COMPANY: Building2,
+};
+
+function ContactCategoryOverview({
+  activeCategory,
+  allContactCount,
+  categoryCounts,
+  onSelect,
+}: {
+  activeCategory: "all" | ContactCategoryValue;
+  allContactCount: number;
+  categoryCounts: Record<ContactCategoryValue, number>;
+  onSelect: (category: "all" | ContactCategoryValue) => void;
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-800">
+        {[
+          { label: "All People", value: "all" as const },
+          ...contactCategoryOptions.map((option) => ({
+            label: option.label,
+            value: option.value,
+          })),
+        ].map((tab) => {
+          const selected = activeCategory === tab.value;
+
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => onSelect(tab.value)}
+              className={`border-b-2 px-3 py-2 text-sm font-semibold transition ${
+                selected
+                  ? "border-brand-500 text-brand-600 dark:text-brand-300"
+                  : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {contactCategoryOptions.map((option, index) => {
+          const Icon = categoryIconByValue[option.value];
+          const count = categoryCounts[option.value] ?? 0;
+          const selected = activeCategory === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onSelect(option.value)}
+              className={`min-h-44 rounded-lg border bg-white p-4 text-left shadow-theme-xs transition hover:-translate-y-0.5 hover:shadow-theme-sm dark:bg-white/[0.03] ${
+                selected
+                  ? "border-brand-400 ring-2 ring-brand-500/15"
+                  : option.cardClassName
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.countClassName}`}
+                >
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                    {index + 1}. {option.label}
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-gray-800 dark:text-white/90">
+                    {option.description}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {option.examples.map((example) => (
+                  <span
+                    key={example}
+                    className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-white/[0.04] dark:text-gray-300 dark:ring-white/10"
+                  >
+                    {example}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-white/10">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {option.pluralLabel}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${option.countClassName}`}
+                >
+                  {count}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {activeCategory !== "all" ? (
+        <button
+          type="button"
+          onClick={() => onSelect("all")}
+          className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+        >
+          Show all {allContactCount} people
+        </button>
+      ) : null}
+    </section>
   );
 }
 
@@ -390,16 +557,17 @@ function ContactCompanyCell({
   }
 
   const address = companyAddress(contact);
-  const companyName = companiesEnabled && contact.companyId ? (
-    <Link
-      href={`/clients/${contact.companyId}`}
-      className="block truncate font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-    >
-      {contact.companyName}
-    </Link>
-  ) : (
-    <span className="block truncate">{contact.companyName}</span>
-  );
+  const companyName =
+    companiesEnabled && contact.companyId ? (
+      <Link
+        href={`/clients/${contact.companyId}`}
+        className="block truncate font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+      >
+        {contact.companyName}
+      </Link>
+    ) : (
+      <span className="block truncate">{contact.companyName}</span>
+    );
 
   return (
     <div className="min-w-0">
@@ -496,6 +664,22 @@ function ContactTags({ contact }: { contact: ContactRow }) {
         </span>
       )}
     </div>
+  );
+}
+
+function ContactCategoryBadge({
+  category,
+}: {
+  category: ContactCategoryValue | null | undefined;
+}) {
+  const option = contactCategoryOption(category ?? defaultContactCategory);
+
+  return (
+    <span
+      className={`inline-flex h-6 items-center rounded-full px-2 text-xs font-semibold ${option.tableClassName}`}
+    >
+      {option.label}
+    </span>
   );
 }
 
