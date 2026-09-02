@@ -1,3 +1,7 @@
+import {
+  isCustomerSalesCategoryValue,
+  type CustomerSalesCategoryValue,
+} from "@/lib/sales/customer-sales-category";
 import type { SalesStageValue } from "@/lib/sales/lifecycle";
 
 export const openStages: SalesStageValue[] = [
@@ -36,6 +40,7 @@ export const salesSortOptions = [
 ];
 
 export type SalesSearchParams = {
+  customerCategory?: string | string[];
   owner?: string | string[];
   page?: string | string[];
   pageSize?: string | string[];
@@ -49,6 +54,7 @@ export type SalesPipelineView = "table" | "kanban";
 
 export type PipelineStageOption = {
   bucket: SalesStageValue;
+  customerSalesCategory?: CustomerSalesCategoryValue;
   color: string | null;
   label: string;
   sortOrder: number;
@@ -68,6 +74,14 @@ export function parseStageFilter(
   return stageOptions.some((option) => option.value === stage)
     ? (stage ?? "all")
     : "all";
+}
+
+export function parseCustomerCategoryFilter(
+  value: string | string[] | undefined,
+) {
+  const category = singleParam(value);
+
+  return isCustomerSalesCategoryValue(category) ? category : "all";
 }
 
 export function parseSalesSort(value: string | string[] | undefined) {

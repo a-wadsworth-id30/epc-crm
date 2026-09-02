@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AttributionSourceIconSlot } from "@/components/crm-boilerplate/AttributionSourceIcon";
+import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSalesCategoryBadge";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import {
@@ -1615,6 +1616,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       id: true,
       title: true,
       stage: true,
+      customerSalesCategory: true,
       salesPipelineStageId: true,
       valueCents: true,
       currency: true,
@@ -2008,7 +2010,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   const spruceExternalJobUrl =
     spruceSaleLink?.externalType === spruceJobExternalType
       ? (spruceQuoteUrlFromExternalId(spruceSaleLink.externalId) ??
-        safeExternalHttpsUrl(jsonObject(spruceSaleLink.metadata).externalJobUrl))
+        safeExternalHttpsUrl(
+          jsonObject(spruceSaleLink.metadata).externalJobUrl,
+        ))
       : null;
   const discoveryAnswerTypes = new Set(
     discoveryTemplates.flatMap((template) =>
@@ -2491,6 +2495,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               <LazyHelpTooltip content="Lead workspace for conversation, lead details and discovery." />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500 lg:hidden dark:text-gray-400">
+              <CustomerSalesCategoryBadge
+                category={sale.customerSalesCategory}
+              />
               <SalesPipelineStageBadge
                 color={saleStageColor}
                 label={saleStageName}
@@ -2507,7 +2514,8 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               )}
             </div>
           </div>
-          <div className="hidden shrink-0 lg:block">
+          <div className="hidden shrink-0 flex-col gap-2 lg:flex">
+            <CustomerSalesCategoryBadge category={sale.customerSalesCategory} />
             <SalesPipelineStageBadge
               color={saleStageColor}
               label={saleStageName}
@@ -2683,7 +2691,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         scopePanel={
           <div className="p-4 sm:p-5">
             <section className="mb-5 border-b border-gray-200 pb-4 dark:border-gray-800">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
                     Customer
@@ -2691,6 +2699,16 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                   <p className="mt-1 truncate text-sm font-semibold text-gray-900 dark:text-white">
                     {customerName || sale.company?.name || "No customer"}
                   </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                    Customer status
+                  </p>
+                  <div className="mt-1">
+                    <CustomerSalesCategoryBadge
+                      category={sale.customerSalesCategory}
+                    />
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">

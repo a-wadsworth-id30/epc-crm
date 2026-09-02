@@ -57,14 +57,15 @@ Rules for future agents:
 - `Company` is the client/company record. The create-company flow can create up to 10 linked contacts in the same transaction, using each contact's role/job title plus the existing contact lead-source field.
 - `Contact` optionally belongs to a company. When the Companies module is enabled, the contact form can link an existing `Company` or create a new linked one by name; when the module is disabled, the form stores only plain `Contact.companyName` text and does not create/link `Company` rows. `Contact.role` stores the person's role/job title at that organisation. `Contact.leadSource` stores the normalized "Where did you hear about us?" source used by manual contact creation and cleanly mapped website/phone captures. Contact and company detail pages link back to each other. Contact detail exposes explicit edit, merge and delete actions; merge keeps the viewed contact, moves duplicate-linked leads, communications, calls, notes, tasks, files, attribution records and tags across, fills missing primary fields, and deletes the duplicate.
 - `CrmSettings.companiesEnabled` controls whether Companies appears in the sidebar and whether contacts use a searchable company dropdown or a text input.
-- `SalesOpportunity` is the sales pipeline record and sale wrapper. It links optionally to company/contact/owner, stores value in `valueCents`, and uses `SalesStage`. Contact detail can open the manual create-lead flow with contact/company details already linked.
+- `SalesOpportunity` is the sales pipeline record and sale wrapper. It links optionally to company/contact/owner, stores value in `valueCents`, keeps EPC's customer status in `customerSalesCategory`, and uses `SalesStage` as the reporting bucket. Contact detail can open the manual create-lead flow with contact/company details already linked.
 - `SalesPipelineStage` is the custom stage foundation. It maps configurable
-  stages to the stable `SalesStage` enum bucket; opportunities and lifecycle
-  stage events can link to it while reports/conversion uploads keep using the
-  bucket. Admins can manage those stage records at
+  stages to a customer sales category and the stable `SalesStage` enum bucket;
+  opportunities and lifecycle stage events can link to it while
+  reports/conversion uploads keep using the bucket. Admins can manage those
+  stage records at
   `/settings/sales-pipeline`. The sales overview uses active custom stages for
-  create, bulk update, filter, sort and display flows while keeping the legacy
-  bucket synced for reporting.
+  create, bulk update, filter, sort and display flows while keeping the
+  customer status and legacy bucket synced for reporting.
 - `SalesLifecycleEvent` records opportunity creation, stage changes, first-contact events and lost-reason updates. `SalesOpportunity` keeps denormalized lifecycle timestamps (`stageChangedAt`, `firstContactedAt`, `closedAt`) plus lost-reason fields for reporting.
 - `SalesCommunication` stores sale-level communication journey events across phone, email, SMS, WhatsApp, notes and system events.
 - `ProductCategory` and `Product` are the reusable sales catalogue foundation;

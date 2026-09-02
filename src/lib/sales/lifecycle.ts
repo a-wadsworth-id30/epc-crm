@@ -1,5 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  customerSalesCategoryForStage,
+  type CustomerSalesCategoryValue,
+} from "@/lib/sales/customer-sales-category";
 
 export const salesStages = [
   "LEAD",
@@ -24,7 +28,8 @@ export const stageProbability: Record<SalesStageValue, number> = {
 export const defaultSalesPipelineStages = [
   {
     stage: "LEAD",
-    name: "Enquiries",
+    customerSalesCategory: "ENQUIRY",
+    name: "Lead",
     slug: "lead",
     sortOrder: 10,
     defaultProbability: 10,
@@ -34,9 +39,10 @@ export const defaultSalesPipelineStages = [
   },
   {
     stage: "QUALIFIED",
-    name: "Qualified (legacy)",
+    customerSalesCategory: "OPPORTUNITY",
+    name: "Qualified",
     slug: "qualified",
-    sortOrder: 90,
+    sortOrder: 20,
     defaultProbability: 25,
     isClosed: false,
     isWon: false,
@@ -44,9 +50,10 @@ export const defaultSalesPipelineStages = [
   },
   {
     stage: "PROPOSAL",
-    name: "Opportunities",
+    customerSalesCategory: "OPPORTUNITY",
+    name: "Proposal",
     slug: "proposal",
-    sortOrder: 20,
+    sortOrder: 30,
     defaultProbability: 45,
     isClosed: false,
     isWon: false,
@@ -54,9 +61,10 @@ export const defaultSalesPipelineStages = [
   },
   {
     stage: "NEGOTIATION",
-    name: "Negotiation (legacy)",
+    customerSalesCategory: "OPPORTUNITY",
+    name: "Negotiation",
     slug: "negotiation",
-    sortOrder: 100,
+    sortOrder: 40,
     defaultProbability: 75,
     isClosed: false,
     isWon: false,
@@ -64,9 +72,10 @@ export const defaultSalesPipelineStages = [
   },
   {
     stage: "WON",
-    name: "Projects",
+    customerSalesCategory: "PROJECT",
+    name: "Won",
     slug: "won",
-    sortOrder: 30,
+    sortOrder: 50,
     defaultProbability: 100,
     isClosed: true,
     isWon: true,
@@ -74,9 +83,10 @@ export const defaultSalesPipelineStages = [
   },
   {
     stage: "LOST",
+    customerSalesCategory: "OPPORTUNITY",
     name: "Lost",
     slug: "lost",
-    sortOrder: 40,
+    sortOrder: 60,
     defaultProbability: 0,
     isClosed: true,
     isWon: false,
@@ -84,6 +94,7 @@ export const defaultSalesPipelineStages = [
   },
 ] as const satisfies Array<{
   stage: SalesStageValue;
+  customerSalesCategory: CustomerSalesCategoryValue;
   name: string;
   slug: string;
   sortOrder: number;
@@ -160,6 +171,7 @@ export async function salesPipelineStageForId(
 const salesPipelineStageSelect = {
   id: true,
   bucket: true,
+  customerSalesCategory: true,
   defaultProbability: true,
   isClosed: true,
   isWon: true,
@@ -177,6 +189,7 @@ export function lifecycleOpportunityDataForStage(
   stage: SalesStageValue,
   occurredAt = new Date(),
   options: {
+    customerSalesCategory?: CustomerSalesCategoryValue;
     lostReason?: string | null;
     lostReasonNotes?: string | null;
     salesPipelineStageId?: string | null;
@@ -186,6 +199,8 @@ export function lifecycleOpportunityDataForStage(
 
   return {
     stage,
+    customerSalesCategory:
+      options.customerSalesCategory ?? customerSalesCategoryForStage(stage),
     salesPipelineStageId: options.salesPipelineStageId ?? null,
     probability: stageProbability[stage],
     stageChangedAt: occurredAt,
@@ -209,6 +224,7 @@ export async function lifecycleOpportunityDataForDefaultStage(
   return {
     ...lifecycleOpportunityDataForStage(stage, occurredAt, {
       ...options,
+      customerSalesCategory: pipelineStage?.customerSalesCategory,
       salesPipelineStageId: pipelineStage?.id ?? null,
     }),
     probability: pipelineStage?.defaultProbability ?? stageProbability[stage],
@@ -242,6 +258,7 @@ export async function lifecycleOpportunityDataForPipelineStage(
   return {
     ...lifecycleOpportunityDataForStage(pipelineStage.bucket, occurredAt, {
       ...options,
+      customerSalesCategory: pipelineStage.customerSalesCategory,
       salesPipelineStageId: pipelineStage.id,
     }),
     probability: pipelineStage.defaultProbability,

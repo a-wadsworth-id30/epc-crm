@@ -15,14 +15,19 @@ function isLocalDatabaseUrl(value: string | undefined) {
   try {
     const hostname = new URL(value).hostname.toLowerCase();
 
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+    return (
+      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+    );
   } catch {
     return false;
   }
 }
 
 function requiresExplicitSeedCredentials() {
-  return process.env.NODE_ENV === "production" || !isLocalDatabaseUrl(process.env.DATABASE_URL);
+  return (
+    process.env.NODE_ENV === "production" ||
+    !isLocalDatabaseUrl(process.env.DATABASE_URL)
+  );
 }
 
 function validateSeedCredentials() {
@@ -50,7 +55,8 @@ async function main() {
   validateSeedCredentials();
 
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? defaultSeedAdminEmail;
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? defaultSeedAdminPassword;
+  const adminPassword =
+    process.env.SEED_ADMIN_PASSWORD ?? defaultSeedAdminPassword;
   const adminName = process.env.SEED_ADMIN_NAME ?? "Default Admin";
   const adminMobile = process.env.SEED_ADMIN_MOBILE ?? "07700900123";
 
@@ -86,80 +92,86 @@ async function main() {
   const defaultPipelineStages = [
     {
       id: "sales-pipeline-stage-lead",
-      name: "Enquiries",
+      name: "Lead",
       slug: "lead",
       bucket: "LEAD",
+      customerSalesCategory: "ENQUIRY",
       sortOrder: 10,
       defaultProbability: 10,
       isActive: true,
       isClosed: false,
       isWon: false,
       isLost: false,
-      color: "#2563EB",
-      description: "Marketed leads land here and are nurtured until engaged.",
+      color: "#6B7280",
+      description: "New enquiry or unqualified sales opportunity.",
     },
     {
       id: "sales-pipeline-stage-qualified",
-      name: "Qualified (legacy)",
+      name: "Qualified",
       slug: "qualified",
       bucket: "QUALIFIED",
-      sortOrder: 90,
+      customerSalesCategory: "OPPORTUNITY",
+      sortOrder: 20,
       defaultProbability: 25,
-      isActive: false,
+      isActive: true,
       isClosed: false,
       isWon: false,
       isLost: false,
-      color: "#64748B",
-      description: "Legacy bucket retained for historical reporting compatibility.",
+      color: "#2563EB",
+      description: "Qualified customer ready to scope or quote.",
     },
     {
       id: "sales-pipeline-stage-proposal",
-      name: "Opportunities",
+      name: "Proposal",
       slug: "proposal",
       bucket: "PROPOSAL",
-      sortOrder: 20,
+      customerSalesCategory: "OPPORTUNITY",
+      sortOrder: 30,
       defaultProbability: 45,
       isActive: true,
       isClosed: false,
       isWon: false,
       isLost: false,
       color: "#0BA5EC",
-      description: "Engaged enquiries that are being scoped, quoted or followed up.",
+      description: "Proposal or quote issued to the customer.",
     },
     {
       id: "sales-pipeline-stage-negotiation",
-      name: "Negotiation (legacy)",
+      name: "Negotiation",
       slug: "negotiation",
       bucket: "NEGOTIATION",
-      sortOrder: 100,
+      customerSalesCategory: "OPPORTUNITY",
+      sortOrder: 40,
       defaultProbability: 75,
-      isActive: false,
+      isActive: true,
       isClosed: false,
       isWon: false,
       isLost: false,
-      color: "#64748B",
-      description: "Legacy bucket retained for historical reporting compatibility.",
+      color: "#D97706",
+      description: "Customer is negotiating scope, price or timing.",
     },
     {
       id: "sales-pipeline-stage-won",
-      name: "Projects",
+      name: "Won",
       slug: "won",
       bucket: "WON",
-      sortOrder: 30,
+      customerSalesCategory: "PROJECT",
+      sortOrder: 50,
       defaultProbability: 100,
       isActive: true,
       isClosed: true,
       isWon: true,
       isLost: false,
       color: "#059669",
-      description: "Confirmed orders that have become customer projects.",
+      description: "Confirmed order that has become a customer project.",
     },
     {
       id: "sales-pipeline-stage-lost",
       name: "Lost",
       slug: "lost",
       bucket: "LOST",
-      sortOrder: 40,
+      customerSalesCategory: "OPPORTUNITY",
+      sortOrder: 60,
       defaultProbability: 0,
       isActive: true,
       isClosed: true,
@@ -177,6 +189,7 @@ async function main() {
         update: {
           name: stage.name,
           bucket: stage.bucket,
+          customerSalesCategory: stage.customerSalesCategory,
           sortOrder: stage.sortOrder,
           defaultProbability: stage.defaultProbability,
           isActive: stage.isActive,
@@ -240,6 +253,7 @@ async function main() {
   const acmeOpportunityData = {
     title: "Acme CRM implementation",
     stage: "PROPOSAL" as const,
+    customerSalesCategory: "OPPORTUNITY" as const,
     salesPipelineStageId: pipelineStageByBucket.PROPOSAL,
     valueCents: 1850000,
     currency: "GBP",
@@ -297,6 +311,7 @@ async function main() {
   const adminOpportunityData = {
     title: "Website enquiry follow-up",
     stage: "QUALIFIED" as const,
+    customerSalesCategory: "OPPORTUNITY" as const,
     salesPipelineStageId: pipelineStageByBucket.QUALIFIED,
     valueCents: 0,
     currency: "GBP",
@@ -342,7 +357,8 @@ async function main() {
       channel: "SMS" as const,
       direction: "OUTBOUND" as const,
       subject: "Booking prompt sent",
-      summary: "Sent an SMS asking the customer to choose a suitable time for a call.",
+      summary:
+        "Sent an SMS asking the customer to choose a suitable time for a call.",
       body: "Thanks for your enquiry. We will call to confirm the details so we can prepare an accurate quote.",
       fromAddress: "Twilio",
       toAddress: adminContact.phone,
@@ -353,7 +369,8 @@ async function main() {
       channel: "PHONE" as const,
       direction: "OUTBOUND" as const,
       subject: "Telephone qualification call",
-      summary: "Next action is to call the customer and confirm the quote requirements.",
+      summary:
+        "Next action is to call the customer and confirm the quote requirements.",
       body: "Use this call to confirm the brief, urgency, budget range and any site-specific constraints.",
       fromAddress: admin.mobile ?? "CRM softphone",
       toAddress: adminContact.phone,
@@ -405,7 +422,8 @@ async function main() {
       id: "product-category-marketing",
       name: "Marketing",
       slug: "marketing",
-      description: "Digital marketing, SEO, paid media and conversion services.",
+      description:
+        "Digital marketing, SEO, paid media and conversion services.",
       sortOrder: 30,
     },
   ] as const;
@@ -516,7 +534,8 @@ async function main() {
       id: "discovery-question-budget",
       slug: "budget",
       label: "What budget range should we work to?",
-      helpText: "Lead-level commercial qualification shared across all products.",
+      helpText:
+        "Lead-level commercial qualification shared across all products.",
       scope: "OPPORTUNITY" as const,
       answerType: "CURRENCY" as const,
       defaultRequired: true,
@@ -589,7 +608,8 @@ async function main() {
       id: "discovery-question-decision-maker",
       slug: "decision-maker",
       label: "Who signs off the project?",
-      helpText: "Confirms the commercial decision maker and any other stakeholders.",
+      helpText:
+        "Confirms the commercial decision maker and any other stakeholders.",
       scope: "OPPORTUNITY" as const,
       answerType: "TEXT" as const,
       defaultRequired: false,
@@ -721,7 +741,12 @@ async function main() {
       scope: "PRODUCT" as const,
       answerType: "SINGLE_SELECT" as const,
       answerMode: "SINGLE" as const,
-      options: ["More leads", "More sales", "Brand awareness", "Retain customers"],
+      options: [
+        "More leads",
+        "More sales",
+        "Brand awareness",
+        "Retain customers",
+      ],
       defaultRequired: true,
       dedupeKey: "marketing-goal",
       sortOrder: 300,
@@ -776,7 +801,8 @@ async function main() {
       name: "Ecommerce discovery",
       slug: "ecommerce-discovery",
       scope: "PRODUCT" as const,
-      description: "Questions required when ecommerce is attached to an opportunity.",
+      description:
+        "Questions required when ecommerce is attached to an opportunity.",
       sortOrder: 100,
       productSlug: "ecommerce-website",
       questionSlugs: [

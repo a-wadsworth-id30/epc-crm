@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
+import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSalesCategoryBadge";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
@@ -23,6 +24,11 @@ import {
   salesKanbanCardFieldDefinitions,
   type SalesKanbanSettings,
 } from "@/lib/sales/kanban-settings";
+import {
+  customerSalesCategoryForStage,
+  customerSalesCategoryOptions,
+  type CustomerSalesCategoryValue,
+} from "@/lib/sales/customer-sales-category";
 import type { SalesStageValue } from "@/lib/sales/lifecycle";
 import {
   stageRequiredActionDefinitions,
@@ -36,6 +42,7 @@ export type SalesPipelineStageManagerItem = {
   name: string;
   slug: string;
   bucket: SalesStageValue;
+  customerSalesCategory: CustomerSalesCategoryValue;
   sortOrder: number;
   defaultProbability: number;
   goal: string | null;
@@ -62,25 +69,25 @@ const bucketOptions: Array<{
 }> = [
   {
     value: "LEAD",
-    label: "Enquiries",
-    description: "Marketed leads being nurtured",
+    label: "Lead",
+    description: "New or unqualified lead bucket",
   },
   {
     value: "QUALIFIED",
     label: "Qualified",
-    description: "Legacy reporting bucket",
+    description: "Qualified lead bucket",
   },
   {
     value: "PROPOSAL",
-    label: "Opportunities",
-    description: "Engaged enquiries being quoted",
+    label: "Proposal",
+    description: "Proposal or quote bucket",
   },
   {
     value: "NEGOTIATION",
     label: "Negotiation",
-    description: "Legacy reporting bucket",
+    description: "Negotiation bucket",
   },
-  { value: "WON", label: "Projects", description: "Confirmed orders" },
+  { value: "WON", label: "Won", description: "Closed won bucket" },
   { value: "LOST", label: "Lost", description: "Closed lost opportunities" },
 ];
 
@@ -195,6 +202,9 @@ function SalesPipelineStageForm({
   const formRef = useRef<HTMLFormElement>(null);
   const { showToast } = useToast();
   const defaultBucket = stage?.bucket ?? "LEAD";
+  const defaultCustomerSalesCategory =
+    stage?.customerSalesCategory ??
+    customerSalesCategoryForStage(defaultBucket);
   const defaultColor = stage?.color ?? bucketDefaultColors[defaultBucket];
 
   useEffect(() => {
@@ -236,6 +246,21 @@ function SalesPipelineStageForm({
             className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
           >
             {bucketOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor={`${mode}-customer-category`}>Customer category</Label>
+          <select
+            id={`${mode}-customer-category`}
+            name="customerSalesCategory"
+            defaultValue={defaultCustomerSalesCategory}
+            className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            {customerSalesCategoryOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -642,6 +667,7 @@ export default function SalesPipelineStageManager({
               <tr className="text-left text-xs text-gray-500 uppercase dark:text-gray-400">
                 <th className="px-5 py-3">Order</th>
                 <th className="px-5 py-3">Stage</th>
+                <th className="px-5 py-3">Customer category</th>
                 <th className="px-5 py-3">Bucket</th>
                 <th className="px-5 py-3">Probability</th>
                 <th className="px-5 py-3">Status</th>
@@ -694,6 +720,11 @@ export default function SalesPipelineStageManager({
                         ) : null}
                       </div>
                     </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <CustomerSalesCategoryBadge
+                      category={stage.customerSalesCategory}
+                    />
                   </td>
                   <td className="px-5 py-4">
                     <StageBadge bucket={stage.bucket} />

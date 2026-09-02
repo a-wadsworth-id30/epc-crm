@@ -58,12 +58,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   contact category enum.
 - `ContactTag` / `ContactTagAssignment`: reusable contact tags with canonical
   slugs and many-to-many contact assignment.
-- `SalesOpportunity`: sale/enquiry pipeline wrapper, including current lead
-  score and score timestamp.
+- `SalesOpportunity`: sale/enquiry pipeline wrapper, including current customer
+  sales category, lead score and score timestamp.
 - `SalesPipelineStage`: configurable sales stage mapped to the stable
-  `SalesStage` reporting/conversion bucket, with stage goal, AI context,
-  movement policy, required-data gate mode and metadata-backed stage
-  progression requirements.
+  `SalesStage` reporting/conversion bucket and a customer sales category, with
+  stage goal, AI context, movement policy, required-data gate mode and
+  metadata-backed stage progression requirements.
 - `SalesCommunication`: communication journey events attached to a sale.
 - `ProductCategory` / `Product`: reusable service/product catalogue for sales
   scoping, with optional R2-backed product image assets and room for later
