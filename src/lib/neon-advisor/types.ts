@@ -85,6 +85,7 @@ export type AdvisorThresholds = AdvisorGuardrails & {
   seqScanWarningCount: number;
   targetMaxCu: number;
   targetMinCu: number;
+  targetSuspendSeconds: number;
 };
 
 export type AdvisorCostRates = {

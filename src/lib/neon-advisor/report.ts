@@ -95,6 +95,7 @@ function neonProfileLines(report: NeonOptimizationReport) {
     `- Neon endpoints seen: ${endpoints ?? "unavailable"}`,
     `- Neon branches seen: ${branches ?? "unavailable"}`,
     `- Autoscaling review target: min ${formatNullableNumber(report.config.thresholds.targetMinCu)} CU / max ${formatNullableNumber(report.config.thresholds.targetMaxCu)} CU`,
+    `- Suspend review target: ${formatNullableNumber(report.config.thresholds.targetSuspendSeconds)} seconds`,
     `- Monthly compute CU-hours: ${formatNullableNumber(report.costModel.monthlyComputeCuHours)}`,
     `- Database size for storage estimate: ${formatGb(report.costModel.databaseSizeGb)}`,
   ];

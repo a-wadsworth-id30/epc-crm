@@ -88,6 +88,11 @@ export function readAdvisorConfig(
       seqScanWarningCount: numberEnv(env, "NEON_ADVISOR_SEQ_SCAN_WARNING_COUNT", 100),
       targetMaxCu: numberEnv(env, "NEON_ADVISOR_TARGET_MAX_CU", 2),
       targetMinCu: numberEnv(env, "NEON_ADVISOR_TARGET_MIN_CU", 0),
+      targetSuspendSeconds: numberEnv(
+        env,
+        "NEON_ADVISOR_TARGET_SUSPEND_SECONDS",
+        300,
+      ),
     },
   };
 }

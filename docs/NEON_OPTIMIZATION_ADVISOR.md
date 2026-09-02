@@ -118,12 +118,18 @@ NEON_ADVISOR_QUERY_DURATION_MS="500"
 NEON_ADVISOR_LOCK_WAIT_MS="1000"
 NEON_ADVISOR_TARGET_MIN_CU="0"
 NEON_ADVISOR_TARGET_MAX_CU="2"
+NEON_ADVISOR_TARGET_SUSPEND_SECONDS="300"
 ```
 
 `NEON_ADVISOR_TARGET_MIN_CU` and `NEON_ADVISOR_TARGET_MAX_CU` are review
 targets only. The advisor compares Neon endpoint autoscaling settings with
 those values when read-only Neon API telemetry is configured; it does not change
 endpoint capacity automatically.
+
+`NEON_ADVISOR_TARGET_SUSPEND_SECONDS` works the same way for scale-to-zero. It
+flags endpoints where suspend is missing, disabled or above the review target,
+but a human still applies any Neon endpoint change after checking cold-start and
+scheduled-job behaviour.
 
 Example rollback rule used by the report:
 

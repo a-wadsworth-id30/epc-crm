@@ -454,6 +454,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   (`NEON_ADVISOR_TARGET_MIN_CU`, `NEON_ADVISOR_TARGET_MAX_CU`) so endpoint
   min/max CU settings can be compared against a conservative CRM target before
   any manual Neon console/API capacity change.
+- Scale-to-zero review is also configurable through
+  `NEON_ADVISOR_TARGET_SUSPEND_SECONDS`; the advisor flags missing, disabled or
+  above-target Neon endpoint suspend settings without changing endpoint
+  behaviour automatically.
 - Migration-sensitive features should use the shared Prisma schema-drift
   helpers in `src/lib/prisma-errors.ts` so optional table/column rollout gaps
   produce controlled fallback states rather than taking down normal routes.

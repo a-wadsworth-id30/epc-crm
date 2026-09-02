@@ -243,13 +243,17 @@ function addEndpointRecommendations({
   recommendations: AdvisorRecommendation[];
 }) {
   const endpoints = recordsFrom(neon.endpoints.data, "endpoints");
-  const endpointsWithoutSuspend = endpoints.filter((endpoint) => {
+  const suspendReviewCandidates = endpoints.filter((endpoint) => {
     const suspendSeconds = numberField(endpoint, [
       "suspend_timeout_seconds",
       "suspendTimeoutSeconds",
     ]);
 
-    return suspendSeconds === null || suspendSeconds <= 0;
+    return (
+      suspendSeconds === null ||
+      suspendSeconds <= 0 ||
+      suspendSeconds > config.thresholds.targetSuspendSeconds
+    );
   });
   const autoscalingEndpoints = endpoints.filter(
     (endpoint) =>
@@ -266,7 +270,7 @@ function addEndpointRecommendations({
     );
   });
 
-  if (endpointsWithoutSuspend.length) {
+  if (suspendReviewCandidates.length) {
     recommendations.push(
       recommendation({
         config,
@@ -286,16 +290,23 @@ function addEndpointRecommendations({
             label: "Endpoints without confirmed suspend timeout",
             measured: true,
             source: "neon-api",
-            value: endpointsWithoutSuspend.length,
+            value: suspendReviewCandidates.length,
+          }),
+          evidence({
+            label: "Target suspend timeout",
+            measured: false,
+            source: "advisor-config",
+            value: config.thresholds.targetSuspendSeconds,
+            unit: "seconds",
           }),
         ],
         expectedSavings:
           "Potential compute-active time reduction during low-traffic periods.",
         id: "review-endpoint-suspend-settings",
         issue:
-          "One or more Neon endpoints do not show an active suspend/scale-to-zero timeout in the available telemetry.",
+          "One or more Neon endpoints have no confirmed suspend timeout, disabled suspend or a timeout above the CRM review target.",
         proposedOptimization:
-          "Review endpoint suspend settings and enable scale-to-zero only if scheduled jobs, webhooks and user workflows tolerate cold starts.",
+          "Review endpoint suspend settings and keep scale-to-zero enabled with a timeout no higher than the validated CRM target.",
         reversibility: 0.95,
         riskLevel: "low",
         savingsScore: 70,
@@ -303,7 +314,7 @@ function addEndpointRecommendations({
         validationProcedure: [
           "Capture active compute and request baseline for at least one week.",
           "Confirm no background worker needs a persistent database connection.",
-          "Apply only after approval in a low-traffic window.",
+          "Apply the suspend timeout target only after approval in a low-traffic window.",
           "Monitor cold-start latency, webhook failures, scheduled jobs and `/api/health`.",
         ],
       }),

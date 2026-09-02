@@ -24,16 +24,19 @@ describe("Neon optimization advisor", () => {
     assert.equal(config.thresholds.activeConnectionSaturationPercent, 80);
     assert.equal(config.thresholds.targetMinCu, 0);
     assert.equal(config.thresholds.targetMaxCu, 2);
+    assert.equal(config.thresholds.targetSuspendSeconds, 300);
   });
 
   it("allows CRM autoscaling review targets to be tuned from env", () => {
     const config = readAdvisorConfig({
       NEON_ADVISOR_TARGET_MAX_CU: "1",
       NEON_ADVISOR_TARGET_MIN_CU: "0.25",
+      NEON_ADVISOR_TARGET_SUSPEND_SECONDS: "120",
     } as unknown as NodeJS.ProcessEnv);
 
     assert.equal(config.thresholds.targetMinCu, 0.25);
     assert.equal(config.thresholds.targetMaxCu, 1);
+    assert.equal(config.thresholds.targetSuspendSeconds, 120);
   });
 
   it("extracts Neon consumption metrics from nested response shapes", () => {
@@ -128,6 +131,46 @@ describe("Neon optimization advisor", () => {
     assert.ok(
       autoscaling.evidence.some(
         (item) => item.label === "Target max CU" && item.value === 2,
+      ),
+    );
+  });
+
+  it("flags Neon endpoints above the configured suspend target", () => {
+    const config = readAdvisorConfig({
+      NEON_ADVISOR_TARGET_SUSPEND_SECONDS: "300",
+    } as unknown as NodeJS.ProcessEnv);
+    const recommendations = buildRecommendations({
+      config,
+      costModel: costModelFixture(config.costRates.currency),
+      neon: neonFixture({
+        endpoints: [
+          {
+            autoscaling_limit_max_cu: 1,
+            autoscaling_limit_min_cu: 0,
+            suspend_timeout_seconds: 900,
+          },
+        ],
+      }),
+      postgres: postgresFixture({
+        active_connections: 1,
+        current_database_connections: 2,
+        idle_connections: 1,
+        idle_in_transaction_connections: 0,
+        max_connections: 100,
+        waiting_connections: 0,
+      }),
+      repository: repositoryFixture("neon-pooler"),
+    });
+
+    const suspend = recommendations.find(
+      (recommendation) => recommendation.id === "review-endpoint-suspend-settings",
+    );
+
+    assert.ok(suspend);
+    assert.match(suspend.issue, /timeout above the CRM review target/);
+    assert.ok(
+      suspend.evidence.some(
+        (item) => item.label === "Target suspend timeout" && item.value === 300,
       ),
     );
   });
