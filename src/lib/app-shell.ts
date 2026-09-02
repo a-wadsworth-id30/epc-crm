@@ -6,7 +6,11 @@ import {
   type CompanyProfile,
 } from "@/lib/company-profile";
 import { parseModuleToggles, type ModuleToggles } from "@/lib/module-toggles";
-import { crmSettingsCacheTag, getCrmSettings } from "@/lib/settings";
+import {
+  crmSettingsCacheRevalidateSeconds,
+  crmSettingsCacheTag,
+  getCrmSettings,
+} from "@/lib/settings";
 
 type AppShellSettings = {
   companiesEnabled: boolean;
@@ -31,7 +35,7 @@ export const getAppShellSettings = unstable_cache(
   loadAppShellSettings,
   ["app-shell-settings"],
   {
-    revalidate: 300,
+    revalidate: crmSettingsCacheRevalidateSeconds(),
     tags: [crmSettingsCacheTag],
   },
 );

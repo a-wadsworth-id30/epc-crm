@@ -23,6 +23,7 @@ import {
   type MessagePersonalisationContext,
   personaliseOutboundMessage,
 } from "@/lib/sales/message-personalisation";
+import { getCrmSettings } from "@/lib/settings";
 
 type SalesLeadAssistantUser = Pick<CurrentUser, "id" | "role">;
 
@@ -602,10 +603,7 @@ export async function runSalesLeadAssistant(
         startedAt: true,
       },
     }),
-    prisma.crmSettings.findUnique({
-      where: { id: "default" },
-      select: { aiContext: true },
-    }),
+    getCrmSettings(),
     buildSalesAIConversionMemory(prisma),
     prisma.salesPipelineStage.findMany({
       where: { isActive: true },

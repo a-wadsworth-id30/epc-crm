@@ -8,6 +8,7 @@ import { isMissingAttributionDebugEventTable } from "@/lib/attribution/debug-eve
 import { requireAdmin } from "@/lib/auth";
 import { twilioProvider, twilioStoredConfigSchema } from "@/lib/integrations/twilio";
 import { prisma } from "@/lib/prisma";
+import { getCrmSettings } from "@/lib/settings";
 
 export const metadata: Metadata = {
   title: "Call Tracking Diagnostics | iD30 CRM",
@@ -247,7 +248,7 @@ async function loadDiagnostics() {
     activeDniRules,
     recentPhoneEvents,
   ] = await Promise.all([
-    prisma.crmSettings.findUnique({ where: { id: "default" } }),
+    getCrmSettings(),
     prisma.integrationConnection.findUnique({ where: { provider: twilioProvider } }),
     prisma.attributionPhoneNumber.count({ where: { isActive: true } }),
     prisma.attributionPhoneNumber.count(),

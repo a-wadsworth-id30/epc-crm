@@ -7,6 +7,7 @@ import CallTrackingTabs from "@/components/crm-boilerplate/telephony-pages/CallT
 import { isMissingAttributionDebugEventTable } from "@/lib/attribution/debug-events";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCrmSettings } from "@/lib/settings";
 
 export const metadata: Metadata = {
   title: "Call Tracking Validation | iD30 CRM",
@@ -215,7 +216,7 @@ async function loadValidationState() {
     totalDniRules,
     activeDniRules,
   ] = await Promise.all([
-    prisma.crmSettings.findUnique({ where: { id: "default" } }),
+    getCrmSettings(),
     prisma.attributionPhoneNumber.count({ where: { isActive: true } }),
     prisma.attributionPhoneNumber
       .findMany({

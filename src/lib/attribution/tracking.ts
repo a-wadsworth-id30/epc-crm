@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { normalizeCallableNumber } from "@/lib/integrations/twilio-server";
 import { prisma } from "@/lib/prisma";
+import { getCrmSettings } from "@/lib/settings";
 
 export const attributionQueryParams = [
   "utm_source",
@@ -782,12 +783,9 @@ export async function assignTrackingPhoneNumber(options: {
 }) {
   const { attribution } = options;
   const now = new Date();
-  const settings = await prisma.crmSettings.findUnique({
-    where: { id: "default" },
-    select: { attributionSessionTimeoutMinutes: true },
-  });
+  const settings = await getCrmSettings();
   const assignmentWindowMinutes =
-    settings?.attributionSessionTimeoutMinutes ?? fallbackAssignmentWindowMinutes;
+    settings.attributionSessionTimeoutMinutes ?? fallbackAssignmentWindowMinutes;
   const expiresAt = new Date(now.getTime() + assignmentWindowMinutes * 60 * 1000);
   const snapshot = await upsertAttributionSnapshot(options);
   const dniRule = await resolveDniRule(attribution);

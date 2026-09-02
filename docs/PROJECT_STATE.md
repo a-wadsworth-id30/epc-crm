@@ -1500,7 +1500,8 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   detailed per-agent editing moved into a modal. Agent avatars are shown where
   profile images exist, with initials as the fallback.
 - Admin shell performance is tuned for Netlify serverless: global CRM settings
-  are cached with explicit invalidation, header notifications load through an
+  and the app-shell projection are cached for one hour by default with explicit
+  tag invalidation on settings saves, header notifications load through an
   authenticated API after initial render, and session `lastSeenAt` writes are
   throttled.
 - CRM Sidekick is exposed from the top-right app header as a Shopify-style

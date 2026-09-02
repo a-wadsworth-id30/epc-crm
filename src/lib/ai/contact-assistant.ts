@@ -25,6 +25,7 @@ import {
   type MessagePersonalisationContext,
   personaliseOutboundMessage,
 } from "@/lib/sales/message-personalisation";
+import { getCrmSettings } from "@/lib/settings";
 
 type ContactAssistantUser = Pick<CurrentUser, "id" | "role">;
 
@@ -571,10 +572,7 @@ export async function runContactAssistant(
           opportunityId: true,
         },
       }),
-      prisma.crmSettings.findUnique({
-        where: { id: "default" },
-        select: { aiContext: true },
-      }),
+      getCrmSettings(),
       prisma.fileAsset.findMany({
         where: {
           OR: [

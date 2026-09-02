@@ -107,6 +107,9 @@ Optional:
   include `/api/health?database=1` or attribution config because they wake
   Neon compute. Use `/api/health` only when a public function warmup is a
   deliberate choice.
+- `CRM_SETTINGS_CACHE_REVALIDATE_SECONDS`: optional global CRM settings cache
+  window. Defaults to `3600` seconds and is still invalidated when admins save
+  settings.
 - `MARKETING_UPLOAD_CRON_ENABLED`: set to `true` to let the scheduled Netlify
   conversion-upload function call the protected upload processor.
 - `MARKETING_UPLOAD_CRON_SECRET`: shared secret required by

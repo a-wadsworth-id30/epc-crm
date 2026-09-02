@@ -38,6 +38,11 @@ PERFORMANCE_LOGGING_THRESHOLD_MS="400"
 The authenticated admin layout logs slow bootstrap work, including session
 lookup and CRM settings loading. Logs include timing labels and safe context
 only; they must not include secrets, form values or customer records.
+Global CRM settings and the app-shell projection are cached for one hour by
+default through tagged Next.js caches. Admin settings saves revalidate the
+shared tag, and `CRM_SETTINGS_CACHE_REVALIDATE_SECONDS` can tune the window
+without code changes. The settings cache reads existing rows with `findUnique`
+and only creates the default row when it is genuinely missing.
 
 ## Database Query Timing
 

@@ -4,6 +4,9 @@ import type { CrmSettings } from "@prisma/client";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isPrismaDatabaseUnavailableError } from "@/lib/prisma-errors";
+import { crmSettingsCacheRevalidateSeconds } from "@/lib/settings-cache";
+
+export { crmSettingsCacheRevalidateSeconds } from "@/lib/settings-cache";
 
 export const crmSettingsCacheTag = "crm-settings";
 
@@ -44,12 +47,28 @@ function defaultCrmSettings(): CrmSettings {
 
 async function loadCrmSettings() {
   try {
-    return await prisma.crmSettings.upsert({
+    const settings = await prisma.crmSettings.findUnique({
       where: { id: "default" },
-      update: {},
-      create: { id: "default", companiesEnabled: true },
+    });
+
+    if (settings) {
+      return settings;
+    }
+
+    return await prisma.crmSettings.create({
+      data: { id: "default", companiesEnabled: true },
     });
   } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      const settings = await prisma.crmSettings.findUnique({
+        where: { id: "default" },
+      });
+
+      if (settings) {
+        return settings;
+      }
+    }
+
     if (isPrismaDatabaseUnavailableError(error)) {
       console.warn(
         "CRM settings database is unavailable; using default settings until DATABASE_URL is configured.",
@@ -84,7 +103,7 @@ async function loadCrmSettings() {
 }
 
 export const getCrmSettings = unstable_cache(loadCrmSettings, ["crm-settings"], {
-  revalidate: 300,
+  revalidate: crmSettingsCacheRevalidateSeconds(),
   tags: [crmSettingsCacheTag],
 });
 
@@ -117,4 +136,10 @@ function isMissingAttributionSettingsColumn(error: unknown) {
       candidate.meta.column === "CrmSettings.documentLibrary" ||
       candidate.meta.column === "CrmSettings.salesKanban")
   );
+}
+
+function isPrismaUniqueConstraintError(error: unknown) {
+  const candidate = error as { code?: string };
+
+  return candidate.code === "P2002";
 }
