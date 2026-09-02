@@ -18,6 +18,7 @@ import type { ContactFormValues } from "@/components/crm-boilerplate/ContactForm
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LazyContactConversationWorkspace from "@/components/crm-boilerplate/LazyContactConversationWorkspace";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
+import PipedriveContactDetailsSyncButton from "@/components/crm-boilerplate/PipedriveContactDetailsSyncButton";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import type { SaleConversationItem } from "@/components/crm-boilerplate/SaleConversationThread";
 import { DeferredAddSaleModal } from "@/components/crm-boilerplate/SalesRouteLoaders";
@@ -324,6 +325,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     contactDocumentPortals,
     contactSignatureRequests,
     r2Integration,
+    pipedrivePersonLink,
   ] = await Promise.all([
     prisma.contact.findFirst({
       where: contactIdAccessWhere(id, user),
@@ -497,6 +499,15 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     prisma.integrationConnection.findUnique({
       where: { provider: cloudflareR2Provider },
       select: { config: true },
+    }),
+    prisma.externalRecordLink.findFirst({
+      where: {
+        externalType: "person",
+        internalId: id,
+        internalType: "contact",
+        provider: "pipedrive",
+      },
+      select: { externalId: true },
     }),
   ]);
 
@@ -1168,6 +1179,9 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               stages={activePipelineStageOptions}
               triggerLabel="Create lead"
             />
+            {user.role === "ADMIN" && pipedrivePersonLink ? (
+              <PipedriveContactDetailsSyncButton contactId={contact.id} />
+            ) : null}
             <DeferredContactEditModal
               availableTags={availableTags}
               companies={companies}

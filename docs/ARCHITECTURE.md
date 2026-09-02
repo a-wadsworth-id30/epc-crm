@@ -343,7 +343,10 @@ older Lead Inbox emails, and the sale detail admin "Pull Pipedrive updates"
 action pulls Lead Inbox notes and uses a deeper bounded email scan for
 immediate historical recovery. The
 same import module also maps standalone Pipedrive persons into CRM contacts and
-companies without creating sales opportunities. The Pipedrive settings page can
+companies without creating sales opportunities, including all imported
+Pipedrive email/phone methods as CRM secondary contact methods. Linked contact
+detail pages expose an admin-only targeted Pipedrive person refresh. The
+Pipedrive settings page can
 manually preview and
 selected-import Pipedrive leads, can manually or automatically pull bounded
 Pipedrive lead batches, sweeps updated Pipedrive lead notes with a separate

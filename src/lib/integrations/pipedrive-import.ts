@@ -1,6 +1,12 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
+import {
+  normalizeContactEmailMethods,
+  normalizeContactPhoneMethods,
+  type ContactEmailMethod,
+  type ContactPhoneMethod,
+} from "@/lib/contact-methods";
 import { emailTextSummary, toEmailPlainText } from "@/lib/email/plain-text";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
@@ -126,10 +132,12 @@ export type PipedriveLeadImportMapping = {
   contact: {
     companyName: string | null;
     email: string | null;
+    emailMethods: ContactEmailMethod[];
     firstName: string;
     lastName: string;
     leadSource: string;
     phone: string | null;
+    phoneMethods: ContactPhoneMethod[];
     phoneNormalized: string | null;
     role: string | null;
   } | null;
@@ -2647,8 +2655,16 @@ export function mapPipedriveLeadToCrm({
       .filter(Boolean)
       .join(" ")
       .trim();
-  const email = firstContactValue(resolvedPerson.email);
-  const phone = firstContactValue(resolvedPerson.phone);
+  const emailMethods = pipedriveEmailContactMethods(
+    resolvedPerson.email,
+    resolvedPerson.emails,
+  );
+  const phoneMethods = pipedrivePhoneContactMethods(
+    resolvedPerson.phone,
+    resolvedPerson.phones,
+  );
+  const email = emailMethods[0]?.email ?? null;
+  const phone = phoneMethods[0]?.phone ?? null;
   const contactName = contactNameParts({
     email,
     fallbackTitle: title,
@@ -2693,10 +2709,12 @@ export function mapPipedriveLeadToCrm({
     ? {
         companyName,
         email,
+        emailMethods,
         firstName: contactName.firstName,
         lastName: contactName.lastName,
         leadSource: source,
         phone,
+        phoneMethods,
         phoneNormalized: normalizedContactPhone(phone),
         role: "Pipedrive lead contact",
       }
@@ -2774,12 +2792,20 @@ export function mapPipedriveDealToCrm({
       .join(" ")
       .trim();
   const embeddedPersonRecord = objectValue(dealRecord.person);
-  const email = firstContactValue(
-    resolvedPerson.email ?? embeddedPersonRecord.email,
+  const emailMethods = pipedriveEmailContactMethods(
+    resolvedPerson.email,
+    resolvedPerson.emails,
+    embeddedPersonRecord.email,
+    embeddedPersonRecord.emails,
   );
-  const phone = firstContactValue(
-    resolvedPerson.phone ?? embeddedPersonRecord.phone,
+  const phoneMethods = pipedrivePhoneContactMethods(
+    resolvedPerson.phone,
+    resolvedPerson.phones,
+    embeddedPersonRecord.phone,
+    embeddedPersonRecord.phones,
   );
+  const email = emailMethods[0]?.email ?? null;
+  const phone = phoneMethods[0]?.phone ?? null;
   const contactName = contactNameParts({
     email,
     fallbackTitle: title,
@@ -2837,10 +2863,12 @@ export function mapPipedriveDealToCrm({
     ? {
         companyName,
         email,
+        emailMethods,
         firstName: contactName.firstName,
         lastName: contactName.lastName,
         leadSource: source,
         phone,
+        phoneMethods,
         phoneNormalized: normalizedContactPhone(phone),
         role: "Pipedrive deal contact",
       }
@@ -2907,8 +2935,16 @@ export function mapPipedrivePersonToCrm({
       .filter(Boolean)
       .join(" ")
       .trim();
-  const email = firstContactValue(personRecord.email ?? personRecord.emails);
-  const phone = firstContactValue(personRecord.phone ?? personRecord.phones);
+  const emailMethods = pipedriveEmailContactMethods(
+    personRecord.email,
+    personRecord.emails,
+  );
+  const phoneMethods = pipedrivePhoneContactMethods(
+    personRecord.phone,
+    personRecord.phones,
+  );
+  const email = emailMethods[0]?.email ?? null;
+  const phone = phoneMethods[0]?.phone ?? null;
   const contactName = contactNameParts({
     email,
     fallbackTitle: `person ${externalPersonId ?? "import"}`,
@@ -2953,10 +2989,12 @@ export function mapPipedrivePersonToCrm({
         ? {
             companyName,
             email,
+            emailMethods,
             firstName: contactName.firstName,
             lastName: contactName.lastName,
             leadSource: source,
             phone,
+            phoneMethods,
             phoneNormalized: normalizedContactPhone(phone),
             role: "Pipedrive contact",
           }
@@ -4933,6 +4971,11 @@ async function resolvePipedriveContact(
     : null;
 
   if (existingLinkedContact) {
+    await syncExistingPipedriveContactDetails(tx, {
+      company,
+      contactId: existingLinkedContact.id,
+      mapping,
+    });
     return { created: false, id: existingLinkedContact.id };
   }
 
@@ -4955,22 +4998,17 @@ async function resolvePipedriveContact(
     }));
 
   if (existingContact) {
-    await tx.contact.update({
-      where: { id: existingContact.id },
-      data: {
-        companyId: existingContact.companyId ?? company.id,
-        companyName:
-          existingContact.companyName ??
-          company.name ??
-          mapping.contact.companyName,
-        email: existingContact.email ?? mapping.contact.email,
-        leadSource: existingContact.leadSource ?? mapping.contact.leadSource,
-        phone: existingContact.phone ?? mapping.contact.phone,
-        phoneNormalized:
-          existingContact.phoneNormalized ?? mapping.contact.phoneNormalized,
-        role: existingContact.role ?? mapping.contact.role,
-      },
-      select: { id: true },
+    await syncExistingPipedriveContactDetails(tx, {
+      company,
+      contactId: existingContact.id,
+      mapping,
+    });
+  } else {
+    await createMissingPipedriveContactMethods(tx, {
+      contact: mapping.contact,
+      contactId: contact.id,
+      primaryEmail: mapping.contact.email,
+      primaryPhone: mapping.contact.phone,
     });
   }
 
@@ -4991,6 +5029,113 @@ async function resolvePipedriveContact(
   }
 
   return { created: !existingContact, id: contact.id };
+}
+
+async function syncExistingPipedriveContactDetails(
+  tx: Prisma.TransactionClient,
+  {
+    company,
+    contactId,
+    mapping,
+  }: {
+    company: ResolvedCompany;
+    contactId: string;
+    mapping: PipedriveLeadImportMapping;
+  },
+) {
+  if (!mapping.contact) return;
+
+  const existingContact = await tx.contact.findUnique({
+    where: { id: contactId },
+    select: {
+      companyId: true,
+      companyName: true,
+      email: true,
+      leadSource: true,
+      phone: true,
+      phoneNormalized: true,
+      role: true,
+    },
+  });
+
+  if (!existingContact) return;
+
+  const primaryEmail = existingContact.email ?? mapping.contact.email;
+  const primaryPhone = existingContact.phone ?? mapping.contact.phone;
+  const primaryPhoneNormalized =
+    normalizedContactPhone(primaryPhone) ?? mapping.contact.phoneNormalized;
+
+  await tx.contact.update({
+    where: { id: contactId },
+    data: {
+      companyId: existingContact.companyId ?? company.id,
+      companyName:
+        existingContact.companyName ??
+        company.name ??
+        mapping.contact.companyName,
+      email: primaryEmail,
+      leadSource: existingContact.leadSource ?? mapping.contact.leadSource,
+      phone: primaryPhone,
+      phoneNormalized: existingContact.phoneNormalized ?? primaryPhoneNormalized,
+      role: existingContact.role ?? mapping.contact.role,
+    },
+    select: { id: true },
+  });
+
+  await createMissingPipedriveContactMethods(tx, {
+    contact: mapping.contact,
+    contactId,
+    primaryEmail,
+    primaryPhone,
+  });
+}
+
+async function createMissingPipedriveContactMethods(
+  tx: Prisma.TransactionClient,
+  {
+    contact,
+    contactId,
+    primaryEmail,
+    primaryPhone,
+  }: {
+    contact: NonNullable<PipedriveLeadImportMapping["contact"]>;
+    contactId: string;
+    primaryEmail: string | null;
+    primaryPhone: string | null;
+  },
+) {
+  const additionalEmails = normalizeContactEmailMethods(
+    contact.emailMethods,
+    primaryEmail,
+  );
+  const additionalPhones = normalizeContactPhoneMethods(
+    contact.phoneMethods,
+    primaryPhone,
+  );
+
+  await Promise.all([
+    additionalEmails.length
+      ? tx.contactEmailAddress.createMany({
+          data: additionalEmails.map((method) => ({
+            contactId,
+            email: method.email,
+            label: method.label,
+          })),
+          skipDuplicates: true,
+        })
+      : Promise.resolve(),
+    additionalPhones.length
+      ? tx.contactPhoneNumber.createMany({
+          data: additionalPhones.map((method) => ({
+            contactId,
+            label: method.label,
+            phone: method.phone,
+            phoneNormalized: method.phoneNormalized,
+          })),
+          skipDuplicates: true,
+        })
+      : Promise.resolve(),
+  ]);
 }
 
 async function findExistingContact(
@@ -5020,24 +5165,37 @@ function contactIdentityMatches(
   contact: NonNullable<PipedriveLeadImportMapping["contact"]>,
 ) {
   const matches: Prisma.ContactWhereInput[] = [];
+  const emails = contact.emailMethods.length
+    ? contact.emailMethods.map((method) => method.email)
+    : contact.email
+      ? [contact.email]
+      : [];
 
-  if (contact.email) {
+  for (const email of emails) {
     matches.push(
-      { email: { equals: contact.email, mode: "insensitive" } },
+      { email: { equals: email, mode: "insensitive" } },
       {
         additionalEmails: {
-          some: { email: { equals: contact.email, mode: "insensitive" } },
+          some: { email: { equals: email, mode: "insensitive" } },
         },
       },
     );
   }
 
-  if (contact.phoneNormalized) {
+  const phoneNormalizedValues = contact.phoneMethods.length
+    ? contact.phoneMethods
+        .map((method) => method.phoneNormalized)
+        .filter((value): value is string => Boolean(value))
+    : contact.phoneNormalized
+      ? [contact.phoneNormalized]
+      : [];
+
+  for (const phoneNormalized of phoneNormalizedValues) {
     matches.push(
-      { phoneNormalized: contact.phoneNormalized },
+      { phoneNormalized },
       {
         additionalPhones: {
-          some: { phoneNormalized: contact.phoneNormalized },
+          some: { phoneNormalized },
         },
       },
     );
@@ -5385,18 +5543,119 @@ function contactNameParts({
   };
 }
 
-function firstContactValue(value: unknown) {
-  if (typeof value === "string") return cleanText(value);
+function pipedriveEmailContactMethods(...values: unknown[]) {
+  const candidates: Array<
+    ContactEmailMethod & { order: number; primary: boolean }
+  > = [];
 
+  for (const value of values) {
+    appendPipedriveEmailMethods(candidates, value);
+  }
+
+  candidates.sort(contactMethodSort);
+
+  return normalizeContactEmailMethods(candidates, null);
+}
+
+function pipedrivePhoneContactMethods(...values: unknown[]) {
+  const candidates: Array<
+    ContactPhoneMethod & { order: number; primary: boolean }
+  > = [];
+
+  for (const value of values) {
+    appendPipedrivePhoneMethods(candidates, value);
+  }
+
+  candidates.sort(contactMethodSort);
+
+  return normalizeContactPhoneMethods(candidates, null);
+}
+
+function appendPipedriveEmailMethods(
+  candidates: Array<ContactEmailMethod & { order: number; primary: boolean }>,
+  value: unknown,
+) {
   if (Array.isArray(value)) {
-    const preferred = value.find(
-      (entry) => objectValue(entry).primary === true,
-    );
-    return firstContactValue(preferred ?? value[0]);
+    for (const item of value) {
+      appendPipedriveEmailMethods(candidates, item);
+    }
+    return;
   }
 
   const record = objectValue(value);
-  return cleanText(record.value ?? record.email ?? record.phone);
+  const rawValue = Object.keys(record).length
+    ? record.value ?? record.email
+    : value;
+  const email = emailAddressCandidates(rawValue)[0] ?? null;
+
+  if (!email) return;
+
+  candidates.push({
+    email,
+    label: pipedriveContactMethodLabel(record, "email"),
+    order: candidates.length,
+    primary: record.primary === true,
+  });
+}
+
+function appendPipedrivePhoneMethods(
+  candidates: Array<ContactPhoneMethod & { order: number; primary: boolean }>,
+  value: unknown,
+) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      appendPipedrivePhoneMethods(candidates, item);
+    }
+    return;
+  }
+
+  const record = objectValue(value);
+  const rawValue = Object.keys(record).length
+    ? record.value ?? record.phone
+    : value;
+  const phone = cleanText(rawValue);
+
+  if (!phone) return;
+
+  candidates.push({
+    label: pipedriveContactMethodLabel(record, "phone"),
+    order: candidates.length,
+    phone,
+    phoneNormalized: normalizedContactPhone(phone),
+    primary: record.primary === true,
+  });
+}
+
+function contactMethodSort(
+  left: { order: number; primary: boolean },
+  right: { order: number; primary: boolean },
+) {
+  if (left.primary !== right.primary) return left.primary ? -1 : 1;
+  return left.order - right.order;
+}
+
+function pipedriveContactMethodLabel(
+  record: Record<string, unknown>,
+  kind: "email" | "phone",
+) {
+  const rawLabel = cleanText(record.label ?? record.type ?? record.name);
+  const lowerLabel = rawLabel?.toLowerCase();
+
+  if (kind === "email") {
+    if (lowerLabel === "work" || lowerLabel === "business") return "Work";
+    if (lowerLabel === "home" || lowerLabel === "personal") return "Personal";
+    if (lowerLabel === "accounts" || lowerLabel === "billing") {
+      return "Accounts";
+    }
+  }
+
+  if (kind === "phone") {
+    if (lowerLabel === "mobile" || lowerLabel === "cell") return "Mobile";
+    if (lowerLabel === "work" || lowerLabel === "business") return "Work";
+    if (lowerLabel === "home") return "Home";
+  }
+
+  return rawLabel ?? "Other";
 }
 
 function parsePipedriveDate(value: unknown) {

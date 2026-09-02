@@ -17,10 +17,26 @@ let crmWriteCalls = 0;
 let crmWriteLabels: string[] = [];
 let companyRows: Array<{ id: string; name: string }> = [];
 let contactRows: Array<{
+  companyId?: string | null;
+  companyName?: string | null;
   email: string | null;
   firstName: string | null;
   id: string;
   lastName: string | null;
+  leadSource?: string | null;
+  phone?: string | null;
+  phoneNormalized?: string | null;
+  role?: string | null;
+}> = [];
+let contactEmailAddressRows: Array<{
+  contactId: string;
+  email: string;
+  label?: string | null;
+}> = [];
+let contactPhoneNumberRows: Array<{
+  contactId: string;
+  label?: string | null;
+  phone: string;
   phoneNormalized?: string | null;
 }> = [];
 let externalRecordLinkRows: Array<{
@@ -115,6 +131,69 @@ async function findContactByIdentity(args: unknown) {
           lookup.includes(row.phoneNormalized.toLowerCase())),
     ) ?? null
   );
+}
+
+async function createManyContactEmailAddresses(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("contactEmailAddress.createMany");
+  const rows =
+    (args as {
+      data?: Array<{ contactId?: string; email?: string; label?: string }>;
+    }).data ?? [];
+
+  for (const row of rows) {
+    if (!row.contactId || !row.email) continue;
+
+    const existing = contactEmailAddressRows.some(
+      (candidate) =>
+        candidate.contactId === row.contactId &&
+        candidate.email.toLowerCase() === row.email?.toLowerCase(),
+    );
+
+    if (!existing) {
+      contactEmailAddressRows.push({
+        contactId: row.contactId,
+        email: row.email,
+        label: row.label,
+      });
+    }
+  }
+
+  return { count: rows.length };
+}
+
+async function createManyContactPhoneNumbers(args: unknown) {
+  crmWriteCalls += 1;
+  crmWriteLabels.push("contactPhoneNumber.createMany");
+  const rows =
+    (args as {
+      data?: Array<{
+        contactId?: string;
+        label?: string;
+        phone?: string;
+        phoneNormalized?: string | null;
+      }>;
+    }).data ?? [];
+
+  for (const row of rows) {
+    if (!row.contactId || !row.phone) continue;
+
+    const existing = contactPhoneNumberRows.some(
+      (candidate) =>
+        candidate.contactId === row.contactId && candidate.phone === row.phone,
+    );
+
+    if (!existing) {
+      contactPhoneNumberRows.push({
+        contactId: row.contactId,
+        label: row.label,
+        phone: row.phone,
+        phoneNormalized: row.phoneNormalized,
+      });
+    }
+  }
+
+  return { count: rows.length };
 }
 
 function recordCrmWriteFor(label: string) {
@@ -389,9 +468,15 @@ before(async () => {
         },
         contact: {
           create: recordCrmWriteFor("contact.create"),
-          findFirst: async () => null,
-          findUnique: async () => null,
+          findFirst: findContactByIdentity,
+          findUnique: findContactById,
           update: recordCrmWriteFor("contact.update"),
+        },
+        contactEmailAddress: {
+          createMany: createManyContactEmailAddresses,
+        },
+        contactPhoneNumber: {
+          createMany: createManyContactPhoneNumbers,
         },
         externalRecordLink: {
           findMany: findExternalRecordLinks,
@@ -496,6 +581,12 @@ before(async () => {
             findFirst: findContactByIdentity,
             findUnique: findContactById,
           },
+          contactEmailAddress: {
+            createMany: createManyContactEmailAddresses,
+          },
+          contactPhoneNumber: {
+            createMany: createManyContactPhoneNumbers,
+          },
           salesOpportunity: {
             findMany: findSalesOpportunities,
             findUnique: async (args: unknown) => ({
@@ -537,6 +628,8 @@ beforeEach(() => {
   crmWriteLabels = [];
   companyRows = [];
   contactRows = [];
+  contactEmailAddressRows = [];
+  contactPhoneNumberRows = [];
   emailMessageRows = [];
   externalRecordLinkRows = [];
   salesCommunicationRows = [];
@@ -910,6 +1003,126 @@ describe("Pipedrive lead import mapping", () => {
         },
       ],
     );
+  });
+
+  it("imports all Pipedrive person contact methods as primary and secondary CRM methods", async () => {
+    const result = await pipedriveImport.importPipedrivePersonPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async (id) => ({
+          id,
+          name: "Heatwave Homes",
+        }),
+        getPerson: async () => ({}),
+        listPersons: async () => ({
+          data: [
+            {
+              emails: [
+                { label: "work", primary: true, value: "adele@heatwave-group.com" },
+                { label: "work", value: "mike@heatwave-group.com" },
+              ],
+              id: 123,
+              name: "Mike & Adele Quirk",
+              org_id: 321,
+              phones: [
+                { label: "home", primary: true, value: "07917222500" },
+                { label: "mobile", value: "07920104340" },
+                { value: "07917 222500" },
+              ],
+            },
+          ],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextCursor: null,
+            nextStart: null,
+            start: null,
+          },
+          relatedObjects: null,
+        }),
+      },
+    });
+
+    assert.equal(result.status, "ok");
+    assert.deepEqual(contactEmailAddressRows, [
+      {
+        contactId: "stub-id",
+        email: "mike@heatwave-group.com",
+        label: "Work",
+      },
+    ]);
+    assert.deepEqual(contactPhoneNumberRows, [
+      {
+        contactId: "stub-id",
+        label: "Mobile",
+        phone: "07920104340",
+        phoneNormalized: "+447920104340",
+      },
+    ]);
+  });
+
+  it("tops up contact methods for already linked Pipedrive persons", async () => {
+    contactRows = [
+      {
+        email: "crm-primary@example.com",
+        firstName: "Mike",
+        id: "contact-existing",
+        lastName: "Quirk",
+        phone: "07917222500",
+        phoneNormalized: "+447917222500",
+      },
+    ];
+    externalRecordLinkRows = [
+      {
+        externalId: "123",
+        externalType: "person",
+        internalId: "contact-existing",
+        internalType: "contact",
+        provider: "pipedrive",
+      },
+    ];
+
+    const result = await pipedriveImport.importPipedrivePersonRecord({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async () => ({}),
+        getPerson: async () => ({}),
+      },
+      person: {
+        emails: [
+          { label: "work", primary: true, value: "adele@heatwave-group.com" },
+          { label: "work", value: "mike@heatwave-group.com" },
+        ],
+        id: 123,
+        name: "Mike & Adele Quirk",
+        phones: [
+          { label: "home", primary: true, value: "07917222500" },
+          { label: "mobile", value: "07920104340" },
+        ],
+      },
+    });
+
+    assert.equal(result.status, "linked_existing");
+    assert.deepEqual(contactEmailAddressRows, [
+      {
+        contactId: "contact-existing",
+        email: "adele@heatwave-group.com",
+        label: "Work",
+      },
+      {
+        contactId: "contact-existing",
+        email: "mike@heatwave-group.com",
+        label: "Work",
+      },
+    ]);
+    assert.deepEqual(contactPhoneNumberRows, [
+      {
+        contactId: "contact-existing",
+        label: "Mobile",
+        phone: "07920104340",
+        phoneNormalized: "+447920104340",
+      },
+    ]);
   });
 
   it("previews latest leads without writing CRM records", async () => {

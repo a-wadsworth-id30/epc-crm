@@ -18,6 +18,8 @@ import {
   companyWhereWithAccess,
   contactIdAccessWhere,
 } from "@/lib/crm-resource-access";
+import { pipedriveProvider } from "@/lib/integrations/pipedrive";
+import { importPipedrivePersonIds } from "@/lib/integrations/pipedrive-import";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
 import { isLeadSourceValue } from "@/lib/sales/lead-sources";
@@ -532,6 +534,82 @@ export async function updateContactAction(
     revalidatePath(`/clients/${linkedCompanyId}`);
   }
   return { ok: true, message: "Contact updated." };
+}
+
+export async function syncPipedriveContactDetailsAction(
+  _: ContactActionState,
+  formData: FormData,
+): Promise<ContactActionState> {
+  const user = await requireUser();
+
+  if (user.role !== "ADMIN") {
+    return {
+      ok: false,
+      message: "Only admins can pull Pipedrive contact details.",
+    };
+  }
+
+  const contactId = String(formData.get("contactId") ?? "").trim();
+
+  if (!contactId) {
+    return { ok: false, message: "Contact is required." };
+  }
+
+  const contact = await prisma.contact.findFirst({
+    where: contactIdAccessWhere(contactId, user),
+    select: { id: true },
+  });
+
+  if (!contact) {
+    return { ok: false, message: "Contact not found." };
+  }
+
+  const personLink = await prisma.externalRecordLink.findFirst({
+    where: {
+      externalType: "person",
+      internalId: contact.id,
+      internalType: "contact",
+      provider: pipedriveProvider,
+    },
+    select: { externalId: true },
+  });
+
+  if (!personLink) {
+    return {
+      ok: false,
+      message: "This contact is not linked to a Pipedrive person.",
+    };
+  }
+
+  const result = await importPipedrivePersonIds({
+    personIds: [personLink.externalId],
+  });
+
+  revalidatePath("/contacts");
+  revalidatePath("/clients");
+  revalidatePath(`/contacts/${contact.id}`);
+
+  if (result.status === "not_configured") {
+    return { ok: false, message: "Pipedrive is not configured." };
+  }
+
+  const personResult = result.results[0];
+  const warning = personResult?.warnings.length
+    ? ` ${personResult.warnings.join(" ")}`
+    : "";
+
+  if (!personResult || personResult.status === "skipped") {
+    return {
+      ok: false,
+      message: `Pipedrive contact details could not be pulled.${warning}`,
+    };
+  }
+
+  return {
+    contactId: contact.id,
+    ok: true,
+    message: `Pulled Pipedrive contact details.${warning}`,
+  };
 }
 
 export async function deleteContactAction(formData: FormData) {

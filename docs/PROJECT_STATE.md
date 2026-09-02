@@ -155,7 +155,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   idempotent CRM sale `NOTE` communications, stores Pipedrive lead file
   metadata as CRM-only `ExternalRecordLink` references for linked sales, and
   also maps standalone Pipedrive persons into CRM contacts and companies
-  without creating opportunities. Lead
+  without creating opportunities. Pipedrive person import preserves the full
+  Pipedrive email/phone method list by filling missing CRM primary values and
+  adding missing secondary `ContactEmailAddress` / `ContactPhoneNumber` rows,
+  including for contacts already linked to a Pipedrive person; linked contact
+  detail pages expose an admin-only "Pull Pipedrive details" action for a
+  targeted refresh. Lead
   note import converts Pipedrive HTML note content to plain text, uses stable
   Pipedrive note IDs to update existing CRM notes instead of duplicating them,
   and can be run from the admin-only sale detail "Pull Pipedrive updates"
