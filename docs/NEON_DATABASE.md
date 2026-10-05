@@ -33,6 +33,20 @@ Use the Neon pooled URL for app runtime and a direct/non-pooled Neon connection
 for migration commands when possible. Pooled URLs reduce serverless connection
 churn, but can cause issues with Prisma schema migration workflows.
 
+Production uses separate database roles as well as separate endpoints:
+
+- `DATABASE_URL` uses the pooled endpoint and the restricted `crm_runtime`
+  login. This role has schema usage plus CRUD access to application tables and
+  sequences, but cannot create databases or roles, replicate, or bypass row
+  security.
+- `MIGRATE_DATABASE_URL` uses the direct endpoint and the `neondb_owner` role.
+  Keep this owner credential limited to Netlify builds and controlled migration
+  work; do not use it for application runtime queries.
+
+Default privileges owned by `neondb_owner` grant the runtime role CRUD access
+to tables and usage/select access to sequences created by future migrations. If
+the migration owner changes, recreate those default grants for the new owner.
+
 ## App Data Changes
 
 For normal app writes through the CRM UI or server actions:

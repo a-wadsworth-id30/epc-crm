@@ -88,6 +88,12 @@ running preflight. Blank values and unresolved placeholders fail
 Netlify build temporarily uses it for `prisma migrate deploy`; runtime still
 uses `DATABASE_URL`.
 
+Production uses the restricted `crm_runtime` role for `DATABASE_URL` and the
+schema-owning `neondb_owner` role only for `MIGRATE_DATABASE_URL`. Store both as
+Netlify secret variables. Netlify CLI environment listings omit write-only
+secret values, so an omitted secret must be checked through its metadata or
+updated in place rather than assumed missing.
+
 `npm run env:check` and `npm run production:preflight` print only sanitized
 connection kinds, such as `Neon pooled runtime` or `Neon direct connection`, so
 operators can confirm the runtime pooling posture without exposing database
@@ -102,11 +108,6 @@ Neon connection usage and CRM concurrency.
 
 Optional:
 
-- `CRM_WARMUP_PATHS`: comma-separated public paths for the scheduled Netlify
-  warmup function. Defaults to `/signin`. Keep warmup paths DB-free; do not
-  include `/api/health?database=1` or attribution config because they wake
-  Neon compute. Use `/api/health` only when a public function warmup is a
-  deliberate choice.
 - `CRM_SETTINGS_CACHE_REVALIDATE_SECONDS`: optional global CRM settings cache
   window. Defaults to `3600` seconds and is still invalidated when admins save
   settings.
@@ -286,12 +287,17 @@ routes for server errors, sign-in redirects and shared admin error boundaries.
 
 ## Cold Starts
 
-The repository includes `netlify/functions/warm-crm.mjs`, a scheduled Netlify
-function that fetches `/signin` every four minutes by default. Keep this list
-DB-free so the warmup does not keep Neon compute awake unnecessarily. Override
-`CRM_WARMUP_PATHS` only after checking the database cost/cold-start tradeoff.
-Do not add `/api/health?database=1` unless deliberately choosing to keep Neon
-warm.
+Do not add a scheduled warmup for `/signin`: the route is statically generated
+and served by Netlify's CDN, so polling it does not warm the Next.js server
+function. The previous four-minute warmup was removed because it added about
+10,800 scheduled invocations per 30-day month without warming application
+compute or Neon.
+
+Keep routine uptime checks on the DB-free `/api/health` and
+`/api/build-version` routes. Use `/api/health?database=1` only for deliberate
+database verification because it wakes Neon compute. If measured production
+latency later justifies a server-function warmup, document the invocation and
+Neon compute cost before adding one.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.
