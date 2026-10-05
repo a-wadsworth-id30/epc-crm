@@ -63,6 +63,14 @@ application bundle without running Prisma migration checks. Remove that flag as
 soon as `DATABASE_URL` and `MIGRATE_DATABASE_URL` are configured; the deployed
 CRM is not operational without a database.
 
+Deploy previews are the exception: their Netlify `deploy-preview` context uses
+`SKIP_DATABASE_MIGRATIONS=true` plus syntactically valid, non-production
+build-only values for `DATABASE_URL` and `CREDENTIAL_ENCRYPTION_KEY`. This lets
+the environment check and `next build` run without exposing production Neon or
+encryption credentials to preview builds. Never copy the production database or
+credential-encryption secrets into the deploy-preview context. Production must
+keep database migrations enabled.
+
 ## Required Environment
 
 Use `.env.production.example` as the Netlify template.
