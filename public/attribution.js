@@ -393,13 +393,19 @@
     removeConsentPrompt();
   }
 
-  function shouldShowConsentPrompt() {
+  function canShowConsentPrompt() {
     var prompt = consentPromptConfig();
 
     return Boolean(
       runtimeConfig.enabled &&
         runtimeConfig.consent.required &&
-        prompt.enabled &&
+        prompt.enabled
+    );
+  }
+
+  function shouldShowConsentPrompt() {
+    return Boolean(
+      canShowConsentPrompt() &&
         !hasConsent() &&
         !hasDeclinedConsent()
     );
@@ -527,19 +533,21 @@
     });
   }
 
-  function showConsentPrompt() {
-    if (!shouldShowConsentPrompt()) {
+  function showConsentPrompt(force) {
+    var shouldForce = force === true;
+
+    if (shouldForce ? !canShowConsentPrompt() : !shouldShowConsentPrompt()) {
       removeConsentPrompt();
-      return;
+      return false;
     }
 
     if (!document.body) {
-      setTimeout(showConsentPrompt, 50);
-      return;
+      setTimeout(function () { showConsentPrompt(shouldForce); }, 50);
+      return true;
     }
 
     if (document.getElementById("id30-attribution-consent-prompt")) {
-      return;
+      return true;
     }
 
     var prompt = consentPromptConfig();
@@ -674,6 +682,13 @@
     container.appendChild(copy);
     container.appendChild(actions);
     document.body.appendChild(container);
+
+    if (shouldForce) {
+      container.tabIndex = -1;
+      container.focus({ preventScroll: true });
+    }
+
+    return true;
   }
 
   function flushDebugQueue() {
@@ -1744,6 +1759,9 @@
       trackDebug("consent.revoked", "Attribution consent revoked.", {});
       clearConsentState("denied");
       return true;
+    },
+    openConsentSettings: function () {
+      return showConsentPrompt(true);
     },
   };
 
