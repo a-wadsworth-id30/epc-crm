@@ -210,6 +210,43 @@ test("built-in prompt decline stores denied preference without tracking", async 
   await expect(page.getByRole("dialog", { name: "Attribution tracking consent" })).toHaveCount(0);
 });
 
+test("public API reopens consent settings after a stored choice", async ({ page }) => {
+  await setupAttributionPage(page, { enabled: true });
+
+  const dialog = page.getByRole("dialog", { name: "Attribution tracking consent" });
+  await page.getByRole("button", { name: "Allow" }).click();
+  await expect(dialog).toBeHidden();
+
+  const reopenedAfterGrant = await page.evaluate(() => {
+    const api = window.id30Attribution as {
+      openConsentSettings?: () => boolean;
+    } | undefined;
+    return api?.openConsentSettings?.();
+  });
+
+  expect(reopenedAfterGrant).toBe(true);
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeFocused();
+  await page.getByRole("button", { name: "No thanks" }).click();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("id30_tracking_consent")))
+    .toBe("denied");
+
+  const reopenedAfterDecline = await page.evaluate(() => {
+    const api = window.id30Attribution as {
+      openConsentSettings?: () => boolean;
+    } | undefined;
+    return api?.openConsentSettings?.();
+  });
+
+  expect(reopenedAfterDecline).toBe(true);
+  await expect(dialog).toBeVisible();
+  await page.getByRole("button", { name: "Allow" }).click();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("id30_tracking_consent")))
+    .toBe("granted");
+});
+
 test("phone number replacement runs before consent without stored attribution", async ({ page }) => {
   const { phonePayloads } = await setupAttributionPage(
     page,

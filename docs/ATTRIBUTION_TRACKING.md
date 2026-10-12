@@ -38,7 +38,10 @@ banner/CMP. Consent Settings also has an optional built-in fallback prompt for
 sites that do not already provide a consent UI; it is off by default and only
 appears when consent is required. The fallback prompt supports CRM-managed
 placement, light/dark/auto/custom theme, size, radius and safe hex colour
-overrides so it can better match the client website. Auto theme follows the
+overrides so it can better match the client website. Client websites can reopen
+the configured prompt from a persistent cookie-settings control by calling
+`window.id30Attribution.openConsentSettings()`; the method preserves the current
+preference until the visitor makes a new choice. Auto theme follows the
 visitor browser or operating-system colour-scheme preference.
 
 ## Forms
