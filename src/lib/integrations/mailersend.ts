@@ -147,6 +147,13 @@ export async function getMailerSendInboundReplyAddress() {
   return mailerSendInboundReplyAddress(config);
 }
 
+const opportunityReplySignatureLength = 20;
+
+export type MailerSendOpportunityReplyTarget =
+  | { status: "none" }
+  | { status: "invalid" }
+  | { status: "valid"; opportunityId: string };
+
 export function mailerSendInboundReplyAddress(
   config: Pick<
     MailerSendStoredConfig,
@@ -160,6 +167,102 @@ export function mailerSendInboundReplyAddress(
   if (recipient.includes("@")) return recipient;
 
   return `${recipient}@${domain}`;
+}
+
+function opportunityReplySignature(opportunityId: string, secret: string) {
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`sales-opportunity:${opportunityId}`)
+    .digest("hex")
+    .slice(0, opportunityReplySignatureLength);
+}
+
+export function mailerSendOpportunityReplyAddress({
+  baseAddress,
+  opportunityId,
+  secret,
+}: {
+  baseAddress: string;
+  opportunityId: string;
+  secret: string;
+}) {
+  const separator = baseAddress.lastIndexOf("@");
+  const localPart = baseAddress.slice(0, separator).trim();
+  const domain = baseAddress.slice(separator + 1).trim().toLowerCase();
+  const normalizedOpportunityId = opportunityId.trim();
+
+  if (!localPart || !domain || !normalizedOpportunityId || !secret) {
+    return baseAddress;
+  }
+
+  const signature = opportunityReplySignature(normalizedOpportunityId, secret);
+  return `${localPart}+sale.${normalizedOpportunityId}.${signature}@${domain}`;
+}
+
+export function readMailerSendOpportunityReplyTarget({
+  address,
+  baseAddress,
+  secret,
+}: {
+  address: string;
+  baseAddress: string;
+  secret: string;
+}): MailerSendOpportunityReplyTarget {
+  const baseSeparator = baseAddress.lastIndexOf("@");
+  const addressSeparator = address.lastIndexOf("@");
+  if (baseSeparator < 1 || addressSeparator < 1) return { status: "none" };
+
+  const baseLocalPart = baseAddress.slice(0, baseSeparator).trim().toLowerCase();
+  const baseDomain = baseAddress.slice(baseSeparator + 1).trim().toLowerCase();
+  const localPart = address.slice(0, addressSeparator).trim().toLowerCase();
+  const domain = address.slice(addressSeparator + 1).trim().toLowerCase();
+  const prefix = `${baseLocalPart}+sale.`;
+
+  if (domain !== baseDomain || !localPart.startsWith(prefix)) {
+    return { status: "none" };
+  }
+
+  const taggedValue = localPart.slice(prefix.length);
+  const signatureSeparator = taggedValue.lastIndexOf(".");
+  const opportunityId = taggedValue.slice(0, signatureSeparator);
+  const signature = taggedValue.slice(signatureSeparator + 1);
+
+  if (
+    !secret ||
+    !/^[a-z0-9_-]{8,191}$/.test(opportunityId) ||
+    !new RegExp(`^[a-f0-9]{${opportunityReplySignatureLength}}$`).test(signature)
+  ) {
+    return { status: "invalid" };
+  }
+
+  const expected = opportunityReplySignature(opportunityId, secret);
+  const signatureBuffer = Buffer.from(signature, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return { status: "invalid" };
+  }
+
+  return { status: "valid", opportunityId };
+}
+
+export async function getMailerSendOpportunityReplyAddress(
+  opportunityId: string,
+) {
+  const config = await getMailerSendStoredConfig();
+  const baseAddress = mailerSendInboundReplyAddress(config);
+  const encryptedSecret = config?.credentials?.inboundSecret;
+
+  if (!baseAddress || !encryptedSecret) return baseAddress;
+
+  return mailerSendOpportunityReplyAddress({
+    baseAddress,
+    opportunityId,
+    secret: decryptSecret(encryptedSecret),
+  });
 }
 
 export type SendMailerSendEmailInput = {

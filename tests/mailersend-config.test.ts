@@ -120,4 +120,56 @@ describe("MailerSend config schema", () => {
       "MailerSend send failed with status 422: You have reached trial account unique recipients limit. #MS42225",
     );
   });
+
+  it("creates and validates a sale-specific inbound reply address", () => {
+    const address = mailerSend.mailerSendOpportunityReplyAddress({
+      baseAddress: "leads@inbound.epc-improvements.co.uk",
+      opportunityId: "cmvf32zwr000ijz09rwt9eo3g",
+      secret: "inbound-route-secret",
+    });
+
+    assert.match(
+      address,
+      /^leads\+sale\.cmvf32zwr000ijz09rwt9eo3g\.[a-f0-9]{20}@inbound\.epc-improvements\.co\.uk$/,
+    );
+    assert.deepEqual(
+      mailerSend.readMailerSendOpportunityReplyTarget({
+        address,
+        baseAddress: "leads@inbound.epc-improvements.co.uk",
+        secret: "inbound-route-secret",
+      }),
+      {
+        status: "valid",
+        opportunityId: "cmvf32zwr000ijz09rwt9eo3g",
+      },
+    );
+  });
+
+  it("rejects a modified sale-specific reply address", () => {
+    const address = mailerSend.mailerSendOpportunityReplyAddress({
+      baseAddress: "leads@inbound.epc-improvements.co.uk",
+      opportunityId: "cmvf32zwr000ijz09rwt9eo3g",
+      secret: "inbound-route-secret",
+    });
+
+    assert.deepEqual(
+      mailerSend.readMailerSendOpportunityReplyTarget({
+        address: address.replace("cmvf32zwr", "cmvf32zws"),
+        baseAddress: "leads@inbound.epc-improvements.co.uk",
+        secret: "inbound-route-secret",
+      }),
+      { status: "invalid" },
+    );
+  });
+
+  it("keeps legacy replies on the generic inbound address untagged", () => {
+    assert.deepEqual(
+      mailerSend.readMailerSendOpportunityReplyTarget({
+        address: "leads@inbound.epc-improvements.co.uk",
+        baseAddress: "leads@inbound.epc-improvements.co.uk",
+        secret: "inbound-route-secret",
+      }),
+      { status: "none" },
+    );
+  });
 });
