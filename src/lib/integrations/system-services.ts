@@ -9,6 +9,10 @@ import {
 } from "@/lib/integrations/id30-auth";
 import type { LatestIntegrationHealthSnapshot } from "@/lib/integrations/health-snapshots";
 import {
+  gmailProvider,
+  hasConnectedGmailMailboxConfig,
+} from "@/lib/integrations/gmail";
+import {
   docusignProvider,
   docusignStoredConfigSchema,
   hasStoredDocuSignCredentials,
@@ -262,13 +266,16 @@ export const systemIntegrationDefinitions: SystemIntegrationDefinition[] = [
     showWhenMissing: true,
   },
   {
-    categoryLabel: "Planned",
-    description: "Connect SMTP, Microsoft 365 or Gmail later.",
+    categoryLabel: "Communications",
+    description:
+      "Multi-mailbox Gmail sending and conversation synchronisation through iD30 Auth.",
+    hasStoredCredentials: hasConnectedGmailMailboxConfig,
     iconSrc: "/images/integration/google-drive.svg",
-    name: "Email provider",
-    provider: "email-provider",
-    realIntegration: false,
-    setupHref: "/settings/integrations/email-provider",
+    name: "Gmail",
+    provider: gmailProvider,
+    realIntegration: true,
+    setupHref: "/settings/integrations/gmail",
+    showWhenMissing: true,
   },
   {
     categoryLabel: "Planned",

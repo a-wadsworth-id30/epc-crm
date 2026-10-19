@@ -10,6 +10,7 @@ import {
 const sendEmailSchema = z.object({
   opportunityId: z.string().trim().min(1),
   contactId: z.string().trim().optional().nullable(),
+  mailboxId: z.string().trim().optional().nullable(),
   to: z.string().trim().email().optional(),
   subject: z.string().trim().min(1).max(191),
   body: z.string().trim().min(1).max(20_000),
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     const result = await sendSalesLeadEmail({
       body: parsed.data.body,
       contactId: parsed.data.contactId,
+      mailboxId: parsed.data.mailboxId,
       opportunityId: parsed.data.opportunityId,
       source: "sales-lead-email",
       subject: parsed.data.subject,

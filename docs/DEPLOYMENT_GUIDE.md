@@ -129,6 +129,9 @@ Optional:
   scheduled job should only process already prepared upload rows.
 - `MARKETING_UPLOAD_CRON_LIMIT`: optional per-run upload row cap, default `50`,
   maximum `250`.
+- `GMAIL_SYNC_SECRET`: shared secret for `/api/maintenance/gmail-sync`;
+  `CRON_SECRET` can be used instead. The job processes up to five connected
+  mailboxes per request and each mailbox reads at most 25 Gmail messages.
 - `OPERATIONAL_RETENTION_SECRET`: shared secret for
   `/api/maintenance/retention`; `CRON_SECRET` can be used instead when a single
   maintenance secret is preferred.

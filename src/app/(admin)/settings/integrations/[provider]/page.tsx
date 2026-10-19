@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BackgroundJobRunStatus, type Prisma } from "@prisma/client";
 import type { ReactNode } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
+import GmailIntegrationForm from "@/components/crm-boilerplate/GmailIntegrationForm";
 import {
   BingAdsIntegrationForm,
   CloudflareR2SettingsForm,
@@ -51,6 +52,7 @@ import {
 } from "@/lib/integrations/mailersend";
 import {
   hasStoredId30AuthCredentials,
+  getId30AuthRuntimeConfig,
   id30AuthConfigSchema,
   id30AuthProvider,
   publicId30AuthConfig,
@@ -83,9 +85,11 @@ import {
 } from "@/lib/marketing/selector-option-lists";
 import {
   fetchMarketingAuthBrokerProviderDiagnostics,
+  fetchMarketingAuthBrokerProviderReadiness,
   findMarketingOAuthProvider,
   type MarketingAuthBrokerProviderDiagnosticsResult,
 } from "@/lib/marketing/oauth";
+import { gmailProvider } from "@/lib/integrations/gmail";
 import { prisma } from "@/lib/prisma";
 import {
   hasStoredOpenAICredentials,
@@ -310,6 +314,77 @@ export default async function IntegrationSettingsPage({
   }
 
   await requireAdmin();
+
+  if (provider === gmailProvider) {
+    const authRuntime = await getId30AuthRuntimeConfig();
+    const [mailboxes, users, readiness] = await Promise.all([
+      prisma.emailMailbox.findMany({
+        where: { provider: gmailProvider },
+        orderBy: [{ status: "asc" }, { emailAddress: "asc" }],
+        select: {
+          id: true,
+          displayName: true,
+          emailAddress: true,
+          lastError: true,
+          lastSyncAt: true,
+          ownerUserId: true,
+          purpose: true,
+          sendEnabled: true,
+          status: true,
+          syncEnabled: true,
+          userAccess: {
+            where: { canSend: true },
+            select: { userId: true },
+          },
+        },
+      }),
+      prisma.user.findMany({
+        where: { status: "ACTIVE" },
+        orderBy: { name: "asc" },
+        select: { email: true, id: true, name: true },
+      }),
+      authRuntime
+        ? fetchMarketingAuthBrokerProviderReadiness()
+        : Promise.resolve(null),
+    ]);
+    const gmailReadiness =
+      readiness?.ok
+        ? readiness.providers.find((item) => item.slug === gmailProvider)
+        : null;
+    const providerReady = Boolean(gmailReadiness?.ready);
+    const providerMessage = !authRuntime
+      ? "Connect iD30 Auth before adding Gmail mailboxes."
+      : providerReady
+        ? "iD30 Auth is ready for Gmail connections."
+        : gmailReadiness
+          ? `iD30 Auth needs ${gmailReadiness.missingEnv.join(", ") || "Gmail provider setup"}.`
+          : readiness && !readiness.ok
+            ? readiness.message
+            : "Gmail readiness could not be confirmed from iD30 Auth.";
+
+    return (
+      <>
+        <PageHeader
+          title="Gmail mailboxes"
+          description="Connect multiple operational Gmail or Google Workspace addresses and control who can send and sync each mailbox."
+        />
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <GmailIntegrationForm
+            authConfigured={Boolean(authRuntime)}
+            mailboxes={mailboxes.map((mailbox) => ({
+              ...mailbox,
+              lastSyncAt: mailbox.lastSyncAt?.toISOString() ?? null,
+              sendUserIds: mailbox.userAccess.map((access) => access.userId),
+            }))}
+            providerMessage={providerMessage}
+            providerReady={providerReady}
+            users={users}
+          />
+        </div>
+      </>
+    );
+  }
+
   const integration = await prisma.integrationConnection.findUnique({
     where: { provider },
   });

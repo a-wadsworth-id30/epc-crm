@@ -101,6 +101,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   instead of sending messages automatically.
 - `EmailMessage`: central inbound email inbox rows, optionally linked to a
   contact, sales opportunity and sale communication.
+- `EmailMailbox`, `EmailMailboxAccess` and `EmailThreadLink`: Auth-backed Gmail
+  mailboxes, per-user send access and durable Gmail-thread-to-sale routing.
+  Google OAuth tokens remain in iD30 Auth.
+- `EmailAttachment`: provider attachment metadata with an optional R2-backed
+  `FileAsset` archive link so imported Gmail files remain available after the
+  provider is disconnected.
 - `CallLog`: provider-neutral phone call record.
 - `CallQueueEntry`: inbound Twilio queue state.
 - `Task`: follow-up work, including missed-call tasks.
@@ -258,6 +264,34 @@ Manual sales email, manual SMS and approved automation drafts share
 `src/lib/sales/outbound-messages.ts` so provider sends, timeline writes,
 first-contact lifecycle updates and follow-on automation triggers stay
 consistent.
+
+### Gmail
+
+Gmail uses iD30 Auth as the OAuth and token boundary. CRM stores one
+`EmailMailbox` row per connected Google mailbox and calls signed Auth broker
+endpoints for message sync, sending and attachment retrieval. Multiple personal
+and shared mailboxes can coexist; admins assign mailbox purpose, primary owner
+and users allowed to send.
+
+Initial sync reads bounded pages from the most recent year, then switches to a
+Gmail history cursor. Imported messages are idempotent, become central
+`EmailMessage` rows and are attached to a sale conversation when an existing
+Gmail thread link identifies the sale or when the participant has exactly one
+open sale. Ambiguous contact matches remain in the inbox rather than being
+attached to the wrong sale. CRM-originated Gmail sends create the thread link
+immediately, allowing replies to return to the correct sale. Attachment bytes
+are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
+when R2 is configured.
+
+Main files:
+
+- `src/lib/integrations/gmail.ts`
+- `src/lib/integrations/gmail-send.ts`
+- `src/lib/integrations/gmail-sync.ts`
+- `src/components/crm-boilerplate/GmailIntegrationForm.tsx`
+- `/api/integrations/gmail/connect`
+- `/api/maintenance/gmail-sync`
+- `/settings/integrations/gmail`
 
 ### Geoapify
 

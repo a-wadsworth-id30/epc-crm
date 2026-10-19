@@ -1136,6 +1136,17 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   to the exact sale. Generic historical reply addresses retain sender-based
   active-sale matching. The MailerSend route must use Catch all for the inbound
   subdomain and requires verified MX DNS before this reply path is operational.
+- Gmail is a real multi-mailbox communication integration backed by iD30 Auth.
+  Admins can connect personal, sales, accounts and shared Google mailboxes,
+  assign a primary user and grant send access to additional CRM users without
+  storing Google tokens in CRM. Bounded initial/history sync writes idempotent
+  `EmailMessage` rows, creates sale conversation email events when an exact
+  thread link or unambiguous open-sale match exists, and leaves ambiguous mail
+  in the central inbox. CRM-originated Gmail sends persist an exact
+  Gmail-thread-to-sale link so replies return to the correct sale. Gmail
+  attachment references are copied into R2-backed `FileAsset` rows when storage
+  is configured. Manual sync is available from Gmail settings and the protected
+  `/api/maintenance/gmail-sync` route supports scheduled pulls.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

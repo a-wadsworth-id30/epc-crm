@@ -6,6 +6,10 @@ import {
   sendMailerSendEmail,
 } from "@/lib/integrations/mailersend";
 import {
+  findGmailMailboxForSend,
+  sendGmailEmail,
+} from "@/lib/integrations/gmail-send";
+import {
   getStoredTwilioConfig,
   getTwilioMessagingRuntime,
   normalizeCallableNumber,
@@ -29,6 +33,7 @@ type SendSalesLeadEmailInput = {
   source: string;
   subject: string;
   to?: string | null;
+  mailboxId?: string | null;
   user: OutboundMessageUser;
 };
 
@@ -275,22 +280,44 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
     throw new Error("Message became empty after resolving placeholders.");
   }
 
-  const replyToEmail = await getMailerSendOpportunityReplyAddress(
-    opportunity.id,
-  );
-  const result = await sendMailerSendEmail({
-    subject,
-    text: body,
-    replyToEmail,
-    to: {
-      email: recipient,
-      name: contactName(opportunity.contact),
-    },
-    tags: ["crm", "sales-lead"],
+  const gmailMailbox = await findGmailMailboxForSend({
+    mailboxId: input.mailboxId,
+    user: input.user,
   });
+  const gmailResult = gmailMailbox
+    ? await sendGmailEmail({
+        body,
+        mailbox: gmailMailbox,
+        opportunityId: opportunity.id,
+        subject,
+        to: recipient,
+        toName: contactName(opportunity.contact),
+      })
+    : null;
+  const mailerSendResult = gmailResult
+    ? null
+    : await (async () => {
+        const replyToEmail = await getMailerSendOpportunityReplyAddress(
+          opportunity.id,
+        );
+        return sendMailerSendEmail({
+          subject,
+          text: body,
+          replyToEmail,
+          to: {
+            email: recipient,
+            name: contactName(opportunity.contact),
+          },
+          tags: ["crm", "sales-lead"],
+        });
+      })();
+  const provider = gmailResult ? "gmail" : "mailersend";
+  const fromEmail = gmailResult?.fromEmail ?? mailerSendResult!.fromEmail;
+  const externalId = gmailResult?.messageId ?? mailerSendResult!.messageId;
 
-  const communication = await prisma.salesCommunication.create({
-    data: {
+  const communication = await prisma.$transaction(async (tx) => {
+    const created = await tx.salesCommunication.create({
+      data: {
       opportunityId: opportunity.id,
       contactId: input.contactId ?? opportunity.contactId,
       userId: input.user.id,
@@ -299,19 +326,79 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
       subject,
       summary: messageSummary(body),
       body,
-      fromAddress: result.fromEmail,
+      fromAddress: fromEmail,
       toAddress: recipient,
-      externalId: result.messageId,
+      externalId,
       metadata: {
-        provider: "mailersend",
-        fromEmail: result.fromEmail,
-        messageId: result.messageId,
-        replyToEmail: result.replyToEmail,
-        statusCode: result.statusCode,
+        provider,
+        fromEmail,
+        messageId: externalId,
+        ...(gmailResult
+          ? {
+              gmailMessageId: gmailResult.providerMessageId,
+              gmailThreadId: gmailResult.providerThreadId,
+              mailboxId: gmailResult.mailboxId,
+            }
+          : {
+              replyToEmail: mailerSendResult!.replyToEmail,
+              statusCode: mailerSendResult!.statusCode,
+            }),
         source: input.source,
       },
     },
     include: { contact: true, user: true },
+    });
+
+    if (gmailResult) {
+      await tx.emailMessage.create({
+        data: {
+          contactId: created.contactId,
+          direction: "OUTBOUND",
+          fromAddress: gmailResult.fromEmail,
+          inReplyTo: null,
+          internetMessageId: gmailResult.internetMessageId,
+          mailboxId: gmailResult.mailboxId,
+          metadata: {
+            gmailMessageId: gmailResult.providerMessageId,
+            gmailThreadId: gmailResult.providerThreadId,
+            source: input.source,
+          },
+          opportunityId: opportunity.id,
+          provider: "gmail",
+          providerMessageId: gmailResult.messageId,
+          providerThreadId: gmailResult.providerThreadId,
+          receivedAt: created.occurredAt,
+          salesCommunicationId: created.id,
+          status: "READ",
+          subject,
+          summary: messageSummary(body),
+          textBody: body,
+          toAddress: recipient,
+        },
+      });
+      await tx.emailThreadLink.upsert({
+        where: {
+          mailboxId_providerThreadId: {
+            mailboxId: gmailResult.mailboxId,
+            providerThreadId: gmailResult.providerThreadId,
+          },
+        },
+        update: {
+          contactId: created.contactId,
+          opportunityId: opportunity.id,
+          source: "crm-send",
+        },
+        create: {
+          contactId: created.contactId,
+          mailboxId: gmailResult.mailboxId,
+          opportunityId: opportunity.id,
+          providerThreadId: gmailResult.providerThreadId,
+          source: "crm-send",
+        },
+      });
+    }
+
+    return created;
   });
 
   await markOpportunityFirstContacted(prisma, {
@@ -330,7 +417,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
     trigger: "EMAIL_SENT",
     userId: input.user.id,
     metadata: {
-      provider: "mailersend",
+      provider,
       source: input.source,
     },
   });
@@ -344,7 +431,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
 
   return {
     communicationId: communication.id,
-    messageId: result.messageId,
+    messageId: externalId,
     recipient,
   };
 }

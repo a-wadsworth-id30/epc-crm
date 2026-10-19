@@ -137,6 +137,7 @@ export default function IntegrationCard({
   const isCloudflareR2 = provider === "cloudflare-r2";
   const isDocuSign = provider === "docusign";
   const isGeoapify = provider === "geoapify";
+  const isGmail = provider === "gmail";
   const isMailerSend = provider === "mailersend";
   const isTwilio = provider === "twilio";
   const isOpenAI = provider === "openai";
@@ -147,6 +148,7 @@ export default function IntegrationCard({
     isCloudflareR2 ||
     isDocuSign ||
     isGeoapify ||
+    isGmail ||
     isId30Auth ||
     isMailerSend ||
     isOpenAI ||

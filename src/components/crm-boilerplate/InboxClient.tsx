@@ -548,7 +548,16 @@ export default function InboxClient({
                         Message state
                       </div>
                       <div className="mt-3 space-y-3 text-gray-600 dark:text-gray-300">
-                        <StateRow label="Provider" value="MailerSend" />
+                        <StateRow
+                          label="Provider"
+                          value={
+                            selectedMessage.provider === "gmail"
+                              ? "Gmail"
+                              : selectedMessage.provider === "mailersend"
+                                ? "MailerSend"
+                                : selectedMessage.provider
+                          }
+                        />
                         <StateRow label="Route" value={selectedMessage.inboundRouteId ?? "-"} />
                         <StateRow label="Direction" value={selectedMessage.direction} />
                         <StateRow label="Status" value={selectedMessage.status} />

@@ -21,6 +21,7 @@ export const inboxMessageSummarySelect = {
       title: true,
     },
   },
+  provider: true,
   receivedAt: true,
   status: true,
   subject: true,

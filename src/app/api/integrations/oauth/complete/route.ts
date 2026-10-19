@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import {
+  findMarketingOAuthProvider,
   saveMarketingAuthBrokerCompletion,
-  verifyMarketingAuthBrokerCompletion,
 } from "@/lib/marketing/oauth";
+import { verifyId30AuthBrokerCompletion } from "@/lib/integrations/id30-auth-oauth";
+import {
+  gmailProvider,
+  saveGmailAuthBrokerCompletion,
+} from "@/lib/integrations/gmail";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -16,7 +21,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const verification = await verifyMarketingAuthBrokerCompletion(body);
+  const verification = await verifyId30AuthBrokerCompletion(body);
 
   if (!verification.ok) {
     return NextResponse.json(
@@ -25,11 +30,24 @@ export async function POST(request: Request) {
     );
   }
 
+  const provider = findMarketingOAuthProvider(verification.payload.provider);
+
+  if (verification.payload.provider !== gmailProvider && !provider) {
+    return NextResponse.json(
+      { ok: false, message: "Signed completion callback provider is not supported." },
+      { status: 400 },
+    );
+  }
+
   try {
-    await saveMarketingAuthBrokerCompletion({
-      payload: verification.payload,
-      provider: verification.provider,
-    });
+    if (verification.payload.provider === gmailProvider) {
+      await saveGmailAuthBrokerCompletion(verification.payload);
+    } else if (provider) {
+      await saveMarketingAuthBrokerCompletion({
+        payload: verification.payload,
+        provider,
+      });
+    }
   } catch (error) {
     console.error("iD30 Auth completion callback failed", error);
 
@@ -41,7 +59,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    provider: verification.provider.slug,
+    provider: verification.payload.provider,
     status: verification.payload.status,
   });
 }

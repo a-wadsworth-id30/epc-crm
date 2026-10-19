@@ -160,6 +160,20 @@ enum EmailMessageStatus {
   ARCHIVED
 }
 
+enum EmailMailboxStatus {
+  CONNECTED
+  NEEDS_REAUTH
+  DISCONNECTED
+  ERROR
+}
+
+enum EmailMailboxPurpose {
+  PERSONAL
+  SALES
+  ACCOUNTS
+  SHARED
+}
+
 enum VoiceRoutingMode {
   BROWSER
   MOBILE
@@ -422,6 +436,8 @@ model User {
   notificationStates         NotificationState[]
   backgroundJobRuns          BackgroundJobRun[]
   dashboardLayout            DashboardUserLayout?
+  ownedEmailMailboxes        EmailMailbox[]               @relation("EmailMailboxOwner")
+  emailMailboxAccess         EmailMailboxAccess[]
 
   @@index([roleTemplate])
 }
@@ -560,6 +576,7 @@ model Contact {
   opportunities         SalesOpportunity[]
   salesCommunications   SalesCommunication[]
   emailMessages         EmailMessage[]
+  emailThreadLinks      EmailThreadLink[]
   callLogs              CallLog[]
   queueEntries          CallQueueEntry[]
   relationshipProfile   CustomerRelationshipProfile?
@@ -706,6 +723,7 @@ model SalesOpportunity {
   contact               Contact?                     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   communications        SalesCommunication[]
   emailMessages         EmailMessage[]
+  emailThreadLinks      EmailThreadLink[]
   lifecycleEvents       SalesLifecycleEvent[]
   products              OpportunityProduct[]
   discoveryAnswers      OpportunityDiscoveryAnswer[]
@@ -1168,6 +1186,12 @@ model EmailMessage {
   opportunity          SalesOpportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   salesCommunicationId String?                @unique
   salesCommunication   SalesCommunication?    @relation(fields: [salesCommunicationId], references: [id], onDelete: SetNull)
+  mailboxId            String?
+  mailbox              EmailMailbox?          @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
+  providerThreadId     String?
+  internetMessageId    String?
+  inReplyTo            String?
+  attachmentsArchive   EmailAttachment[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
@@ -1176,6 +1200,91 @@ model EmailMessage {
   @@index([contactId, receivedAt])
   @@index([opportunityId, receivedAt])
   @@index([inboundRouteId])
+  @@index([mailboxId, receivedAt])
+  @@index([mailboxId, providerThreadId])
+  @@index([internetMessageId])
+}
+
+model EmailMailbox {
+  id               String              @id @default(cuid())
+  provider         String              @default("gmail")
+  authConnectionId String              @unique
+  emailAddress     String
+  displayName      String?
+  purpose          EmailMailboxPurpose @default(SHARED)
+  status           EmailMailboxStatus  @default(CONNECTED)
+  syncEnabled      Boolean             @default(true)
+  sendEnabled      Boolean             @default(true)
+  ownerUserId      String?
+  owner            User?               @relation("EmailMailboxOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  lastHistoryId    String?
+  lastSyncAt       DateTime?
+  lastFullSyncAt   DateTime?
+  lastError        String?
+  metadata         Json?
+  messages         EmailMessage[]
+  threadLinks      EmailThreadLink[]
+  userAccess       EmailMailboxAccess[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([provider, emailAddress])
+  @@index([status, syncEnabled])
+  @@index([ownerUserId])
+  @@index([purpose])
+}
+
+model EmailMailboxAccess {
+  id          String       @id @default(cuid())
+  mailboxId   String
+  mailbox     EmailMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canSend     Boolean      @default(true)
+  canManage   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([mailboxId, userId])
+  @@index([userId])
+}
+
+model EmailThreadLink {
+  id               String           @id @default(cuid())
+  mailboxId        String
+  mailbox          EmailMailbox     @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  providerThreadId String
+  opportunityId    String?
+  opportunity      SalesOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contactId        String?
+  contact          Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  source           String           @default("automatic")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([mailboxId, providerThreadId])
+  @@index([opportunityId])
+  @@index([contactId])
+}
+
+model EmailAttachment {
+  id                   String       @id @default(cuid())
+  emailMessageId       String
+  emailMessage         EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  providerAttachmentId String?
+  fileName             String
+  mimeType             String?
+  sizeBytes            Int?
+  fileAssetId          String?
+  fileAsset            FileAsset?   @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
+  archiveStatus        String       @default("REFERENCE")
+  lastError            String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@unique([emailMessageId, providerAttachmentId])
+  @@index([fileAssetId])
+  @@index([archiveStatus, createdAt])
 }
 
 model ReportDefinition {
@@ -1684,6 +1793,7 @@ model FileAsset {
   visibility                   FileAssetVisibility         @default(PRIVATE)
   uploadedById                 String?
   uploadedBy                   User?                       @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  emailAttachments             EmailAttachment[]
   productImages                Product[]                   @relation("ProductImageAsset")
   customerDocumentShareFiles   CustomerDocumentShareFile[]
   signatureSourceRequests      SignatureRequest[]          @relation("SignatureRequestSourceFile")

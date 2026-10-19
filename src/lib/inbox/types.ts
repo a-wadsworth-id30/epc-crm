@@ -18,6 +18,7 @@ export type InboxMessageSummary = {
   fromName: string | null;
   inboundRouteId: string | null;
   opportunity: InboxOpportunitySummary | null;
+  provider: string;
   receivedAt: string;
   status: string;
   subject: string | null;
