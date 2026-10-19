@@ -2011,6 +2011,7 @@ export default function SaleDetailAIWorkspace({
                     communications={communications}
                     embedded
                     onReply={() => setIsComposerOpen(true)}
+                    saleId={saleId}
                     totalCount={communicationsCount}
                   />
                 ) : null}

@@ -857,7 +857,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Sales detail URLs use opaque opportunity IDs rather than descriptive slugs.
 - Sale detail now uses a compact lead header and connected workspace tabs:
   Conversation, Lead, Discovery, Estimate, Proposal and Automation.
-  Conversation shows the compact latest-open timeline, Lead shows a compact
+  Conversation uses an authenticated server-side history endpoint with
+  per-channel counts and 12-item pages. All merges CRM communications,
+  Pipedrive file activity and website attribution events chronologically, while
+  Calls, Emails, Notes, SMS, Files and Website each page through their complete
+  matching history instead of filtering only the initial 40 communication
+  rows. Lead shows a compact
   lead-level Discovery summary and key lead facts, Discovery dynamically loads
   matching lead/category/product question packs from configured Discovery
   templates, and Automation shows score history, AI stage guidance and recent

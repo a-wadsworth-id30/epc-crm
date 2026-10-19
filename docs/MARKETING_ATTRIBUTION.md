@@ -373,6 +373,13 @@ visitor detail. The list shows first, assisted and last journey steps, while
 the detail timeline marks page events as first touch, assisted touch, last
 touch or first + last touch when there is only one captured page touch.
 
+Sale Conversation timelines expose website attribution events through the
+authenticated, server-paginated sale conversation endpoint. The Website filter
+reads the complete set of opportunity- and contact-matched attribution records
+and normalized touchpoints, deduplicates equivalent events and pages them with
+the other conversation channels without exposing visitor or session IDs in the
+conversation response.
+
 Marketing > Visitor log also shows completion fields for each visitor row. The
 completion score checks whether source, campaign, click ID, journey, location,
 conversion, matched lead, matched opportunity, won sale, consent and device

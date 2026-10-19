@@ -670,6 +670,14 @@ bottom sheet with an optional full-screen editing mode. SMS sends through
 Twilio, phone scripts start the softphone, and email sends through MailerSend
 when configured.
 
+Sale conversation history is paginated through the authenticated
+`GET /api/sales/[id]/conversation` endpoint. The endpoint applies normal sale
+access rules, returns per-channel totals and merges CRM `SalesCommunication`
+rows, Pipedrive file references and website attribution events in descending
+event order. Each Calls, Emails, Notes, SMS, Files and Website filter queries
+its complete server-side history rather than filtering only the initial sale
+page payload.
+
 ### OpenAI Contact Assistant
 
 The contact detail page uses

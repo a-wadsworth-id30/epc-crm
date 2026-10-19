@@ -17,24 +17,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import {
+  saleConversationFilters,
+  saleConversationPageSize,
+  type SaleConversationFilter,
+  type SaleConversationItem,
+  type SaleConversationPage,
+} from "@/lib/sales/conversation-types";
 
-export type SaleConversationItem = {
-  id: string;
-  channel: string;
-  direction: string;
-  subject: string | null;
-  summary: string;
-  body: string | null;
-  fromAddress: string | null;
-  toAddress: string | null;
-  occurredAt: string;
-  userName: string | null;
-  contactName: string | null;
-  metadata: unknown;
-};
+export type { SaleConversationItem } from "@/lib/sales/conversation-types";
 
 export type SaleConversationThreadProps = {
   communications: SaleConversationItem[];
@@ -43,23 +37,10 @@ export type SaleConversationThreadProps = {
   emptyLabel?: string;
   helpText?: string;
   onReply?: () => void;
+  saleId?: string;
   title?: string;
   totalCount?: number;
 };
-
-const conversationFilters = [
-  { value: "ALL", label: "All" },
-  { value: "PHONE", label: "Calls" },
-  { value: "EMAIL", label: "Emails" },
-  { value: "NOTE", label: "Notes" },
-  { value: "SMS", label: "SMS" },
-  { value: "FILE", label: "Files" },
-  { value: "WEBSITE", label: "Website" },
-] as const;
-
-const pageSize = 12;
-
-type ConversationFilter = (typeof conversationFilters)[number]["value"];
 
 function communicationVisual(channel: string): {
   Icon: LucideIcon;
@@ -394,7 +375,7 @@ function directionRoute(communication: SaleConversationItem) {
 }
 
 function filterMatchesChannel(
-  filter: ConversationFilter,
+  filter: SaleConversationFilter,
   communication: SaleConversationItem,
 ) {
   const channel = displayChannel(communication);
@@ -464,14 +445,64 @@ export default function SaleConversationThread({
   emptyLabel = "No conversation yet. Calls, SMS and email will appear here.",
   helpText = "Shows the sales activity thread for this opportunity, including calls, SMS and email history in one timeline.",
   onReply,
+  saleId,
   title = "Conversation",
   totalCount,
 }: SaleConversationThreadProps) {
-  const [activeFilter, setActiveFilter] = useState<ConversationFilter>("ALL");
+  const [activeFilter, setActiveFilter] =
+    useState<SaleConversationFilter>("ALL");
   const [expandedId, setExpandedId] = useState<string | null | undefined>(
     undefined,
   );
   const [page, setPage] = useState(1);
+  const [remotePage, setRemotePage] =
+    useState<SaleConversationPage | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saleId) {
+      setRemotePage(null);
+      setLoadError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadPage = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const response = await fetch(
+          `/api/sales/${encodeURIComponent(saleId)}/conversation?filter=${activeFilter}&page=${page}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (!response.ok) {
+          throw new Error("Conversation history could not be loaded.");
+        }
+
+        const result = (await response.json()) as SaleConversationPage;
+        if (!Array.isArray(result.items) || result.filter !== activeFilter) {
+          throw new Error("Conversation history returned an invalid response.");
+        }
+
+        setRemotePage(result);
+        if (result.page !== page) setPage(result.page);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "Conversation history could not be loaded.",
+        );
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
+    };
+
+    void loadPage();
+    return () => controller.abort();
+  }, [activeFilter, communications, page, saleId, totalCount]);
   const orderedCommunications = useMemo(
     () =>
       [...communications].sort(
@@ -481,22 +512,39 @@ export default function SaleConversationThread({
       ),
     [communications],
   );
-  const visibleCommunications = useMemo(
+  const initialFilteredCommunications = useMemo(
     () =>
       orderedCommunications.filter((communication) =>
         filterMatchesChannel(activeFilter, communication),
       ),
     [activeFilter, orderedCommunications],
   );
+  const hasCurrentRemotePage =
+    Boolean(saleId) &&
+    remotePage?.filter === activeFilter &&
+    remotePage.page === page;
+  const visibleCommunications = hasCurrentRemotePage
+    ? remotePage.items
+    : initialFilteredCommunications;
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(visibleCommunications.length / pageSize),
-  );
-  const currentPage = Math.min(page, totalPages);
-  const pageStart = (currentPage - 1) * pageSize;
-  const pageEnd = Math.min(pageStart + pageSize, visibleCommunications.length);
-  const pagedCommunications = visibleCommunications.slice(pageStart, pageEnd);
+  const remoteTotal = hasCurrentRemotePage ? remotePage.total : null;
+  const totalPages = hasCurrentRemotePage
+    ? remotePage.totalPages
+    : Math.max(
+        1,
+        Math.ceil(initialFilteredCommunications.length / saleConversationPageSize),
+      );
+  const currentPage = saleId ? page : Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * saleConversationPageSize;
+  const pageEnd = hasCurrentRemotePage
+    ? pageStart + visibleCommunications.length
+    : Math.min(
+        pageStart + saleConversationPageSize,
+        visibleCommunications.length,
+      );
+  const pagedCommunications = hasCurrentRemotePage
+    ? visibleCommunications
+    : visibleCommunications.slice(pageStart, pageEnd);
   const groupedCommunications = pagedCommunications.reduce<
     Array<{ label: string; items: SaleConversationItem[] }>
   >((groups, communication) => {
@@ -516,12 +564,15 @@ export default function SaleConversationThread({
       ? (visibleCommunications[0]?.id ?? null)
       : expandedId;
   const loadedCount = orderedCommunications.length;
-  const allItemsCount = Math.max(totalCount ?? loadedCount, loadedCount);
-  const hasPartialHistory = allItemsCount > loadedCount;
-  const countLabel =
-    hasPartialHistory && activeFilter === "ALL"
-      ? `Latest ${loadedCount} of ${allItemsCount} items`
-      : `${visibleCommunications.length} items`;
+  const allItemsCount = Math.max(
+    remotePage?.counts.ALL ?? totalCount ?? loadedCount,
+    loadedCount,
+  );
+  const hasPartialHistory = !saleId && allItemsCount > loadedCount;
+  const filteredTotal = remoteTotal ?? initialFilteredCommunications.length;
+  const countLabel = isLoading
+    ? "Loading history"
+    : `${activeFilter === "ALL" ? allItemsCount : filteredTotal} items`;
 
   return (
     <section
@@ -548,13 +599,23 @@ export default function SaleConversationThread({
                 Showing the latest {loadedCount} loaded items from {allItemsCount} total.
               </p>
             ) : null}
+            {saleId ? (
+              <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                Complete history is loaded from the server one page at a time.
+              </p>
+            ) : null}
+            {loadError ? (
+              <p className="mt-1 text-xs font-medium text-error-600 dark:text-error-400">
+                {loadError}
+              </p>
+            ) : null}
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
             <span className="inline-flex h-7 items-center rounded-md border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-600 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
               {countLabel}
             </span>
             <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-gray-100 p-1 dark:bg-white/[0.04]">
-              {conversationFilters.map((filter) => {
+              {saleConversationFilters.map((filter) => {
                 const selected = activeFilter === filter.value;
 
                 return (
@@ -563,6 +624,7 @@ export default function SaleConversationThread({
                     type="button"
                     onClick={() => {
                       setActiveFilter(filter.value);
+                      setRemotePage(null);
                       setExpandedId(undefined);
                       setPage(1);
                     }}
@@ -582,7 +644,7 @@ export default function SaleConversationThread({
       </div>
 
       <div className="max-h-[calc(100dvh-220px)] min-h-[680px] space-y-5 overflow-y-auto bg-gray-50/70 px-3 py-4 dark:bg-black/10">
-        {visibleCommunications.length ? (
+        {pagedCommunications.length ? (
           groupedCommunications.map((group) => (
             <div key={group.label} className="space-y-3">
               <div className="flex items-center gap-3 py-1">
@@ -950,7 +1012,8 @@ export default function SaleConversationThread({
         )}
       </div>
 
-      {visibleCommunications.length > pageSize ? (
+      {(remoteTotal ?? visibleCommunications.length) >
+      saleConversationPageSize ? (
         <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-gray-900">
           <p className="text-gray-500 dark:text-gray-400">
             Showing{" "}
@@ -959,14 +1022,14 @@ export default function SaleConversationThread({
             </span>{" "}
             of{" "}
             <span className="font-semibold text-gray-700 dark:text-gray-200">
-              {visibleCommunications.length}
+              {remoteTotal ?? visibleCommunications.length}
             </span>
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPage((value) => Math.max(1, value - 1))}
-              disabled={currentPage === 1}
+              disabled={currentPage === 1 || isLoading}
               className="inline-flex h-9 items-center rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
             >
               Previous
@@ -979,7 +1042,7 @@ export default function SaleConversationThread({
               onClick={() =>
                 setPage((value) => Math.min(totalPages, value + 1))
               }
-              disabled={currentPage === totalPages}
+              disabled={currentPage === totalPages || isLoading}
               className="inline-flex h-9 items-center rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
             >
               Next
