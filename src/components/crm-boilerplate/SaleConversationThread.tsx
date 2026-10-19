@@ -9,6 +9,7 @@ import {
   Mail,
   MessageSquareText,
   Mic2,
+  Paperclip,
   Phone,
   Play,
   Reply,
@@ -233,6 +234,15 @@ function metadataValue(metadata: unknown, key: string) {
   return typeof value === "string" ? value : null;
 }
 
+function metadataNumber(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function metadataText(metadata: unknown, keys: string[]) {
   for (const key of keys) {
     const value = metadataValue(metadata, key);
@@ -240,6 +250,40 @@ function metadataText(metadata: unknown, keys: string[]) {
   }
 
   return null;
+}
+
+function emailAttachments(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return [];
+  }
+
+  const value = (metadata as Record<string, unknown>).emailAttachments;
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+
+    const record = item as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (!name) return [];
+
+    return [
+      {
+        mimeType:
+          typeof record.mimeType === "string" ? record.mimeType : null,
+        name,
+        sizeBytes:
+          typeof record.sizeBytes === "number" ? record.sizeBytes : null,
+      },
+    ];
+  });
+}
+
+function formatFileSize(value: number | null) {
+  if (value === null || value < 0) return null;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function recordingPlaybackUrl(
@@ -564,6 +608,17 @@ export default function SaleConversationThread({
                   "transcription",
                   "transcriptText",
                 ]);
+                const attachments =
+                  communication.channel === "EMAIL"
+                    ? emailAttachments(communication.metadata)
+                    : [];
+                const attachmentCount = Math.max(
+                  attachments.length,
+                  metadataNumber(
+                    communication.metadata,
+                    "emailAttachmentCount",
+                  ) ?? 0,
+                );
                 const recordingSid = metadataValue(
                   communication.metadata,
                   "recordingSid",
@@ -686,6 +741,13 @@ export default function SaleConversationThread({
                                 Recording
                               </span>
                             ) : null}
+                            {attachmentCount ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700 dark:bg-white/[0.06] dark:text-gray-300">
+                                <Paperclip className="block h-3 w-3" />
+                                {attachmentCount} attachment
+                                {attachmentCount === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
                             {transcriptStatus ? (
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClassName(transcriptStatus)}`}
@@ -777,6 +839,49 @@ export default function SaleConversationThread({
                               </p>
                               <p className="mt-2 max-h-72 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-gray-700 dark:text-gray-300">
                                 {transcript || plainBody}
+                              </p>
+                            </div>
+                          ) : null}
+                          {attachmentCount ? (
+                            <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.04]">
+                              <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                                Email attachments
+                              </p>
+                              <div className="mt-2 space-y-2">
+                                {attachments.map((attachment, index) => (
+                                  <div
+                                    key={`${attachment.name}-${index}`}
+                                    className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                  >
+                                    <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                                    <div className="min-w-0">
+                                      <p className="break-all font-medium">
+                                        {attachment.name}
+                                      </p>
+                                      {attachment.mimeType ||
+                                      attachment.sizeBytes !== null ? (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                          {[
+                                            attachment.mimeType,
+                                            formatFileSize(
+                                              attachment.sizeBytes,
+                                            ),
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ))}
+                                {!attachments.length ? (
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Pipedrive reported an attachment, but did not return its file details.
+                                  </p>
+                                ) : null}
+                              </div>
+                              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                                Pipedrive reference only — copy the file into CRM storage before final cutover.
                               </p>
                             </div>
                           ) : null}

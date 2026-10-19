@@ -320,6 +320,7 @@ export type PipedriveLeadFilesSyncResult =
 
 export type PipedriveLeadEmailsSyncResult =
   | {
+      archive: PipedriveEmailArchiveVerification;
       created: number;
       emailsRead: number;
       externalLeadId: string;
@@ -331,6 +332,7 @@ export type PipedriveLeadEmailsSyncResult =
       warnings: string[];
     }
   | {
+      archive: PipedriveEmailArchiveVerification;
       created: 0;
       emailsRead: 0;
       externalLeadId: string | null;
@@ -603,8 +605,29 @@ type PipedriveLeadFilesWriteResult = {
 type PipedriveLeadEmailsReadResult = {
   emails: PipedriveMailMessage[];
   emailsRead: number;
+  historyScanComplete: boolean;
   warnings: string[];
 };
+
+export type PipedriveEmailArchiveVerification = {
+  attachmentCount: number;
+  attachmentFilesArchived: boolean;
+  fullMessageReadFailures: number;
+  fullMessagesRead: number;
+  historyScanComplete: boolean;
+  messagesMatched: number;
+  messagesWithAttachments: number;
+};
+
+const emptyPipedriveEmailArchiveVerification = {
+  attachmentCount: 0,
+  attachmentFilesArchived: true,
+  fullMessageReadFailures: 0,
+  fullMessagesRead: 0,
+  historyScanComplete: false,
+  messagesMatched: 0,
+  messagesWithAttachments: 0,
+} satisfies PipedriveEmailArchiveVerification;
 
 type PipedriveLeadEmailsWriteResult = {
   created: number;
@@ -913,6 +936,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
 
   if (!readClient) {
     return {
+      archive: emptyPipedriveEmailArchiveVerification,
       created: 0,
       emailsRead: 0,
       externalLeadId: null,
@@ -933,6 +957,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
 
   if (!canReadLeadMailThreads && !canReadPersonMailMessages) {
     return {
+      archive: emptyPipedriveEmailArchiveVerification,
       created: 0,
       emailsRead: 0,
       externalLeadId: null,
@@ -972,6 +997,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
 
   if (!leadLink || !opportunity) {
     return {
+      archive: emptyPipedriveEmailArchiveVerification,
       created: 0,
       emailsRead: 0,
       externalLeadId: null,
@@ -995,6 +1021,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
 
   if (!personId && !canReadLeadMailThreads) {
     return {
+      archive: emptyPipedriveEmailArchiveVerification,
       created: 0,
       emailsRead: 0,
       externalLeadId: leadLink.externalId,
@@ -1029,6 +1056,10 @@ export async function syncPipedriveLeadEmailsForOpportunity({
   );
 
   return {
+    archive: pipedriveEmailArchiveVerification(
+      emailRead.emails,
+      emailRead.historyScanComplete,
+    ),
     created: writeResult.created,
     emailsRead: emailRead.emailsRead,
     externalLeadId: leadLink.externalId,
@@ -1235,7 +1266,7 @@ export async function importPipedriveLeadEmailThreadPages({
             continue;
           }
 
-          const email = await readFullPipedriveMailMessageIfNeeded(
+          const email = await readFullPipedriveMailMessage(
             readClient,
             messageWithThreadContext,
             warnings,
@@ -3308,6 +3339,7 @@ async function readPipedriveLeadEmails(
   const emails: PipedriveMailMessage[] = [];
   const warnings: string[] = [];
   let emailsRead = 0;
+  let historyScanComplete = true;
 
   const threadEmailRead = await readPipedriveLeadThreadEmails(
     client,
@@ -3316,6 +3348,8 @@ async function readPipedriveLeadEmails(
   );
   emails.push(...threadEmailRead.emails);
   emailsRead += threadEmailRead.emailsRead;
+  historyScanComplete =
+    historyScanComplete && threadEmailRead.historyScanComplete;
   warnings.push(...threadEmailRead.warnings);
 
   if (personId && typeof client.listPersonMailMessages === "function") {
@@ -3327,12 +3361,24 @@ async function readPipedriveLeadEmails(
     );
     emails.push(...personEmailRead.emails);
     emailsRead += personEmailRead.emailsRead;
+    historyScanComplete =
+      historyScanComplete && personEmailRead.historyScanComplete;
     warnings.push(...personEmailRead.warnings);
   }
 
+  const uniqueEmails = deduplicatePipedriveMailMessages(emails);
+  const hydratedEmails: PipedriveMailMessage[] = [];
+
+  for (const email of uniqueEmails) {
+    hydratedEmails.push(
+      await readFullPipedriveMailMessage(client, email, warnings),
+    );
+  }
+
   return {
-    emails: deduplicatePipedriveMailMessages(emails),
+    emails: hydratedEmails,
     emailsRead,
+    historyScanComplete,
     warnings,
   };
 }
@@ -3346,7 +3392,12 @@ async function readPipedriveLeadThreadEmails(
     typeof client.listMailThreads !== "function" ||
     typeof client.listMailThreadMessages !== "function"
   ) {
-    return { emails: [], emailsRead: 0, warnings: [] };
+    return {
+      emails: [],
+      emailsRead: 0,
+      historyScanComplete: true,
+      warnings: [],
+    };
   }
 
   const emails: PipedriveMailMessage[] = [];
@@ -3358,6 +3409,7 @@ async function readPipedriveLeadThreadEmails(
     manualPipedriveLeadEmailMaxPages,
   );
   let emailsRead = 0;
+  let historyScanComplete = true;
 
   for (const folder of pipedriveLeadEmailThreadFolders) {
     const threadRead = await readPipedriveLeadEmailThreadPagesForFolder(
@@ -3366,6 +3418,7 @@ async function readPipedriveLeadThreadEmails(
       null,
       pageLimit,
     );
+    historyScanComplete = historyScanComplete && !threadRead.moreAvailable;
     warnings.push(...threadRead.warnings);
 
     for (const thread of threadRead.threadsByLeadId.get(externalLeadId) ?? []) {
@@ -3397,13 +3450,7 @@ async function readPipedriveLeadThreadEmails(
           continue;
         }
 
-        emails.push(
-          await readFullPipedriveMailMessageIfNeeded(
-            client,
-            messageWithThreadContext,
-            warnings,
-          ),
-        );
+        emails.push(messageWithThreadContext);
       }
     } catch (error) {
       warnings.push(
@@ -3416,7 +3463,7 @@ async function readPipedriveLeadThreadEmails(
     }
   }
 
-  return { emails, emailsRead, warnings };
+  return { emails, emailsRead, historyScanComplete, warnings };
 }
 
 async function readPipedriveLeadEmailThreadPagesForFolder(
@@ -3511,7 +3558,12 @@ async function readPipedrivePersonEmailsForLead(
   maxPages = defaultPipedriveLeadEmailMaxPages,
 ): Promise<PipedriveLeadEmailsReadResult> {
   if (typeof client.listPersonMailMessages !== "function") {
-    return { emails: [], emailsRead: 0, warnings: [] };
+    return {
+      emails: [],
+      emailsRead: 0,
+      historyScanComplete: true,
+      warnings: [],
+    };
   }
 
   const emails: PipedriveMailMessage[] = [];
@@ -3519,10 +3571,12 @@ async function readPipedrivePersonEmailsForLead(
   const pageLimit = boundedFullPullMaxPages(
     maxPages,
     defaultPipedriveLeadEmailMaxPages,
+    manualPipedriveLeadEmailMaxPages,
   );
   let emailsRead = 0;
   let pagesRead = 0;
   let start: number | null = null;
+  let historyScanComplete = false;
 
   try {
     while (pagesRead < pageLimit) {
@@ -3545,6 +3599,7 @@ async function readPipedrivePersonEmailsForLead(
         !page.pagination.moreItemsInCollection ||
         page.pagination.nextStart === null
       ) {
+        historyScanComplete = true;
         break;
       }
 
@@ -3556,7 +3611,7 @@ async function readPipedrivePersonEmailsForLead(
     );
   }
 
-  return { emails, emailsRead, warnings };
+  return { emails, emailsRead, historyScanComplete, warnings };
 }
 
 function deduplicatePipedriveMailMessages(emails: PipedriveMailMessage[]) {
@@ -3578,20 +3633,27 @@ function deduplicatePipedriveMailMessages(emails: PipedriveMailMessage[]) {
   return uniqueEmails;
 }
 
-async function readFullPipedriveMailMessageIfNeeded(
+async function readFullPipedriveMailMessage(
   client: PipedriveRelatedRecordClient,
   message: PipedriveMailMessage,
   warnings: string[],
 ) {
-  if (
-    pipedriveMailMessageHasBody(message) ||
-    typeof client.getMailMessage !== "function"
-  ) {
-    return message;
+  if (typeof client.getMailMessage !== "function") {
+    return {
+      ...message,
+      _crmFullMessageRead: false,
+      _crmFullMessageReadFailed: false,
+    } satisfies PipedriveMailMessage;
   }
 
   const mailId = numericId(pipedriveMailMessageExternalId(message));
-  if (!mailId) return message;
+  if (!mailId) {
+    return {
+      ...message,
+      _crmFullMessageRead: false,
+      _crmFullMessageReadFailed: true,
+    } satisfies PipedriveMailMessage;
+  }
 
   try {
     const fullMessage = await client.getMailMessage(mailId, {
@@ -3605,6 +3667,8 @@ async function readFullPipedriveMailMessageIfNeeded(
     return {
       ...message,
       ...fullMessage,
+      _crmFullMessageRead: true,
+      _crmFullMessageReadFailed: false,
       deal_id:
         fullMessage.deal_id ??
         fullRecord.deal_id ??
@@ -3630,12 +3694,16 @@ async function readFullPipedriveMailMessageIfNeeded(
   } catch (error) {
     warnings.push(
       pipedriveReadWarning(
-        "mail message body",
+        "full mail message",
         pipedriveMailMessageExternalId(message) ?? "unknown",
         error,
       ),
     );
-    return message;
+    return {
+      ...message,
+      _crmFullMessageRead: false,
+      _crmFullMessageReadFailed: true,
+    } satisfies PipedriveMailMessage;
   }
 }
 
@@ -3800,43 +3868,39 @@ function mapPipedriveMailMessageToSalesEmail({
     externalId(emailDataRecord.thread_id) ??
     externalId(emailRecord.mail_thread) ??
     externalId(emailDataRecord.mail_thread);
-  const fromAddress = firstEmailAddress(
+  const fromValue =
     email.from ??
-      emailRecord.from ??
-      emailDataRecord.from ??
-      emailRecord.from_address ??
-      emailDataRecord.from_address ??
-      emailRecord.from_email ??
-      emailDataRecord.from_email ??
-      emailRecord.sender ??
-      emailDataRecord.sender,
-  );
-  const toAddress = firstEmailAddress(
+    emailRecord.from ??
+    emailDataRecord.from ??
+    emailRecord.from_address ??
+    emailDataRecord.from_address ??
+    emailRecord.from_email ??
+    emailDataRecord.from_email ??
+    emailRecord.sender ??
+    emailDataRecord.sender;
+  const toValue =
     email.to ??
-      emailRecord.to ??
-      emailDataRecord.to ??
-      emailRecord.to_address ??
-      emailDataRecord.to_address ??
-      emailRecord.to_email ??
-      emailDataRecord.to_email,
-  );
-  const fromName = firstEmailName(
-    email.from ??
-      emailRecord.from ??
-      emailDataRecord.from ??
-      emailRecord.from_address ??
-      emailDataRecord.from_address ??
-      emailRecord.from_email ??
-      emailDataRecord.from_email ??
-      emailRecord.sender ??
-      emailDataRecord.sender,
-  );
+    emailRecord.to ??
+    emailDataRecord.to ??
+    emailRecord.to_address ??
+    emailDataRecord.to_address ??
+    emailRecord.to_email ??
+    emailDataRecord.to_email;
+  const ccValue = emailRecord.cc ?? emailDataRecord.cc;
+  const bccValue = emailRecord.bcc ?? emailDataRecord.bcc;
+  const fromAddresses = uniqueEmailAddresses(fromValue);
+  const toAddresses = uniqueEmailAddresses(toValue);
+  const ccAddresses = uniqueEmailAddresses(ccValue);
+  const bccAddresses = uniqueEmailAddresses(bccValue);
+  const fromAddress = fromAddresses[0] ?? null;
+  const toAddress = toAddresses[0] ?? null;
+  const fromName = firstEmailName(fromValue);
   const subject =
     cleanText(email.subject) ??
     cleanText(emailRecord.subject) ??
     cleanText(emailDataRecord.subject) ??
     "Pipedrive email";
-  const bodySource =
+  const plainBodySource =
     cleanText(email.body_plain) ??
     cleanText(emailRecord.body_plain) ??
     cleanText(emailDataRecord.body_plain) ??
@@ -3844,22 +3908,27 @@ function mapPipedriveMailMessageToSalesEmail({
     cleanText(emailDataRecord.body_text) ??
     cleanText(emailRecord.text) ??
     cleanText(emailDataRecord.text) ??
+    cleanText(email.snippet) ??
+    cleanText(emailRecord.snippet) ??
+    cleanText(emailDataRecord.snippet);
+  const htmlBodySource =
+    cleanText(emailRecord.body_html) ??
+    cleanText(emailDataRecord.body_html) ??
     cleanText(email.body) ??
     cleanText(emailRecord.body) ??
     cleanText(emailDataRecord.body) ??
     cleanText(emailRecord.content) ??
-    cleanText(emailDataRecord.content) ??
-    cleanText(email.snippet) ??
-    cleanText(emailRecord.snippet) ??
-    cleanText(emailDataRecord.snippet);
+    cleanText(emailDataRecord.content);
   const plainBody =
-    toEmailPlainText(bodySource) ||
+    toEmailPlainText(plainBodySource ?? htmlBodySource) ||
     cleanText(email.snippet) ||
     cleanText(emailRecord.snippet) ||
     cleanText(emailDataRecord.snippet) ||
     subject;
   const htmlBody =
-    bodySource && /<\/?[a-z][\s\S]*>/i.test(bodySource) ? bodySource : null;
+    htmlBodySource && /<\/?[a-z][\s\S]*>/i.test(htmlBodySource)
+      ? htmlBodySource
+      : null;
   const occurredAt =
     parsePipedriveDate(email.message_time) ??
     parsePipedriveDate(emailRecord.message_time) ??
@@ -3884,12 +3953,33 @@ function mapPipedriveMailMessageToSalesEmail({
   const providerMessageId = `${pipedriveMailExternalIdPrefix}${externalMailId}`;
   const matchedLeadId = pipedriveLeadIdFromMailMessage(email);
   const matchedDealId = pipedriveDealIdFromMailMessage(email);
+  const rawAttachments = pipedriveMailAttachments(email);
+  const normalizedAttachments = normalizePipedriveMailAttachments(
+    rawAttachments,
+  );
+  const attachmentCount = pipedriveMailAttachmentCount(
+    email,
+    normalizedAttachments.length,
+  );
+  const fullMessageRead = emailRecord._crmFullMessageRead === true;
+  const fullMessageReadFailed = emailRecord._crmFullMessageReadFailed === true;
   const metadata = {
+    archiveVersion: 1,
+    emailAttachmentCount: attachmentCount,
+    emailAttachments: normalizedAttachments,
+    emailAttachmentStorage:
+      attachmentCount > 0 ? "pipedrive-reference" : "none",
+    emailBccAddresses: bccAddresses,
+    emailCcAddresses: ccAddresses,
+    emailFromAddresses: fromAddresses,
+    emailToAddresses: toAddresses,
     externalLeadId,
     externalMailId,
     externalPersonId: externalPersonId ?? null,
     externalThreadId: externalThreadId ?? null,
     importedFrom: "pipedrive",
+    fullMessageRead,
+    fullMessageReadFailed,
     matchedDealId,
     matchedLeadId,
     pipedriveAddTime:
@@ -3925,10 +4015,8 @@ function mapPipedriveMailMessageToSalesEmail({
       toAddress,
     },
     emailData: {
-      attachments: jsonValue(
-        emailRecord.attachments ?? emailDataRecord.attachments,
-      ),
-      ccAddresses: jsonValue(emailRecord.cc ?? emailDataRecord.cc),
+      attachments: jsonValue(rawAttachments),
+      ccAddresses: jsonValue(ccValue),
       contactId,
       direction,
       fromAddress,
@@ -3939,6 +4027,11 @@ function mapPipedriveMailMessageToSalesEmail({
       opportunityId,
       provider: pipedriveProvider,
       providerMessageId,
+      rawMessage:
+        cleanText(emailRecord.raw_message) ??
+        cleanText(emailDataRecord.raw_message) ??
+        cleanText(emailRecord.raw) ??
+        cleanText(emailDataRecord.raw),
       receivedAt: occurredAt,
       status: "READ" as const,
       subject,
@@ -4400,24 +4493,115 @@ function pipedriveMailMessageDataRecord(email: PipedriveMailMessage) {
   return objectValue(objectValue(email).data);
 }
 
-function pipedriveMailMessageHasBody(email: PipedriveMailMessage) {
+function pipedriveMailAttachments(email: PipedriveMailMessage) {
   const emailRecord = objectValue(email);
   const emailDataRecord = pipedriveMailMessageDataRecord(email);
 
-  return Boolean(
-    cleanText(email.body_plain) ??
-      cleanText(emailRecord.body_plain) ??
-      cleanText(emailDataRecord.body_plain) ??
-      cleanText(emailRecord.body_text) ??
-      cleanText(emailDataRecord.body_text) ??
-      cleanText(emailRecord.text) ??
-      cleanText(emailDataRecord.text) ??
-      cleanText(email.body) ??
-      cleanText(emailRecord.body) ??
-      cleanText(emailDataRecord.body) ??
-      cleanText(emailRecord.content) ??
-      cleanText(emailDataRecord.content),
+  return (
+    emailRecord.attachments ??
+    emailDataRecord.attachments ??
+    emailRecord.mail_attachments ??
+    emailDataRecord.mail_attachments
   );
+}
+
+function normalizePipedriveMailAttachments(value: unknown) {
+  const valueRecord = objectValue(value);
+  const candidates = Array.isArray(value)
+    ? value
+    : Array.isArray(valueRecord.data)
+      ? valueRecord.data
+      : Object.keys(valueRecord).length
+        ? [value]
+        : [];
+
+  return candidates.map((candidate, index) => {
+    const record = objectValue(candidate);
+    const externalAttachmentId = firstExternalId(
+      record.id,
+      record.attachment_id,
+      record.file_id,
+    );
+    const name =
+      cleanText(record.file_name) ??
+      cleanText(record.filename) ??
+      cleanText(record.name) ??
+      `Attachment ${index + 1}`;
+    const mimeType =
+      cleanText(record.mime_type) ??
+      cleanText(record.content_type) ??
+      cleanText(record.file_type);
+    const sizeBytes =
+      numberValue(record.file_size) ??
+      numberValue(record.size) ??
+      numberValue(record.size_bytes);
+
+    return {
+      ...(externalAttachmentId ? { externalAttachmentId } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      name,
+      ...(sizeBytes !== null ? { sizeBytes } : {}),
+    } satisfies Prisma.InputJsonObject;
+  });
+}
+
+function pipedriveMailAttachmentCount(
+  email: PipedriveMailMessage,
+  normalizedCount: number,
+) {
+  if (normalizedCount > 0) return normalizedCount;
+
+  const emailRecord = objectValue(email);
+  const emailDataRecord = pipedriveMailMessageDataRecord(email);
+  const declaredCount =
+    numberValue(emailRecord.attachment_count) ??
+    numberValue(emailDataRecord.attachment_count) ??
+    numberValue(emailRecord.attachments_count) ??
+    numberValue(emailDataRecord.attachments_count);
+  if (declaredCount !== null) return Math.max(0, Math.trunc(declaredCount));
+
+  const hasAttachments =
+    emailRecord.has_attachments === true ||
+    emailDataRecord.has_attachments === true ||
+    emailRecord.has_attachment === true ||
+    emailDataRecord.has_attachment === true;
+
+  return hasAttachments ? 1 : 0;
+}
+
+function pipedriveEmailArchiveVerification(
+  emails: PipedriveMailMessage[],
+  historyScanComplete: boolean,
+): PipedriveEmailArchiveVerification {
+  let attachmentCount = 0;
+  let fullMessageReadFailures = 0;
+  let fullMessagesRead = 0;
+  let messagesWithAttachments = 0;
+
+  for (const email of emails) {
+    const emailRecord = objectValue(email);
+    const messageAttachmentCount = pipedriveMailAttachmentCount(
+      email,
+      normalizePipedriveMailAttachments(pipedriveMailAttachments(email)).length,
+    );
+
+    attachmentCount += messageAttachmentCount;
+    if (messageAttachmentCount > 0) messagesWithAttachments += 1;
+    if (emailRecord._crmFullMessageRead === true) fullMessagesRead += 1;
+    if (emailRecord._crmFullMessageReadFailed === true) {
+      fullMessageReadFailures += 1;
+    }
+  }
+
+  return {
+    attachmentCount,
+    attachmentFilesArchived: attachmentCount === 0,
+    fullMessageReadFailures,
+    fullMessagesRead,
+    historyScanComplete,
+    messagesMatched: emails.length,
+    messagesWithAttachments,
+  };
 }
 
 function pipedriveLeadIdFromMailMessage(email: PipedriveMailMessage) {
@@ -4508,8 +4692,8 @@ function contactEmailValues(
     .filter((value): value is string => Boolean(value));
 }
 
-function firstEmailAddress(value: unknown) {
-  return emailAddressCandidates(value)[0] ?? null;
+function uniqueEmailAddresses(value: unknown) {
+  return [...new Set(emailAddressCandidates(value))];
 }
 
 function firstEmailName(value: unknown): string | null {

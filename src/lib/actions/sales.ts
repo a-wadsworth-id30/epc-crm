@@ -107,6 +107,28 @@ function salesPipedriveWarningMessage(warnings: string[]) {
   return ` ${warnings.length} warning${warnings.length === 1 ? "" : "s"} recorded.${detail}`;
 }
 
+function salesPipedriveEmailArchiveMessage(archive: {
+  attachmentCount: number;
+  attachmentFilesArchived: boolean;
+  fullMessageReadFailures: number;
+  fullMessagesRead: number;
+  historyScanComplete: boolean;
+  messagesMatched: number;
+}) {
+  const history = archive.historyScanComplete
+    ? "history scan reached the end"
+    : "history scan is partial and needs another/deeper pass";
+  const fullMessages = `${archive.fullMessagesRead}/${archive.messagesMatched} full messages verified`;
+  const attachmentStatus = archive.attachmentCount
+    ? `${archive.attachmentCount} attachment${archive.attachmentCount === 1 ? "" : "s"} found; files are still Pipedrive references and must be copied before cutover`
+    : "no email attachments found in this pass";
+  const failures = archive.fullMessageReadFailures
+    ? ` ${archive.fullMessageReadFailures} full-message read${archive.fullMessageReadFailures === 1 ? "" : "s"} failed.`
+    : "";
+
+  return ` Archive check: ${history}; ${fullMessages}; ${attachmentStatus}.${failures}`;
+}
+
 const saleSchema = z.object({
   title: z.string().trim().min(2, "Sale name is required."),
   stage: z.enum(salesStages).default("LEAD"),
@@ -2000,7 +2022,7 @@ export async function syncPipedriveLeadEmailsAction(
 
   return {
     ok: true,
-    message: `Pulled ${result.emailsRead} Pipedrive email${result.emailsRead === 1 ? "" : "s"}. Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}.${warningMessage}`,
+    message: `Pulled ${result.emailsRead} Pipedrive email${result.emailsRead === 1 ? "" : "s"}. Created ${result.created}, updated ${result.updated}, skipped ${result.skipped}.${salesPipedriveEmailArchiveMessage(result.archive)}${warningMessage}`,
   };
 }
 
@@ -2052,7 +2074,7 @@ export async function syncPipedriveLeadUpdatesAction(
     opportunityId: sale.id,
   });
   const noteSummary = `Notes: read ${noteResult.notesRead}, created ${noteResult.created}, updated ${noteResult.updated}, skipped ${noteResult.skipped}.`;
-  const emailSummary = `Emails: read ${emailResult.emailsRead}, created ${emailResult.created}, updated ${emailResult.updated}, skipped ${emailResult.skipped}.`;
+  const emailSummary = `Emails: read ${emailResult.emailsRead}, created ${emailResult.created}, updated ${emailResult.updated}, skipped ${emailResult.skipped}.${salesPipedriveEmailArchiveMessage(emailResult.archive)}`;
 
   await bumpRealtimeTopics([
     realtimeTopics.saleConversation(sale.id),

@@ -51,7 +51,9 @@ let externalRecordLinkRows: Array<{
   provider: string;
 }> = [];
 let emailMessageRows: Array<{
+  attachments?: unknown;
   body?: string | null;
+  htmlBody?: string | null;
   id: string;
   opportunityId?: string | null;
   providerMessageId?: string | null;
@@ -396,6 +398,8 @@ async function createEmailMessage(args: unknown) {
   crmWriteLabels.push("emailMessage.create");
   const data = (args as { data?: Record<string, unknown> }).data ?? {};
   const row = {
+    attachments: data.attachments,
+    htmlBody: typeof data.htmlBody === "string" ? data.htmlBody : null,
     id: `email-message-${emailMessageRows.length + 1}`,
     opportunityId:
       typeof data.opportunityId === "string" ? data.opportunityId : null,
@@ -1749,6 +1753,7 @@ describe("Pipedrive lead import mapping", () => {
 
   it("imports Pipedrive person emails into linked sale conversations", async () => {
     const listMailCalls: unknown[] = [];
+    const getMailMessageCalls: unknown[] = [];
     externalRecordLinkRows = [
       {
         externalId: "lead-emails",
@@ -1771,6 +1776,32 @@ describe("Pipedrive lead import mapping", () => {
     const result = await pipedriveImport.syncPipedriveLeadEmailsForOpportunity({
       client: {
         defaultLeadSource: "Pipedrive",
+        getMailMessage: async (mailMessageId, params) => {
+          getMailMessageCalls.push({ mailMessageId, params });
+          return {
+            attachments: [
+              {
+                file_name: "survey.pdf",
+                file_size: 2048,
+                id: 991,
+                mime_type: "application/pdf",
+              },
+            ],
+            bcc: [{ email: "archive@example.com" }],
+            body: "<p>Hello<br>Customer reply</p>",
+            body_plain: "Hello\nCustomer reply",
+            cc: [{ email: "manager@example.com" }],
+            from: { email: "customer@example.com", name: "Customer" },
+            id: mailMessageId,
+            lead_id: "lead-emails",
+            message_time: "2026-08-24T11:00:00Z",
+            subject: "Survey booking",
+            to: [
+              { email: "sales@example.com" },
+              { email: "support@example.com" },
+            ],
+          };
+        },
         getOrganization: async () => ({}),
         getPerson: async () => ({}),
         listPersonMailMessages: async (personId, params) => {
@@ -1810,6 +1841,18 @@ describe("Pipedrive lead import mapping", () => {
         personId: 123,
       },
     ]);
+    assert.deepEqual(getMailMessageCalls, [
+      { mailMessageId: 701, params: { includeBody: true } },
+    ]);
+    assert.deepEqual(result.archive, {
+      attachmentCount: 1,
+      attachmentFilesArchived: false,
+      fullMessageReadFailures: 0,
+      fullMessagesRead: 1,
+      historyScanComplete: true,
+      messagesMatched: 1,
+      messagesWithAttachments: 1,
+    });
     assert.equal(salesCommunicationRows.length, 1);
     assert.equal(salesCommunicationRows[0]?.channel, "EMAIL");
     assert.equal(salesCommunicationRows[0]?.direction, "INBOUND");
@@ -1824,9 +1867,52 @@ describe("Pipedrive lead import mapping", () => {
     assert.equal(emailMessageRows.length, 1);
     assert.equal(emailMessageRows[0]?.providerMessageId, "pipedrive:mail:701");
     assert.equal(
+      emailMessageRows[0]?.htmlBody,
+      "<p>Hello<br>Customer reply</p>",
+    );
+    assert.deepEqual(emailMessageRows[0]?.attachments, [
+      {
+        file_name: "survey.pdf",
+        file_size: 2048,
+        id: 991,
+        mime_type: "application/pdf",
+      },
+    ]);
+    assert.equal(
       emailMessageRows[0]?.salesCommunicationId,
       salesCommunicationRows[0]?.id,
     );
+    assert.deepEqual(salesCommunicationRows[0]?.metadata, {
+      archiveVersion: 1,
+      emailAttachmentCount: 1,
+      emailAttachments: [
+        {
+          externalAttachmentId: "991",
+          mimeType: "application/pdf",
+          name: "survey.pdf",
+          sizeBytes: 2048,
+        },
+      ],
+      emailAttachmentStorage: "pipedrive-reference",
+      emailBccAddresses: ["archive@example.com"],
+      emailCcAddresses: ["manager@example.com"],
+      emailFromAddresses: ["customer@example.com"],
+      emailToAddresses: ["sales@example.com", "support@example.com"],
+      externalLeadId: "lead-emails",
+      externalMailId: "701",
+      externalPersonId: "123",
+      externalThreadId: null,
+      fullMessageRead: true,
+      fullMessageReadFailed: false,
+      importedFrom: "pipedrive",
+      matchedDealId: null,
+      matchedLeadId: "lead-emails",
+      pipedriveAddTime: null,
+      pipedriveMessageTime: "2026-08-24T11:00:00Z",
+      pipedriveUpdateTime: null,
+      provider: "pipedrive",
+      source: "pipedrive-mail-import",
+    });
   });
 
   it("imports wrapped Pipedrive mail-message payloads with IDs under data", async () => {

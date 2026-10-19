@@ -191,6 +191,15 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   emails use stable `pipedrive:mail:*` external IDs, update existing CRM email
   communications instead of duplicating them, deduplicate overlap between
   lead-thread and person-message reads, and never write back to Pipedrive. The
+  importer now reads each matched message through Pipedrive's full-message
+  endpoint when available, keeps separate plain-text and HTML bodies, preserves
+  all To/Cc/Bcc addresses, and records normalized attachment names, MIME types,
+  sizes and provider IDs. Manual pull results report whether the bounded history
+  scan reached the end, how many full messages were verified and how many email
+  attachments were found. Email attachment binaries are not yet copied into R2:
+  conversation cards label them as Pipedrive references and the archive check
+  remains incomplete when attachments exist, so the provider files cannot be
+  treated as migration-safe before cutover.
   admin-only sale detail "Pull Pipedrive updates" action pulls both Pipedrive
   Lead Inbox notes and emails, with the email side using a deeper bounded read
   for historical recovery and surfacing sanitized Pipedrive read warnings in
