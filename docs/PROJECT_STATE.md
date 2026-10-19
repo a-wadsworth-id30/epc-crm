@@ -200,7 +200,7 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   readable custom fields inside the CRM without persisting the raw lead payload
   or writing back to Pipedrive.
   Pipedrive-linked sale document panels also show provider file references and
-  run a throttled metadata refresh when the Documents tab is opened, with an
+  linked sale views run a throttled metadata refresh, with an
   admin-only manual refresh option, without downloading files during metadata
   refresh, creating CRM `FileAsset` rows or writing back to Pipedrive. Opening
   a provider file link goes through an authenticated CRM route that checks sale
@@ -210,6 +210,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   preview modal and a separate download action for provider files. The Pipedrive
   file proxy uses same-origin frame headers so previewable provider PDFs/text
   can render inside the CRM modal without relaxing iframe permissions globally.
+  Synced Pipedrive file references also appear as idempotent virtual file
+  activity in the sale Conversation timeline, with preview and download links;
+  the underlying file remains owned by Pipedrive and is not duplicated in CRM
+  storage or as a `SalesCommunication` row.
   Settings > Integrations > Pipedrive includes an admin-only historical linked
   sale backfill for older CRM sales already linked to Pipedrive Lead Inbox
   records. The backfill has preview and import modes, runs in bounded cursor

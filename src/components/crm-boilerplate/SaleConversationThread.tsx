@@ -2,6 +2,7 @@
 
 import {
   ChevronDown,
+  Download,
   ExternalLink,
   FileText,
   Globe2,
@@ -51,6 +52,7 @@ const conversationFilters = [
   { value: "EMAIL", label: "Emails" },
   { value: "NOTE", label: "Notes" },
   { value: "SMS", label: "SMS" },
+  { value: "FILE", label: "Files" },
   { value: "WEBSITE", label: "Website" },
 ] as const;
 
@@ -110,6 +112,16 @@ function communicationVisual(channel: string): {
         "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300",
       iconClassName:
         "bg-violet-50 text-violet-700 ring-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-900/40",
+    };
+  }
+
+  if (channel === "FILE") {
+    return {
+      Icon: FileText,
+      badgeClassName:
+        "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300",
+      iconClassName:
+        "bg-blue-50 text-blue-700 ring-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-900/40",
     };
   }
 
@@ -268,6 +280,7 @@ function externalActionLabel(
     });
   }
   if (channel === "WEBSITE") return "Open page";
+  if (channel === "FILE") return "Preview file";
   return "Open";
 }
 
@@ -279,6 +292,7 @@ function channelLabel(channel: string) {
   if (channel === "NOTE") return "Note";
   if (channel === "SYSTEM") return "System";
   if (channel === "WEBSITE") return "Website";
+  if (channel === "FILE") return "File";
   return channel.toLowerCase();
 }
 
@@ -288,7 +302,24 @@ function directionLabel(direction: string) {
   return "Internal";
 }
 
+function isPipedriveFileActivity(communication: SaleConversationItem) {
+  return (
+    metadataValue(communication.metadata, "source") ===
+    "pipedrive-file-import"
+  );
+}
+
+function displayChannel(communication: SaleConversationItem) {
+  return isPipedriveFileActivity(communication)
+    ? "FILE"
+    : communication.channel;
+}
+
 function directionRoute(communication: SaleConversationItem) {
+  if (isPipedriveFileActivity(communication)) {
+    return "Pipedrive file activity";
+  }
+
   if (communication.channel === "WEBSITE") {
     return communication.contactName
       ? `${communication.contactName} website activity`
@@ -318,7 +349,11 @@ function directionRoute(communication: SaleConversationItem) {
     : "Internal note";
 }
 
-function filterMatchesChannel(filter: ConversationFilter, channel: string) {
+function filterMatchesChannel(
+  filter: ConversationFilter,
+  communication: SaleConversationItem,
+) {
+  const channel = displayChannel(communication);
   if (filter === "ALL") return true;
   if (filter === "SMS") return channel === "SMS" || channel === "WHATSAPP";
   return channel === filter;
@@ -349,6 +384,10 @@ function statusClassName(status: string) {
 function directionPillClassName(direction: string, channel: string) {
   if (channel === "WEBSITE") {
     return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";
+  }
+
+  if (channel === "FILE") {
+    return "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
   }
 
   if (direction === "OUTBOUND") {
@@ -401,7 +440,7 @@ export default function SaleConversationThread({
   const visibleCommunications = useMemo(
     () =>
       orderedCommunications.filter((communication) =>
-        filterMatchesChannel(activeFilter, communication.channel),
+        filterMatchesChannel(activeFilter, communication),
       ),
     [activeFilter, orderedCommunications],
   );
@@ -510,6 +549,7 @@ export default function SaleConversationThread({
                 <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
               </div>
               {group.items.map((communication) => {
+                const renderedChannel = displayChannel(communication);
                 const index = orderedCommunications.findIndex(
                   (item) => item.id === communication.id,
                 );
@@ -575,6 +615,7 @@ export default function SaleConversationThread({
                     ? status || compactUrlText(plainBody || plainSummary)
                     : null;
                 const direction =
+                  renderedChannel === "FILE" ||
                   communication.channel === "WEBSITE"
                     ? "Activity"
                     : directionLabel(communication.direction);
@@ -583,15 +624,25 @@ export default function SaleConversationThread({
                   communication.channel === "WEBSITE"
                     ? firstUrl(plainBody || plainSummary)
                     : null;
+                const filePreviewUrl = isPipedriveFileActivity(communication)
+                  ? metadataValue(communication.metadata, "previewUrl")
+                  : null;
+                const fileDownloadUrl = isPipedriveFileActivity(communication)
+                  ? metadataValue(communication.metadata, "downloadUrl")
+                  : null;
                 const ActionIcon = actionIcon(
-                  communication.channel,
+                  renderedChannel,
                   Boolean(recordingUrl),
                 );
-                const externalHref = recordingUrl || pageHref;
+                const externalHref =
+                  recordingUrl || pageHref || filePreviewUrl;
                 const showReplyAction =
                   Boolean(onReply) && canReplyToCommunication(communication);
                 const hasFooterActions =
-                  showReplyAction || Boolean(opportunityId) || Boolean(externalHref);
+                  showReplyAction ||
+                  Boolean(opportunityId) ||
+                  Boolean(externalHref) ||
+                  Boolean(fileDownloadUrl);
                 const cardClassName = [
                   "overflow-hidden rounded-xl border bg-white shadow-theme-xs transition dark:bg-gray-900",
                   isExpanded
@@ -609,7 +660,7 @@ export default function SaleConversationThread({
                       }`}
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <CommunicationIcon channel={communication.channel} />
+                        <CommunicationIcon channel={renderedChannel} />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="text-sm leading-5 font-semibold text-gray-900 dark:text-white/90">
@@ -621,7 +672,7 @@ export default function SaleConversationThread({
                                 Latest
                               </span>
                             )}
-                            <ChannelBadge channel={communication.channel} />
+                            <ChannelBadge channel={renderedChannel} />
                             {status && (
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClassName(status)}`}
@@ -665,7 +716,7 @@ export default function SaleConversationThread({
                         <span
                           className={`hidden rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${directionPillClassName(
                             communication.direction,
-                            communication.channel,
+                            renderedChannel,
                           )}`}
                         >
                           {direction}
@@ -760,10 +811,20 @@ export default function SaleConversationThread({
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
                               >
                                 <ActionIcon className="h-4 w-4" />
-                                {externalActionLabel(communication.channel, {
+                                {externalActionLabel(renderedChannel, {
                                   hasRecording: Boolean(recordingUrl),
                                   hasTranscript,
                                 })}
+                              </a>
+                            ) : null}
+                            {fileDownloadUrl ? (
+                              <a
+                                href={fileDownloadUrl}
+                                download
+                                className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
+                              >
+                                <Download className="h-4 w-4" />
+                                Download file
                               </a>
                             ) : null}
                           </div>

@@ -2171,16 +2171,6 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     contactName: customerName,
     sale,
   });
-  const conversationItems = [
-    ...communicationConversationItems,
-    ...websiteConversationItems,
-  ].sort(
-    (left, right) =>
-      new Date(right.occurredAt).getTime() -
-      new Date(left.occurredAt).getTime(),
-  );
-  const conversationTotalCount =
-    sale._count.communications + websiteConversationItems.length;
   const initialSalesLeadGuidance = cachedSalesLeadGuidance(sale.aiGuidance);
   const saleStageName =
     sale.salesPipelineStage?.name ?? formatEnumLabel(sale.stage);
@@ -2280,8 +2270,18 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   }));
   const pipedriveFileReferences = pipedriveFileLinks.map((link) => {
     const metadata = jsonObject(link.metadata);
+    const pipedriveAddedAt = dateValue(metadata.pipedriveAddTime);
     const pipedriveUpdatedAt = dateValue(metadata.pipedriveUpdateTime);
     const sizeBytes = numberValue(metadata.sizeBytes);
+    const sizeLabel = sizeBytes !== null ? fileSizeLabel(sizeBytes) : null;
+    const mimeType =
+      stringValue(metadata.pipedriveFileType) ?? "application/octet-stream";
+    const name =
+      stringValue(metadata.name) ??
+      stringValue(metadata.pipedriveFileName) ??
+      `Pipedrive file ${link.externalId}`;
+    const activityAt =
+      pipedriveAddedAt ?? pipedriveUpdatedAt ?? link.lastSeenAt ?? link.updatedAt;
     const updatedAt =
       formatDateTime(
         pipedriveUpdatedAt ?? link.lastSeenAt ?? link.updatedAt,
@@ -2291,18 +2291,55 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     return {
       downloadUrl: `/api/pipedrive/files/${encodeURIComponent(link.id)}?download=1`,
       id: link.id,
-      mimeType:
-        stringValue(metadata.pipedriveFileType) ?? "application/octet-stream",
-      name:
-        stringValue(metadata.name) ??
-        stringValue(metadata.pipedriveFileName) ??
-        `Pipedrive file ${link.externalId}`,
-      sizeLabel: sizeBytes !== null ? fileSizeLabel(sizeBytes) : null,
+      mimeType,
+      name,
+      occurredAt: activityAt.toISOString(),
+      sizeLabel,
       typeLabel: externalFileTypeLabel(stringValue(metadata.pipedriveFileType)),
       updatedAt,
       url: `/api/pipedrive/files/${encodeURIComponent(link.id)}`,
     };
   });
+  const pipedriveFileConversationItems = pipedriveFileReferences.map(
+    (file) => ({
+      body: null,
+      channel: "SYSTEM",
+      contactName: null,
+      direction: "INTERNAL",
+      fromAddress: null,
+      id: `pipedrive-file:${file.id}`,
+      metadata: {
+        downloadUrl: file.downloadUrl,
+        fileName: file.name,
+        mimeType: file.mimeType,
+        previewUrl: file.url,
+        provider: "Pipedrive",
+        sizeLabel: file.sizeLabel,
+        source: "pipedrive-file-import",
+        typeLabel: file.typeLabel,
+      },
+      occurredAt: file.occurredAt,
+      subject: "File added in Pipedrive",
+      summary: [file.name, file.typeLabel, file.sizeLabel]
+        .filter(Boolean)
+        .join(" · "),
+      toAddress: null,
+      userName: null,
+    }),
+  );
+  const conversationItems = [
+    ...communicationConversationItems,
+    ...pipedriveFileConversationItems,
+    ...websiteConversationItems,
+  ].sort(
+    (left, right) =>
+      new Date(right.occurredAt).getTime() -
+      new Date(left.occurredAt).getTime(),
+  );
+  const conversationTotalCount =
+    sale._count.communications +
+    pipedriveFileConversationItems.length +
+    websiteConversationItems.length;
   const notes = [
     ...sale.communications
       .filter((communication) => communication.channel === "NOTE")
@@ -2587,6 +2624,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         </div>
       </section>
 
+      {pipedriveLeadLink ? (
+        <PipedriveLeadFilesAutoSync saleId={sale.id} />
+      ) : null}
+
       <SaleDetailAIWorkspace
         initialResult={initialSalesLeadGuidance}
         saleId={sale.id}
@@ -2665,14 +2706,11 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         documentsPanel={
           <div className="p-4 sm:p-5">
             {pipedriveLeadLink ? (
-              <>
-                <PipedriveLeadFilesAutoSync saleId={sale.id} />
-                <PipedriveLeadFilesPanel
-                  canSync={user.role === "ADMIN"}
-                  files={pipedriveFileReferences}
-                  saleId={sale.id}
-                />
-              </>
+              <PipedriveLeadFilesPanel
+                canSync={user.role === "ADMIN"}
+                files={pipedriveFileReferences}
+                saleId={sale.id}
+              />
             ) : null}
             <RecordDocumentLibrary
               documentPortals={opportunityDocumentPortals}
