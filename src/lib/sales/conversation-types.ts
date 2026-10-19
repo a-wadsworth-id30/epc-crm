@@ -36,6 +36,7 @@ export type SaleConversationPage = {
   items: SaleConversationItem[];
   page: number;
   pageSize: number;
+  query: string;
   total: number;
   totalPages: number;
 };
@@ -44,4 +45,42 @@ export function isSaleConversationFilter(
   value: string | null,
 ): value is SaleConversationFilter {
   return saleConversationFilters.some((filter) => filter.value === value);
+}
+
+function searchableMetadata(value: unknown) {
+  try {
+    return JSON.stringify(value ?? "");
+  } catch {
+    return "";
+  }
+}
+
+export function conversationItemMatchesQuery(
+  item: SaleConversationItem,
+  query: string,
+) {
+  const terms = query
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!terms.length) return true;
+
+  const searchableText = [
+    item.subject,
+    item.summary,
+    item.body,
+    item.fromAddress,
+    item.toAddress,
+    item.contactName,
+    item.userName,
+    item.channel,
+    item.direction,
+    searchableMetadata(item.metadata),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+
+  return terms.every((term) => searchableText.includes(term));
 }

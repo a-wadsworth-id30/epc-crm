@@ -7,6 +7,7 @@ import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { prisma } from "@/lib/prisma";
 import {
+  conversationItemMatchesQuery,
   saleConversationPageSize,
   type SaleConversationCounts,
   type SaleConversationFilter,
@@ -449,14 +450,27 @@ function emptyCounts(): SaleConversationCounts {
   };
 }
 
+function addCommunicationToCounts(
+  counts: SaleConversationCounts,
+  item: SaleConversationItem,
+) {
+  counts.ALL += 1;
+  if (item.channel === "PHONE") counts.PHONE += 1;
+  if (item.channel === "EMAIL") counts.EMAIL += 1;
+  if (item.channel === "NOTE") counts.NOTE += 1;
+  if (item.channel === "SMS" || item.channel === "WHATSAPP") counts.SMS += 1;
+}
+
 export async function listSaleConversationPage({
   filter,
   page,
+  query = "",
   saleId,
   user,
 }: {
   filter: SaleConversationFilter;
   page: number;
+  query?: string;
   saleId: string;
   user: Pick<CurrentUser, "id" | "role">;
 }): Promise<SaleConversationPage | null> {
@@ -509,7 +523,70 @@ export async function listSaleConversationPage({
     records: attributionRecords,
     sale,
   });
+  const normalizedQuery = query.trim().slice(0, 200);
   const counts = emptyCounts();
+
+  if (normalizedQuery) {
+    const communications = (
+      await prisma.salesCommunication.findMany({
+        where: { opportunityId: saleId },
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+        select: communicationSelect,
+      })
+    )
+      .map(serializeCommunication)
+      .filter((item) => conversationItemMatchesQuery(item, normalizedQuery));
+    const matchingFiles = pipedriveFileItems.filter((item) =>
+      conversationItemMatchesQuery(item, normalizedQuery),
+    );
+    const matchingWebsiteItems = websiteItems.filter((item) =>
+      conversationItemMatchesQuery(item, normalizedQuery),
+    );
+
+    for (const item of communications) addCommunicationToCounts(counts, item);
+    counts.FILE = matchingFiles.length;
+    counts.WEBSITE = matchingWebsiteItems.length;
+    counts.ALL += counts.FILE + counts.WEBSITE;
+
+    let matchingItems: SaleConversationItem[];
+    if (filter === "FILE") {
+      matchingItems = matchingFiles;
+    } else if (filter === "WEBSITE") {
+      matchingItems = matchingWebsiteItems;
+    } else if (filter === "ALL") {
+      matchingItems = [
+        ...communications,
+        ...matchingFiles,
+        ...matchingWebsiteItems,
+      ];
+    } else {
+      const channels = communicationChannels(filter) ?? [];
+      matchingItems = communications.filter((item) =>
+        channels.includes(item.channel as CommunicationChannel),
+      );
+    }
+
+    matchingItems.sort(
+      (left, right) =>
+        new Date(right.occurredAt).getTime() -
+        new Date(left.occurredAt).getTime(),
+    );
+    const total = counts[filter];
+    const totalPages = Math.max(1, Math.ceil(total / saleConversationPageSize));
+    const resolvedPage = Math.min(Math.max(1, page), totalPages);
+    const skip = (resolvedPage - 1) * saleConversationPageSize;
+
+    return {
+      counts,
+      filter,
+      items: matchingItems.slice(skip, skip + saleConversationPageSize),
+      page: resolvedPage,
+      pageSize: saleConversationPageSize,
+      query: normalizedQuery,
+      total,
+      totalPages,
+    };
+  }
 
   for (const row of communicationCounts) {
     counts.ALL += row._count._all;
@@ -571,6 +648,7 @@ export async function listSaleConversationPage({
     items,
     page: resolvedPage,
     pageSize: saleConversationPageSize,
+    query: normalizedQuery,
     total,
     totalPages,
   };

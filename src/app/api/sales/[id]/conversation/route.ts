@@ -23,9 +23,11 @@ export async function GET(request: Request, context: RouteContext) {
   const requestedPage = Number(url.searchParams.get("page") ?? "1");
   const page =
     Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const query = url.searchParams.get("q")?.trim().slice(0, 200) ?? "";
   const result = await listSaleConversationPage({
     filter,
     page,
+    query,
     saleId: id,
     user: auth.user,
   });

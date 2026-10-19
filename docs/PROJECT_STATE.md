@@ -223,6 +223,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   activity in the sale Conversation timeline, with preview and download links;
   the underlying file remains owned by Pipedrive and is not duplicated in CRM
   storage or as a `SalesCommunication` row.
+  Sale Conversation also provides debounced full-history search across message
+  subjects and bodies, addresses, notes, SMS, call transcripts, file names and
+  website attribution details. Search works together with the existing channel
+  filters and returns server-paginated results rather than searching only the
+  currently visible page.
   Settings > Integrations > Pipedrive includes an admin-only historical linked
   sale backfill for older CRM sales already linked to Pipedrive Lead Inbox
   records. The backfill has preview and import modes, runs in bounded cursor

@@ -13,7 +13,9 @@ import {
   Phone,
   Play,
   Reply,
+  Search,
   StickyNote,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
+  conversationItemMatchesQuery,
   saleConversationFilters,
   saleConversationPageSize,
   type SaleConversationFilter,
@@ -451,6 +454,8 @@ export default function SaleConversationThread({
 }: SaleConversationThreadProps) {
   const [activeFilter, setActiveFilter] =
     useState<SaleConversationFilter>("ALL");
+  const [searchText, setSearchText] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null | undefined>(
     undefined,
   );
@@ -459,6 +464,18 @@ export default function SaleConversationThread({
     useState<SaleConversationPage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const nextQuery = searchText.trim().slice(0, 200);
+      setActiveQuery(nextQuery);
+      setRemotePage(null);
+      setExpandedId(undefined);
+      setPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
 
   useEffect(() => {
     if (!saleId) {
@@ -473,8 +490,13 @@ export default function SaleConversationThread({
       setLoadError(null);
 
       try {
+        const searchParams = new URLSearchParams({
+          filter: activeFilter,
+          page: String(page),
+        });
+        if (activeQuery) searchParams.set("q", activeQuery);
         const response = await fetch(
-          `/api/sales/${encodeURIComponent(saleId)}/conversation?filter=${activeFilter}&page=${page}`,
+          `/api/sales/${encodeURIComponent(saleId)}/conversation?${searchParams.toString()}`,
           { cache: "no-store", signal: controller.signal },
         );
         if (!response.ok) {
@@ -482,7 +504,11 @@ export default function SaleConversationThread({
         }
 
         const result = (await response.json()) as SaleConversationPage;
-        if (!Array.isArray(result.items) || result.filter !== activeFilter) {
+        if (
+          !Array.isArray(result.items) ||
+          result.filter !== activeFilter ||
+          result.query !== activeQuery
+        ) {
           throw new Error("Conversation history returned an invalid response.");
         }
 
@@ -502,7 +528,7 @@ export default function SaleConversationThread({
 
     void loadPage();
     return () => controller.abort();
-  }, [activeFilter, communications, page, saleId, totalCount]);
+  }, [activeFilter, activeQuery, communications, page, saleId, totalCount]);
   const orderedCommunications = useMemo(
     () =>
       [...communications].sort(
@@ -514,10 +540,12 @@ export default function SaleConversationThread({
   );
   const initialFilteredCommunications = useMemo(
     () =>
-      orderedCommunications.filter((communication) =>
-        filterMatchesChannel(activeFilter, communication),
+      orderedCommunications.filter(
+        (communication) =>
+          filterMatchesChannel(activeFilter, communication) &&
+          conversationItemMatchesQuery(communication, activeQuery),
       ),
-    [activeFilter, orderedCommunications],
+    [activeFilter, activeQuery, orderedCommunications],
   );
   const hasCurrentRemotePage =
     Boolean(saleId) &&
@@ -564,15 +592,19 @@ export default function SaleConversationThread({
       ? (visibleCommunications[0]?.id ?? null)
       : expandedId;
   const loadedCount = orderedCommunications.length;
-  const allItemsCount = Math.max(
-    remotePage?.counts.ALL ?? totalCount ?? loadedCount,
-    loadedCount,
-  );
+  const allItemsCount = activeQuery
+    ? (remotePage?.counts.ALL ?? initialFilteredCommunications.length)
+    : Math.max(
+        remotePage?.counts.ALL ?? totalCount ?? loadedCount,
+        loadedCount,
+      );
   const hasPartialHistory = !saleId && allItemsCount > loadedCount;
   const filteredTotal = remoteTotal ?? initialFilteredCommunications.length;
   const countLabel = isLoading
-    ? "Loading history"
-    : `${activeFilter === "ALL" ? allItemsCount : filteredTotal} items`;
+    ? activeQuery
+      ? "Searching history"
+      : "Loading history"
+    : `${activeFilter === "ALL" ? allItemsCount : filteredTotal} ${activeQuery ? "matches" : "items"}`;
 
   return (
     <section
@@ -594,7 +626,7 @@ export default function SaleConversationThread({
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
               {description}
             </p>
-            {hasPartialHistory ? (
+            {hasPartialHistory && !activeQuery ? (
               <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                 Showing the latest {loadedCount} loaded items from {allItemsCount} total.
               </p>
@@ -611,6 +643,34 @@ export default function SaleConversationThread({
             ) : null}
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
+            <div className="relative min-w-[220px] flex-1 sm:flex-none">
+              <label className="sr-only" htmlFor="conversation-search">
+                Search conversation
+              </label>
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                id="conversation-search"
+                type="search"
+                value={searchText}
+                maxLength={200}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="Search conversation"
+                className="h-9 w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-800 shadow-theme-xs outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+              />
+              {searchText ? (
+                <button
+                  type="button"
+                  aria-label="Clear conversation search"
+                  onClick={() => setSearchText("")}
+                  className="absolute right-2 top-1/2 inline-grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
             <span className="inline-flex h-7 items-center rounded-md border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-600 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
               {countLabel}
             </span>
@@ -1005,7 +1065,9 @@ export default function SaleConversationThread({
           ))
         ) : (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400">
-            {orderedCommunications.length
+            {activeQuery
+              ? `No conversation items match “${activeQuery}”.`
+              : orderedCommunications.length
               ? "No conversation items match this filter."
               : emptyLabel}
           </div>
