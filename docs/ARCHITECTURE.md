@@ -35,6 +35,11 @@
 Core Prisma models are in `prisma/schema.prisma`.
 
 - `User`: CRM user, auth identity and telephony profile.
+- `DashboardRoleLayout`: admin-managed default dashboard widget order,
+  visibility and size for each client-facing role template.
+- `DashboardUserLayout`: a user's personal dashboard override. It stores the
+  role template it was based on so a later role change safely falls back to the
+  new role default instead of retaining widgets from the previous role.
 - `Session`: database-backed auth session.
 - `AuthRateLimitBucket`: database-backed authentication throttle bucket used
   for sign-in, two-factor and password-reset attempt limits across app
@@ -146,6 +151,22 @@ Core Prisma models are in `prisma/schema.prisma`.
   numbers and phone assignments.
 - `OfflineCampaign`: offline media campaign metadata, including campaign code,
   channel/status, source fields, dates/costs and optional attribution links.
+
+## Dashboard Layouts
+
+- `src/lib/dashboard/layout.ts` is the allow-listed widget registry and owns
+  role restrictions, system defaults, saved-layout normalization and grid
+  sizes. Saved JSON cannot add a widget that the current role is not allowed
+  to use.
+- The dashboard lets each user reorder, resize and hide permitted widgets.
+  Personal changes are stored in `DashboardUserLayout` and can be reset to the
+  current role default.
+- Settings > Dashboard is admin-only and edits `DashboardRoleLayout` defaults.
+  Role-template visibility is a dashboard presentation rule; the existing
+  `ADMIN` / `USER` server authorization boundary remains authoritative.
+- Team-level layouts are deliberately not inferred because the CRM does not
+  yet have a defined team model. Add them only after team membership and
+  precedence rules are agreed.
 
 ## Performance Observability
 

@@ -16,6 +16,7 @@ export type CurrentUser = {
   mobile: string | null;
   email: string;
   role: "ADMIN" | "USER";
+  roleTemplate: string | null;
   browserSoftphoneEnabled?: boolean;
 };
 
@@ -170,6 +171,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
             mobile: true,
             name: true,
             role: true,
+            roleTemplate: true,
             status: true,
             voiceExtension: true,
             voiceRoutingMode: true,
@@ -182,7 +184,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return null;
   }
 
-  if (!session || session.expiresAt <= new Date() || session.user.status !== "ACTIVE") {
+  if (
+    !session ||
+    session.expiresAt <= new Date() ||
+    session.user.status !== "ACTIVE"
+  ) {
     if (session) {
       await prisma.session.deleteMany({ where: { id: session.id } });
     }
@@ -208,6 +214,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     mobile: session.user.mobile,
     email: session.user.email,
     role: session.user.role,
+    roleTemplate: session.user.roleTemplate,
     browserSoftphoneEnabled: isBrowserSoftphoneCapable(session.user),
   };
 }

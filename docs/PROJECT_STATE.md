@@ -403,6 +403,16 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   active setup items remain. Admins can dismiss the prompt per user; it hides
   automatically when setup is complete and reappears if the outstanding setup
   fingerprint changes.
+- The primary dashboard is configurable by role and by user. Admins set each
+  role template's default widget order, visibility and size in Settings >
+  Dashboard; users can personalise their permitted widgets from the dashboard
+  and reset to the role default. Marketing and live-call widgets are excluded
+  from roles that should not receive them, and application health remains
+  admin-only. Personal layouts are invalidated when a user's role template
+  changes. The `DashboardRoleLayout` and `DashboardUserLayout` tables are added
+  by migration `20261019152000_dashboard_layouts`; the read path falls back to
+  system defaults until the migration is available. Team-level defaults are
+  intentionally deferred until CRM team membership is defined.
 - The app exposes a PWA manifest with install-ready product icons, standalone
   display mode and product metadata so supported browsers can offer desktop app
   installation.
@@ -853,7 +863,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   a client-facing role template such as Owner, Admin, Manager, Sales user,
   Marketing user, Reporting user or Support user. Role templates currently map
   to the existing `ADMIN` / `USER` enforcement boundary while creating a
-  foundation for finer permissions later.
+  foundation for finer permissions later. They also select the user's default
+  dashboard layout and permitted dashboard widgets.
 - The user dropdown opens a single My Account page for the signed-in user's
   avatar, name, contact numbers, account access metadata, active session count
   password change, two-factor authentication setup and active browser session

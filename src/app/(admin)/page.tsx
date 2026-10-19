@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import type { SalesStage } from "@prisma/client";
 import Link from "next/link";
 import DashboardSetupPrompt from "@/components/crm-boilerplate/DashboardSetupPrompt";
+import EditableDashboard, {
+  DashboardWidget,
+} from "@/components/crm-boilerplate/EditableDashboard";
 import EmptyState from "@/components/crm-boilerplate/EmptyState";
 import { LiveQueueTimer } from "@/components/crm-boilerplate/LiveQueueControls";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
@@ -29,6 +32,7 @@ import {
   dashboardMarketingWindowDays,
   getDashboardSummary,
 } from "@/lib/dashboard/summary";
+import { loadDashboardLayout } from "@/lib/dashboard/preferences";
 import {
   formatDisplayDate,
   formatDisplayLongDate,
@@ -275,6 +279,7 @@ export default async function DashboardPage() {
     applicationHealth,
     settings,
     setupPrompt,
+    dashboardLayout,
   ] = await Promise.all([
     getDashboardSummary(),
     prisma.task.findMany({
@@ -348,6 +353,7 @@ export default async function DashboardPage() {
     checkDashboardHealth(),
     getCrmSettings(),
     setupPromptPromise,
+    loadDashboardLayout(currentUser),
   ]);
 
   const {
@@ -485,6 +491,9 @@ export default async function DashboardPage() {
     proposalCount,
     staleLeadCount: leadCount,
   });
+  const permittedDashboardWidgetIds = new Set(
+    dashboardLayout.layout.map((item) => item.id),
+  );
 
   return (
     <>
@@ -524,357 +533,393 @@ export default async function DashboardPage() {
 
       {setupPrompt ? <DashboardSetupPrompt prompt={setupPrompt} /> : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <DashboardMetric
-          detail={`${openOpportunityStats.count} active opportunities`}
-          href="/sales?stage=open"
-          iconName="circle-dollar-sign"
-          label="Pipeline"
-          tone="brand"
-          value={formatMoney(openPipelineValue, currency, displayFormatting)}
-        />
-        <DashboardMetric
-          detail="Enquiry-stage sales"
-          href="/sales?stage=LEAD"
-          iconName="users-round"
-          label="Enquiries"
-          tone="success"
-          value={leadCount}
-        />
-        <DashboardMetric
-          detail="Tasks not yet done"
-          href="/tasks"
-          iconName="list-todo"
-          label="Open tasks"
-          tone="warning"
-          value={openTaskCount}
-        />
-        <DashboardMetric
-          detail="Open missed-call follow-ups"
-          href="/tasks"
-          iconName="headphones"
-          label="Missed calls"
-          tone="error"
-          value={missedCallTasksCount}
-        />
-        <DashboardMetric
-          detail={`${companies} companies`}
-          href="/contacts"
-          iconName="users-round"
-          label="Contacts"
-          tone="purple"
-          value={contactsLabel}
-        />
-        <DashboardMetric
-          detail={healthDetail}
-          href="/settings/system"
-          iconName="square-check-big"
-          label="App health"
-          tone={healthTone}
-          value={healthValue}
-        />
-      </div>
-
-      <DashboardSectionCard
-        className="mt-5"
-        title="Marketing snapshot"
-        description={`Attribution and ad-platform signals from the last ${dashboardMarketingWindowDays} days.`}
-        actions={
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/marketing">Open Marketing</Link>
-          </Button>
-        }
+      <EditableDashboard
+        hasPersonalLayout={dashboardLayout.hasPersonalLayout}
+        initialLayout={dashboardLayout.layout}
+        roleLayout={dashboardLayout.roleLayout}
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <MarketingSnapshotCard
-            iconName="chart-column"
-            label="Tracked sessions"
-            value={marketing.sessions.toString()}
-            detail="Visitor sessions updated in the reporting window"
-          />
-          <MarketingSnapshotCard
-            iconName="users-round"
-            label="Attributed leads"
-            value={marketing.attributedLeadCount.toString()}
-            detail={`${marketing.formLeadCount} forms / ${marketing.phoneLeadCount} calls`}
-          />
-          <MarketingSnapshotCard
-            iconName="circle-dollar-sign"
-            label="Imported ad spend"
-            value={formatOptionalMoney(
-              marketing.importedSpendCents,
-              currency,
-              displayFormatting,
-            )}
-            detail={`${marketing.importedClicks} clicks imported`}
-          />
-          <MarketingSnapshotCard
-            iconName="square-check-big"
-            label="Platform conversions"
-            value={Math.round(marketing.importedConversions).toString()}
-            detail="Conversions from connected ad platforms"
-          />
-        </div>
-      </DashboardSectionCard>
+        <DashboardWidget id="overview-metrics">
+          <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+            <DashboardMetric
+              detail={`${openOpportunityStats.count} active opportunities`}
+              href="/sales?stage=open"
+              iconName="circle-dollar-sign"
+              label="Pipeline"
+              tone="brand"
+              value={formatMoney(
+                openPipelineValue,
+                currency,
+                displayFormatting,
+              )}
+            />
+            <DashboardMetric
+              detail="Enquiry-stage sales"
+              href="/sales?stage=LEAD"
+              iconName="users-round"
+              label="Enquiries"
+              tone="success"
+              value={leadCount}
+            />
+            <DashboardMetric
+              detail="Tasks not yet done"
+              href="/tasks"
+              iconName="list-todo"
+              label="Open tasks"
+              tone="warning"
+              value={openTaskCount}
+            />
+            <DashboardMetric
+              detail="Open missed-call follow-ups"
+              href="/tasks"
+              iconName="headphones"
+              label="Missed calls"
+              tone="error"
+              value={missedCallTasksCount}
+            />
+            <DashboardMetric
+              detail={`${companies} companies`}
+              href="/contacts"
+              iconName="users-round"
+              label="Contacts"
+              tone="purple"
+              value={contactsLabel}
+            />
+            {dashboardLayout.roleTemplate === "owner" ||
+            dashboardLayout.roleTemplate === "admin" ? (
+              <DashboardMetric
+                detail={healthDetail}
+                href="/settings/system"
+                iconName="square-check-big"
+                label="App health"
+                tone={healthTone}
+                value={healthValue}
+              />
+            ) : null}
+          </div>
+        </DashboardWidget>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.75fr)_360px]">
-        <DashboardSectionCard
-          title="Today's work"
-          description="Open tasks, missed-call follow-ups and sales actions that need attention."
-          actions={
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/tasks">View all</Link>
-            </Button>
-          }
-          contentClassName="p-0"
-        >
-          {taskRows.length ? (
-            <>
-              <div className="divide-y divide-gray-100 md:hidden dark:divide-gray-800">
-                {taskRows.map((task) => (
-                  <div key={task.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <Link
-                          href={task.href}
-                          className="line-clamp-2 text-sm font-semibold text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-300"
-                        >
-                          {task.title}
-                        </Link>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {task.type} / {task.owner}
-                        </p>
+        {permittedDashboardWidgetIds.has("marketing-snapshot") ? (
+          <DashboardWidget id="marketing-snapshot">
+            <DashboardSectionCard
+              className="h-full"
+              title="Marketing snapshot"
+              description={`Attribution and ad-platform signals from the last ${dashboardMarketingWindowDays} days.`}
+              actions={
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/marketing">Open Marketing</Link>
+                </Button>
+              }
+            >
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <MarketingSnapshotCard
+                  iconName="chart-column"
+                  label="Tracked sessions"
+                  value={marketing.sessions.toString()}
+                  detail="Visitor sessions updated in the reporting window"
+                />
+                <MarketingSnapshotCard
+                  iconName="users-round"
+                  label="Attributed leads"
+                  value={marketing.attributedLeadCount.toString()}
+                  detail={`${marketing.formLeadCount} forms / ${marketing.phoneLeadCount} calls`}
+                />
+                <MarketingSnapshotCard
+                  iconName="circle-dollar-sign"
+                  label="Imported ad spend"
+                  value={formatOptionalMoney(
+                    marketing.importedSpendCents,
+                    currency,
+                    displayFormatting,
+                  )}
+                  detail={`${marketing.importedClicks} clicks imported`}
+                />
+                <MarketingSnapshotCard
+                  iconName="square-check-big"
+                  label="Platform conversions"
+                  value={Math.round(marketing.importedConversions).toString()}
+                  detail="Conversions from connected ad platforms"
+                />
+              </div>
+            </DashboardSectionCard>
+          </DashboardWidget>
+        ) : null}
+
+        <div className="contents">
+          <DashboardWidget id="todays-work">
+            <DashboardSectionCard
+              className="h-full"
+              title="Today's work"
+              description="Open tasks, missed-call follow-ups and sales actions that need attention."
+              actions={
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/tasks">View all</Link>
+                </Button>
+              }
+              contentClassName="p-0"
+            >
+              {taskRows.length ? (
+                <>
+                  <div className="divide-y divide-gray-100 md:hidden dark:divide-gray-800">
+                    {taskRows.map((task) => (
+                      <div key={task.id} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <Link
+                              href={task.href}
+                              className="line-clamp-2 text-sm font-semibold text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-300"
+                            >
+                              {task.title}
+                            </Link>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {task.type} / {task.owner}
+                            </p>
+                          </div>
+                          <PriorityBadge value={task.priority} />
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-gray-500 dark:text-gray-400">
+                          <div>
+                            <p className="font-medium text-gray-400 uppercase dark:text-gray-500">
+                              Related
+                            </p>
+                            <p className="mt-1 text-gray-700 dark:text-gray-300">
+                              {task.related}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-400 uppercase dark:text-gray-500">
+                              Due
+                            </p>
+                            <p className="mt-1 text-gray-700 dark:text-gray-300">
+                              {formatDueDate(task.due, displayFormatting)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <Badge variant="outline">{task.status}</Badge>
+                        </div>
                       </div>
-                      <PriorityBadge value={task.priority} />
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Work</TableHead>
+                          <TableHead>Related</TableHead>
+                          <TableHead>Due</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {taskRows.map((task) => (
+                          <TableRow key={task.id}>
+                            <TableCell>
+                              <Link
+                                href={task.href}
+                                className="font-medium text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-300"
+                              >
+                                {task.title}
+                              </Link>
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {task.type} / {task.owner}
+                              </div>
+                            </TableCell>
+                            <TableCell>{task.related}</TableCell>
+                            <TableCell>
+                              {formatDueDate(task.due, displayFormatting)}
+                            </TableCell>
+                            <TableCell>
+                              <PriorityBadge value={task.priority} />
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{task.status}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              ) : (
+                <div className="p-5">
+                  <EmptyState
+                    title="No open work"
+                    description="Tasks and missed-call follow-ups will appear here when they need attention."
+                  />
+                </div>
+              )}
+            </DashboardSectionCard>
+          </DashboardWidget>
+
+          <DashboardWidget id="pipeline-snapshot">
+            <DashboardSectionCard
+              className="h-full"
+              title="Pipeline snapshot"
+              description="Opportunity count and value by stage."
+              actions={
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/sales">View all</Link>
+                </Button>
+              }
+              contentClassName="p-0"
+            >
+              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                {stageSummary.map((stage) => (
+                  <div key={stage.stage} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="font-medium text-gray-400 uppercase dark:text-gray-500">
-                          Related
-                        </p>
-                        <p className="mt-1 text-gray-700 dark:text-gray-300">
-                          {task.related}
-                        </p>
+                        <div className="text-sm font-medium text-gray-800 dark:text-white/90">
+                          {formatStage(stage.stage)}
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {stage.count} deal{stage.count === 1 ? "" : "s"} /{" "}
+                          {formatMoney(
+                            stage.valueCents,
+                            currency,
+                            displayFormatting,
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-400 uppercase dark:text-gray-500">
-                          Due
-                        </p>
-                        <p className="mt-1 text-gray-700 dark:text-gray-300">
-                          {formatDueDate(task.due, displayFormatting)}
-                        </p>
-                      </div>
+                      <Badge variant="secondary">{stage.stage}</Badge>
                     </div>
-                    <div className="mt-3">
-                      <Badge variant="outline">{task.status}</Badge>
+                    <div className="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-white/[0.06]">
+                      <div
+                        className="h-1.5 rounded-full bg-brand-500"
+                        style={{
+                          width: `${Math.max(4, Math.min(100, (Math.max(stage.count, Math.round(stage.valueCents / 10000)) / largestStageValue) * 100))}%`,
+                        }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="hidden overflow-x-auto md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Work</TableHead>
-                      <TableHead>Related</TableHead>
-                      <TableHead>Due</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {taskRows.map((task) => (
-                      <TableRow key={task.id}>
-                        <TableCell>
-                          <Link
-                            href={task.href}
-                            className="font-medium text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-300"
-                          >
-                            {task.title}
-                          </Link>
-                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {task.type} / {task.owner}
+            </DashboardSectionCard>
+          </DashboardWidget>
+
+          <aside className="contents">
+            {permittedDashboardWidgetIds.has("live-calls") ? (
+              <DashboardWidget id="live-calls">
+                <DashboardSectionCard
+                  className="h-full"
+                  title="Live calls"
+                  description="Current inbound queue state."
+                  actions={
+                    <Badge variant="success">{`${liveInboundCallCount} ACTIVE`}</Badge>
+                  }
+                  contentClassName="p-0"
+                >
+                  {liveInboundCalls.length ? (
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {liveInboundCalls.map((entry) => {
+                        const contact = contactName(entry.contact);
+                        const attempts = routingAttempts(entry.metadata);
+                        const metadata = metadataObject(entry.metadata);
+                        const routeName =
+                          stringMetadata(metadata, "queueName") ||
+                          stringMetadata(metadata, "routingRuleName") ||
+                          "Default route";
+
+                        return (
+                          <div key={entry.id} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
+                                  {contact ||
+                                    entry.opportunity?.title ||
+                                    "Unknown caller"}
+                                </p>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  {routeName} /{" "}
+                                  {entry.assignedUser?.name ??
+                                    "Waiting for agent"}
+                                </p>
+                              </div>
+                              <Badge variant="outline">{entry.status}</Badge>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                              <span>
+                                Waiting{" "}
+                                <LiveQueueTimer
+                                  queuedAt={entry.queuedAt.toISOString()}
+                                />
+                              </span>
+                              <span>{attempts.length} attempts</span>
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell>{task.related}</TableCell>
-                        <TableCell>
-                          {formatDueDate(task.due, displayFormatting)}
-                        </TableCell>
-                        <TableCell>
-                          <PriorityBadge value={task.priority} />
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{task.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </>
-          ) : (
-            <div className="p-5">
-              <EmptyState
-                title="No open work"
-                description="Tasks and missed-call follow-ups will appear here when they need attention."
-              />
-            </div>
-          )}
-        </DashboardSectionCard>
-
-        <DashboardSectionCard
-          title="Pipeline snapshot"
-          description="Opportunity count and value by stage."
-          actions={
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/sales">View all</Link>
-            </Button>
-          }
-          contentClassName="p-0"
-        >
-          <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {stageSummary.map((stage) => (
-              <div key={stage.stage} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-gray-800 dark:text-white/90">
-                      {formatStage(stage.stage)}
+                        );
+                      })}
                     </div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {stage.count} deal{stage.count === 1 ? "" : "s"} /{" "}
-                      {formatMoney(
-                        stage.valueCents,
-                        currency,
-                        displayFormatting,
-                      )}
+                  ) : (
+                    <div className="px-4 py-5 text-sm text-gray-600 dark:text-gray-400">
+                      No live inbound calls. New routed calls will appear here.
                     </div>
+                  )}
+                  <div className="border-t border-gray-100 px-4 py-3 dark:border-gray-800">
+                    <Link
+                      href="/telephony/live"
+                      className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    >
+                      Open monitoring
+                    </Link>
                   </div>
-                  <Badge variant="secondary">{stage.stage}</Badge>
-                </div>
-                <div className="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-white/[0.06]">
-                  <div
-                    className="h-1.5 rounded-full bg-brand-500"
-                    style={{
-                      width: `${Math.max(4, Math.min(100, (Math.max(stage.count, Math.round(stage.valueCents / 10000)) / largestStageValue) * 100))}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </DashboardSectionCard>
+                </DashboardSectionCard>
+              </DashboardWidget>
+            ) : null}
 
-        <aside className="space-y-5">
+            <DashboardWidget id="ai-next-steps">
+              <DashboardSectionCard
+                className="h-full"
+                title="AI suggested next steps"
+                description="Rule-based now; ready for conversation-aware AI."
+                actions={<Badge>Beta</Badge>}
+              >
+                <div className="space-y-3">
+                  {suggestions.map((suggestion) => (
+                    <SuggestionCard
+                      key={suggestion.title}
+                      suggestion={suggestion}
+                    />
+                  ))}
+                </div>
+              </DashboardSectionCard>
+            </DashboardWidget>
+          </aside>
+        </div>
+
+        <DashboardWidget id="recent-activity">
           <DashboardSectionCard
-            title="Live calls"
-            description="Current inbound queue state."
+            className="h-full"
+            title="Recent activity"
+            description="Latest notes, calls and communication events."
             actions={
-              <Badge variant="success">{`${liveInboundCallCount} ACTIVE`}</Badge>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/notes">View all</Link>
+              </Button>
             }
             contentClassName="p-0"
           >
-            {liveInboundCalls.length ? (
-              <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                {liveInboundCalls.map((entry) => {
-                  const contact = contactName(entry.contact);
-                  const attempts = routingAttempts(entry.metadata);
-                  const metadata = metadataObject(entry.metadata);
-                  const routeName =
-                    stringMetadata(metadata, "queueName") ||
-                    stringMetadata(metadata, "routingRuleName") ||
-                    "Default route";
-
-                  return (
-                    <div key={entry.id} className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
-                            {contact ||
-                              entry.opportunity?.title ||
-                              "Unknown caller"}
-                          </p>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {routeName} /{" "}
-                            {entry.assignedUser?.name ?? "Waiting for agent"}
-                          </p>
-                        </div>
-                        <Badge variant="outline">{entry.status}</Badge>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <span>
-                          Waiting{" "}
-                          <LiveQueueTimer
-                            queuedAt={entry.queuedAt.toISOString()}
-                          />
-                        </span>
-                        <span>{attempts.length} attempts</span>
-                      </div>
-                    </div>
-                  );
-                })}
+            {activityItems.length ? (
+              <div className="grid divide-y divide-gray-100 lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-gray-800">
+                {activityItems.map((item) => (
+                  <ActivityRow
+                    displayFormatting={displayFormatting}
+                    item={item}
+                    key={item.id}
+                  />
+                ))}
               </div>
             ) : (
-              <div className="px-4 py-5 text-sm text-gray-600 dark:text-gray-400">
-                No live inbound calls. New routed calls will appear here.
+              <div className="p-5">
+                <EmptyState
+                  title="No activity yet"
+                  description="Notes, calls and sales communications will appear here as the CRM is used."
+                />
               </div>
             )}
-            <div className="border-t border-gray-100 px-4 py-3 dark:border-gray-800">
-              <Link
-                href="/telephony/live"
-                className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-              >
-                Open monitoring
-              </Link>
-            </div>
           </DashboardSectionCard>
-
-          <DashboardSectionCard
-            title="AI suggested next steps"
-            description="Rule-based now; ready for conversation-aware AI."
-            actions={<Badge>Beta</Badge>}
-          >
-            <div className="space-y-3">
-              {suggestions.map((suggestion) => (
-                <SuggestionCard
-                  key={suggestion.title}
-                  suggestion={suggestion}
-                />
-              ))}
-            </div>
-          </DashboardSectionCard>
-        </aside>
-      </div>
-
-      <DashboardSectionCard
-        className="mt-5"
-        title="Recent activity"
-        description="Latest notes, calls and communication events."
-        actions={
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/notes">View all</Link>
-          </Button>
-        }
-        contentClassName="p-0"
-      >
-        {activityItems.length ? (
-          <div className="grid divide-y divide-gray-100 lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-gray-800">
-            {activityItems.map((item) => (
-              <ActivityRow
-                displayFormatting={displayFormatting}
-                item={item}
-                key={item.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="p-5">
-            <EmptyState
-              title="No activity yet"
-              description="Notes, calls and sales communications will appear here as the CRM is used."
-            />
-          </div>
-        )}
-      </DashboardSectionCard>
+        </DashboardWidget>
+      </EditableDashboard>
     </>
   );
 }

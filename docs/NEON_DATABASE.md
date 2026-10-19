@@ -115,6 +115,11 @@ missing-schema errors and fall back deliberately. Do not catch broad database
 errors around new queries; operator/type mistakes and permission failures
 should still fail loudly.
 
+The migration `20261019152000_dashboard_layouts` adds role-default and
+per-user dashboard layout tables. Dashboard reads fall back to code-defined
+role defaults while this migration is pending, but saving a role or personal
+layout requires the migration to have been applied.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

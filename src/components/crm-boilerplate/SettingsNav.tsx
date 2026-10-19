@@ -26,6 +26,7 @@ const items: {
     moduleKey: "ai",
   },
   { label: "Users & Permissions", href: "/settings/users", adminOnly: true },
+  { label: "Dashboard", href: "/settings/dashboard", adminOnly: true },
   {
     label: "Sales Pipeline",
     href: "/settings/sales-pipeline",

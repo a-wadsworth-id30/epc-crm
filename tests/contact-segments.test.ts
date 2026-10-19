@@ -12,6 +12,8 @@ type CurrentUser = {
   mobile: string | null;
   email: string;
   role: "ADMIN" | "USER";
+  roleTemplate: string | null;
+  browserSoftphoneEnabled: boolean;
 };
 
 type ContactSegmentCriteria = {
@@ -64,6 +66,8 @@ const user = {
   mobile: null,
   email: "user@example.com",
   role: "USER",
+  roleTemplate: "sales-user",
+  browserSoftphoneEnabled: false,
 } satisfies CurrentUser;
 
 const admin = {

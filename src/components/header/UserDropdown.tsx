@@ -15,6 +15,7 @@ const fallbackUser: CurrentUser = {
   mobile: null,
   email: "user@example.com",
   role: "USER",
+  roleTemplate: null,
   browserSoftphoneEnabled: false,
 };
 
@@ -104,10 +105,9 @@ export default function UserDropdown({
     closeDropdown();
   }
 
-  const initials =
-    `${currentUser.firstName?.[0] ?? currentUser.name[0] ?? ""}${
-      currentUser.lastName?.[0] ?? ""
-    }`.toUpperCase();
+  const initials = `${currentUser.firstName?.[0] ?? currentUser.name[0] ?? ""}${
+    currentUser.lastName?.[0] ?? ""
+  }`.toUpperCase();
 
   return (
     <div className="relative">
@@ -132,12 +132,12 @@ export default function UserDropdown({
           )}
         </span>
 
-        <span className="block mr-1 font-medium text-theme-sm">
+        <span className="mr-1 block text-theme-sm font-medium">
           {currentUser.name}
         </span>
 
         <svg
-          className={`stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200 ${
+          className={`stroke-gray-500 transition-transform duration-200 dark:stroke-gray-400 ${
             isOpen ? "rotate-180" : ""
           }`}
           width="18"

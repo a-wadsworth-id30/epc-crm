@@ -421,8 +421,33 @@ model User {
   createdSignatureRequests   SignatureRequest[]           @relation("SignatureRequestCreator")
   notificationStates         NotificationState[]
   backgroundJobRuns          BackgroundJobRun[]
+  dashboardLayout            DashboardUserLayout?
 
   @@index([roleTemplate])
+}
+
+model DashboardRoleLayout {
+  id              String   @id @default(cuid())
+  roleTemplate    String   @unique
+  layout          Json
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model DashboardUserLayout {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleTemplate String
+  layout       Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([roleTemplate])
+  @@index([updatedAt])
 }
 
 model Session {
