@@ -225,9 +225,13 @@ context or Sales AI prompts.
 
 Outbound sales lead email uses the saved MailerSend API token and sender
 defaults, then creates an outbound `SalesCommunication` so the sales timeline
-stays aligned with provider sends. Lead emails set `Reply-To` to the configured
-inbound route address so replies are captured by the CRM inbox instead of a
-personal mailbox.
+stays aligned with provider sends. Lead emails set `Reply-To` to a signed,
+sale-specific address derived from the configured inbound route address. The
+inbound route validates that address and the customer sender before attaching
+the reply to that exact sale; legacy replies to the generic address retain the
+sender-based active-sale fallback. MailerSend must use a catch-all inbound
+route for the configured inbound subdomain so the sale-specific plus addresses
+reach the CRM webhook.
 
 Manual sales email, manual SMS and approved automation drafts share
 `src/lib/sales/outbound-messages.ts` so provider sends, timeline writes,

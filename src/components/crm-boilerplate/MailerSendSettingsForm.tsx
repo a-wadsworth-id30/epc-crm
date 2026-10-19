@@ -271,13 +271,18 @@ export default function MailerSendSettingsForm({
               disabled={!canEdit}
             />
           </Field>
-          <Field label="Catch recipient">
+          <Field label="Reply address base">
             <Input
               name="inboundCatchRecipient"
               defaultValue={config.inboundCatchRecipient ?? ""}
-              placeholder="sales or catch-all"
+              placeholder="leads@inbound.example.com"
               disabled={!canEdit}
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Configure the MailerSend route as Catch all. CRM adds a signed
+              sale reference to this address so replies return to the correct
+              conversation.
+            </p>
           </Field>
           <div className="md:col-span-2">
             <WebhookUrl baseUrl={config.webhookBaseUrl} />

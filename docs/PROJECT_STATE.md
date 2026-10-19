@@ -1098,6 +1098,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   being shown on leads or used by Sales AI.
 - Sales lead email drafts can be sent through the saved MailerSend integration
   and are logged back to the lead conversation timeline as outbound email.
+  Their Reply-To address contains a signed sale reference; inbound processing
+  validates both that reference and the contact sender before attaching a reply
+  to the exact sale. Generic historical reply addresses retain sender-based
+  active-sale matching. The MailerSend route must use Catch all for the inbound
+  subdomain and requires verified MX DNS before this reply path is operational.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

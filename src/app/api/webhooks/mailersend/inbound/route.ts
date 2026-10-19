@@ -2,8 +2,11 @@ import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import {
   getMailerSendInboundSecret,
+  getMailerSendStoredConfig,
+  mailerSendInboundReplyAddress,
   mailerSendProvider,
   mailerSendWebhookTestSecret,
+  readMailerSendOpportunityReplyTarget,
   verifyMailerSendSignature,
 } from "@/lib/integrations/mailersend";
 import {
@@ -58,22 +61,60 @@ function parseDate(value: string) {
   return parsed && Number.isFinite(parsed.getTime()) ? parsed : new Date();
 }
 
-async function findEmailLeadContext(fromAddress: string) {
+const contactEmailMatches = (fromAddress: string) => ({
+  OR: [
+    { email: { equals: fromAddress, mode: "insensitive" as const } },
+    {
+      additionalEmails: {
+        some: { email: { equals: fromAddress, mode: "insensitive" as const } },
+      },
+    },
+  ],
+});
+
+async function findEmailLeadContext(
+  fromAddress: string,
+  toAddress: string | null,
+) {
   if (!fromAddress) return { contact: null, opportunity: null };
+
+  const [config, inboundSecret] = await Promise.all([
+    getMailerSendStoredConfig(),
+    getMailerSendInboundSecret(),
+  ]);
+  const baseAddress = mailerSendInboundReplyAddress(config);
+  const replyTarget =
+    toAddress && baseAddress && inboundSecret
+      ? readMailerSendOpportunityReplyTarget({
+          address: toAddress,
+          baseAddress,
+          secret: inboundSecret,
+        })
+      : { status: "none" as const };
+
+  if (replyTarget.status === "valid") {
+    const opportunity = await prisma.salesOpportunity.findFirst({
+      where: {
+        id: replyTarget.opportunityId,
+        contact: contactEmailMatches(fromAddress),
+      },
+      include: { contact: true },
+    });
+
+    return opportunity
+      ? { contact: opportunity.contact, opportunity }
+      : { contact: null, opportunity: null };
+  }
+
+  // A sale tag that fails validation must never fall back to a different lead.
+  if (replyTarget.status === "invalid") {
+    return { contact: null, opportunity: null };
+  }
 
   const opportunity = await prisma.salesOpportunity.findFirst({
     where: {
       stage: { notIn: ["WON", "LOST"] },
-      contact: {
-        OR: [
-          { email: { equals: fromAddress, mode: "insensitive" } },
-          {
-            additionalEmails: {
-              some: { email: { equals: fromAddress, mode: "insensitive" } },
-            },
-          },
-        ],
-      },
+      contact: contactEmailMatches(fromAddress),
     },
     include: { contact: true },
     orderBy: { updatedAt: "desc" },
@@ -84,16 +125,7 @@ async function findEmailLeadContext(fromAddress: string) {
   }
 
   const contact = await prisma.contact.findFirst({
-    where: {
-      OR: [
-        { email: { equals: fromAddress, mode: "insensitive" } },
-        {
-          additionalEmails: {
-            some: { email: { equals: fromAddress, mode: "insensitive" } },
-          },
-        },
-      ],
-    },
+    where: contactEmailMatches(fromAddress),
     orderBy: { updatedAt: "desc" },
   });
 
@@ -191,7 +223,10 @@ export async function POST(request: Request) {
     text: textBody,
   });
   const summary = emailTextSummary(plainBody || subject || "");
-  const { contact, opportunity } = await findEmailLeadContext(fromAddress);
+  const { contact, opportunity } = await findEmailLeadContext(
+    fromAddress,
+    toAddress,
+  );
   const inboundId = asString(payload.inbound_id) || null;
   const headersJson = headers as Prisma.InputJsonObject;
   const salesMetadata: Prisma.InputJsonObject = {

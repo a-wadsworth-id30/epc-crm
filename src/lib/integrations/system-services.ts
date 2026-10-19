@@ -449,7 +449,10 @@ function mailerSendCapabilities({ config }: SystemIntegrationCapabilityInput) {
   );
   const inboundReady = Boolean(
     storedConfig?.credentials?.inboundSecret &&
-    mailerSendInboundReplyAddress(storedConfig),
+    mailerSendInboundReplyAddress(storedConfig) &&
+    storedConfig.inboundRouteId &&
+    storedConfig.inboundRouteId !== "0" &&
+    storedConfig.inboundVerified,
   );
   const dnsReady = Boolean(
     storedConfig?.spfVerified &&
@@ -467,8 +470,8 @@ function mailerSendCapabilities({ config }: SystemIntegrationCapabilityInput) {
     }),
     capability({
       detail: inboundReady
-        ? `${mailerSendInboundReplyAddress(storedConfig)} is ready for inbound replies.`
-        : "Save an inbound secret, inbound domain and catch recipient.",
+        ? `${mailerSendInboundReplyAddress(storedConfig)} is ready for sale-specific inbound replies.`
+        : "Save the real route ID and secret, use a catch-all route, and verify inbound MX DNS.",
       label: "Inbound routing",
       status: inboundReady ? "ready" : "missing",
     }),

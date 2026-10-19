@@ -2,7 +2,7 @@ import "server-only";
 
 import twilio from "twilio";
 import {
-  getMailerSendInboundReplyAddress,
+  getMailerSendOpportunityReplyAddress,
   sendMailerSendEmail,
 } from "@/lib/integrations/mailersend";
 import {
@@ -275,7 +275,9 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
     throw new Error("Message became empty after resolving placeholders.");
   }
 
-  const replyToEmail = await getMailerSendInboundReplyAddress();
+  const replyToEmail = await getMailerSendOpportunityReplyAddress(
+    opportunity.id,
+  );
   const result = await sendMailerSendEmail({
     subject,
     text: body,
