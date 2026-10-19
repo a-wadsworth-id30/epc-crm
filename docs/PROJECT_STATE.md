@@ -675,7 +675,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   filters and desktop bulk selection/pagination frame into route-local chunks.
   The overview supports the default table/list layout plus `view=kanban`, which
   reuses the same URL-backed search, stage, owner and sort filters and groups a
-  bounded set of matching opportunities by pipeline stage. Admins can configure
+  bounded set of matching opportunities by pipeline stage. The table keeps the
+  sales filter rail visible, while Kanban defaults to the full-width board and
+  provides a session-persistent Show filters / Hide filters control. Admins can configure
   which fields show on Kanban cards from `Settings > Sales Pipeline`; the saved
   fields cover customer, value, owner, source, products, next activity, close
   date, service-plan status and open linked tasks. Kanban cards can be dragged

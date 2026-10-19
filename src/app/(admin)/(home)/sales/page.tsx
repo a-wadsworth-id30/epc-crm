@@ -8,6 +8,7 @@ import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSal
 import EmptyState from "@/components/crm-boilerplate/EmptyState";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
 import SalesKanbanDragBoard from "@/components/crm-boilerplate/SalesKanbanDragBoard";
+import SalesPipelineLayout from "@/components/crm-boilerplate/SalesPipelineLayout";
 import SalesPipelineStageBadge from "@/components/crm-boilerplate/SalesPipelineStageBadge";
 import { SalesSourceJourney } from "@/components/crm-boilerplate/SalesSourceJourney";
 import {
@@ -1217,25 +1218,28 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
             </div>
           </div>
           {allOpportunityCount ? (
-            <div className="grid xl:grid-cols-[250px_minmax(0,1fr)]">
-              <LazySalesPipelineFilters
-                customerCategoryCounts={customerCategoryCounts}
-                customerCategoryOptions={customerCategoryFilterOptions}
-                ownerOptions={ownerOptions}
-                query={queryInput}
-                selectedCustomerCategory={activeCustomerCategory}
-                selectedOwner={activeOwner}
-                selectedSort={activeSort}
-                selectedStage={activeStage}
-                resetHref={resetHref}
-                defaultSortValue={DEFAULT_SALES_SORT}
-                openStageValues={openStageFilterValues}
-                sortOptions={salesSortOptions}
-                stageCounts={stageCounts}
-                stageOptions={salesStageFilters}
-                variant="rail"
-              />
-              <div className="min-w-0">
+            <SalesPipelineLayout
+              view={activeView}
+              filters={
+                <LazySalesPipelineFilters
+                  customerCategoryCounts={customerCategoryCounts}
+                  customerCategoryOptions={customerCategoryFilterOptions}
+                  ownerOptions={ownerOptions}
+                  query={queryInput}
+                  selectedCustomerCategory={activeCustomerCategory}
+                  selectedOwner={activeOwner}
+                  selectedSort={activeSort}
+                  selectedStage={activeStage}
+                  resetHref={resetHref}
+                  defaultSortValue={DEFAULT_SALES_SORT}
+                  openStageValues={openStageFilterValues}
+                  sortOptions={salesSortOptions}
+                  stageCounts={stageCounts}
+                  stageOptions={salesStageFilters}
+                  variant="rail"
+                />
+              }
+            >
                 {filteredOpportunities.length ? (
                   <>
                     {activeView === "kanban" ? (
@@ -1861,8 +1865,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                     />
                   </div>
                 )}
-              </div>
-            </div>
+            </SalesPipelineLayout>
           ) : (
             <div className="p-5">
               <EmptyState
