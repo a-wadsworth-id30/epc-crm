@@ -2525,8 +2525,11 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           </Link>
           <span className="hidden h-8 w-px shrink-0 bg-gray-200 lg:block dark:bg-gray-800" />
           <div className="min-w-0 lg:max-w-[460px] xl:max-w-[560px]">
-            <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-xl font-semibold text-gray-900 dark:text-white">
+            <div className="flex min-w-0 items-start gap-2">
+              <h1
+                className="min-w-0 break-words text-xl leading-7 font-semibold text-gray-900 dark:text-white"
+                title={sale.title}
+              >
                 {sale.title}
               </h1>
               <LazyHelpTooltip content="Lead workspace for conversation, lead details and discovery." />
