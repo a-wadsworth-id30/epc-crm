@@ -20,6 +20,18 @@ function authorized(request: Request) {
   );
 }
 
+function boundedInteger(
+  value: string | null,
+  defaultValue: number,
+  maximum: number,
+) {
+  if (!value) return defaultValue;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return defaultValue;
+
+  return Math.min(Math.max(Math.trunc(parsed), 1), maximum);
+}
+
 export async function GET(request: Request) {
   if (!cronSecret()) {
     return NextResponse.json(
@@ -48,11 +60,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Unauthorized." }, { status: 401 });
   }
 
+  const url = new URL(request.url);
+  const mailboxLimit = boundedInteger(
+    url.searchParams.get("mailboxLimit"),
+    5,
+    5,
+  );
+  const maxResults = boundedInteger(
+    url.searchParams.get("maxResults"),
+    25,
+    25,
+  );
   const mailboxes = await prisma.emailMailbox.findMany({
     where: { status: "CONNECTED", syncEnabled: true },
     orderBy: [{ lastSyncAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
     select: { emailAddress: true, id: true },
-    take: 5,
+    take: mailboxLimit,
   });
   const results = [];
   for (const mailbox of mailboxes) {
@@ -60,7 +83,7 @@ export async function POST(request: Request) {
       results.push({
         emailAddress: mailbox.emailAddress,
         ok: true,
-        result: await syncGmailMailbox(mailbox.id),
+        result: await syncGmailMailbox(mailbox.id, { maxResults }),
       });
     } catch (error) {
       results.push({

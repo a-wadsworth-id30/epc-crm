@@ -1153,7 +1153,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   writes an audit entry. Manual sync is available from Gmail settings. A
   Netlify Scheduled Function calls the protected `/api/maintenance/gmail-sync`
   route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`, using
-  `GMAIL_SYNC_SECRET` or `CRON_SECRET`.
+  `GMAIL_SYNC_SECRET` or `CRON_SECRET`. Scheduled runs select the least recently
+  synced mailbox and read at most 10 messages so provider, attachment and CRM
+  writes complete inside the Netlify execution window.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.
