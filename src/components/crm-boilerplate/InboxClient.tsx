@@ -373,18 +373,27 @@ export default function InboxClient({
         <div className="grid min-h-[680px] lg:grid-cols-[380px_1fr]">
           <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white lg:border-r lg:border-b-0 dark:border-gray-800 dark:bg-white/[0.02]">
             <div className="border-b border-gray-200 p-4 dark:border-gray-800">
-              <form action="/inbox" className="relative">
+              <form action="/inbox" className="flex items-center gap-2">
                 {lane ? <input name="lane" type="hidden" value={lane} /> : null}
                 {pageSize !== 25 ? (
                   <input name="pageSize" type="hidden" value={pageSize} />
                 ) : null}
-                <SearchIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  className="h-10 w-full rounded-lg border border-gray-300 bg-white pr-3 pl-9 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
-                  defaultValue={query}
-                  name="q"
-                  placeholder="Search email, subject or lead"
-                />
+                <div className="relative min-w-0 flex-1">
+                  <SearchIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white pr-3 pl-9 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                    defaultValue={query}
+                    name="q"
+                    placeholder="Search email, subject or lead"
+                    type="search"
+                  />
+                </div>
+                <button
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600 focus:ring-3 focus:ring-brand-500/20 focus:outline-none"
+                  type="submit"
+                >
+                  Search
+                </button>
               </form>
             </div>
 
