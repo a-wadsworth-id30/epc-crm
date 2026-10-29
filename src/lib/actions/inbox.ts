@@ -2,6 +2,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import {
   emailMessageWhereWithAccess,
@@ -9,6 +10,11 @@ import {
 } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
+import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
+import {
+  outboundMessageError,
+  sendSalesLeadEmail,
+} from "@/lib/sales/outbound-messages";
 
 export type InboxSaleOption = {
   companyName: string | null;
@@ -31,6 +37,15 @@ export type InboxThreadAssignmentResult =
       opportunity: { id: string; stage: string; title: string };
     }
   | { ok: false; message: string };
+
+export type InboxReplyResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+const inboxReplySchema = z.object({
+  body: z.string().trim().min(1, "Enter a reply.").max(20_000),
+  messageId: z.string().trim().min(1),
+});
 
 function jsonInput(value: Prisma.JsonValue | null) {
   if (value === null) return undefined;
@@ -354,6 +369,92 @@ export async function assignInboxThreadToSale(
       title: opportunity.title,
     },
   };
+}
+
+export async function replyToInboxMessage(
+  messageId: string,
+  body: string,
+): Promise<InboxReplyResult> {
+  const parsed = inboxReplySchema.safeParse({ body, messageId });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Enter a reply.",
+    };
+  }
+
+  const user = await requireUser();
+  const message = await prisma.emailMessage.findFirst({
+    where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
+    select: {
+      fromAddress: true,
+      internetMessageId: true,
+      mailboxId: true,
+      opportunityId: true,
+      provider: true,
+      providerThreadId: true,
+      subject: true,
+      toAddress: true,
+      direction: true,
+    },
+  });
+
+  if (!message) {
+    return { ok: false, message: "Email not found or unavailable." };
+  }
+  if (
+    message.provider !== "gmail" ||
+    !message.mailboxId ||
+    !message.providerThreadId
+  ) {
+    return {
+      ok: false,
+      message: "In-CRM replies are currently available for Gmail conversations.",
+    };
+  }
+  if (!message.opportunityId) {
+    return {
+      ok: false,
+      message: "Assign this Gmail conversation to a sale before replying.",
+    };
+  }
+
+  const recipient = inboxReplyRecipient(message);
+  if (!recipient || !z.string().email().safeParse(recipient).success) {
+    return { ok: false, message: "This conversation has no valid reply address." };
+  }
+
+  try {
+    await sendSalesLeadEmail({
+      body: parsed.data.body,
+      gmailThreadId: message.providerThreadId,
+      inReplyTo: message.internetMessageId,
+      mailboxId: message.mailboxId,
+      opportunityId: message.opportunityId,
+      source: "inbox-reply",
+      subject: inboxReplySubject(message.subject),
+      to: recipient,
+      user,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      message: outboundMessageError(error, "Gmail reply could not be sent."),
+    };
+  }
+
+  await prisma.emailMessage.updateMany({
+    where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
+    data: { readAt: new Date(), status: "READ" },
+  });
+  await bumpRealtimeTopics([
+    realtimeTopics.inbox,
+    realtimeTopics.saleConversation(message.opportunityId),
+  ]);
+  revalidatePath("/inbox");
+  revalidatePath(`/sales/${message.opportunityId}`);
+
+  return { ok: true, message: `Reply sent to ${recipient}.` };
 }
 
 export async function markInboxMessageRead(messageId: string) {

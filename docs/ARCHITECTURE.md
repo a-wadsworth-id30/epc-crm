@@ -297,6 +297,11 @@ thread, updates archived attachment ownership, and writes the selected sale to
 route. Existing and destination sale permissions are checked before the move,
 and the change is recorded in `AuditLog`.
 
+Matched Gmail conversations expose an inline Inbox reply composer. Replies use
+the receiving mailbox, exact Gmail thread ID and original internet message ID,
+then write the outbound email into `EmailMessage` and the sale conversation.
+The existing per-user mailbox send permissions and sale access checks apply.
+
 Main files:
 
 - `src/lib/integrations/gmail.ts`

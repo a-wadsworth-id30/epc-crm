@@ -17,11 +17,13 @@ import {
   assignInboxThreadToSale,
   archiveInboxMessage,
   markInboxMessageRead,
+  replyToInboxMessage,
   restoreInboxMessage,
   searchInboxSales,
 } from "@/lib/actions/inbox";
 import type { InboxSaleOption } from "@/lib/actions/inbox";
 import { latestInboundEmailPlainText } from "@/lib/email/plain-text";
+import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import type {
   InboxMessageDetail,
   InboxMessageSummary,
@@ -160,6 +162,7 @@ export default function InboxClient({
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [isAssigning, startAssignmentTransition] = useTransition();
+  const [isReplying, startReplyTransition] = useTransition();
   const [selectedId, setSelectedId] = useState(
     selectedMessageId ?? messages[0]?.id ?? "",
   );
@@ -173,6 +176,9 @@ export default function InboxClient({
   const [assignmentSaleId, setAssignmentSaleId] = useState("");
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assignmentSearching, setAssignmentSearching] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+  const [replyError, setReplyError] = useState<string | null>(null);
   const selectedSummary = useMemo(
     () => messages.find((message) => message.id === selectedId) ?? messages[0],
     [messages, selectedId],
@@ -230,9 +236,37 @@ export default function InboxClient({
 
   function selectMessage(messageId: string) {
     setAssignmentOpen(false);
+    setReplyOpen(false);
+    setReplyBody("");
+    setReplyError(null);
     setSelectedId(messageId);
     router.replace(inboxHref({ lane, messageId, page, pageSize, query }), {
       scroll: false,
+    });
+  }
+
+  function sendReply() {
+    if (!selectedMessage) return;
+
+    setReplyError(null);
+    startReplyTransition(async () => {
+      try {
+        const result = await replyToInboxMessage(
+          selectedMessage.id,
+          replyBody,
+        );
+        if (!result.ok) {
+          setReplyError(result.message);
+          return;
+        }
+
+        setReplyBody("");
+        setReplyOpen(false);
+        showToast(result.message);
+        router.refresh();
+      } catch {
+        setReplyError("The Gmail reply could not be sent. Please try again.");
+      }
     });
   }
 
@@ -609,17 +643,99 @@ export default function InboxClient({
                             : "Assign to sale"}
                         </button>
                       ) : null}
-                      {selectedMessage.fromAddress ? (
-                        <a
+                      {selectedMessage.provider === "gmail" &&
+                      inboxReplyRecipient(selectedMessage) ? (
+                        <button
                           className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
-                          href={`mailto:${selectedMessage.fromAddress}?subject=${encodeURIComponent(
-                            `Re: ${selectedMessage.subject ?? "Your email"}`,
-                          )}`}
+                          disabled={!selectedMessage.opportunity || isReplying}
+                          title={
+                            selectedMessage.opportunity
+                              ? "Reply from the connected Gmail mailbox"
+                              : "Assign this Gmail conversation to a sale before replying"
+                          }
+                          type="button"
+                          onClick={() => {
+                            setReplyError(null);
+                            setReplyOpen((current) => !current);
+                          }}
                         >
-                          Reply
-                        </a>
+                          {selectedMessage.opportunity
+                            ? "Reply in CRM"
+                            : "Assign to sale to reply"}
+                        </button>
                       ) : null}
                     </div>
+
+                    {replyOpen && selectedMessage.opportunity ? (
+                      <form
+                        className="border-t border-gray-100 bg-gray-50/70 px-5 py-5 dark:border-gray-800 dark:bg-white/[0.02]"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          sendReply();
+                        }}
+                      >
+                        <div className="grid gap-3 text-sm sm:grid-cols-2">
+                          <div>
+                            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                              To
+                            </span>
+                            <p className="mt-1 break-all text-gray-800 dark:text-white/90">
+                              {inboxReplyRecipient(selectedMessage)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                              Subject
+                            </span>
+                            <p className="mt-1 text-gray-800 dark:text-white/90">
+                              {inboxReplySubject(selectedMessage.subject)}
+                            </p>
+                          </div>
+                        </div>
+                        <label
+                          className="mt-4 block text-sm font-semibold text-gray-700 dark:text-gray-300"
+                          htmlFor={`inbox-reply-${selectedMessage.id}`}
+                        >
+                          Reply
+                        </label>
+                        <textarea
+                          autoFocus
+                          className="mt-2 min-h-36 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                          disabled={isReplying}
+                          id={`inbox-reply-${selectedMessage.id}`}
+                          maxLength={20_000}
+                          placeholder="Write your reply..."
+                          required
+                          value={replyBody}
+                          onChange={(event) => setReplyBody(event.target.value)}
+                        />
+                        {replyError ? (
+                          <p className="mt-2 text-sm font-medium text-error-600 dark:text-error-400">
+                            {replyError}
+                          </p>
+                        ) : null}
+                        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            className="inline-flex h-10 items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                            disabled={isReplying}
+                            type="button"
+                            onClick={() => {
+                              setReplyOpen(false);
+                              setReplyError(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={isReplying || !replyBody.trim()}
+                            type="submit"
+                          >
+                            {isReplying ? "Sending..." : "Send Gmail reply"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
                   </div>
 
                   <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_320px]">

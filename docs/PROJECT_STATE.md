@@ -1155,7 +1155,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`, using
   `GMAIL_SYNC_SECRET` or `CRON_SECRET`. Scheduled runs select the least recently
   synced mailbox and read at most 10 messages so provider, attachment and CRM
-  writes complete inside the Netlify execution window.
+  writes complete inside the Netlify execution window. Matched Gmail messages
+  can be replied to directly from the Inbox; the composer sends from the
+  receiving mailbox, preserves the exact Gmail thread and writes the outbound
+  message into the linked sale conversation.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.
