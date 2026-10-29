@@ -370,7 +370,7 @@ export default function InboxClient({
       )}
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="grid min-h-[680px] lg:h-[calc(100dvh-13rem)] lg:grid-cols-[380px_1fr]">
+        <div className="grid min-h-[680px] lg:grid-cols-[380px_1fr]">
           <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white lg:border-r lg:border-b-0 dark:border-gray-800 dark:bg-white/[0.02]">
             <div className="border-b border-gray-200 p-4 dark:border-gray-800">
               <form action="/inbox" className="flex items-center gap-2">
@@ -397,7 +397,7 @@ export default function InboxClient({
               </form>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {messages.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-gray-500 dark:text-gray-400">
                   No messages match this view.
@@ -514,7 +514,7 @@ export default function InboxClient({
             </div>
           </aside>
 
-          <main className="min-w-0 bg-gray-50 lg:overflow-y-auto lg:overscroll-contain dark:bg-black/10">
+          <main className="min-w-0 bg-gray-50 dark:bg-black/10">
             {selectedMessage ? (
               <div className="flex min-h-full flex-col">
                 <div className="border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-white/[0.02]">
