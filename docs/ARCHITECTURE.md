@@ -301,6 +301,9 @@ Matched Gmail conversations expose an inline Inbox reply composer. Replies use
 the receiving mailbox, exact Gmail thread ID and original internet message ID,
 then write the outbound email into `EmailMessage` and the sale conversation.
 The existing per-user mailbox send permissions and sale access checks apply.
+Sale Conversation email entries surface the same Gmail reply context from the
+linked `EmailMessage`, and reuse the Inbox reply action so mailbox permissions,
+thread headers and persistence behaviour remain identical in both surfaces.
 
 Main files:
 

@@ -26,6 +26,11 @@ export type SaleConversationItem = {
   userName: string | null;
   contactName: string | null;
   metadata: unknown;
+  gmailReply?: {
+    emailMessageId: string;
+    recipient: string;
+    subject: string;
+  } | null;
 };
 
 export type SaleConversationCounts = Record<SaleConversationFilter, number>;
