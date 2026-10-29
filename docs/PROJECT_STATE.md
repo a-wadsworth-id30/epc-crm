@@ -1147,7 +1147,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   in the central inbox. CRM-originated Gmail sends persist an exact
   Gmail-thread-to-sale link so replies return to the correct sale. Gmail
   attachment references are copied into R2-backed `FileAsset` rows when storage
-  is configured. Manual sync is available from Gmail settings and the protected
+  is configured. Inbox users can assign or move a complete Gmail thread to an
+  accessible sale; the CRM moves its email/timeline records and archived
+  attachments together, stores a durable manual route for later replies, and
+  writes an audit entry. Manual sync is available from Gmail settings and the protected
   `/api/maintenance/gmail-sync` route supports scheduled pulls.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.

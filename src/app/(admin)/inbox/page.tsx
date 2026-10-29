@@ -90,31 +90,37 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ],
   };
 
-  const [totalCount, allCount, unreadCount, matchedCount, unmatchedCount, archivedCount] =
-    await Promise.all([
-      prisma.emailMessage.count({ where }),
-      prisma.emailMessage.count({
-        where: emailMessageWhereWithAccess(user, { status: { not: "ARCHIVED" } }),
+  const [
+    totalCount,
+    allCount,
+    unreadCount,
+    matchedCount,
+    unmatchedCount,
+    archivedCount,
+  ] = await Promise.all([
+    prisma.emailMessage.count({ where }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, { status: { not: "ARCHIVED" } }),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, { status: "UNREAD" }),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, {
+        status: { not: "ARCHIVED" },
+        opportunityId: { not: null },
       }),
-      prisma.emailMessage.count({
-        where: emailMessageWhereWithAccess(user, { status: "UNREAD" }),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, {
+        status: { not: "ARCHIVED" },
+        opportunityId: null,
       }),
-      prisma.emailMessage.count({
-        where: emailMessageWhereWithAccess(user, {
-          status: { not: "ARCHIVED" },
-          opportunityId: { not: null },
-        }),
-      }),
-      prisma.emailMessage.count({
-        where: emailMessageWhereWithAccess(user, {
-          status: { not: "ARCHIVED" },
-          opportunityId: null,
-        }),
-      }),
-      prisma.emailMessage.count({
-        where: emailMessageWhereWithAccess(user, { status: "ARCHIVED" }),
-      }),
-    ]);
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, { status: "ARCHIVED" }),
+    }),
+  ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const page = Math.min(requestedPage, totalPages);
   const messages = await prisma.emailMessage.findMany({
@@ -130,11 +136,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       <RealtimePageRefresh topics={[realtimeTopics.inbox]} />
       <PageHeader
         title="Inbox"
-        description="Inbound email captured from MailerSend and routed to active leads when the sender matches a contact."
+        description="Email captured from Gmail and MailerSend, with conversations routed to the relevant sale."
         actions={
           <Link
             href="/settings/integrations/mailersend"
-            className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium whitespace-nowrap text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
           >
             MailerSend settings
           </Link>
