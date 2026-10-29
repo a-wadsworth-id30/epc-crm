@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
+import { Modal } from "@/components/ui/modal";
 import {
   InboxAltIcon,
   MailIcon,
@@ -13,12 +14,18 @@ import {
   StarLine,
 } from "@/icons";
 import {
+  assignInboxThreadToSale,
   archiveInboxMessage,
   markInboxMessageRead,
   restoreInboxMessage,
+  searchInboxSales,
 } from "@/lib/actions/inbox";
+import type { InboxSaleOption } from "@/lib/actions/inbox";
 import { latestInboundEmailPlainText } from "@/lib/email/plain-text";
-import type { InboxMessageDetail, InboxMessageSummary } from "@/lib/inbox/types";
+import type {
+  InboxMessageDetail,
+  InboxMessageSummary,
+} from "@/lib/inbox/types";
 
 export type InboxClientProps = {
   counts: {
@@ -152,6 +159,7 @@ export default function InboxClient({
   const router = useRouter();
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [isAssigning, startAssignmentTransition] = useTransition();
   const [selectedId, setSelectedId] = useState(
     selectedMessageId ?? messages[0]?.id ?? "",
   );
@@ -159,13 +167,21 @@ export default function InboxClient({
     Record<string, InboxMessageDetail>
   >({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [assignmentQuery, setAssignmentQuery] = useState("");
+  const [assignmentSales, setAssignmentSales] = useState<InboxSaleOption[]>([]);
+  const [assignmentSaleId, setAssignmentSaleId] = useState("");
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentSearching, setAssignmentSearching] = useState(false);
   const selectedSummary = useMemo(
     () => messages.find((message) => message.id === selectedId) ?? messages[0],
     [messages, selectedId],
   );
   const selectedDetail = selectedId ? messageDetails[selectedId] : undefined;
   const detailError = selectedId ? detailErrors[selectedId] : null;
-  const isDetailLoading = Boolean(selectedId && !selectedDetail && !detailError);
+  const isDetailLoading = Boolean(
+    selectedId && !selectedDetail && !detailError,
+  );
   const selectedMessage = selectedDetail ?? selectedSummary;
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -199,7 +215,8 @@ export default function InboxClient({
         }));
       })
       .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (error instanceof DOMException && error.name === "AbortError")
+          return;
 
         setDetailErrors((current) => ({
           ...current,
@@ -212,13 +229,79 @@ export default function InboxClient({
   }, [detailError, selectedDetail, selectedId]);
 
   function selectMessage(messageId: string) {
+    setAssignmentOpen(false);
     setSelectedId(messageId);
     router.replace(inboxHref({ lane, messageId, page, pageSize, query }), {
       scroll: false,
     });
   }
 
-  function runMessageAction(action: () => Promise<void>, successMessage: string) {
+  async function loadAssignmentSales(messageId: string, search: string) {
+    setAssignmentSearching(true);
+    setAssignmentError(null);
+    try {
+      const result = await searchInboxSales(messageId, search);
+      if (!result.ok) {
+        setAssignmentSales([]);
+        setAssignmentError(result.message);
+        return;
+      }
+      setAssignmentSales(result.sales);
+      if (!result.sales.length) {
+        setAssignmentError("No accessible sales matched this search.");
+      }
+    } catch {
+      setAssignmentSales([]);
+      setAssignmentError("Sales could not be loaded. Please try again.");
+    } finally {
+      setAssignmentSearching(false);
+    }
+  }
+
+  function openAssignment() {
+    if (!selectedMessage || selectedMessage.provider !== "gmail") return;
+    setAssignmentQuery("");
+    setAssignmentSaleId(selectedMessage.opportunity?.id ?? "");
+    setAssignmentSales([]);
+    setAssignmentError(null);
+    setAssignmentOpen(true);
+    void loadAssignmentSales(selectedMessage.id, "");
+  }
+
+  function assignThread() {
+    if (!selectedMessage || !assignmentSaleId) return;
+
+    startAssignmentTransition(async () => {
+      try {
+        const result = await assignInboxThreadToSale(
+          selectedMessage.id,
+          assignmentSaleId,
+        );
+        if (!result.ok) {
+          setAssignmentError(result.message);
+          return;
+        }
+
+        setMessageDetails((current) => {
+          const next = { ...current };
+          delete next[selectedMessage.id];
+          return next;
+        });
+        setAssignmentOpen(false);
+        showToast(result.message);
+        router.refresh();
+      } catch {
+        setAssignmentError(
+          "The Gmail thread could not be assigned. Please try again.",
+        );
+      }
+    });
+  }
+
+  function runMessageAction(
+    action: () => Promise<void>,
+    successMessage: string,
+  ) {
     startTransition(async () => {
       try {
         await action();
@@ -254,7 +337,7 @@ export default function InboxClient({
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="grid min-h-[680px] lg:grid-cols-[380px_1fr]">
-          <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.02] lg:border-r lg:border-b-0">
+          <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white lg:border-r lg:border-b-0 dark:border-gray-800 dark:bg-white/[0.02]">
             <div className="border-b border-gray-200 p-4 dark:border-gray-800">
               <form action="/inbox" className="relative">
                 {lane ? <input name="lane" type="hidden" value={lane} /> : null}
@@ -318,7 +401,9 @@ export default function InboxClient({
                             </p>
                             <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
                               <Badge className={statusTone(message)}>
-                                {message.opportunity ? "Matched lead" : "Unmatched"}
+                                {message.opportunity
+                                  ? "Matched lead"
+                                  : "Unmatched"}
                               </Badge>
                               {message.status === "UNREAD" ? (
                                 <Badge className="bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/20 dark:text-sky-300 dark:ring-sky-900/40">
@@ -394,7 +479,9 @@ export default function InboxClient({
                     <div className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
                         <Badge className={statusTone(selectedMessage)}>
-                          {selectedMessage.opportunity ? "Matched lead" : "Unmatched"}
+                          {selectedMessage.opportunity
+                            ? "Matched lead"
+                            : "Unmatched"}
                         </Badge>
                         <StatusBadge>{selectedMessage.status}</StatusBadge>
                         <span className="text-xs text-gray-400">
@@ -424,7 +511,11 @@ export default function InboxClient({
                         </IconButton>
                       ) : null}
                       <IconButton
-                        label={selectedMessage.status === "ARCHIVED" ? "Restore" : "Archive"}
+                        label={
+                          selectedMessage.status === "ARCHIVED"
+                            ? "Restore"
+                            : "Archive"
+                        }
                         disabled={isPending}
                         onClick={() =>
                           runMessageAction(
@@ -456,10 +547,11 @@ export default function InboxClient({
                             <p className="font-semibold text-gray-900 dark:text-white/90">
                               {senderName(selectedMessage)}
                             </p>
-                            <p className="mt-0.5 break-all text-sm text-gray-500 dark:text-gray-400">
-                              {selectedMessage.fromAddress ?? "No sender address"}
+                            <p className="mt-0.5 text-sm break-all text-gray-500 dark:text-gray-400">
+                              {selectedMessage.fromAddress ??
+                                "No sender address"}
                             </p>
-                            <p className="mt-0.5 break-all text-xs text-gray-400">
+                            <p className="mt-0.5 text-xs break-all text-gray-400">
                               To {selectedMessage.toAddress ?? "CRM inbox"}
                             </p>
                           </div>
@@ -505,6 +597,18 @@ export default function InboxClient({
                           Open lead
                         </Link>
                       ) : null}
+                      {selectedMessage.provider === "gmail" ? (
+                        <button
+                          className="inline-flex h-10 items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-500/10"
+                          disabled={isPending || isAssigning}
+                          type="button"
+                          onClick={openAssignment}
+                        >
+                          {selectedMessage.opportunity
+                            ? "Move to another sale"
+                            : "Assign to sale"}
+                        </button>
+                      ) : null}
                       {selectedMessage.fromAddress ? (
                         <a
                           className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
@@ -533,7 +637,10 @@ export default function InboxClient({
                           </Link>
                           <p className="text-sm text-gray-500 dark:text-gray-400">
                             Stage:{" "}
-                            {selectedMessage.opportunity.stage.replaceAll("_", " ")}
+                            {selectedMessage.opportunity.stage.replaceAll(
+                              "_",
+                              " ",
+                            )}
                           </p>
                         </div>
                       ) : (
@@ -558,9 +665,18 @@ export default function InboxClient({
                                 : selectedMessage.provider
                           }
                         />
-                        <StateRow label="Route" value={selectedMessage.inboundRouteId ?? "-"} />
-                        <StateRow label="Direction" value={selectedMessage.direction} />
-                        <StateRow label="Status" value={selectedMessage.status} />
+                        <StateRow
+                          label="Route"
+                          value={selectedMessage.inboundRouteId ?? "-"}
+                        />
+                        <StateRow
+                          label="Direction"
+                          value={selectedMessage.direction}
+                        />
+                        <StateRow
+                          label="Status"
+                          value={selectedMessage.status}
+                        />
                       </div>
                     </div>
                   </div>
@@ -579,6 +695,138 @@ export default function InboxClient({
           </main>
         </div>
       </section>
+
+      <Modal
+        className="max-w-2xl p-6 sm:p-8"
+        isOpen={assignmentOpen}
+        onClose={() => {
+          if (!isAssigning) setAssignmentOpen(false);
+        }}
+      >
+        <div className="pr-10">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white/90">
+            {selectedMessage?.opportunity
+              ? "Move Gmail thread to another sale"
+              : "Assign Gmail thread to a sale"}
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+            Every imported email in this Gmail conversation will move together.
+            Future replies will continue routing to the selected sale.
+          </p>
+        </div>
+
+        <form
+          className="mt-6 flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (selectedMessage) {
+              void loadAssignmentSales(selectedMessage.id, assignmentQuery);
+            }
+          }}
+        >
+          <input
+            className="h-11 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+            placeholder="Search sale, contact, email, company or owner"
+            value={assignmentQuery}
+            onChange={(event) => setAssignmentQuery(event.target.value)}
+          />
+          <button
+            className="h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+            disabled={assignmentSearching}
+            type="submit"
+          >
+            {assignmentSearching ? "Searching..." : "Search"}
+          </button>
+        </form>
+
+        <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+          {assignmentSearching && assignmentSales.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+              Loading accessible sales...
+            </p>
+          ) : null}
+          {!assignmentSearching
+            ? assignmentSales.map((sale) => {
+                const selected = assignmentSaleId === sale.id;
+                const isCurrent = selectedMessage?.opportunity?.id === sale.id;
+                return (
+                  <button
+                    key={sale.id}
+                    className={`w-full rounded-xl border p-4 text-left transition ${
+                      selected
+                        ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500/10 dark:bg-brand-500/10"
+                        : "border-gray-200 hover:border-brand-300 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/[0.04]"
+                    }`}
+                    type="button"
+                    onClick={() => {
+                      setAssignmentSaleId(sale.id);
+                      setAssignmentError(null);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 dark:text-white/90">
+                          {sale.title}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {[
+                            sale.contactName,
+                            sale.contactEmail,
+                            sale.companyName,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "No linked contact"}
+                        </p>
+                        {sale.ownerName ? (
+                          <p className="mt-1 text-xs text-gray-400">
+                            Owner: {sale.ownerName}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <StatusBadge>{sale.stage}</StatusBadge>
+                        {isCurrent ? (
+                          <span className="text-xs font-semibold text-brand-600 dark:text-brand-300">
+                            Current sale
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            : null}
+        </div>
+
+        {assignmentError ? (
+          <p className="mt-4 text-sm font-medium text-error-600 dark:text-error-400">
+            {assignmentError}
+          </p>
+        ) : null}
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            className="h-11 rounded-lg border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+            disabled={isAssigning}
+            type="button"
+            onClick={() => setAssignmentOpen(false)}
+          >
+            Cancel
+          </button>
+          <button
+            className="h-11 rounded-lg bg-brand-500 px-5 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={
+              !assignmentSaleId ||
+              isAssigning ||
+              assignmentSaleId === selectedMessage?.opportunity?.id
+            }
+            type="button"
+            onClick={assignThread}
+          >
+            {isAssigning ? "Assigning thread..." : "Assign Gmail thread"}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

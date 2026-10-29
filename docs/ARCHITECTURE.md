@@ -283,6 +283,13 @@ immediately, allowing replies to return to the correct sale. Attachment bytes
 are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
 when R2 is configured.
 
+Inbox users can manually assign or move a Gmail conversation to an accessible
+sale. The action moves every imported message and sales communication in the
+thread, updates archived attachment ownership, and writes the selected sale to
+`EmailThreadLink` with a manual source so later Gmail replies keep the corrected
+route. Existing and destination sale permissions are checked before the move,
+and the change is recorded in `AuditLog`.
+
 Main files:
 
 - `src/lib/integrations/gmail.ts`
