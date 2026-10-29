@@ -4,6 +4,7 @@ import type { CommunicationChannel, Prisma } from "@prisma/client";
 import type { CurrentUser } from "@/lib/auth";
 import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { prisma } from "@/lib/prisma";
 import {
@@ -165,6 +166,19 @@ const communicationSelect = {
   channel: true,
   contact: { select: { firstName: true, lastName: true } },
   direction: true,
+  emailMessage: {
+    select: {
+      direction: true,
+      fromAddress: true,
+      id: true,
+      mailboxId: true,
+      opportunityId: true,
+      provider: true,
+      providerThreadId: true,
+      subject: true,
+      toAddress: true,
+    },
+  },
   fromAddress: true,
   id: true,
   metadata: true,
@@ -183,6 +197,22 @@ function serializeCommunication(
   communication: CommunicationRow,
 ): SaleConversationItem {
   const body = toEmailPlainText(communication.body);
+  const recipient = communication.emailMessage
+    ? inboxReplyRecipient(communication.emailMessage)
+    : null;
+  const gmailReply =
+    communication.channel === "EMAIL" &&
+    communication.emailMessage?.provider === "gmail" &&
+    communication.emailMessage.mailboxId &&
+    communication.emailMessage.providerThreadId &&
+    communication.emailMessage.opportunityId &&
+    recipient
+      ? {
+          emailMessageId: communication.emailMessage.id,
+          recipient,
+          subject: inboxReplySubject(communication.emailMessage.subject),
+        }
+      : null;
 
   return {
     body:
@@ -192,6 +222,7 @@ function serializeCommunication(
     contactName: contactName(communication.contact),
     direction: communication.direction,
     fromAddress: communication.fromAddress,
+    gmailReply,
     id: communication.id,
     metadata: communication.metadata,
     occurredAt: communication.occurredAt.toISOString(),

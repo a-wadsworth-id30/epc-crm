@@ -56,6 +56,7 @@ import {
 } from "@/lib/display-defaults";
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import {
   spruceJobExternalType,
@@ -1691,6 +1692,19 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           id: true,
           channel: true,
           direction: true,
+          emailMessage: {
+            select: {
+              direction: true,
+              fromAddress: true,
+              id: true,
+              mailboxId: true,
+              opportunityId: true,
+              provider: true,
+              providerThreadId: true,
+              subject: true,
+              toAddress: true,
+            },
+          },
           subject: true,
           summary: true,
           body: true,
@@ -2146,6 +2160,22 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   const communicationConversationItems = sale.communications.map(
     (communication) => {
       const body = toEmailPlainText(communication.body);
+      const recipient = communication.emailMessage
+        ? inboxReplyRecipient(communication.emailMessage)
+        : null;
+      const gmailReply =
+        communication.channel === "EMAIL" &&
+        communication.emailMessage?.provider === "gmail" &&
+        communication.emailMessage.mailboxId &&
+        communication.emailMessage.providerThreadId &&
+        communication.emailMessage.opportunityId &&
+        recipient
+          ? {
+              emailMessageId: communication.emailMessage.id,
+              recipient,
+              subject: inboxReplySubject(communication.emailMessage.subject),
+            }
+          : null;
 
       return {
         id: communication.id,
@@ -2158,6 +2188,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             ? latestEmailReplyText(body)
             : body) || null,
         fromAddress: communication.fromAddress,
+        gmailReply,
         toAddress: communication.toAddress,
         occurredAt: communication.occurredAt.toISOString(),
         userName: communication.user?.name ?? null,

@@ -19,8 +19,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
+import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
   conversationItemMatchesQuery,
@@ -452,6 +454,7 @@ export default function SaleConversationThread({
   title = "Conversation",
   totalCount,
 }: SaleConversationThreadProps) {
+  const router = useRouter();
   const [activeFilter, setActiveFilter] =
     useState<SaleConversationFilter>("ALL");
   const [searchText, setSearchText] = useState("");
@@ -464,6 +467,36 @@ export default function SaleConversationThread({
     useState<SaleConversationPage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState("");
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [replySuccess, setReplySuccess] = useState<string | null>(null);
+  const [isGmailReplying, startGmailReplyTransition] = useTransition();
+
+  function sendGmailReply(communication: SaleConversationItem) {
+    if (!communication.gmailReply || !replyBody.trim()) return;
+
+    setReplyError(null);
+    setReplySuccess(null);
+    startGmailReplyTransition(async () => {
+      try {
+        const result = await replyToInboxMessage(
+          communication.gmailReply!.emailMessageId,
+          replyBody,
+        );
+        if (!result.ok) {
+          setReplyError(result.message);
+          return;
+        }
+
+        setReplyBody("");
+        setReplySuccess(result.message);
+        router.refresh();
+      } catch {
+        setReplyError("The Gmail reply could not be sent. Please try again.");
+      }
+    });
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -813,9 +846,13 @@ export default function SaleConversationThread({
                 );
                 const externalHref =
                   recordingUrl || pageHref || filePreviewUrl;
+                const showGmailReplyAction = Boolean(communication.gmailReply);
                 const showReplyAction =
-                  Boolean(onReply) && canReplyToCommunication(communication);
+                  !showGmailReplyAction &&
+                  Boolean(onReply) &&
+                  canReplyToCommunication(communication);
                 const hasFooterActions =
+                  showGmailReplyAction ||
                   showReplyAction ||
                   Boolean(opportunityId) ||
                   Boolean(externalHref) ||
@@ -1011,6 +1048,25 @@ export default function SaleConversationThread({
 
                         {hasFooterActions ? (
                           <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-gray-800 dark:bg-white/[0.03]">
+                            {showGmailReplyAction ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyingToId((current) =>
+                                    current === communication.id
+                                      ? null
+                                      : communication.id,
+                                  );
+                                  setReplyBody("");
+                                  setReplyError(null);
+                                  setReplySuccess(null);
+                                }}
+                                className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 text-sm font-semibold text-brand-600 shadow-theme-xs transition hover:bg-brand-50 dark:border-brand-900/60 dark:bg-gray-950 dark:text-brand-300 dark:hover:bg-brand-900/20"
+                              >
+                                <Reply className="h-4 w-4" />
+                                Reply in Gmail
+                              </button>
+                            ) : null}
                             {showReplyAction ? (
                               <button
                                 type="button"
@@ -1055,6 +1111,91 @@ export default function SaleConversationThread({
                               </a>
                             ) : null}
                           </div>
+                        ) : null}
+
+                        {replyingToId === communication.id &&
+                        communication.gmailReply ? (
+                          <form
+                            className="border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-800 dark:bg-gray-950"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              sendGmailReply(communication);
+                            }}
+                          >
+                            <div className="grid gap-3 text-sm sm:grid-cols-2">
+                              <div>
+                                <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                                  To
+                                </span>
+                                <p className="mt-1 break-all text-gray-800 dark:text-white/90">
+                                  {communication.gmailReply.recipient}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                                  Subject
+                                </span>
+                                <p className="mt-1 text-gray-800 dark:text-white/90">
+                                  {communication.gmailReply.subject}
+                                </p>
+                              </div>
+                            </div>
+                            <label
+                              className="mt-4 block text-sm font-semibold text-gray-700 dark:text-gray-300"
+                              htmlFor={`sale-gmail-reply-${communication.id}`}
+                            >
+                              Reply
+                            </label>
+                            <textarea
+                              autoFocus
+                              className="mt-2 min-h-32 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                              disabled={isGmailReplying}
+                              id={`sale-gmail-reply-${communication.id}`}
+                              maxLength={20_000}
+                              placeholder="Write your reply..."
+                              required
+                              value={replyBody}
+                              onChange={(event) => {
+                                setReplyBody(event.target.value);
+                                setReplyError(null);
+                                setReplySuccess(null);
+                              }}
+                            />
+                            {replyError ? (
+                              <p className="mt-2 text-sm font-medium text-error-600 dark:text-error-400">
+                                {replyError}
+                              </p>
+                            ) : null}
+                            {replySuccess ? (
+                              <p className="mt-2 text-sm font-medium text-success-600 dark:text-success-400">
+                                {replySuccess}
+                              </p>
+                            ) : null}
+                            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                className="inline-flex h-10 items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                                disabled={isGmailReplying}
+                                type="button"
+                                onClick={() => {
+                                  setReplyingToId(null);
+                                  setReplyBody("");
+                                  setReplyError(null);
+                                  setReplySuccess(null);
+                                }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={isGmailReplying || !replyBody.trim()}
+                                type="submit"
+                              >
+                                {isGmailReplying
+                                  ? "Sending..."
+                                  : "Send Gmail reply"}
+                              </button>
+                            </div>
+                          </form>
                         ) : null}
                       </div>
                     ) : null}

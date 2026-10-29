@@ -1159,7 +1159,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   writes complete inside the Netlify execution window. Matched Gmail messages
   can be replied to directly from the Inbox; the composer sends from the
   receiving mailbox, preserves the exact Gmail thread and writes the outbound
-  message into the linked sale conversation.
+  message into the linked sale conversation. Gmail email entries in the linked
+  sale Conversation expose the same threaded reply composer, so users can
+  continue the exact Gmail thread without returning to the Inbox.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

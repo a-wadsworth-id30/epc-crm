@@ -18,6 +18,20 @@ const emailRows = Array.from({ length: 15 }, (_, index) => ({
   channel: "EMAIL",
   contact: { firstName: "Adam", lastName: "Wadsworth" },
   direction: index % 2 ? "OUTBOUND" : "INBOUND",
+  emailMessage:
+    index === 0
+      ? {
+          direction: "INBOUND",
+          fromAddress: "customer@example.com",
+          id: "gmail-email-1",
+          mailboxId: "mailbox-1",
+          opportunityId: "sale-1",
+          provider: "gmail",
+          providerThreadId: "thread-1",
+          subject: "Re: Email 1",
+          toAddress: "sales@example.com",
+        }
+      : null,
   fromAddress: "customer@example.com",
   id: `email-${index + 1}`,
   metadata: null,
@@ -209,6 +223,22 @@ describe("sale conversation history", () => {
       result.items.map((item) => item.id),
       ["email-13", "email-14", "email-15"],
     );
+  });
+
+  it("exposes safe Gmail reply context for linked sale emails", async () => {
+    const result = await conversationHistory.listSaleConversationPage({
+      filter: "EMAIL",
+      page: 1,
+      saleId: "sale-1",
+      user: { id: "admin-1", role: "ADMIN" },
+    });
+
+    assert.ok(result);
+    assert.deepEqual(result.items[0]?.gmailReply, {
+      emailMessageId: "gmail-email-1",
+      recipient: "customer@example.com",
+      subject: "Re: Email 1",
+    });
   });
 
   it("merges communication, file and website counts into the complete timeline", async () => {
