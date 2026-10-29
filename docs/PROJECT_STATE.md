@@ -1130,7 +1130,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   unmatched messages, and links matched messages to active sales opportunities
   when the sender email matches the opportunity contact. Inbound email bodies
   are normalized to plain text and trimmed to the latest visible reply before
-  being shown on leads or used by Sales AI.
+  being shown on leads or used by Sales AI. Inbox search includes an explicit
+  submit action so users can clearly apply email, subject or lead filters.
 - Sales lead email drafts can be sent through the saved MailerSend integration
   and are logged back to the lead conversation timeline as outbound email.
   Their Reply-To address contains a signed sale reference; inbound processing
