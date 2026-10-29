@@ -283,6 +283,11 @@ immediately, allowing replies to return to the correct sale. Attachment bytes
 are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
 when R2 is configured.
 
+`netlify/functions/sync-gmail-mailboxes.mjs` invokes the protected maintenance
+route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`. It reuses the
+bounded sync path behind the manual action and authenticates with
+`GMAIL_SYNC_SECRET` or the shared `CRON_SECRET`.
+
 Inbox users can manually assign or move a Gmail conversation to an accessible
 sale. The action moves every imported message and sales communication in the
 thread, updates archived attachment ownership, and writes the selected sale to
@@ -298,6 +303,7 @@ Main files:
 - `src/components/crm-boilerplate/GmailIntegrationForm.tsx`
 - `/api/integrations/gmail/connect`
 - `/api/maintenance/gmail-sync`
+- `netlify/functions/sync-gmail-mailboxes.mjs`
 - `/settings/integrations/gmail`
 
 ### Geoapify
