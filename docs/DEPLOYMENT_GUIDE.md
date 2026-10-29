@@ -132,6 +132,8 @@ Optional:
 - `GMAIL_SYNC_SECRET`: shared secret for `/api/maintenance/gmail-sync`;
   `CRON_SECRET` can be used instead. The job processes up to five connected
   mailboxes per request and each mailbox reads at most 25 Gmail messages.
+- `GMAIL_SYNC_CRON_ENABLED`: set to `true` to let the scheduled Netlify
+  function sync connected Gmail mailboxes every 10 minutes.
 - `OPERATIONAL_RETENTION_SECRET`: shared secret for
   `/api/maintenance/retention`; `CRON_SECRET` can be used instead when a single
   maintenance secret is preferred.
@@ -309,6 +311,14 @@ Keep routine uptime checks on the DB-free `/api/health` and
 database verification because it wakes Neon compute. If measured production
 latency later justifies a server-function warmup, document the invocation and
 Neon compute cost before adding one.
+
+The repository also includes
+`netlify/functions/sync-gmail-mailboxes.mjs`, scheduled every 10 minutes. It is
+disabled unless `GMAIL_SYNC_CRON_ENABLED=true` is set. When enabled, it calls
+`/api/maintenance/gmail-sync` with `GMAIL_SYNC_SECRET` or `CRON_SECRET` and
+processes the same bounded mailbox sync used by the manual **Sync Gmail now**
+action. The function logs only compact counts and does not include mailbox
+addresses or message content.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.

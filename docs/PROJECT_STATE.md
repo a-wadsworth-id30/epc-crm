@@ -1150,8 +1150,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   is configured. Inbox users can assign or move a complete Gmail thread to an
   accessible sale; the CRM moves its email/timeline records and archived
   attachments together, stores a durable manual route for later replies, and
-  writes an audit entry. Manual sync is available from Gmail settings and the protected
-  `/api/maintenance/gmail-sync` route supports scheduled pulls.
+  writes an audit entry. Manual sync is available from Gmail settings. A
+  Netlify Scheduled Function calls the protected `/api/maintenance/gmail-sync`
+  route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`, using
+  `GMAIL_SYNC_SECRET` or `CRON_SECRET`.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.
