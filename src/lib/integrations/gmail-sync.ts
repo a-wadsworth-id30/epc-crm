@@ -433,7 +433,14 @@ async function archiveMessageAttachments({
   return { archived, failed };
 }
 
-export async function syncGmailMailbox(mailboxId: string) {
+export async function syncGmailMailbox(
+  mailboxId: string,
+  options: { maxResults?: number } = {},
+) {
+  const maxResults = Math.min(
+    Math.max(Math.trunc(options.maxResults ?? 25), 1),
+    25,
+  );
   const mailbox = await prisma.emailMailbox.findUnique({
     where: { id: mailboxId },
     select: {
@@ -463,7 +470,7 @@ export async function syncGmailMailbox(mailboxId: string) {
   let response = await id30AuthBrokerRequest({
     body: {
       historyId: mailbox.lastHistoryId,
-      maxResults: 25,
+      maxResults,
       pageToken: mailbox.lastHistoryId ? historyPageToken : initialPageToken,
       query: mailbox.lastHistoryId ? null : "newer_than:1y",
     },
@@ -474,7 +481,7 @@ export async function syncGmailMailbox(mailboxId: string) {
 
   if (!response.ok && response.status === 409 && response.body?.code === "history_expired") {
     response = await id30AuthBrokerRequest({
-      body: { historyId: null, maxResults: 25, pageToken: null, query: "newer_than:1y" },
+      body: { historyId: null, maxResults, pageToken: null, query: "newer_than:1y" },
       connectionId: mailbox.authConnectionId,
       method: "POST",
       pathname,

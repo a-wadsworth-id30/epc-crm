@@ -286,7 +286,9 @@ when R2 is configured.
 `netlify/functions/sync-gmail-mailboxes.mjs` invokes the protected maintenance
 route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`. It reuses the
 bounded sync path behind the manual action and authenticates with
-`GMAIL_SYNC_SECRET` or the shared `CRON_SECRET`.
+`GMAIL_SYNC_SECRET` or the shared `CRON_SECRET`. Scheduled runs process the
+least recently synced mailbox and at most 10 messages per invocation to stay
+inside Netlify's execution window; repeated runs drain any remaining pages.
 
 Inbox users can manually assign or move a Gmail conversation to an accessible
 sale. The action moves every imported message and sales communication in the

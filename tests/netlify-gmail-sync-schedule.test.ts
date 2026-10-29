@@ -93,7 +93,10 @@ describe("scheduled Gmail sync Netlify function", () => {
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(requestUrl, "https://crm.example.test/api/maintenance/gmail-sync");
+    assert.equal(
+      requestUrl,
+      "https://crm.example.test/api/maintenance/gmail-sync?mailboxLimit=1&maxResults=10",
+    );
     assert.equal(requestInit?.method, "POST");
     assert.equal(
       new Headers(requestInit?.headers).get("authorization"),

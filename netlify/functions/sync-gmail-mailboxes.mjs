@@ -90,6 +90,8 @@ export default async function handler() {
   }
 
   const url = new URL("/api/maintenance/gmail-sync", baseUrl.url);
+  url.searchParams.set("mailboxLimit", "1");
+  url.searchParams.set("maxResults", "10");
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",

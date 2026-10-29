@@ -317,8 +317,10 @@ The repository also includes
 disabled unless `GMAIL_SYNC_CRON_ENABLED=true` is set. When enabled, it calls
 `/api/maintenance/gmail-sync` with `GMAIL_SYNC_SECRET` or `CRON_SECRET` and
 processes the same bounded mailbox sync used by the manual **Sync Gmail now**
-action. The function logs only compact counts and does not include mailbox
-addresses or message content.
+action. Each scheduled invocation selects the least recently synced mailbox and
+reads at most 10 messages so Auth, attachment and CRM writes stay inside the
+Netlify execution window. The function logs only compact counts and does not
+include mailbox addresses or message content.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.
