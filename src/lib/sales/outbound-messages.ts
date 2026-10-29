@@ -29,6 +29,8 @@ type OutboundMessageUser = Pick<CurrentUser, "id" | "role">;
 type SendSalesLeadEmailInput = {
   body: string;
   contactId?: string | null;
+  gmailThreadId?: string | null;
+  inReplyTo?: string | null;
   opportunityId: string;
   source: string;
   subject: string;
@@ -287,8 +289,10 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
   const gmailResult = gmailMailbox
     ? await sendGmailEmail({
         body,
+        inReplyTo: input.inReplyTo,
         mailbox: gmailMailbox,
         opportunityId: opportunity.id,
+        providerThreadId: input.gmailThreadId,
         subject,
         to: recipient,
         toName: contactName(opportunity.contact),
@@ -355,7 +359,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
           contactId: created.contactId,
           direction: "OUTBOUND",
           fromAddress: gmailResult.fromEmail,
-          inReplyTo: null,
+          inReplyTo: input.inReplyTo ?? null,
           internetMessageId: gmailResult.internetMessageId,
           mailboxId: gmailResult.mailboxId,
           metadata: {

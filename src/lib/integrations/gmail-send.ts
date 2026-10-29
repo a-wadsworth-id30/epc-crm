@@ -76,24 +76,30 @@ export async function findGmailMailboxForSend({
 
 export async function sendGmailEmail({
   body,
+  inReplyTo,
   mailbox,
   opportunityId,
+  providerThreadId: requestedThreadId,
   subject,
   to,
   toName,
 }: {
   body: string;
+  inReplyTo?: string | null;
   mailbox: NonNullable<Awaited<ReturnType<typeof findGmailMailboxForSend>>>;
   opportunityId: string;
+  providerThreadId?: string | null;
   subject: string;
   to: string;
   toName?: string | null;
 }) {
-  const threadLink = await prisma.emailThreadLink.findFirst({
-    where: { mailboxId: mailbox.id, opportunityId },
-    orderBy: { updatedAt: "desc" },
-    select: { providerThreadId: true },
-  });
+  const threadLink = requestedThreadId
+    ? null
+    : await prisma.emailThreadLink.findFirst({
+        where: { mailboxId: mailbox.id, opportunityId },
+        orderBy: { updatedAt: "desc" },
+        select: { providerThreadId: true },
+      });
   const messageId = `<${crypto.randomUUID()}@${domainForAddress(mailbox.emailAddress)}>`;
   const from = mailbox.displayName
     ? `${encodeHeader(mailbox.displayName)} <${mailbox.emailAddress}>`
@@ -106,6 +112,12 @@ export async function sendGmailEmail({
     `To: ${recipient}`,
     `Subject: ${encodeHeader(subject)}`,
     `Message-ID: ${messageId}`,
+    ...(inReplyTo
+      ? [
+          `In-Reply-To: ${inReplyTo.replace(/[\r\n]+/g, " ")}`,
+          `References: ${inReplyTo.replace(/[\r\n]+/g, " ")}`,
+        ]
+      : []),
     `Date: ${new Date().toUTCString()}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
@@ -117,7 +129,7 @@ export async function sendGmailEmail({
   const response = await id30AuthBrokerRequest({
     body: {
       raw: base64Url(raw),
-      threadId: threadLink?.providerThreadId ?? null,
+      threadId: requestedThreadId ?? threadLink?.providerThreadId ?? null,
     },
     connectionId: mailbox.authConnectionId,
     method: "POST",
