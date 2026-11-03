@@ -2013,7 +2013,10 @@ export default function SaleDetailAIWorkspace({
                   <SaleConversationThread
                     communications={communications}
                     embedded
-                    onReply={() => setIsComposerOpen(true)}
+                    onReply={(channel = "email") => {
+                      setSelectedChannel(channel);
+                      setIsComposerOpen(true);
+                    }}
                     saleId={saleId}
                     sendMailboxes={sendMailboxes}
                     totalCount={communicationsCount}

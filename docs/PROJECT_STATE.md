@@ -104,8 +104,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   conversation. The linked email is visibly presented as a fallback only when
   the provider omitted its sender address. The same direction inference is
   applied during import so later syncs correct the stored direction.
-- Linked inbound emails in Inbox and Sales > Conversation include **Reply with
-  AI** beside the manual reply action. It opens the normal editable reply form,
+- Linked inbound emails in Inbox and Sales > Conversation use one consistent
+  **Reply** action and include **Reply with AI** beside it. Sent emails do not
+  show reply controls. The AI action opens the normal editable reply form,
   keeps the existing mailbox, recipient, subject and thread safeguards, and
   drafts against the selected email plus the wider lead history. AI never
   sends the reply automatically.
@@ -1218,11 +1219,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   sender name but no usable address. The user must enter a valid recipient,
   normal sale/contact send permissions still apply, and the confirmed address
   is stored on the source message only after a successful reply.
-- Inbox and sale Conversation expose **Reply in CRM** for every linked email
-  enquiry, not only rows with complete Gmail thread metadata. Gmail messages
-  retain exact thread replies when mailbox/thread IDs exist; MailerSend and
-  other imported email enquiries use the normal authorised sale-email delivery
-  path.
+- Inbox and sale Conversation expose **Reply** for linked inbound email
+  enquiries, including rows without complete Gmail thread metadata. Gmail
+  messages retain exact thread replies when mailbox/thread IDs exist;
+  MailerSend and other imported email enquiries use the normal authorised
+  sale-email delivery path. Outbound emails do not expose reply controls.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

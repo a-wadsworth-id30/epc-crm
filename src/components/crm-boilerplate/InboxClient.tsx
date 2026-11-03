@@ -218,6 +218,9 @@ export default function InboxClient({
     selectedId && !selectedDetail && !detailError,
   );
   const selectedMessage = selectedDetail ?? selectedSummary;
+  const canReplyToSelectedEmail = Boolean(
+    selectedMessage?.opportunity && selectedMessage.direction === "INBOUND",
+  );
   const resolvedReplyRecipient = selectedMessage
     ? inboxReplyRecipient({
         ...selectedMessage,
@@ -305,7 +308,7 @@ export default function InboxClient({
   }
 
   function openReplyComposer() {
-    if (!selectedMessage?.opportunity) return;
+    if (!canReplyToSelectedEmail || !selectedMessage?.opportunity) return;
 
     setReplyError(null);
     setReplyMailboxId(
@@ -321,7 +324,7 @@ export default function InboxClient({
   }
 
   async function draftReplyWithAI() {
-    if (!selectedMessage?.opportunity) return;
+    if (!canReplyToSelectedEmail || !selectedMessage?.opportunity) return;
 
     openReplyComposer();
     setReplyBody("");
@@ -790,15 +793,11 @@ export default function InboxClient({
                             : "Assign to sale"}
                         </button>
                       ) : null}
-                      {selectedMessage.opportunity ? (
+                      {canReplyToSelectedEmail ? (
                         <button
                           className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
-                          disabled={!selectedMessage.opportunity || isReplying}
-                          title={
-                            selectedMessage.opportunity
-                              ? "Reply using the CRM's connected email delivery"
-                              : "Assign this Gmail conversation to a sale before replying"
-                          }
+                          disabled={isReplying}
+                          title="Reply using the CRM's connected email delivery"
                           type="button"
                           onClick={() =>
                             replyOpen
@@ -806,12 +805,10 @@ export default function InboxClient({
                               : openReplyComposer()
                           }
                         >
-                          {selectedMessage.opportunity
-                            ? "Reply in CRM"
-                            : "Assign to sale to reply"}
+                          Reply
                         </button>
                       ) : null}
-                      {selectedMessage.opportunity ? (
+                      {canReplyToSelectedEmail ? (
                         <button
                           className="ai-gradient-button inline-flex h-10 rounded-lg p-[2px] shadow-sm shadow-cyan-100 disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none"
                           disabled={isDraftingAI || isReplying}
@@ -828,7 +825,7 @@ export default function InboxClient({
                       ) : null}
                     </div>
 
-                    {replyOpen && selectedMessage.opportunity ? (
+                    {replyOpen && canReplyToSelectedEmail ? (
                       <form
                         className="border-t border-gray-100 bg-gray-50/70 px-5 py-5 dark:border-gray-800 dark:bg-white/[0.02]"
                         onSubmit={(event) => {

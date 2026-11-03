@@ -52,7 +52,7 @@ export type SaleConversationThreadProps = {
   embedded?: boolean;
   emptyLabel?: string;
   helpText?: string;
-  onReply?: () => void;
+  onReply?: (channel?: "email" | "phone" | "sms") => void;
   saleId?: string;
   sendMailboxes?: EmailMailboxOption[];
   title?: string;
@@ -461,6 +461,24 @@ function actionIcon(channel: string, hasRecording: boolean) {
 function canReplyToCommunication(communication: SaleConversationItem) {
   if (communication.direction !== "INBOUND") return false;
   return ["EMAIL", "PHONE", "SMS", "WHATSAPP"].includes(communication.channel);
+}
+
+function replyChannel(communication: SaleConversationItem) {
+  if (communication.channel === "PHONE") return "phone" as const;
+  if (
+    communication.channel === "SMS" ||
+    communication.channel === "WHATSAPP"
+  ) {
+    return "sms" as const;
+  }
+  return "email" as const;
+}
+
+function replyLabel(communication: SaleConversationItem) {
+  if (communication.channel === "PHONE") return "Call back";
+  if (communication.channel === "WHATSAPP") return "Reply by WhatsApp";
+  if (communication.channel === "SMS") return "Reply by SMS";
+  return "Reply";
 }
 
 export default function SaleConversationThread({
@@ -969,7 +987,9 @@ export default function SaleConversationThread({
                 );
                 const externalHref =
                   recordingUrl || pageHref || filePreviewUrl;
-                const showEmailReplyAction = Boolean(communication.emailReply);
+                const showEmailReplyAction =
+                  Boolean(communication.emailReply) &&
+                  displayDirection === "INBOUND";
                 const showAIReplyAction =
                   showEmailReplyAction &&
                   Boolean(saleId) &&
@@ -977,7 +997,9 @@ export default function SaleConversationThread({
                 const showReplyAction =
                   !showEmailReplyAction &&
                   Boolean(onReply) &&
-                  canReplyToCommunication(communication);
+                  canReplyToCommunication(communication) &&
+                  (communication.channel !== "EMAIL" ||
+                    displayDirection === "INBOUND");
                 const hasFooterActions =
                   canShowFullEmail ||
                   showEmailReplyAction ||
@@ -1217,7 +1239,7 @@ export default function SaleConversationThread({
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 text-sm font-semibold text-brand-600 shadow-theme-xs transition hover:bg-brand-50 dark:border-brand-900/60 dark:bg-gray-950 dark:text-brand-300 dark:hover:bg-brand-900/20"
                               >
                                 <Reply className="h-4 w-4" />
-                                Reply in CRM
+                                Reply
                               </button>
                             ) : null}
                             {showAIReplyAction ? (
@@ -1242,11 +1264,13 @@ export default function SaleConversationThread({
                             {showReplyAction ? (
                               <button
                                 type="button"
-                                onClick={onReply}
+                                onClick={() =>
+                                  onReply?.(replyChannel(communication))
+                                }
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 text-sm font-semibold text-brand-600 shadow-theme-xs transition hover:bg-brand-50 dark:border-brand-900/60 dark:bg-gray-950 dark:text-brand-300 dark:hover:bg-brand-900/20"
                               >
                                 <Reply className="h-4 w-4" />
-                                Reply
+                                {replyLabel(communication)}
                               </button>
                             ) : null}
                             {opportunityId ? (

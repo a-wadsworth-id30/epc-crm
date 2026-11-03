@@ -794,7 +794,10 @@ export default function ContactConversationWorkspace({
                     embedded
                     helpText="Combines the customer's communication history across all linked leads, including calls, emails, SMS and tracked website touchpoints."
                     emptyLabel="No customer conversation yet. Calls, SMS, email and website activity will appear here once linked to this contact."
-                    onReply={() => setIsComposerOpen(true)}
+                    onReply={(channel = "email") => {
+                      setSelectedChannel(channel);
+                      setIsComposerOpen(true);
+                    }}
                     totalCount={totalCommunicationCount}
                   />
                 ) : null}
