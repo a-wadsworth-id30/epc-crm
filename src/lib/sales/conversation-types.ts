@@ -36,6 +36,7 @@ export type SaleConversationItem = {
   metadata: unknown;
   emailReply?: {
     emailMessageId: string;
+    mailboxId: string | null;
     recipient: string | null;
     subject: string;
   } | null;

@@ -49,6 +49,7 @@ import {
 } from "@/lib/actions/sales-documents";
 import { documentUploadTypeDefinitions } from "@/lib/document-library";
 import { realtimeTopics } from "@/lib/realtime/topic-names";
+import type { EmailMailboxOption } from "@/lib/inbox/types";
 import {
   saleNoteMentionHandleCandidates,
   type SaleNoteMentionUser,
@@ -121,6 +122,7 @@ type SaleDetailAIWorkspaceProps = {
   };
   communications: SaleConversationItem[];
   communicationsCount: number;
+  sendMailboxes: EmailMailboxOption[];
   contactId: string | null;
   automationPanel: React.ReactNode;
   documents: SaleDocument[];
@@ -1482,6 +1484,7 @@ export default function SaleDetailAIWorkspace({
   sale,
   communications,
   communicationsCount,
+  sendMailboxes,
   contactId,
   automationPanel,
   documents,
@@ -2012,6 +2015,7 @@ export default function SaleDetailAIWorkspace({
                     embedded
                     onReply={() => setIsComposerOpen(true)}
                     saleId={saleId}
+                    sendMailboxes={sendMailboxes}
                     totalCount={communicationsCount}
                   />
                 ) : null}

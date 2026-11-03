@@ -116,6 +116,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   contact email surface a warning. Successful overrides create a compact
   `email.reply.recipient_overridden` audit event without storing message body
   content.
+- Reply composers list only connected, send-enabled `EmailMailbox` rows the
+  current user can send from. The source mailbox is selected by default so an
+  exact Gmail thread is reused only inside the mailbox that owns it. Choosing a
+  different authorised mailbox clears provider threading for the send and
+  records `email.reply.sender_overridden`; server-side mailbox access is always
+  revalidated before delivery.
 - Sale-conversation email serialization includes the provider `From` name.
   Outbound communications with a CRM user are displayed as CRM sends; imported
   Gmail/provider sent mail uses its actual sender name or address and carries a

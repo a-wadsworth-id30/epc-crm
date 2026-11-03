@@ -23,10 +23,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
+import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import type { EmailMailboxOption } from "@/lib/inbox/types";
 import {
   emailDisplayDirection,
   emailOriginLabel,
@@ -51,6 +53,7 @@ export type SaleConversationThreadProps = {
   helpText?: string;
   onReply?: () => void;
   saleId?: string;
+  sendMailboxes?: EmailMailboxOption[];
   title?: string;
   totalCount?: number;
 };
@@ -467,6 +470,7 @@ export default function SaleConversationThread({
   helpText = "Shows the sales activity thread for this opportunity, including calls, SMS and email history in one timeline.",
   onReply,
   saleId,
+  sendMailboxes = [],
   title = "Conversation",
   totalCount,
 }: SaleConversationThreadProps) {
@@ -485,6 +489,7 @@ export default function SaleConversationThread({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [replyMailboxId, setReplyMailboxId] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -512,6 +517,7 @@ export default function SaleConversationThread({
           replyBody,
           replyRecipient,
           replySubject,
+          replyMailboxId || undefined,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -519,6 +525,7 @@ export default function SaleConversationThread({
         }
 
         setReplyBody("");
+        setReplyMailboxId("");
         setReplyRecipient("");
         setReplySubject("");
         setReplySuccess(result.message);
@@ -1145,6 +1152,16 @@ export default function SaleConversationThread({
                                       : communication.id,
                                   );
                                   setReplyBody("");
+                                  setReplyMailboxId(
+                                    sendMailboxes.some(
+                                      (mailbox) =>
+                                        mailbox.id ===
+                                        communication.emailReply?.mailboxId,
+                                    )
+                                      ? (communication.emailReply?.mailboxId ??
+                                          "")
+                                      : (sendMailboxes[0]?.id ?? ""),
+                                  );
                                   setReplyRecipient(
                                     communication.emailReply?.recipient ?? "",
                                   );
@@ -1215,7 +1232,23 @@ export default function SaleConversationThread({
                               sendGmailReply(communication);
                             }}
                           >
-                            <div className="grid gap-3 text-sm sm:grid-cols-2">
+                            <div className="grid gap-3 text-sm lg:grid-cols-3">
+                              {sendMailboxes.length ? (
+                                <EmailMailboxSenderField
+                                  disabled={isGmailReplying}
+                                  id={`sale-gmail-mailbox-${communication.id}`}
+                                  mailboxes={sendMailboxes}
+                                  onChange={(value) => {
+                                    setReplyMailboxId(value);
+                                    setReplyError(null);
+                                    setReplySuccess(null);
+                                  }}
+                                  originalMailboxId={
+                                    communication.emailReply.mailboxId
+                                  }
+                                  value={replyMailboxId}
+                                />
+                              ) : null}
                               <LockedEmailRecipientField
                                 disabled={isGmailReplying}
                                 id={`sale-gmail-recipient-${communication.id}`}
@@ -1292,6 +1325,7 @@ export default function SaleConversationThread({
                                 onClick={() => {
                                   setReplyingToId(null);
                                   setReplyBody("");
+                                  setReplyMailboxId("");
                                   setReplyRecipient("");
                                   setReplySubject("");
                                   setReplyError(null);

@@ -21,6 +21,7 @@ function inboxRow(
     id: "message-1",
     inboundRouteId: null,
     mailbox: { emailAddress: "craig@epc-improvements.co.uk" },
+    mailboxId: "mailbox-1",
     metadata: null,
     opportunity: null,
     provider: "gmail",

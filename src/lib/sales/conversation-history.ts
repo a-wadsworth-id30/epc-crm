@@ -244,6 +244,7 @@ function serializeCommunication(
     communication.emailMessage?.opportunityId
       ? {
           emailMessageId: communication.emailMessage.id,
+          mailboxId: communication.emailMessage.mailboxId,
           recipient,
           subject: inboxReplySubject(communication.emailMessage.subject),
         }

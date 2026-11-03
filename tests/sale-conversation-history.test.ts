@@ -244,6 +244,7 @@ describe("sale conversation history", () => {
     assert.ok(result);
     assert.deepEqual(result.items[0]?.emailReply, {
       emailMessageId: "email-message-1",
+      mailboxId: null,
       recipient: "reply@example.com",
       subject: "Re: Email 1",
     });
