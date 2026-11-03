@@ -67,6 +67,7 @@ export type ContactConversationWorkspaceProps = {
   relationshipPanel: ReactNode;
   relationshipStatusLabel: string;
   relationshipTechnologyCount: number;
+  sendMailboxes: NonNullable<SaleConversationThreadProps["sendMailboxes"]>;
   recipientEmail: string | null;
   recipientEmails: ContactSummaryMethod[];
   recipientPhone: string | null;
@@ -421,6 +422,7 @@ export default function ContactConversationWorkspace({
   relationshipPanel,
   relationshipStatusLabel,
   relationshipTechnologyCount,
+  sendMailboxes,
   recipientEmail,
   recipientEmails,
   recipientPhone,
@@ -798,6 +800,7 @@ export default function ContactConversationWorkspace({
                       setSelectedChannel(channel);
                       setIsComposerOpen(true);
                     }}
+                    sendMailboxes={sendMailboxes}
                     totalCount={totalCommunicationCount}
                   />
                 ) : null}

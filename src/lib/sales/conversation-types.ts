@@ -24,6 +24,7 @@ export type SaleConversationItem = {
   emailHtmlBody?: string | null;
   emailIdentity?: string | null;
   emailProvider?: string | null;
+  focusCommunicationId?: string | null;
   fullEmailBody?: string | null;
   fullEmailHtmlBody?: string | null;
   fromAddress: string | null;
@@ -34,6 +35,7 @@ export type SaleConversationItem = {
   userName: string | null;
   contactName: string | null;
   metadata: unknown;
+  saleId?: string | null;
   emailReply?: {
     emailMessageId: string;
     mailboxId: string | null;

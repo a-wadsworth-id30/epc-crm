@@ -379,6 +379,13 @@ fresh and do not replace the sale-level cached AI guidance. The normal mailbox,
 recipient and subject safeguards still apply, and the user must explicitly
 send the draft.
 
+Contact Conversation reuses the same serialized email cards and authorised
+Gmail mailbox list. Each contact email retains its own linked sale ID and, when
+available, `SalesCommunication` ID so **Open lead**, **Reply** and **Reply with
+AI** act on the correct sale even though the contact timeline aggregates
+multiple leads. The shared sanitized latest/full body views also provide the
+same **Show all** / **Show less** behavior as Inbox and Sales > Conversation.
+
 Main files:
 
 - `src/lib/integrations/gmail.ts`
