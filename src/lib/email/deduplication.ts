@@ -88,11 +88,19 @@ function occurredAtMillis(value: Date | string) {
 function strictContentKey(candidate: EmailDuplicateCandidate) {
   return [
     candidate.direction,
-    firstEmailAddress(candidate.fromAddress) ?? "",
-    firstEmailAddress(candidate.toAddress) ?? "",
     normalizeText(candidate.subject),
     normalizeText(candidate.body),
   ].join("|");
+}
+
+function addressesAreCompatible(
+  left: string | null | undefined,
+  right: string | null | undefined,
+) {
+  const leftAddress = firstEmailAddress(left);
+  const rightAddress = firstEmailAddress(right);
+
+  return !leftAddress || !rightAddress || leftAddress === rightAddress;
 }
 
 export function emailMessagesAreDuplicates(
@@ -105,6 +113,8 @@ export function emailMessagesAreDuplicates(
 
   if (!normalizeText(left.body) || !normalizeText(right.body)) return false;
   if (strictContentKey(left) !== strictContentKey(right)) return false;
+  if (!addressesAreCompatible(left.fromAddress, right.fromAddress)) return false;
+  if (!addressesAreCompatible(left.toAddress, right.toAddress)) return false;
 
   return (
     Math.abs(occurredAtMillis(left.occurredAt) - occurredAtMillis(right.occurredAt)) <=

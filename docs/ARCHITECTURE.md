@@ -117,7 +117,9 @@ Core Prisma models are in `prisma/schema.prisma`.
   Pipedrive/Gmail cards without deleting stored records, while Gmail import can
   transfer the shared `SalesCommunication` link to the richer Gmail row and
   leave the provider archive row intact. The email dedupe maintenance command
-  is audit-only.
+  is audit-only. Its strict content fallback treats a missing provider address
+  as compatible, but never collapses records carrying different RFC
+  `Message-ID` values.
 - `CallLog`: provider-neutral phone call record.
 - `CallQueueEntry`: inbound Twilio queue state.
 - `Task`: follow-up work, including missed-call tasks.
