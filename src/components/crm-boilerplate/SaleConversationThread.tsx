@@ -1220,9 +1220,7 @@ export default function SaleConversationThread({
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
                               >
                                 <Mail className="h-4 w-4" />
-                                {isShowingFullEmail
-                                  ? "Show latest reply"
-                                  : "Show full email"}
+                                {isShowingFullEmail ? "Show less" : "Show all"}
                               </button>
                             ) : null}
                             {showEmailReplyAction ? (

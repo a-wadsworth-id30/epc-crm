@@ -1205,8 +1205,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `email.reply.sender_overridden` audit event without storing body content.
   Inbox and
   sale Conversation views show the complete email by default and expose a
-  **Show latest reply** compact option when the stored Gmail HTML contains
-  quoted or forwarded history. Both views render an allow-listed rich-text version when
+  consistent **Show all** / **Show less** toggle when the stored Gmail HTML
+  contains quoted or forwarded history. Both views render an allow-listed rich-text version when
   Gmail supplied HTML, preserving basic emphasis, lists, links, quotes and
   tables while removing scripts, event handlers, forms, remote images and
   unsafe URL schemes. If provider HTML cannot be split safely at its quoted
