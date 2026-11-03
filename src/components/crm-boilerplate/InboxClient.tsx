@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { ExternalLink, Mail, Reply } from "lucide-react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
+import {
+  conversationEmailActionButtonClass,
+  conversationEmailAIButtonClass,
+  conversationEmailAIButtonInnerClass,
+  conversationEmailReplyButtonClass,
+} from "@/components/crm-boilerplate/conversationEmailActionStyles";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
@@ -12,7 +19,6 @@ import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
 import {
   InboxAltIcon,
-  MailIcon,
   MoreDotIcon,
   SearchIcon,
   StarLine,
@@ -747,22 +753,6 @@ export default function InboxClient({
                           {detailError}
                         </p>
                       ) : null}
-                      {canShowFullEmail ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-white/[0.03]">
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                            {showFullEmail
-                              ? "Showing the complete email, including quoted history."
-                              : "Showing the latest reply only."}
-                          </span>
-                          <button
-                            className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400"
-                            type="button"
-                            onClick={() => setShowFullEmail((current) => !current)}
-                          >
-                            {showFullEmail ? "Show less" : "Show all"}
-                          </button>
-                        </div>
-                      ) : null}
                       <SanitizedEmailBody
                         html={displayedEmailHtml}
                         text={displayedEmailBody}
@@ -770,30 +760,19 @@ export default function InboxClient({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-                      {selectedMessage.opportunity ? (
-                        <Link
-                          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600"
-                          href={`/sales/${selectedMessage.opportunity.id}`}
-                        >
-                          <MailIcon className="h-4 w-4" />
-                          Open lead
-                        </Link>
-                      ) : null}
-                      {selectedMessage.provider === "gmail" ? (
+                      {canShowFullEmail ? (
                         <button
-                          className="inline-flex h-10 items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-500/10"
-                          disabled={isPending || isAssigning}
+                          className={conversationEmailActionButtonClass}
                           type="button"
-                          onClick={openAssignment}
+                          onClick={() => setShowFullEmail((current) => !current)}
                         >
-                          {selectedMessage.opportunity
-                            ? "Move to another sale"
-                            : "Assign to sale"}
+                          <Mail className="h-4 w-4" />
+                          {showFullEmail ? "Show less" : "Show all"}
                         </button>
                       ) : null}
                       {canReplyToSelectedEmail ? (
                         <button
-                          className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+                          className={conversationEmailReplyButtonClass}
                           disabled={isReplying}
                           title="Reply using the CRM's connected email delivery"
                           type="button"
@@ -803,22 +782,46 @@ export default function InboxClient({
                               : openReplyComposer()
                           }
                         >
+                          <Reply className="h-4 w-4" />
                           Reply
                         </button>
                       ) : null}
                       {canReplyToSelectedEmail ? (
                         <button
-                          className="ai-gradient-button inline-flex h-10 rounded-lg p-[2px] shadow-sm shadow-cyan-100 disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none"
+                          className={conversationEmailAIButtonClass}
                           disabled={isDraftingAI || isReplying}
                           type="button"
                           onClick={() => void draftReplyWithAI()}
                         >
-                          <span className="inline-flex h-full items-center gap-2 rounded-[6px] bg-white px-4 text-sm font-semibold text-gray-900 dark:bg-gray-950 dark:text-white">
+                          <span
+                            className={conversationEmailAIButtonInnerClass}
+                          >
                             <AISparkIcon />
                             {isDraftingAI
                               ? "Drafting reply..."
                               : "Reply with AI"}
                           </span>
+                        </button>
+                      ) : null}
+                      {selectedMessage.opportunity ? (
+                        <Link
+                          className={conversationEmailActionButtonClass}
+                          href={`/sales/${selectedMessage.opportunity.id}`}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Open lead
+                        </Link>
+                      ) : null}
+                      {selectedMessage.provider === "gmail" ? (
+                        <button
+                          className={conversationEmailActionButtonClass}
+                          disabled={isPending || isAssigning}
+                          type="button"
+                          onClick={openAssignment}
+                        >
+                          {selectedMessage.opportunity
+                            ? "Move to another sale"
+                            : "Assign to sale"}
                         </button>
                       ) : null}
                     </div>

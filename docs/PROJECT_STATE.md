@@ -1207,14 +1207,17 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   remains the default for Gmail replies. Selecting another account deliberately
   starts a new Gmail conversation, is called out in the composer and creates an
   `email.reply.sender_overridden` audit event without storing body content.
-  Inbox and
-  sale Conversation views show the complete email by default and expose a
+  Inbox, sale Conversation and contact Conversation views show the complete
+  email by default and expose a
   consistent **Show all** / **Show less** toggle when the stored Gmail HTML
-  contains quoted or forwarded history. Both views render an allow-listed rich-text version when
+  contains quoted or forwarded history. All three views render an allow-listed rich-text version when
   Gmail supplied HTML, preserving basic emphasis, lists, links, quotes and
   tables while removing scripts, event handlers, forms, remote images and
   unsafe URL schemes. If provider HTML cannot be split safely at its quoted
   history marker, the optional latest view falls back to cleaned plain text.
+  Their email-card actions share the same styling and order: full-email toggle,
+  **Reply**, **Reply with AI**, then **Open lead** when relevant. Inbox-only
+  assignment controls follow those shared actions.
 - Gmail sync normalizes sender and recipient headers, including `Reply-To` and
   connected-mailbox fallbacks when Gmail omits `From` or `To`. Inbox display
   and reply actions also recover participant addresses for older incomplete

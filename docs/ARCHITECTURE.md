@@ -379,6 +379,11 @@ fresh and do not replace the sale-level cached AI guidance. The normal mailbox,
 recipient and subject safeguards still apply, and the user must explicitly
 send the draft.
 
+Inbox, Sales Conversation and Contact Conversation share the email action
+styles and sequence: **Show all** / **Show less**, **Reply**, **Reply with AI**,
+then **Open lead** when the current context needs that link. Inbox-only thread
+assignment controls follow the shared actions.
+
 Contact Conversation reuses the same serialized email cards and authorised
 Gmail mailbox list. Each contact email retains its own linked sale ID and, when
 available, `SalesCommunication` ID so **Open lead**, **Reply** and **Reply with
