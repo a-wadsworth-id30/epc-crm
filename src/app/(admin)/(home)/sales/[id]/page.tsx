@@ -60,7 +60,7 @@ import {
   latestEmailReplyText,
   toEmailPlainText,
 } from "@/lib/email/plain-text";
-import { sanitizedEmailHtml } from "@/lib/email/sanitized-html";
+import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import {
@@ -2176,6 +2176,11 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             text: communication.emailMessage.textBody,
           })
         : body;
+      const emailHtmlViews = sanitizedEmailHtmlViews({
+        fullText: completeEmailBody,
+        html: communication.emailMessage?.htmlBody,
+        latestText: latestEmailBody,
+      });
       const recipient = communication.emailMessage
         ? inboxReplyRecipient(communication.emailMessage)
         : null;
@@ -2201,9 +2206,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         summary: toEmailPlainText(communication.summary),
         body: latestEmailBody || null,
         emailHtmlBody:
-          communication.channel === "EMAIL"
-            ? sanitizedEmailHtml(communication.emailMessage?.htmlBody)
-            : null,
+          communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
         fullEmailBody:
           communication.channel === "EMAIL" &&
           completeEmailBody &&
@@ -2211,11 +2214,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             ? completeEmailBody
             : null,
         fullEmailHtmlBody:
-          communication.channel === "EMAIL"
-            ? sanitizedEmailHtml(communication.emailMessage?.htmlBody, {
-                includeQuotedHistory: true,
-              })
-            : null,
+          communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
         fromAddress: communication.fromAddress,
         gmailReply,
         toAddress: communication.toAddress,

@@ -8,7 +8,7 @@ import {
   latestEmailReplyText,
   toEmailPlainText,
 } from "@/lib/email/plain-text";
-import { sanitizedEmailHtml } from "@/lib/email/sanitized-html";
+import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { prisma } from "@/lib/prisma";
@@ -213,6 +213,11 @@ function serializeCommunication(
         text: communication.emailMessage.textBody,
       })
     : body;
+  const emailHtmlViews = sanitizedEmailHtmlViews({
+    fullText: completeEmailBody,
+    html: communication.emailMessage?.htmlBody,
+    latestText: latestEmailBody,
+  });
   const recipient = communication.emailMessage
     ? inboxReplyRecipient(communication.emailMessage)
     : null;
@@ -236,9 +241,7 @@ function serializeCommunication(
     contactName: contactName(communication.contact),
     direction: communication.direction,
     emailHtmlBody:
-      communication.channel === "EMAIL"
-        ? sanitizedEmailHtml(communication.emailMessage?.htmlBody)
-        : null,
+      communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
     fromAddress: communication.fromAddress,
     fullEmailBody:
       communication.channel === "EMAIL" &&
@@ -247,11 +250,7 @@ function serializeCommunication(
         ? completeEmailBody
         : null,
     fullEmailHtmlBody:
-      communication.channel === "EMAIL"
-        ? sanitizedEmailHtml(communication.emailMessage?.htmlBody, {
-            includeQuotedHistory: true,
-          })
-        : null,
+      communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
     gmailReply,
     id: communication.id,
     metadata: communication.metadata,
