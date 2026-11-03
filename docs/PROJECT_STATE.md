@@ -94,6 +94,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   email cards show their CRM/provider origin. Imported email participant routes
   prefer stored `From` and `To` names/addresses before the linked lead identity,
   preventing a lead fallback from replacing a conflicting provider recipient.
+  If a provider omits the recipient and the linked lead matches the known
+  sender, the route reports **Recipient unavailable** rather than fabricating a
+  self-to-self conversation.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

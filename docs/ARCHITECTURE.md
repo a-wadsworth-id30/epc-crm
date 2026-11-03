@@ -117,7 +117,9 @@ Core Prisma models are in `prisma/schema.prisma`.
   Gmail/provider sent mail uses its actual sender name or address and carries a
   provider-origin badge instead of being presented as CRM-authored. Participant
   routes prefer provider `From`/`To` display names and addresses; the linked
-  lead is only a fallback when the relevant provider identity is missing.
+  lead is only a fallback when the relevant provider identity is missing and
+  does not conflict with the known sender. Conflicting missing-recipient data is
+  displayed as unavailable instead of inventing a self-route.
 - `src/lib/email/deduplication.ts` owns provider-neutral email identity and
   strict fingerprint matching. Conversation rendering collapses duplicate
   Pipedrive/Gmail cards without deleting stored records, while Gmail import can

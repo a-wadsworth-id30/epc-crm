@@ -17,14 +17,14 @@ function message(
     emailProvider: "gmail",
     fromAddress: "a.wadsworth@id30.com",
     fromName: "Adam Wadsworth",
-    toAddress: "craig@epc-improvements.co.uk",
+    toAddress: null,
     userName: null,
     ...overrides,
   };
 }
 
-test("imported Gmail sent mail uses the real sender and Gmail origin", () => {
-  const imported = message();
+test("imported Gmail sent mail uses a stored recipient before the linked lead", () => {
+  const imported = message({ toAddress: "craig@epc-improvements.co.uk" });
 
   assert.equal(emailOriginLabel(imported), "Gmail");
   assert.equal(
@@ -34,7 +34,10 @@ test("imported Gmail sent mail uses the real sender and Gmail origin", () => {
 });
 
 test("CRM-composed Gmail mail remains identified as CRM", () => {
-  const crmComposed = message({ userName: "Adam Wadsworth" });
+  const crmComposed = message({
+    toAddress: "craig@epc-improvements.co.uk",
+    userName: "Adam Wadsworth",
+  });
 
   assert.equal(emailOriginLabel(crmComposed), "CRM");
   assert.equal(
@@ -45,7 +48,12 @@ test("CRM-composed Gmail mail remains identified as CRM", () => {
 
 test("imported sent mail falls back to the sender address", () => {
   assert.equal(
-    outboundEmailRoute(message({ fromName: null })),
+    outboundEmailRoute(
+      message({
+        fromName: null,
+        toAddress: "craig@epc-improvements.co.uk",
+      }),
+    ),
     "a.wadsworth@id30.com → craig@epc-improvements.co.uk",
   );
 });
@@ -67,6 +75,20 @@ test("imported received mail uses stored participants before the linked lead", (
 test("stored To display name is preferred over its address", () => {
   assert.equal(
     emailParticipantRoute(message({ toName: "Craig McAllister" })),
+    "Adam Wadsworth → Craig McAllister",
+  );
+});
+
+test("a linked lead matching the sender is not fabricated as the recipient", () => {
+  assert.equal(
+    emailParticipantRoute(message()),
+    "Adam Wadsworth → Recipient unavailable",
+  );
+});
+
+test("a distinct linked lead remains a valid last-resort recipient", () => {
+  assert.equal(
+    emailParticipantRoute(message({ contactName: "Craig McAllister" })),
     "Adam Wadsworth → Craig McAllister",
   );
 });

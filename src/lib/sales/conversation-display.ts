@@ -20,6 +20,17 @@ export function emailOriginLabel(message: EmailConversationDisplay) {
   return message.emailProvider ?? null;
 }
 
+function sameParticipant(
+  left: string | null | undefined,
+  right: string | null | undefined,
+) {
+  const normalizedLeft = left?.trim().toLocaleLowerCase();
+  const normalizedRight = right?.trim().toLocaleLowerCase();
+  return Boolean(
+    normalizedLeft && normalizedRight && normalizedLeft === normalizedRight,
+  );
+}
+
 export function emailParticipantRoute(message: EmailConversationDisplay) {
   if (message.channel !== "EMAIL") return null;
 
@@ -31,11 +42,17 @@ export function emailParticipantRoute(message: EmailConversationDisplay) {
         (message.direction === "INBOUND" ? message.contactName : null) ||
         emailOriginLabel(message) ||
         "Mailbox";
+  const contactRecipient =
+    message.direction === "OUTBOUND" &&
+    !sameParticipant(message.contactName, message.fromName) &&
+    !sameParticipant(message.contactName, message.fromAddress)
+      ? message.contactName
+      : null;
   const recipient =
     message.toName ||
     message.toAddress ||
-    (message.direction === "OUTBOUND" ? message.contactName : null) ||
-    "CRM";
+    contactRecipient ||
+    (message.direction === "INBOUND" ? "CRM" : "Recipient unavailable");
 
   return `${sender} → ${recipient}`;
 }
