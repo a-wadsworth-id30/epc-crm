@@ -168,7 +168,7 @@ function formatRole(value: string) {
     .join(" ");
 }
 
-const communicationSelect = {
+export const conversationCommunicationSelect = {
   body: true,
   channel: true,
   contact: { select: { email: true, firstName: true, lastName: true } },
@@ -194,21 +194,25 @@ const communicationSelect = {
       toAddress: true,
     },
   },
+  externalId: true,
   fromAddress: true,
   id: true,
   metadata: true,
   occurredAt: true,
+  opportunity: { select: { title: true } },
+  opportunityId: true,
   subject: true,
   summary: true,
   toAddress: true,
+  updatedAt: true,
   user: { select: { name: true } },
 } satisfies Prisma.SalesCommunicationSelect;
 
 type CommunicationRow = Prisma.SalesCommunicationGetPayload<{
-  select: typeof communicationSelect;
+  select: typeof conversationCommunicationSelect;
 }>;
 
-function serializeCommunication(
+export function serializeConversationCommunication(
   communication: CommunicationRow,
 ): SaleConversationItem {
   const body = toEmailPlainText(communication.body);
@@ -265,6 +269,7 @@ function serializeCommunication(
       ? emailInternetMessageIdentity(communication.emailMessage)
       : null,
     emailProvider: communication.emailMessage?.provider ?? null,
+    focusCommunicationId: communication.id,
     fromAddress:
       communication.emailMessage?.fromAddress ?? communication.fromAddress,
     fromName: communication.emailMessage?.fromName ?? null,
@@ -278,13 +283,115 @@ function serializeCommunication(
       communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
     emailReply,
     id: communication.id,
-    metadata: communication.metadata,
+    metadata: {
+      ...objectValue(communication.metadata),
+      opportunityId: communication.opportunityId,
+      opportunityTitle: communication.opportunity?.title ?? null,
+    },
     occurredAt: communication.occurredAt.toISOString(),
     subject: communication.subject,
     summary: toEmailPlainText(communication.summary),
+    saleId: communication.opportunityId,
     toAddress: communication.emailMessage?.toAddress ?? communication.toAddress,
     toName: emailAddresses?.toName ?? null,
     userName: communication.user?.name ?? null,
+  };
+}
+
+export const conversationEmailMessageSelect = {
+  contact: {
+    select: { email: true, firstName: true, lastName: true },
+  },
+  direction: true,
+  fromAddress: true,
+  fromName: true,
+  headers: true,
+  htmlBody: true,
+  id: true,
+  internetMessageId: true,
+  mailbox: { select: { emailAddress: true } },
+  mailboxId: true,
+  metadata: true,
+  opportunity: { select: { title: true } },
+  opportunityId: true,
+  provider: true,
+  receivedAt: true,
+  salesCommunicationId: true,
+  status: true,
+  subject: true,
+  summary: true,
+  textBody: true,
+  toAddress: true,
+} satisfies Prisma.EmailMessageSelect;
+
+type ConversationEmailMessageRow = Prisma.EmailMessageGetPayload<{
+  select: typeof conversationEmailMessageSelect;
+}>;
+
+export function serializeConversationEmailMessage(
+  message: ConversationEmailMessageRow,
+): SaleConversationItem {
+  const fallback = toEmailPlainText(message.summary) || "Email captured";
+  const completeEmailBody = completeEmailPlainText({
+    fallback,
+    html: message.htmlBody,
+    text: message.textBody,
+  });
+  const latestEmailBody = latestEmailReplyText(completeEmailBody);
+  const emailHtmlViews = sanitizedEmailHtmlViews({
+    fullText: completeEmailBody,
+    html: message.htmlBody,
+    latestText: latestEmailBody,
+  });
+  const emailAddresses = resolveInboxMessageAddresses(message);
+  const recipient = inboxReplyRecipient({
+    contactAddress: message.contact?.email,
+    direction: message.direction,
+    fromAddress: emailAddresses.fromAddress,
+    mailboxAddress: emailAddresses.mailboxAddress,
+    replyToAddress: emailAddresses.replyToAddress,
+    toAddress: emailAddresses.toAddress,
+  });
+
+  return {
+    body: latestEmailBody || null,
+    channel: "EMAIL",
+    contactEmail: message.contact?.email ?? null,
+    contactName: contactName(message.contact),
+    direction: message.direction,
+    emailHtmlBody: emailHtmlViews.latestHtml,
+    emailIdentity: emailInternetMessageIdentity(message),
+    emailProvider: message.provider,
+    emailReply: message.opportunityId
+      ? {
+          emailMessageId: message.id,
+          mailboxId: message.mailboxId,
+          recipient,
+          subject: inboxReplySubject(message.subject),
+        }
+      : null,
+    focusCommunicationId: message.salesCommunicationId,
+    fromAddress: emailAddresses.fromAddress,
+    fromName: message.fromName,
+    fullEmailBody:
+      completeEmailBody && completeEmailBody !== latestEmailBody
+        ? completeEmailBody
+        : null,
+    fullEmailHtmlBody: emailHtmlViews.fullHtml,
+    id: `email-${message.id}`,
+    metadata: {
+      ...objectValue(message.metadata),
+      opportunityId: message.opportunityId,
+      opportunityTitle: message.opportunity?.title ?? null,
+      status: formatRole(message.status),
+    },
+    occurredAt: message.receivedAt.toISOString(),
+    saleId: message.opportunityId,
+    subject: message.subject,
+    summary: fallback,
+    toAddress: emailAddresses.toAddress,
+    toName: emailAddresses.toName,
+    userName: null,
   };
 }
 
@@ -617,10 +724,10 @@ export async function listSaleConversationPage({
       await prisma.salesCommunication.findMany({
         where: { opportunityId: saleId },
         orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
-        select: communicationSelect,
+        select: conversationCommunicationSelect,
       })
     )
-      .map(serializeCommunication)
+      .map(serializeConversationCommunication)
       .filter((item) => conversationItemMatchesQuery(item, normalizedQuery));
     const matchingFiles = pipedriveFileItems.filter((item) =>
       conversationItemMatchesQuery(item, normalizedQuery),
@@ -703,10 +810,10 @@ export async function listSaleConversationPage({
       where: { opportunityId: saleId },
       orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       take,
-      select: communicationSelect,
+      select: conversationCommunicationSelect,
     });
     items = [
-      ...communications.map(serializeCommunication),
+      ...communications.map(serializeConversationCommunication),
       ...pipedriveFileItems.slice(0, take),
       ...websiteItems.slice(0, take),
     ]
@@ -723,9 +830,9 @@ export async function listSaleConversationPage({
       orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       skip,
       take: saleConversationPageSize,
-      select: communicationSelect,
+      select: conversationCommunicationSelect,
     });
-    items = communications.map(serializeCommunication);
+    items = communications.map(serializeConversationCommunication);
   }
 
   return {

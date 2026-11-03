@@ -1031,7 +1031,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   fingerprint so reloads do not regenerate it unless linked history, tone,
   channel or AI context changes. Email/SMS replies from contact pages are
   attached to the latest open linked lead, or the latest linked lead when no
-  open lead exists. Lead
+  open lead exists. Imported email cards keep their individual linked-lead and
+  provider context, so Contact Conversation exposes the same **Show all** /
+  **Show less**, **Open lead**, **Reply** and **Reply with AI** actions as Inbox
+  and Sales > Conversation. AI replies use the selected email's linked sale
+  rather than whichever lead happens to be newest. Lead
   and contact conversation panels open the latest event by default, keep older
   events as compact rows and route the inline Reply action to the existing AI
   composer.

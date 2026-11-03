@@ -50,9 +50,15 @@ import { listRecordCustomerDocumentShares } from "@/lib/customer-document-share-
 import { listRecordCustomerDocumentPortals } from "@/lib/customer-document-portal-list";
 import { listRecordCustomerUploadRequests } from "@/lib/customer-upload-request-list";
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
-import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import { isGeoapifyAddressLookupEnabled } from "@/lib/integrations/geoapify";
+import { listGmailMailboxesForSend } from "@/lib/integrations/gmail-send";
 import { prisma } from "@/lib/prisma";
+import {
+  conversationCommunicationSelect,
+  conversationEmailMessageSelect,
+  serializeConversationCommunication,
+  serializeConversationEmailMessage,
+} from "@/lib/sales/conversation-history";
 import {
   parseSalesDefaults,
   resolveSalesDefaultOwnerId,
@@ -318,7 +324,10 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   const opportunityAccessWhere = salesOpportunityAccessWhere(user);
   const accessibleOpportunityWhere =
     user.role === "ADMIN" ? undefined : opportunityAccessWhere;
-  const settings = await getCrmSettings();
+  const [settings, sendMailboxes] = await Promise.all([
+    getCrmSettings(),
+    listGmailMailboxesForSend({ user }),
+  ]);
   const mergeCandidateWhere: Prisma.ContactWhereInput = {
     AND: [{ id: { not: id } }, contactAccessWhere(user)],
   };
@@ -571,30 +580,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         where: linkedOpportunityWhere,
         orderBy: { occurredAt: "desc" },
         take: 100,
-        select: {
-          body: true,
-          channel: true,
-          direction: true,
-          emailMessage: {
-            select: { id: true },
-          },
-          externalId: true,
-          fromAddress: true,
-          id: true,
-          metadata: true,
-          occurredAt: true,
-          opportunity: {
-            select: { title: true },
-          },
-          opportunityId: true,
-          subject: true,
-          summary: true,
-          toAddress: true,
-          updatedAt: true,
-          user: {
-            select: { name: true },
-          },
-        },
+        select: conversationCommunicationSelect,
       }),
       prisma.callLog.findMany({
         where: contactActivityWhere,
@@ -620,21 +606,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         where: contactActivityWhere,
         orderBy: { receivedAt: "desc" },
         take: 100,
-        select: {
-          direction: true,
-          fromAddress: true,
-          id: true,
-          opportunity: {
-            select: { title: true },
-          },
-          opportunityId: true,
-          receivedAt: true,
-          status: true,
-          subject: true,
-          summary: true,
-          textBody: true,
-          toAddress: true,
-        },
+        select: conversationEmailMessageSelect,
       }),
       prisma.attributionRecord.findMany({
         where: contactActivityWhere,
@@ -848,31 +820,8 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   ];
   const conversationItems: SaleConversationItem[] = [
     ...syncedCommunications.map((communication) => ({
-      id: `communication-${communication.id}`,
-      channel: communication.channel,
-      direction: communication.direction,
-      subject:
-        communication.subject ||
-        `${formatEnumLabel(communication.direction)} ${formatEnumLabel(
-          communication.channel,
-        )}`,
-      summary:
-        toEmailPlainText(communication.summary) ||
-        "Sales communication captured",
-      body:
-        (communication.channel === "EMAIL"
-          ? latestEmailReplyText(communication.body)
-          : toEmailPlainText(communication.body)) || null,
-      fromAddress: communication.fromAddress,
-      toAddress: communication.toAddress,
-      occurredAt: communication.occurredAt.toISOString(),
-      userName: communication.user?.name ?? null,
+      ...serializeConversationCommunication(communication),
       contactName: name,
-      metadata: {
-        ...jsonObject(communication.metadata),
-        opportunityId: communication.opportunityId,
-        opportunityTitle: communication.opportunity.title,
-      },
     })),
     ...calls.map((call) => ({
       id: `call-${call.id}`,
@@ -898,22 +847,8 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     ...emailMessages
       .filter((email) => !communicationEmailIds.has(email.id))
       .map((email) => ({
-        id: `email-${email.id}`,
-        channel: "EMAIL",
-        direction: email.direction,
-        subject: email.subject || `${formatEnumLabel(email.direction)} email`,
-        summary: toEmailPlainText(email.summary) || "Email captured",
-        body: latestEmailReplyText(email.textBody) || null,
-        fromAddress: email.fromAddress,
-        toAddress: email.toAddress,
-        occurredAt: email.receivedAt.toISOString(),
-        userName: null,
+        ...serializeConversationEmailMessage(email),
         contactName: name,
-        metadata: {
-          status: formatEnumLabel(email.status),
-          opportunityId: email.opportunityId,
-          opportunityTitle: email.opportunity?.title,
-        },
       })),
     ...attributionRecords.flatMap((record) =>
       record.touchpoints.map((touchpoint, index) => {
@@ -1302,6 +1237,14 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         relationshipPanel={contactRelationshipPanel}
         relationshipStatusLabel={relationshipStatusLabel}
         relationshipTechnologyCount={relationshipTechnologies.length}
+        sendMailboxes={sendMailboxes.map(
+          ({ displayName, emailAddress, id, purpose }) => ({
+            displayName,
+            emailAddress,
+            id,
+            purpose,
+          }),
+        )}
         recipientEmail={recipientEmail}
         recipientEmails={summaryEmailMethods}
         recipientPhone={recipientPhone}

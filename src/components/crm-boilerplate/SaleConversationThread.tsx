@@ -535,7 +535,12 @@ export default function SaleConversationThread({
   }
 
   async function draftEmailReplyWithAI(communication: SaleConversationItem) {
-    if (!saleId || !communication.emailReply) return;
+    const replySaleId = communication.saleId ?? saleId;
+    if (!replySaleId || !communication.emailReply) return;
+
+    const focusCommunicationId =
+      communication.focusCommunicationId ??
+      (saleId ? communication.id : null);
 
     openEmailReply(communication);
     setReplyBody("");
@@ -546,11 +551,11 @@ export default function SaleConversationThread({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          saleId,
+          saleId: replySaleId,
           preferredChannel: "email",
           forceRefresh: true,
           tone: "professional",
-          focusCommunicationId: communication.id,
+          ...(focusCommunicationId ? { focusCommunicationId } : {}),
         }),
       });
       const payload = (await response.json().catch(() => null)) as
@@ -992,7 +997,7 @@ export default function SaleConversationThread({
                   displayDirection === "INBOUND";
                 const showAIReplyAction =
                   showEmailReplyAction &&
-                  Boolean(saleId) &&
+                  Boolean(communication.saleId ?? saleId) &&
                   displayDirection === "INBOUND";
                 const showReplyAction =
                   !showEmailReplyAction &&
