@@ -131,6 +131,24 @@ function statusTone(message: InboxMessageSummary) {
   return "bg-warning-50 text-warning-700 ring-warning-200 dark:bg-warning-900/20 dark:text-warning-300 dark:ring-warning-900/40";
 }
 
+function emailDirectionLabel(direction: string) {
+  if (direction === "OUTBOUND") return "Sent";
+  if (direction === "INBOUND") return "Received";
+  return "Internal";
+}
+
+function emailDirectionTone(direction: string) {
+  if (direction === "OUTBOUND") {
+    return "bg-brand-50 text-brand-700 ring-brand-200 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-900/40";
+  }
+
+  if (direction === "INBOUND") {
+    return "bg-success-50 text-success-700 ring-success-200 dark:bg-success-500/10 dark:text-success-300 dark:ring-success-900/40";
+  }
+
+  return "bg-gray-100 text-gray-700 ring-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:ring-gray-800";
+}
+
 function Badge({
   children,
   className,
@@ -555,6 +573,13 @@ export default function InboxClient({
                             : "Unmatched"}
                         </Badge>
                         <StatusBadge>{selectedMessage.status}</StatusBadge>
+                        <Badge
+                          className={emailDirectionTone(
+                            selectedMessage.direction,
+                          )}
+                        >
+                          {emailDirectionLabel(selectedMessage.direction)}
+                        </Badge>
                         <span className="text-xs text-gray-400">
                           {formatDateTime(selectedMessage.receivedAt)}
                         </span>
@@ -873,7 +898,9 @@ export default function InboxClient({
                         />
                         <StateRow
                           label="Direction"
-                          value={selectedMessage.direction}
+                          value={emailDirectionLabel(
+                            selectedMessage.direction,
+                          )}
                         />
                         <StateRow
                           label="Status"

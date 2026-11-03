@@ -86,7 +86,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   message's `Reply-To` address, then its sender or linked lead email, while
   excluding the connected CRM mailbox from the automatic recipient. Reply
   subjects default to the normalized `Re:` subject and remain editable before
-  sending.
+  sending. Customer-facing email direction labels use **Sent** and **Received**
+  in both views while the stored direction values remain `OUTBOUND` and
+  `INBOUND`.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an
