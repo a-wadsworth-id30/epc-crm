@@ -6,6 +6,7 @@ export type EmailConversationDisplay = {
   fromAddress: string | null;
   fromName?: string | null;
   toAddress: string | null;
+  toName?: string | null;
   userName: string | null;
 };
 
@@ -19,22 +20,27 @@ export function emailOriginLabel(message: EmailConversationDisplay) {
   return message.emailProvider ?? null;
 }
 
-export function outboundEmailRoute(message: EmailConversationDisplay) {
-  if (message.channel !== "EMAIL" || message.direction !== "OUTBOUND") {
-    return null;
-  }
-
-  const recipient =
-    message.contactName ||
-    message.toAddress ||
-    message.fromAddress ||
-    "Customer";
-  if (message.userName) return `CRM → ${recipient}`;
+export function emailParticipantRoute(message: EmailConversationDisplay) {
+  if (message.channel !== "EMAIL") return null;
 
   const sender =
-    message.fromName ||
-    message.fromAddress ||
-    emailOriginLabel(message) ||
-    "Mailbox";
+    message.direction === "OUTBOUND" && message.userName
+      ? "CRM"
+      : message.fromName ||
+        message.fromAddress ||
+        (message.direction === "INBOUND" ? message.contactName : null) ||
+        emailOriginLabel(message) ||
+        "Mailbox";
+  const recipient =
+    message.toName ||
+    message.toAddress ||
+    (message.direction === "OUTBOUND" ? message.contactName : null) ||
+    "CRM";
+
   return `${sender} → ${recipient}`;
+}
+
+export function outboundEmailRoute(message: EmailConversationDisplay) {
+  if (message.direction !== "OUTBOUND") return null;
+  return emailParticipantRoute(message);
 }

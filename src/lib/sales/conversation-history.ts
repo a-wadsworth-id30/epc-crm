@@ -260,7 +260,7 @@ function serializeCommunication(
       ? emailInternetMessageIdentity(communication.emailMessage)
       : null,
     emailProvider: communication.emailMessage?.provider ?? null,
-    fromAddress: communication.fromAddress,
+    fromAddress: emailAddresses?.fromAddress ?? communication.fromAddress,
     fromName: communication.emailMessage?.fromName ?? null,
     fullEmailBody:
       communication.channel === "EMAIL" &&
@@ -276,7 +276,8 @@ function serializeCommunication(
     occurredAt: communication.occurredAt.toISOString(),
     subject: communication.subject,
     summary: toEmailPlainText(communication.summary),
-    toAddress: communication.toAddress,
+    toAddress: emailAddresses?.toAddress ?? communication.toAddress,
+    toName: emailAddresses?.toName ?? null,
     userName: communication.user?.name ?? null,
   };
 }
