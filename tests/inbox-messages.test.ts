@@ -26,6 +26,7 @@ function inboxRow(
     opportunity: null,
     provider: "gmail",
     receivedAt: new Date("2026-11-03T10:00:00.000Z"),
+    salesCommunicationId: null,
     status: "UNREAD",
     subject: "Imported message",
     summary: "Hello",
@@ -78,5 +79,13 @@ describe("inbox message serialization", () => {
     );
 
     assert.equal(result.toName, "Craig McAllister");
+  });
+
+  it("keeps the linked sales communication available for focused AI replies", () => {
+    const result = serializeInboxMessageSummary(
+      inboxRow({ salesCommunicationId: "communication-1" }),
+    );
+
+    assert.equal(result.salesCommunicationId, "communication-1");
   });
 });

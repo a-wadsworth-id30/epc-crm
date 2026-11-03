@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
@@ -494,10 +495,65 @@ export default function SaleConversationThread({
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
+  const [aiDraftingForId, setAiDraftingForId] = useState<string | null>(null);
   const [showingFullEmailId, setShowingFullEmailId] = useState<string | null>(
     null,
   );
   const [isGmailReplying, startGmailReplyTransition] = useTransition();
+
+  function openEmailReply(communication: SaleConversationItem) {
+    setReplyingToId(communication.id);
+    setReplyMailboxId(
+      sendMailboxes.some(
+        (mailbox) => mailbox.id === communication.emailReply?.mailboxId,
+      )
+        ? (communication.emailReply?.mailboxId ?? "")
+        : (sendMailboxes[0]?.id ?? ""),
+    );
+    setReplyRecipient(communication.emailReply?.recipient ?? "");
+    setReplySubject(communication.emailReply?.subject ?? "");
+    setReplyError(null);
+    setReplySuccess(null);
+  }
+
+  async function draftEmailReplyWithAI(communication: SaleConversationItem) {
+    if (!saleId || !communication.emailReply) return;
+
+    openEmailReply(communication);
+    setReplyBody("");
+    setAiDraftingForId(communication.id);
+
+    try {
+      const response = await fetch("/api/ai/sales-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          saleId,
+          preferredChannel: "email",
+          forceRefresh: true,
+          tone: "professional",
+          focusCommunicationId: communication.id,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { drafts?: { email?: { body?: string } }; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.drafts?.email?.body) {
+        throw new Error(payload?.error || "AI could not draft this reply.");
+      }
+
+      setReplyBody(payload.drafts.email.body);
+    } catch (error) {
+      setReplyError(
+        error instanceof Error
+          ? error.message
+          : "AI could not draft this reply. Please try again.",
+      );
+    } finally {
+      setAiDraftingForId(null);
+    }
+  }
 
   function sendGmailReply(communication: SaleConversationItem) {
     if (
@@ -914,6 +970,10 @@ export default function SaleConversationThread({
                 const externalHref =
                   recordingUrl || pageHref || filePreviewUrl;
                 const showEmailReplyAction = Boolean(communication.emailReply);
+                const showAIReplyAction =
+                  showEmailReplyAction &&
+                  Boolean(saleId) &&
+                  displayDirection === "INBOUND";
                 const showReplyAction =
                   !showEmailReplyAction &&
                   Boolean(onReply) &&
@@ -921,6 +981,7 @@ export default function SaleConversationThread({
                 const hasFooterActions =
                   canShowFullEmail ||
                   showEmailReplyAction ||
+                  showAIReplyAction ||
                   showReplyAction ||
                   Boolean(opportunityId) ||
                   Boolean(externalHref) ||
@@ -1146,35 +1207,36 @@ export default function SaleConversationThread({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setReplyingToId((current) =>
-                                    current === communication.id
-                                      ? null
-                                      : communication.id,
-                                  );
+                                  if (replyingToId === communication.id) {
+                                    setReplyingToId(null);
+                                    return;
+                                  }
                                   setReplyBody("");
-                                  setReplyMailboxId(
-                                    sendMailboxes.some(
-                                      (mailbox) =>
-                                        mailbox.id ===
-                                        communication.emailReply?.mailboxId,
-                                    )
-                                      ? (communication.emailReply?.mailboxId ??
-                                          "")
-                                      : (sendMailboxes[0]?.id ?? ""),
-                                  );
-                                  setReplyRecipient(
-                                    communication.emailReply?.recipient ?? "",
-                                  );
-                                  setReplySubject(
-                                    communication.emailReply?.subject ?? "",
-                                  );
-                                  setReplyError(null);
-                                  setReplySuccess(null);
+                                  openEmailReply(communication);
                                 }}
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 text-sm font-semibold text-brand-600 shadow-theme-xs transition hover:bg-brand-50 dark:border-brand-900/60 dark:bg-gray-950 dark:text-brand-300 dark:hover:bg-brand-900/20"
                               >
                                 <Reply className="h-4 w-4" />
                                 Reply in CRM
+                              </button>
+                            ) : null}
+                            {showAIReplyAction ? (
+                              <button
+                                type="button"
+                                disabled={
+                                  aiDraftingForId !== null || isGmailReplying
+                                }
+                                onClick={() =>
+                                  void draftEmailReplyWithAI(communication)
+                                }
+                                className="ai-gradient-button inline-flex h-9 rounded-lg p-[2px] shadow-sm shadow-cyan-100 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none"
+                              >
+                                <span className="inline-flex h-full items-center gap-2 rounded-[6px] bg-white px-3 text-sm font-semibold text-gray-900 dark:bg-gray-950 dark:text-white">
+                                  <AISparkIcon />
+                                  {aiDraftingForId === communication.id
+                                    ? "Drafting reply..."
+                                    : "Reply with AI"}
+                                </span>
                               </button>
                             ) : null}
                             {showReplyAction ? (

@@ -23,6 +23,7 @@ export type InboxMessageSummary = {
   provider: string;
   receivedAt: string;
   replyToAddress: string | null;
+  salesCommunicationId: string | null;
   status: string;
   subject: string | null;
   summary: string;
