@@ -283,6 +283,13 @@ immediately, allowing replies to return to the correct sale. Attachment bytes
 are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
 when R2 is configured.
 
+Gmail participant addresses are normalized from provider headers. When Gmail
+omits `From`, inbound sync falls back to `Reply-To` and outbound sync falls back
+to the connected mailbox. Inbox serialization also resolves older incomplete
+rows from stored headers, `Reply-To`, the linked contact or mailbox, and the
+reply server action uses the same resolution so display and sending cannot
+disagree about the recipient.
+
 `netlify/functions/sync-gmail-mailboxes.mjs` invokes the protected maintenance
 route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`. It reuses the
 bounded sync path behind the manual action and authenticates with

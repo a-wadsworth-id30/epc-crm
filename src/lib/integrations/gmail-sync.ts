@@ -3,6 +3,11 @@ import "server-only";
 import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import {
+  emailAddresses,
+  emailHeaderName,
+  firstEmailAddress,
+} from "@/lib/email/addresses";
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
@@ -73,11 +78,6 @@ function jsonObject(value: unknown): Record<string, unknown> {
 
 function jsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
-function emailAddresses(value: string | null | undefined) {
-  const matches = value?.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [];
-  return [...new Set(matches.map((item) => item.toLowerCase()))];
 }
 
 function occurredAt(message: GmailMessage) {
@@ -181,6 +181,15 @@ async function importGmailMessage({
       : message.textBody ?? message.snippet ?? "";
   const summary = emailTextSummary(body || message.headers.subject || "Email");
   const date = occurredAt(message);
+  const fromAddress =
+    firstEmailAddress(
+      message.headers.from,
+      direction === "INBOUND" ? message.headers.replyTo : null,
+    ) ?? (direction === "OUTBOUND" ? mailbox.emailAddress : null);
+  const fromName = emailHeaderName(message.headers.from);
+  const toAddress =
+    firstEmailAddress(message.headers.to) ??
+    (direction === "INBOUND" ? mailbox.emailAddress : null);
   const metadata = jsonValue({
     bcc: emailAddresses(message.headers.bcc),
     gmailHistoryId: message.historyId,
@@ -201,13 +210,13 @@ async function importGmailMessage({
         channel: "EMAIL" as const,
         contactId: context.contactId,
         direction: direction as "INBOUND" | "OUTBOUND",
-        fromAddress: emailAddresses(message.headers.from)[0] ?? message.headers.from,
+        fromAddress,
         metadata,
         occurredAt: date,
         opportunityId: context.opportunityId,
         subject: message.headers.subject ?? "Email",
         summary,
-        toAddress: emailAddresses(message.headers.to)[0] ?? message.headers.to,
+        toAddress,
       };
       if (communicationId) {
         await tx.salesCommunication.update({
@@ -256,7 +265,8 @@ async function importGmailMessage({
       ccAddresses: jsonValue(emailAddresses(message.headers.cc)),
       contactId: context.contactId,
       direction: direction as "INBOUND" | "OUTBOUND",
-      fromAddress: emailAddresses(message.headers.from)[0] ?? message.headers.from,
+      fromAddress,
+      fromName,
       htmlBody: message.htmlBody,
       inReplyTo: message.headers.inReplyTo,
       internetMessageId: message.headers.messageId,
@@ -270,7 +280,7 @@ async function importGmailMessage({
       subject: message.headers.subject,
       summary,
       textBody: message.textBody ?? body,
-      toAddress: emailAddresses(message.headers.to)[0] ?? message.headers.to,
+      toAddress,
     };
     const email = existing
       ? await tx.emailMessage.update({ where: { id: existing.id }, data: emailData })
