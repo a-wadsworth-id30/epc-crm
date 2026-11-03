@@ -1,3 +1,5 @@
+import { inferredEmailDirection } from "@/lib/email/direction";
+
 export type EmailConversationDisplay = {
   channel: string;
   contactName: string | null;
@@ -9,6 +11,19 @@ export type EmailConversationDisplay = {
   toName?: string | null;
   userName: string | null;
 };
+
+export function emailDisplayDirection(message: EmailConversationDisplay) {
+  if (message.channel !== "EMAIL" || message.userName) {
+    return message.direction;
+  }
+
+  return inferredEmailDirection({
+    contactName: message.contactName,
+    fromAddress: message.fromAddress,
+    fromName: message.fromName,
+    storedDirection: message.direction,
+  });
+}
 
 export function emailOriginLabel(message: EmailConversationDisplay) {
   if (message.channel !== "EMAIL") return null;
@@ -34,16 +49,18 @@ function sameParticipant(
 export function emailParticipantRoute(message: EmailConversationDisplay) {
   if (message.channel !== "EMAIL") return null;
 
+  const direction = emailDisplayDirection(message);
+
   const sender =
-    message.direction === "OUTBOUND" && message.userName
+    direction === "OUTBOUND" && message.userName
       ? "CRM"
       : message.fromName ||
         message.fromAddress ||
-        (message.direction === "INBOUND" ? message.contactName : null) ||
+        (direction === "INBOUND" ? message.contactName : null) ||
         emailOriginLabel(message) ||
         "Mailbox";
   const contactRecipient =
-    message.direction === "OUTBOUND" &&
+    direction === "OUTBOUND" &&
     !sameParticipant(message.contactName, message.fromName) &&
     !sameParticipant(message.contactName, message.fromAddress)
       ? message.contactName
@@ -52,7 +69,7 @@ export function emailParticipantRoute(message: EmailConversationDisplay) {
     message.toName ||
     message.toAddress ||
     contactRecipient ||
-    (message.direction === "INBOUND" ? "CRM" : "Recipient unavailable");
+    (direction === "INBOUND" ? "CRM" : "Recipient unavailable");
 
   return `${sender} → ${recipient}`;
 }

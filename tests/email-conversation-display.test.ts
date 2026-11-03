@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  emailDisplayDirection,
   emailOriginLabel,
   emailParticipantRoute,
   outboundEmailRoute,
@@ -79,10 +80,13 @@ test("stored To display name is preferred over its address", () => {
   );
 });
 
-test("a linked lead matching the sender is not fabricated as the recipient", () => {
+test("a name-only sender matching the linked lead is displayed as received", () => {
+  const imported = message({ fromAddress: null });
+
+  assert.equal(emailDisplayDirection(imported), "INBOUND");
   assert.equal(
-    emailParticipantRoute(message()),
-    "Adam Wadsworth → Recipient unavailable",
+    emailParticipantRoute(imported),
+    "Adam Wadsworth → CRM",
   );
 });
 

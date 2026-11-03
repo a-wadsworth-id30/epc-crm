@@ -118,8 +118,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   provider-origin badge instead of being presented as CRM-authored. Participant
   routes prefer provider `From`/`To` display names and addresses; the linked
   lead is only a fallback when the relevant provider identity is missing and
-  does not conflict with the known sender. Conflicting missing-recipient data is
-  displayed as unavailable instead of inventing a self-route.
+  does not conflict with the known sender. For imported provider mail without
+  sender/recipient addresses, an exact sender-name match with the linked lead
+  is inferred as inbound in both the importer and display layer, producing a
+  **Lead → CRM** route instead of inventing a CRM send or self-route.
 - `src/lib/email/deduplication.ts` owns provider-neutral email identity and
   strict fingerprint matching. Conversation rendering collapses duplicate
   Pipedrive/Gmail cards without deleting stored records, while Gmail import can

@@ -27,6 +27,7 @@ import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
+  emailDisplayDirection,
   emailOriginLabel,
   emailParticipantRoute,
 } from "@/lib/sales/conversation-display";
@@ -881,9 +882,11 @@ export default function SaleConversationThread({
                   communication.channel === "WEBSITE"
                     ? "Activity"
                     : directionLabel(
-                        communication.direction,
+                        emailDisplayDirection(communication),
                         communication.channel,
                       );
+                const displayDirection =
+                  emailDisplayDirection(communication);
                 const emailOrigin = emailOriginLabel(communication);
                 const isExpanded = visibleExpandedId === communication.id;
                 const pageHref =
@@ -998,7 +1001,7 @@ export default function SaleConversationThread({
                         </span>
                         <span
                           className={`hidden rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${directionPillClassName(
-                            communication.direction,
+                            displayDirection,
                             renderedChannel,
                           )}`}
                         >
