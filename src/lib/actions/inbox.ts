@@ -11,6 +11,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
+import { isReplyRecipientOverride } from "@/lib/inbox/recipient-safety";
 import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import {
   outboundMessageError,
@@ -465,6 +466,25 @@ export async function replyToInboxMessage(
       to: replyRecipient,
       user,
     });
+
+    if (isReplyRecipientOverride(replyRecipient, resolvedRecipient)) {
+      await prisma.auditLog
+        .create({
+          data: {
+            action: "email.reply.recipient_overridden",
+            actorId: user.id,
+            entity: "EmailMessage",
+            entityId: message.id,
+            metadata: {
+              opportunityId: message.opportunityId,
+              provider: message.provider,
+              resolvedRecipient,
+              selectedRecipient: replyRecipient,
+            },
+          },
+        })
+        .catch(() => null);
+    }
 
     await prisma.emailMessage
       .update({
