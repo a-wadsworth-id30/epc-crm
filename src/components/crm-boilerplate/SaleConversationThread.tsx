@@ -471,6 +471,9 @@ export default function SaleConversationThread({
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
+  const [showingFullEmailId, setShowingFullEmailId] = useState<string | null>(
+    null,
+  );
   const [isGmailReplying, startGmailReplyTransition] = useTransition();
 
   function sendGmailReply(communication: SaleConversationItem) {
@@ -803,6 +806,17 @@ export default function SaleConversationThread({
                   communication.channel === "EMAIL"
                     ? latestEmailReplyText(normalizedBody)
                     : normalizedBody;
+                const fullEmailBody = toEmailPlainText(
+                  communication.fullEmailBody,
+                );
+                const canShowFullEmail = Boolean(
+                  communication.channel === "EMAIL" &&
+                    fullEmailBody &&
+                    fullEmailBody !== plainBody,
+                );
+                const isShowingFullEmail =
+                  canShowFullEmail &&
+                  showingFullEmailId === communication.id;
                 const plainSummary = toEmailPlainText(communication.summary);
                 const hasTranscript =
                   Boolean(transcript) ||
@@ -815,7 +829,9 @@ export default function SaleConversationThread({
                   communication.channel === "PHONE" &&
                   (recordingUrl || hasTranscript)
                     ? null
-                    : plainBody;
+                    : isShowingFullEmail
+                      ? fullEmailBody
+                      : plainBody;
                 const displaySummary =
                   communication.channel === "WEBSITE"
                     ? compactUrlText(plainBody || plainSummary) || plainSummary
@@ -852,6 +868,7 @@ export default function SaleConversationThread({
                   Boolean(onReply) &&
                   canReplyToCommunication(communication);
                 const hasFooterActions =
+                  canShowFullEmail ||
                   showGmailReplyAction ||
                   showReplyAction ||
                   Boolean(opportunityId) ||
@@ -1048,6 +1065,24 @@ export default function SaleConversationThread({
 
                         {hasFooterActions ? (
                           <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-gray-800 dark:bg-white/[0.03]">
+                            {canShowFullEmail ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowingFullEmailId((current) =>
+                                    current === communication.id
+                                      ? null
+                                      : communication.id,
+                                  )
+                                }
+                                className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
+                              >
+                                <Mail className="h-4 w-4" />
+                                {isShowingFullEmail
+                                  ? "Show latest reply"
+                                  : "Show full email"}
+                              </button>
+                            ) : null}
                             {showGmailReplyAction ? (
                               <button
                                 type="button"
@@ -1064,7 +1099,7 @@ export default function SaleConversationThread({
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 text-sm font-semibold text-brand-600 shadow-theme-xs transition hover:bg-brand-50 dark:border-brand-900/60 dark:bg-gray-950 dark:text-brand-300 dark:hover:bg-brand-900/20"
                               >
                                 <Reply className="h-4 w-4" />
-                                Reply in Gmail
+                                Reply in CRM
                               </button>
                             ) : null}
                             {showReplyAction ? (

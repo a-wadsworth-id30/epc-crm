@@ -304,6 +304,12 @@ The existing per-user mailbox send permissions and sale access checks apply.
 Sale Conversation email entries surface the same Gmail reply context from the
 linked `EmailMessage`, and reuse the Inbox reply action so mailbox permissions,
 thread headers and persistence behaviour remain identical in both surfaces.
+Inbox and sale Conversation serializers also derive a plain-text full-body
+alternative from the richest stored text/HTML body. The UI keeps the cleaned
+latest reply as the default and reveals the complete body only on request,
+without rendering provider HTML directly. Gmail sync retains the provider's
+complete text and HTML bodies on `EmailMessage`; only the linked sales
+communication is reduced to the latest reply for timeline and AI use.
 
 Main files:
 

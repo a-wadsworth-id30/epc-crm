@@ -1161,7 +1161,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   receiving mailbox, preserves the exact Gmail thread and writes the outbound
   message into the linked sale conversation. Gmail email entries in the linked
   sale Conversation expose the same threaded reply composer, so users can
-  continue the exact Gmail thread without returning to the Inbox.
+  continue the exact Gmail thread without returning to the Inbox. Inbox and
+  sale Conversation views show the cleaned latest reply by default and expose
+  a **Show full email** toggle when the stored Gmail HTML contains quoted or
+  forwarded history.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

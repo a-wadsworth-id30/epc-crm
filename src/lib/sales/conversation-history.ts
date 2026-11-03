@@ -3,7 +3,11 @@ import "server-only";
 import type { CommunicationChannel, Prisma } from "@prisma/client";
 import type { CurrentUser } from "@/lib/auth";
 import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
-import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import {
+  completeEmailPlainText,
+  latestEmailReplyText,
+  toEmailPlainText,
+} from "@/lib/email/plain-text";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { prisma } from "@/lib/prisma";
@@ -170,12 +174,14 @@ const communicationSelect = {
     select: {
       direction: true,
       fromAddress: true,
+      htmlBody: true,
       id: true,
       mailboxId: true,
       opportunityId: true,
       provider: true,
       providerThreadId: true,
       subject: true,
+      textBody: true,
       toAddress: true,
     },
   },
@@ -197,6 +203,15 @@ function serializeCommunication(
   communication: CommunicationRow,
 ): SaleConversationItem {
   const body = toEmailPlainText(communication.body);
+  const latestEmailBody =
+    communication.channel === "EMAIL" ? latestEmailReplyText(body) : body;
+  const completeEmailBody = communication.emailMessage
+    ? completeEmailPlainText({
+        fallback: body,
+        html: communication.emailMessage.htmlBody,
+        text: communication.emailMessage.textBody,
+      })
+    : body;
   const recipient = communication.emailMessage
     ? inboxReplyRecipient(communication.emailMessage)
     : null;
@@ -215,13 +230,17 @@ function serializeCommunication(
       : null;
 
   return {
-    body:
-      (communication.channel === "EMAIL" ? latestEmailReplyText(body) : body) ||
-      null,
+    body: latestEmailBody || null,
     channel: communication.channel,
     contactName: contactName(communication.contact),
     direction: communication.direction,
     fromAddress: communication.fromAddress,
+    fullEmailBody:
+      communication.channel === "EMAIL" &&
+      completeEmailBody &&
+      completeEmailBody !== latestEmailBody
+        ? completeEmailBody
+        : null,
     gmailReply,
     id: communication.id,
     metadata: communication.metadata,

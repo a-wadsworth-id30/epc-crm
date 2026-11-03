@@ -20,6 +20,7 @@ export type SaleConversationItem = {
   subject: string | null;
   summary: string;
   body: string | null;
+  fullEmailBody?: string | null;
   fromAddress: string | null;
   toAddress: string | null;
   occurredAt: string;
@@ -75,6 +76,7 @@ export function conversationItemMatchesQuery(
     item.subject,
     item.summary,
     item.body,
+    item.fullEmailBody,
     item.fromAddress,
     item.toAddress,
     item.contactName,

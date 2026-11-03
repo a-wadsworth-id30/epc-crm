@@ -23,12 +23,15 @@ const emailRows = Array.from({ length: 15 }, (_, index) => ({
       ? {
           direction: "INBOUND",
           fromAddress: "customer@example.com",
+          htmlBody:
+            "<p>Email body 1</p><div>On Monday, customer wrote:</div><blockquote>Earlier message</blockquote>",
           id: "gmail-email-1",
           mailboxId: "mailbox-1",
           opportunityId: "sale-1",
           provider: "gmail",
           providerThreadId: "thread-1",
           subject: "Re: Email 1",
+          textBody: "Email body 1",
           toAddress: "sales@example.com",
         }
       : null,
@@ -239,6 +242,7 @@ describe("sale conversation history", () => {
       recipient: "customer@example.com",
       subject: "Re: Email 1",
     });
+    assert.match(result.items[0]?.fullEmailBody ?? "", /Earlier message/);
   });
 
   it("merges communication, file and website counts into the complete timeline", async () => {
@@ -277,6 +281,20 @@ describe("sale conversation history", () => {
     assert.equal(result.query, "heat loss survey");
     assert.equal(result.total, 1);
     assert.deepEqual(result.items.map((item) => item.id), ["phone-1"]);
+  });
+
+  it("searches quoted content exposed by the full Gmail body", async () => {
+    const result = await conversationHistory.listSaleConversationPage({
+      filter: "EMAIL",
+      page: 1,
+      query: "Earlier message",
+      saleId: "sale-1",
+      user: { id: "admin-1", role: "ADMIN" },
+    });
+
+    assert.ok(result);
+    assert.equal(result.total, 1);
+    assert.deepEqual(result.items.map((item) => item.id), ["email-1"]);
   });
 
   it("searches Pipedrive filenames and website attribution details", async () => {
