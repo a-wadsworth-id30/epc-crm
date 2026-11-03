@@ -46,6 +46,11 @@ export type InboxReplyResult =
 const inboxReplySchema = z.object({
   body: z.string().trim().min(1, "Enter a reply.").max(20_000),
   messageId: z.string().trim().min(1),
+  recipient: z
+    .string()
+    .trim()
+    .email("Enter a valid reply address.")
+    .optional(),
 });
 
 function jsonInput(value: Prisma.JsonValue | null) {
@@ -375,8 +380,9 @@ export async function assignInboxThreadToSale(
 export async function replyToInboxMessage(
   messageId: string,
   body: string,
+  recipient?: string,
 ): Promise<InboxReplyResult> {
-  const parsed = inboxReplySchema.safeParse({ body, messageId });
+  const parsed = inboxReplySchema.safeParse({ body, messageId, recipient });
   if (!parsed.success) {
     return {
       ok: false,
@@ -392,6 +398,7 @@ export async function replyToInboxMessage(
       fromAddress: true,
       fromName: true,
       headers: true,
+      id: true,
       internetMessageId: true,
       mailbox: { select: { emailAddress: true } },
       mailboxId: true,
@@ -426,13 +433,14 @@ export async function replyToInboxMessage(
   }
 
   const resolvedAddresses = resolveInboxMessageAddresses(message);
-  const recipient = inboxReplyRecipient({
+  const resolvedRecipient = inboxReplyRecipient({
     ...message,
     fromAddress: resolvedAddresses.fromAddress,
     toAddress: resolvedAddresses.toAddress,
   });
-  if (!recipient || !z.string().email().safeParse(recipient).success) {
-    return { ok: false, message: "This conversation has no valid reply address." };
+  const replyRecipient = parsed.data.recipient ?? resolvedRecipient;
+  if (!replyRecipient) {
+    return { ok: false, message: "Enter a valid reply address." };
   }
 
   try {
@@ -444,9 +452,19 @@ export async function replyToInboxMessage(
       opportunityId: message.opportunityId,
       source: "inbox-reply",
       subject: inboxReplySubject(message.subject),
-      to: recipient,
+      to: replyRecipient,
       user,
     });
+
+    await prisma.emailMessage
+      .update({
+        where: { id: message.id },
+        data:
+          message.direction === "OUTBOUND"
+            ? { toAddress: replyRecipient }
+            : { fromAddress: replyRecipient },
+      })
+      .catch(() => null);
   } catch (error) {
     return {
       ok: false,

@@ -226,8 +226,7 @@ function serializeCommunication(
     communication.emailMessage?.provider === "gmail" &&
     communication.emailMessage.mailboxId &&
     communication.emailMessage.providerThreadId &&
-    communication.emailMessage.opportunityId &&
-    recipient
+    communication.emailMessage.opportunityId
       ? {
           emailMessageId: communication.emailMessage.id,
           recipient,

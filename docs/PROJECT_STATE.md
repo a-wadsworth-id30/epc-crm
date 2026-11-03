@@ -1162,18 +1162,21 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   message into the linked sale conversation. Gmail email entries in the linked
   sale Conversation expose the same threaded reply composer, so users can
   continue the exact Gmail thread without returning to the Inbox. Inbox and
-  sale Conversation views show the cleaned latest reply by default and expose
-  a **Show full email** toggle when the stored Gmail HTML contains quoted or
-  forwarded history. Both views render an allow-listed rich-text version when
+  sale Conversation views show the complete email by default and expose a
+  **Show latest reply** compact option when the stored Gmail HTML contains
+  quoted or forwarded history. Both views render an allow-listed rich-text version when
   Gmail supplied HTML, preserving basic emphasis, lists, links, quotes and
   tables while removing scripts, event handlers, forms, remote images and
   unsafe URL schemes. If provider HTML cannot be split safely at its quoted
-  history marker, the latest view falls back to cleaned plain text so **Show
-  full email** remains meaningful.
+  history marker, the optional latest view falls back to cleaned plain text.
 - Gmail sync normalizes sender and recipient headers, including `Reply-To` and
   connected-mailbox fallbacks when Gmail omits `From` or `To`. Inbox display
   and reply actions also recover participant addresses for older incomplete
   rows from stored headers, the linked contact and mailbox.
+- Gmail reply composers remain available when an older imported message has a
+  sender name but no usable address. The user must enter a valid recipient,
+  normal sale/contact send permissions still apply, and the confirmed address
+  is stored on the source message only after a successful reply.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

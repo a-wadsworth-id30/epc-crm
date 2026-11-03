@@ -470,15 +470,21 @@ export default function SaleConversationThread({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [replyRecipient, setReplyRecipient] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
-  const [showingFullEmailId, setShowingFullEmailId] = useState<string | null>(
+  const [showingLatestEmailId, setShowingLatestEmailId] = useState<string | null>(
     null,
   );
   const [isGmailReplying, startGmailReplyTransition] = useTransition();
 
   function sendGmailReply(communication: SaleConversationItem) {
-    if (!communication.gmailReply || !replyBody.trim()) return;
+    if (
+      !communication.gmailReply ||
+      !replyBody.trim() ||
+      !replyRecipient.trim()
+    )
+      return;
 
     setReplyError(null);
     setReplySuccess(null);
@@ -487,6 +493,7 @@ export default function SaleConversationThread({
         const result = await replyToInboxMessage(
           communication.gmailReply!.emailMessageId,
           replyBody,
+          replyRecipient,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -494,6 +501,7 @@ export default function SaleConversationThread({
         }
 
         setReplyBody("");
+        setReplyRecipient("");
         setReplySuccess(result.message);
         router.refresh();
       } catch {
@@ -819,7 +827,7 @@ export default function SaleConversationThread({
                 );
                 const isShowingFullEmail =
                   canShowFullEmail &&
-                  showingFullEmailId === communication.id;
+                  showingLatestEmailId !== communication.id;
                 const plainSummary = toEmailPlainText(communication.summary);
                 const hasTranscript =
                   Boolean(transcript) ||
@@ -1081,7 +1089,7 @@ export default function SaleConversationThread({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setShowingFullEmailId((current) =>
+                                  setShowingLatestEmailId((current) =>
                                     current === communication.id
                                       ? null
                                       : communication.id,
@@ -1105,6 +1113,9 @@ export default function SaleConversationThread({
                                       : communication.id,
                                   );
                                   setReplyBody("");
+                                  setReplyRecipient(
+                                    communication.gmailReply?.recipient ?? "",
+                                  );
                                   setReplyError(null);
                                   setReplySuccess(null);
                                 }}
@@ -1171,12 +1182,26 @@ export default function SaleConversationThread({
                           >
                             <div className="grid gap-3 text-sm sm:grid-cols-2">
                               <div>
-                                <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                                <label
+                                  className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
+                                  htmlFor={`sale-gmail-recipient-${communication.id}`}
+                                >
                                   To
-                                </span>
-                                <p className="mt-1 break-all text-gray-800 dark:text-white/90">
-                                  {communication.gmailReply.recipient}
-                                </p>
+                                </label>
+                                <input
+                                  className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                                  disabled={isGmailReplying}
+                                  id={`sale-gmail-recipient-${communication.id}`}
+                                  onChange={(event) => {
+                                    setReplyRecipient(event.target.value);
+                                    setReplyError(null);
+                                    setReplySuccess(null);
+                                  }}
+                                  placeholder="customer@example.com"
+                                  required
+                                  type="email"
+                                  value={replyRecipient}
+                                />
                               </div>
                               <div>
                                 <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
@@ -1226,6 +1251,7 @@ export default function SaleConversationThread({
                                 onClick={() => {
                                   setReplyingToId(null);
                                   setReplyBody("");
+                                  setReplyRecipient("");
                                   setReplyError(null);
                                   setReplySuccess(null);
                                 }}
@@ -1234,7 +1260,11 @@ export default function SaleConversationThread({
                               </button>
                               <button
                                 className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={isGmailReplying || !replyBody.trim()}
+                                disabled={
+                                  isGmailReplying ||
+                                  !replyBody.trim() ||
+                                  !replyRecipient.trim()
+                                }
                                 type="submit"
                               >
                                 {isGmailReplying
