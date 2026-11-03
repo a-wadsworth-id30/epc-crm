@@ -4,6 +4,7 @@ import type { EmailMailboxStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import type { Id30AuthBrokerCompletionPayload } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
+import { defaultGmailMailboxPurpose } from "@/lib/integrations/gmail-mailbox-purpose";
 
 export const gmailProvider = "gmail";
 
@@ -89,8 +90,9 @@ export async function saveGmailAuthBrokerCompletion(
 
   const matchingUser = await prisma.user.findFirst({
     where: { email: { equals: emailAddress, mode: "insensitive" } },
-    select: { id: true },
+    select: { id: true, roleTemplate: true },
   });
+  const defaultPurpose = defaultGmailMailboxPurpose(matchingUser);
   const metadata = jsonValue({
     authConnectedAt: payload.connectedAt ?? new Date().toISOString(),
     crmClientId: payload.crmClientId,
@@ -121,8 +123,7 @@ export async function saveGmailAuthBrokerCompletion(
       lastError: null,
       metadata,
       ownerUserId: existing?.ownerUserId ?? matchingUser?.id ?? null,
-      purpose:
-        existing?.purpose ?? (matchingUser ? "PERSONAL" : "SHARED"),
+      purpose: existing?.purpose ?? defaultPurpose,
       status: mailboxStatus(payload.status),
     },
     create: {
@@ -132,7 +133,7 @@ export async function saveGmailAuthBrokerCompletion(
       metadata,
       ownerUserId: matchingUser?.id ?? null,
       provider: gmailProvider,
-      purpose: matchingUser ? "PERSONAL" : "SHARED",
+      purpose: defaultPurpose,
       status: mailboxStatus(payload.status),
     },
   });

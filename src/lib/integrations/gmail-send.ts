@@ -82,9 +82,15 @@ export async function listGmailMailboxesForSend({
         ? 0
         : mailbox.purpose === "SALES"
           ? 1
-          : mailbox.purpose === "SHARED"
+          : mailbox.purpose === "NEW_BUSINESS"
             ? 2
-            : 3);
+            : mailbox.purpose === "CUSTOMER_SUCCESS"
+              ? 3
+              : mailbox.purpose === "SUPPORT"
+                ? 4
+                : mailbox.purpose === "SHARED"
+                  ? 5
+                  : 6);
     return (
       score(left) - score(right) ||
       left.emailAddress.localeCompare(right.emailAddress)

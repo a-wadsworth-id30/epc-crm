@@ -46,6 +46,7 @@ import {
   hasStoredTwilioCredentials,
   twilioConfigSchema,
 } from "@/lib/integrations/twilio";
+import { canOwnPersonalGmailMailbox } from "@/lib/integrations/gmail-mailbox-purpose";
 import {
   hasStoredMailerSendCredentials,
   mailerSendConfigSchema,
@@ -341,7 +342,12 @@ export default async function IntegrationSettingsPage({
       prisma.user.findMany({
         where: { status: "ACTIVE" },
         orderBy: { name: "asc" },
-        select: { email: true, id: true, name: true },
+        select: {
+          email: true,
+          id: true,
+          name: true,
+          roleTemplate: true,
+        },
       }),
       authRuntime
         ? fetchMarketingAuthBrokerProviderReadiness()
@@ -378,7 +384,12 @@ export default async function IntegrationSettingsPage({
             }))}
             providerMessage={providerMessage}
             providerReady={providerReady}
-            users={users}
+            users={users.map((user) => ({
+              email: user.email,
+              id: user.id,
+              name: user.name,
+              canUsePersonalMailbox: canOwnPersonalGmailMailbox(user),
+            }))}
           />
         </div>
       </>
