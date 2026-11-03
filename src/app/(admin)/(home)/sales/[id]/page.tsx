@@ -2184,12 +2184,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       const recipient = communication.emailMessage
         ? inboxReplyRecipient(communication.emailMessage)
         : null;
-      const gmailReply =
+      const emailReply =
         communication.channel === "EMAIL" &&
-        communication.emailMessage?.provider === "gmail" &&
-        communication.emailMessage.mailboxId &&
-        communication.emailMessage.providerThreadId &&
-        communication.emailMessage.opportunityId
+        communication.emailMessage?.opportunityId
           ? {
               emailMessageId: communication.emailMessage.id,
               recipient,
@@ -2215,7 +2212,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         fullEmailHtmlBody:
           communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
         fromAddress: communication.fromAddress,
-        gmailReply,
+        emailReply,
         toAddress: communication.toAddress,
         occurredAt: communication.occurredAt.toISOString(),
         userName: communication.user?.name ?? null,

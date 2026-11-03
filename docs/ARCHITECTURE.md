@@ -316,6 +316,11 @@ source message only after a successful send.
 Sale Conversation email entries surface the same Gmail reply context from the
 linked `EmailMessage`, and reuse the Inbox reply action so mailbox permissions,
 thread headers and persistence behaviour remain identical in both surfaces.
+Reply controls are also created for linked MailerSend and other imported email
+enquiries. Complete Gmail mailbox/thread metadata preserves the exact Gmail
+thread; other providers use the CRM's normal authorised sale-email delivery
+path with a `Re:` subject and the reviewed recipient instead of hiding the
+composer.
 Inbox and sale Conversation serializers derive both plain-text fallbacks and
 sanitized rich-text views from the stored Gmail body. The allow-list preserves
 basic email formatting such as paragraphs, headings, emphasis, lists, links,

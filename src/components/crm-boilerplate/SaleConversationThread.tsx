@@ -480,7 +480,7 @@ export default function SaleConversationThread({
 
   function sendGmailReply(communication: SaleConversationItem) {
     if (
-      !communication.gmailReply ||
+      !communication.emailReply ||
       !replyBody.trim() ||
       !replyRecipient.trim()
     )
@@ -491,7 +491,7 @@ export default function SaleConversationThread({
     startGmailReplyTransition(async () => {
       try {
         const result = await replyToInboxMessage(
-          communication.gmailReply!.emailMessageId,
+          communication.emailReply!.emailMessageId,
           replyBody,
           replyRecipient,
         );
@@ -879,14 +879,14 @@ export default function SaleConversationThread({
                 );
                 const externalHref =
                   recordingUrl || pageHref || filePreviewUrl;
-                const showGmailReplyAction = Boolean(communication.gmailReply);
+                const showEmailReplyAction = Boolean(communication.emailReply);
                 const showReplyAction =
-                  !showGmailReplyAction &&
+                  !showEmailReplyAction &&
                   Boolean(onReply) &&
                   canReplyToCommunication(communication);
                 const hasFooterActions =
                   canShowFullEmail ||
-                  showGmailReplyAction ||
+                  showEmailReplyAction ||
                   showReplyAction ||
                   Boolean(opportunityId) ||
                   Boolean(externalHref) ||
@@ -1103,7 +1103,7 @@ export default function SaleConversationThread({
                                   : "Show full email"}
                               </button>
                             ) : null}
-                            {showGmailReplyAction ? (
+                            {showEmailReplyAction ? (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1114,7 +1114,7 @@ export default function SaleConversationThread({
                                   );
                                   setReplyBody("");
                                   setReplyRecipient(
-                                    communication.gmailReply?.recipient ?? "",
+                                    communication.emailReply?.recipient ?? "",
                                   );
                                   setReplyError(null);
                                   setReplySuccess(null);
@@ -1172,7 +1172,7 @@ export default function SaleConversationThread({
                         ) : null}
 
                         {replyingToId === communication.id &&
-                        communication.gmailReply ? (
+                        communication.emailReply ? (
                           <form
                             className="border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-800 dark:bg-gray-950"
                             onSubmit={(event) => {
@@ -1208,7 +1208,7 @@ export default function SaleConversationThread({
                                   Subject
                                 </span>
                                 <p className="mt-1 text-gray-800 dark:text-white/90">
-                                  {communication.gmailReply.subject}
+                                  {communication.emailReply.subject}
                                 </p>
                               </div>
                             </div>
@@ -1269,7 +1269,7 @@ export default function SaleConversationThread({
                               >
                                 {isGmailReplying
                                   ? "Sending..."
-                                  : "Send Gmail reply"}
+                                  : "Send email reply"}
                               </button>
                             </div>
                           </form>

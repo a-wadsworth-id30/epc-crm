@@ -221,12 +221,9 @@ function serializeCommunication(
   const recipient = communication.emailMessage
     ? inboxReplyRecipient(communication.emailMessage)
     : null;
-  const gmailReply =
+  const emailReply =
     communication.channel === "EMAIL" &&
-    communication.emailMessage?.provider === "gmail" &&
-    communication.emailMessage.mailboxId &&
-    communication.emailMessage.providerThreadId &&
-    communication.emailMessage.opportunityId
+    communication.emailMessage?.opportunityId
       ? {
           emailMessageId: communication.emailMessage.id,
           recipient,
@@ -250,7 +247,7 @@ function serializeCommunication(
         : null,
     fullEmailHtmlBody:
       communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
-    gmailReply,
+    emailReply,
     id: communication.id,
     metadata: communication.metadata,
     occurredAt: communication.occurredAt.toISOString(),
