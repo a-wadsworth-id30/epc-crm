@@ -309,6 +309,14 @@ endpoints for message sync, sending and attachment retrieval. Multiple personal
 and shared mailboxes can coexist; admins assign mailbox purpose, primary owner
 and users allowed to send.
 
+Mailbox purposes use the same operational taxonomy as Phone System teams:
+Sales, New Business, Customer Success and Support. Personal is available only
+when the mailbox has an Owner/director-level primary user; the server action
+revalidates that role template before saving. Legacy Accounts and Shared enum
+values remain readable for existing records but are not offered for new
+selections. New connections default to Personal for a matching Owner account
+and Sales otherwise.
+
 Initial sync reads bounded pages from the most recent year, then switches to a
 Gmail history cursor. Imported messages are idempotent, become central
 `EmailMessage` rows and are attached to a sale conversation when an existing

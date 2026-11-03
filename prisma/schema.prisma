@@ -170,6 +170,9 @@ enum EmailMailboxStatus {
 enum EmailMailboxPurpose {
   PERSONAL
   SALES
+  NEW_BUSINESS
+  CUSTOMER_SUCCESS
+  SUPPORT
   ACCOUNTS
   SHARED
 }
@@ -1211,7 +1214,7 @@ model EmailMailbox {
   authConnectionId String              @unique
   emailAddress     String
   displayName      String?
-  purpose          EmailMailboxPurpose @default(SHARED)
+  purpose          EmailMailboxPurpose @default(SALES)
   status           EmailMailboxStatus  @default(CONNECTED)
   syncEnabled      Boolean             @default(true)
   sendEnabled      Boolean             @default(true)

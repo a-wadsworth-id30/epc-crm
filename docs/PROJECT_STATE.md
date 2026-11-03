@@ -1180,7 +1180,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   active-sale matching. The MailerSend route must use Catch all for the inbound
   subdomain and requires verified MX DNS before this reply path is operational.
 - Gmail is a real multi-mailbox communication integration backed by iD30 Auth.
-  Admins can connect personal, sales, accounts and shared Google mailboxes,
+  Admins can classify connected Google mailboxes using the same teams as Phone
+  System: Sales, New Business, Customer Success and Support. Personal is also
+  available when the selected primary user has the Owner/director role
+  template, with the same restriction enforced by the save action. Existing
+  Accounts and Shared classifications remain readable until an admin moves
+  them to a current team. Admins can
   assign a primary user and grant send access to additional CRM users without
   storing Google tokens in CRM. Bounded initial/history sync writes idempotent
   `EmailMessage` rows, creates sale conversation email events when an exact

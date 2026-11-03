@@ -5,6 +5,11 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { refreshGmailIntegrationSummary } from "@/lib/integrations/gmail";
+import {
+  canOwnPersonalGmailMailbox,
+  gmailMailboxPurposeValues,
+  isLegacyGmailMailboxPurpose,
+} from "@/lib/integrations/gmail-mailbox-purpose";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
 import { prisma } from "@/lib/prisma";
 
@@ -18,7 +23,7 @@ const mailboxIdSchema = z.string().trim().min(1);
 const mailboxSettingsSchema = z.object({
   mailboxId: mailboxIdSchema,
   ownerUserId: z.string().trim().optional(),
-  purpose: z.enum(["PERSONAL", "SALES", "ACCOUNTS", "SHARED"]),
+  purpose: z.enum(gmailMailboxPurposeValues),
   sendUserIds: z.array(z.string().trim().min(1)).default([]),
   sendEnabled: z.boolean(),
   syncEnabled: z.boolean(),
@@ -49,9 +54,23 @@ export async function updateGmailMailboxAction(
   if (parsed.data.ownerUserId) {
     const user = await prisma.user.findUnique({
       where: { id: parsed.data.ownerUserId },
-      select: { id: true },
+      select: { id: true, roleTemplate: true },
     });
     if (!user) return actionResult(false, "Selected mailbox owner was not found.");
+    if (
+      parsed.data.purpose === "PERSONAL" &&
+      !canOwnPersonalGmailMailbox(user)
+    ) {
+      return actionResult(
+        false,
+        "Personal mailboxes require an Owner/director-level primary user.",
+      );
+    }
+  } else if (parsed.data.purpose === "PERSONAL") {
+    return actionResult(
+      false,
+      "Choose an Owner/director-level primary user for a personal mailbox.",
+    );
   }
 
   const permittedUserIds = [...new Set(parsed.data.sendUserIds)];
@@ -66,9 +85,15 @@ export async function updateGmailMailboxAction(
 
   const mailbox = await prisma.emailMailbox.findUnique({
     where: { id: parsed.data.mailboxId },
-    select: { id: true },
+    select: { id: true, purpose: true },
   });
   if (!mailbox) return actionResult(false, "Gmail mailbox was not found.");
+  if (
+    isLegacyGmailMailboxPurpose(parsed.data.purpose) &&
+    parsed.data.purpose !== mailbox.purpose
+  ) {
+    return actionResult(false, "Choose a current Phone System team purpose.");
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.emailMailbox.update({

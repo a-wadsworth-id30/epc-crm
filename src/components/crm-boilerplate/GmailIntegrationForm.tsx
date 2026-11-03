@@ -1,11 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   disconnectGmailMailboxAction,
   syncGmailMailboxAction,
   updateGmailMailboxAction,
 } from "@/lib/actions/gmail";
+import {
+  gmailMailboxTeamPurposeOptions,
+  type GmailMailboxPurpose,
+} from "@/lib/integrations/gmail-mailbox-purpose";
 
 type GmailMailboxRow = {
   id: string;
@@ -14,14 +18,19 @@ type GmailMailboxRow = {
   lastError: string | null;
   lastSyncAt: string | null;
   ownerUserId: string | null;
-  purpose: "PERSONAL" | "SALES" | "ACCOUNTS" | "SHARED";
+  purpose: GmailMailboxPurpose;
   sendEnabled: boolean;
   sendUserIds: string[];
   status: "CONNECTED" | "NEEDS_REAUTH" | "DISCONNECTED" | "ERROR";
   syncEnabled: boolean;
 };
 
-type UserOption = { id: string; email: string; name: string };
+type UserOption = {
+  canUsePersonalMailbox: boolean;
+  id: string;
+  email: string;
+  name: string;
+};
 
 const initialState = { ok: false, message: "", savedAt: null };
 
@@ -101,6 +110,11 @@ function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: User
     initialState,
   );
   const connected = mailbox.status === "CONNECTED";
+  const [ownerUserId, setOwnerUserId] = useState(mailbox.ownerUserId ?? "");
+  const [purpose, setPurpose] = useState<GmailMailboxPurpose>(mailbox.purpose);
+  const ownerCanUsePersonalMailbox = Boolean(
+    users.find((user) => user.id === ownerUserId)?.canUsePersonalMailbox,
+  );
 
   return (
     <article className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
@@ -126,20 +140,54 @@ function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: User
           Mailbox purpose
           <select
             name="purpose"
-            defaultValue={mailbox.purpose}
+            value={purpose}
+            onChange={(event) =>
+              setPurpose(event.target.value as GmailMailboxPurpose)
+            }
             className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
           >
-            <option value="PERSONAL">Personal sales mailbox</option>
-            <option value="SALES">Shared sales mailbox</option>
-            <option value="ACCOUNTS">Accounts mailbox</option>
-            <option value="SHARED">Other shared mailbox</option>
+            {mailbox.purpose === "ACCOUNTS" ? (
+              <option value="ACCOUNTS">
+                Accounts (legacy — choose a team)
+              </option>
+            ) : null}
+            {mailbox.purpose === "SHARED" ? (
+              <option value="SHARED">
+                Other shared (legacy — choose a team)
+              </option>
+            ) : null}
+            {gmailMailboxTeamPurposeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+            <option value="PERSONAL" disabled={!ownerCanUsePersonalMailbox}>
+              Personal (Owner / director only)
+            </option>
           </select>
+          <span className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">
+            Matches Phone System teams. Personal requires an Owner/director-level primary user.
+          </span>
         </label>
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
           Primary user
           <select
             name="ownerUserId"
-            defaultValue={mailbox.ownerUserId ?? ""}
+            value={ownerUserId}
+            onChange={(event) => {
+              const nextOwnerUserId = event.target.value;
+              setOwnerUserId(nextOwnerUserId);
+              if (
+                purpose === "PERSONAL" &&
+                !users.find(
+                  (user) =>
+                    user.id === nextOwnerUserId &&
+                    user.canUsePersonalMailbox,
+                )
+              ) {
+                setPurpose("SALES");
+              }
+            }}
             className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
           >
             <option value="">Shared / no single owner</option>

@@ -120,6 +120,11 @@ per-user dashboard layout tables. Dashboard reads fall back to code-defined
 role defaults while this migration is pending, but saving a role or personal
 layout requires the migration to have been applied.
 
+The migration `20261103170000_gmail_mailbox_team_purposes` adds New Business,
+Customer Success and Support to `EmailMailboxPurpose` and changes the default
+for new mailbox rows to Sales. Existing Accounts and Shared values are retained
+so the migration does not rewrite connected mailbox classifications.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run
