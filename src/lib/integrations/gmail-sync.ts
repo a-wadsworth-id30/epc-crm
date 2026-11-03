@@ -269,7 +269,7 @@ async function importGmailMessage({
       salesCommunicationId: communicationId,
       subject: message.headers.subject,
       summary,
-      textBody: body || message.textBody,
+      textBody: message.textBody ?? body,
       toAddress: emailAddresses(message.headers.to)[0] ?? message.headers.to,
     };
     const email = existing

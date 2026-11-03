@@ -22,7 +22,10 @@ import {
   searchInboxSales,
 } from "@/lib/actions/inbox";
 import type { InboxSaleOption } from "@/lib/actions/inbox";
-import { latestInboundEmailPlainText } from "@/lib/email/plain-text";
+import {
+  completeEmailPlainText,
+  latestInboundEmailPlainText,
+} from "@/lib/email/plain-text";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import type {
   InboxMessageDetail,
@@ -179,6 +182,7 @@ export default function InboxClient({
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [showFullEmail, setShowFullEmail] = useState(false);
   const selectedSummary = useMemo(
     () => messages.find((message) => message.id === selectedId) ?? messages[0],
     [messages, selectedId],
@@ -189,6 +193,27 @@ export default function InboxClient({
     selectedId && !selectedDetail && !detailError,
   );
   const selectedMessage = selectedDetail ?? selectedSummary;
+  const latestEmailBody = selectedDetail
+    ? latestInboundEmailPlainText({
+        fallback: selectedDetail.summary,
+        html: selectedDetail.htmlBody,
+        text: selectedDetail.textBody,
+      })
+    : (selectedMessage?.summary ?? "");
+  const completeEmailBody = selectedDetail
+    ? completeEmailPlainText({
+        fallback: selectedDetail.summary,
+        html: selectedDetail.htmlBody,
+        text: selectedDetail.textBody,
+      })
+    : latestEmailBody;
+  const canShowFullEmail = Boolean(
+    selectedDetail &&
+      completeEmailBody &&
+      completeEmailBody !== latestEmailBody,
+  );
+  const displayedEmailBody =
+    showFullEmail && canShowFullEmail ? completeEmailBody : latestEmailBody;
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -239,6 +264,7 @@ export default function InboxClient({
     setReplyOpen(false);
     setReplyBody("");
     setReplyError(null);
+    setShowFullEmail(false);
     setSelectedId(messageId);
     router.replace(inboxHref({ lane, messageId, page, pageSize, query }), {
       scroll: false,
@@ -616,18 +642,27 @@ export default function InboxClient({
                           {detailError}
                         </p>
                       ) : null}
-                      {(selectedDetail
-                        ? latestInboundEmailPlainText({
-                            fallback: selectedDetail.summary,
-                            html: selectedDetail.htmlBody,
-                            text: selectedDetail.textBody,
-                          })
-                        : selectedMessage.summary
-                      )
-                        .split(/\n{2,}/)
-                        .map((paragraph) => (
-                          <p key={paragraph}>{paragraph}</p>
-                        ))}
+                      {canShowFullEmail ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-white/[0.03]">
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                            {showFullEmail
+                              ? "Showing the complete email, including quoted history."
+                              : "Showing the latest reply only."}
+                          </span>
+                          <button
+                            className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400"
+                            type="button"
+                            onClick={() => setShowFullEmail((current) => !current)}
+                          >
+                            {showFullEmail
+                              ? "Show latest reply"
+                              : "Show full email"}
+                          </button>
+                        </div>
+                      ) : null}
+                      <p className="whitespace-pre-wrap">
+                        {displayedEmailBody}
+                      </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">

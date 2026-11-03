@@ -46,6 +46,28 @@ export function inboundEmailPlainText({
   return toEmailPlainText(text) || htmlToPlainText(html) || cleanPlainText(fallback ?? "");
 }
 
+export function completeEmailPlainText({
+  fallback,
+  html,
+  text,
+}: {
+  fallback?: string | null;
+  html?: string | null;
+  text?: string | null;
+}) {
+  const candidates = [
+    toEmailPlainText(text),
+    htmlToPlainText(html),
+    toEmailPlainText(fallback),
+  ].filter(Boolean);
+
+  return candidates.reduce(
+    (longest, candidate) =>
+      candidate.length > longest.length ? candidate : longest,
+    "",
+  );
+}
+
 export function latestEmailReplyText(value: string | null | undefined) {
   const plainText = toEmailPlainText(value);
 

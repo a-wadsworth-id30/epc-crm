@@ -55,7 +55,11 @@ import {
   type DisplayFormattingContext,
 } from "@/lib/display-defaults";
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
-import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import {
+  completeEmailPlainText,
+  latestEmailReplyText,
+  toEmailPlainText,
+} from "@/lib/email/plain-text";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import {
@@ -1696,12 +1700,14 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             select: {
               direction: true,
               fromAddress: true,
+              htmlBody: true,
               id: true,
               mailboxId: true,
               opportunityId: true,
               provider: true,
               providerThreadId: true,
               subject: true,
+              textBody: true,
               toAddress: true,
             },
           },
@@ -2160,6 +2166,15 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   const communicationConversationItems = sale.communications.map(
     (communication) => {
       const body = toEmailPlainText(communication.body);
+      const latestEmailBody =
+        communication.channel === "EMAIL" ? latestEmailReplyText(body) : body;
+      const completeEmailBody = communication.emailMessage
+        ? completeEmailPlainText({
+            fallback: body,
+            html: communication.emailMessage.htmlBody,
+            text: communication.emailMessage.textBody,
+          })
+        : body;
       const recipient = communication.emailMessage
         ? inboxReplyRecipient(communication.emailMessage)
         : null;
@@ -2183,10 +2198,13 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         direction: communication.direction,
         subject: communication.subject,
         summary: toEmailPlainText(communication.summary),
-        body:
-          (communication.channel === "EMAIL"
-            ? latestEmailReplyText(body)
-            : body) || null,
+        body: latestEmailBody || null,
+        fullEmailBody:
+          communication.channel === "EMAIL" &&
+          completeEmailBody &&
+          completeEmailBody !== latestEmailBody
+            ? completeEmailBody
+            : null,
         fromAddress: communication.fromAddress,
         gmailReply,
         toAddress: communication.toAddress,
