@@ -179,6 +179,7 @@ export default function InboxClient({
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
+  const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [showFullEmail, setShowFullEmail] = useState(true);
   const selectedSummary = useMemo(
@@ -260,6 +261,7 @@ export default function InboxClient({
     setReplyOpen(false);
     setReplyBody("");
     setReplyRecipient("");
+    setReplySubject("");
     setReplyError(null);
     setShowFullEmail(true);
     setSelectedId(messageId);
@@ -278,6 +280,7 @@ export default function InboxClient({
           selectedMessage.id,
           replyBody,
           replyRecipient,
+          replySubject,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -285,11 +288,12 @@ export default function InboxClient({
         }
 
         setReplyBody("");
+        setReplySubject("");
         setReplyOpen(false);
         showToast(result.message);
         router.refresh();
       } catch {
-        setReplyError("The Gmail reply could not be sent. Please try again.");
+        setReplyError("The email reply could not be sent. Please try again.");
       }
     });
   }
@@ -704,6 +708,9 @@ export default function InboxClient({
                                 contactAddress: selectedMessage.contact?.email,
                               }) ?? "",
                             );
+                            setReplySubject(
+                              inboxReplySubject(selectedMessage.subject),
+                            );
                             setReplyOpen((current) => !current);
                           }}
                         >
@@ -745,12 +752,25 @@ export default function InboxClient({
                             />
                           </div>
                           <div>
-                            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                            <label
+                              className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
+                              htmlFor={`inbox-reply-subject-${selectedMessage.id}`}
+                            >
                               Subject
-                            </span>
-                            <p className="mt-1 text-gray-800 dark:text-white/90">
-                              {inboxReplySubject(selectedMessage.subject)}
-                            </p>
+                            </label>
+                            <input
+                              className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                              disabled={isReplying}
+                              id={`inbox-reply-subject-${selectedMessage.id}`}
+                              maxLength={200}
+                              onChange={(event) => {
+                                setReplySubject(event.target.value);
+                                setReplyError(null);
+                              }}
+                              required
+                              type="text"
+                              value={replySubject}
+                            />
                           </div>
                         </div>
                         <label
@@ -792,7 +812,8 @@ export default function InboxClient({
                             disabled={
                               isReplying ||
                               !replyBody.trim() ||
-                              !replyRecipient.trim()
+                              !replyRecipient.trim() ||
+                              !replySubject.trim()
                             }
                             type="submit"
                           >

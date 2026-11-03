@@ -84,7 +84,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   transaction and block obvious duplicate contacts by email or normalized phone.
 - Inbox and Sales > Conversation email replies default to the incoming
   message's `Reply-To` address, then its sender or linked lead email, while
-  excluding the connected CRM mailbox from the automatic recipient.
+  excluding the connected CRM mailbox from the automatic recipient. Reply
+  subjects default to the normalized `Re:` subject and remain editable before
+  sending.
 - Settings > General stores task defaults in `CrmSettings.taskDefaults` for
   default follow-up task assignee mode, optional specific assignee and default
   due-date offset. The shared task creation API uses these defaults when AI

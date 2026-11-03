@@ -51,6 +51,12 @@ const inboxReplySchema = z.object({
     .trim()
     .email("Enter a valid reply address.")
     .optional(),
+  subject: z
+    .string()
+    .trim()
+    .min(1, "Enter an email subject.")
+    .max(200, "Keep the email subject under 200 characters.")
+    .optional(),
 });
 
 function jsonInput(value: Prisma.JsonValue | null) {
@@ -381,8 +387,14 @@ export async function replyToInboxMessage(
   messageId: string,
   body: string,
   recipient?: string,
+  subject?: string,
 ): Promise<InboxReplyResult> {
-  const parsed = inboxReplySchema.safeParse({ body, messageId, recipient });
+  const parsed = inboxReplySchema.safeParse({
+    body,
+    messageId,
+    recipient,
+    subject,
+  });
   if (!parsed.success) {
     return {
       ok: false,
@@ -449,7 +461,7 @@ export async function replyToInboxMessage(
       mailboxId: isThreadedGmail ? message.mailboxId : null,
       opportunityId: message.opportunityId,
       source: isThreadedGmail ? "inbox-gmail-reply" : "inbox-email-reply",
-      subject: inboxReplySubject(message.subject),
+      subject: parsed.data.subject ?? inboxReplySubject(message.subject),
       to: replyRecipient,
       user,
     });

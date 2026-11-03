@@ -471,6 +471,7 @@ export default function SaleConversationThread({
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
+  const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
   const [showingLatestEmailId, setShowingLatestEmailId] = useState<string | null>(
@@ -482,7 +483,8 @@ export default function SaleConversationThread({
     if (
       !communication.emailReply ||
       !replyBody.trim() ||
-      !replyRecipient.trim()
+      !replyRecipient.trim() ||
+      !replySubject.trim()
     )
       return;
 
@@ -494,6 +496,7 @@ export default function SaleConversationThread({
           communication.emailReply!.emailMessageId,
           replyBody,
           replyRecipient,
+          replySubject,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -502,10 +505,11 @@ export default function SaleConversationThread({
 
         setReplyBody("");
         setReplyRecipient("");
+        setReplySubject("");
         setReplySuccess(result.message);
         router.refresh();
       } catch {
-        setReplyError("The Gmail reply could not be sent. Please try again.");
+        setReplyError("The email reply could not be sent. Please try again.");
       }
     });
   }
@@ -1116,6 +1120,9 @@ export default function SaleConversationThread({
                                   setReplyRecipient(
                                     communication.emailReply?.recipient ?? "",
                                   );
+                                  setReplySubject(
+                                    communication.emailReply?.subject ?? "",
+                                  );
                                   setReplyError(null);
                                   setReplySuccess(null);
                                 }}
@@ -1204,12 +1211,26 @@ export default function SaleConversationThread({
                                 />
                               </div>
                               <div>
-                                <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                                <label
+                                  className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
+                                  htmlFor={`sale-email-subject-${communication.id}`}
+                                >
                                   Subject
-                                </span>
-                                <p className="mt-1 text-gray-800 dark:text-white/90">
-                                  {communication.emailReply.subject}
-                                </p>
+                                </label>
+                                <input
+                                  className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                                  disabled={isGmailReplying}
+                                  id={`sale-email-subject-${communication.id}`}
+                                  maxLength={200}
+                                  onChange={(event) => {
+                                    setReplySubject(event.target.value);
+                                    setReplyError(null);
+                                    setReplySuccess(null);
+                                  }}
+                                  required
+                                  type="text"
+                                  value={replySubject}
+                                />
                               </div>
                             </div>
                             <label
@@ -1252,6 +1273,7 @@ export default function SaleConversationThread({
                                   setReplyingToId(null);
                                   setReplyBody("");
                                   setReplyRecipient("");
+                                  setReplySubject("");
                                   setReplyError(null);
                                   setReplySuccess(null);
                                 }}
@@ -1263,7 +1285,8 @@ export default function SaleConversationThread({
                                 disabled={
                                   isGmailReplying ||
                                   !replyBody.trim() ||
-                                  !replyRecipient.trim()
+                                  !replyRecipient.trim() ||
+                                  !replySubject.trim()
                                 }
                                 type="submit"
                               >
