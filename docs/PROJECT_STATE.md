@@ -92,7 +92,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an
   existing cross-provider communication when identity or a strict two-minute
   content fingerprint matches. `npm run maintenance:email-dedupe-audit --
-  --sale <id>` reports existing duplicate pairs without deleting records.
+  --sale <id>` reports existing duplicate pairs without deleting records. The
+  fallback tolerates a missing sender/recipient on one provider copy while
+  preserving separately sent messages with distinct RFC `Message-ID` values.
 - Settings > General stores task defaults in `CrmSettings.taskDefaults` for
   default follow-up task assignee mode, optional specific assignee and default
   due-date offset. The shared task creation API uses these defaults when AI

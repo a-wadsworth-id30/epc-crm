@@ -61,6 +61,47 @@ describe("email deduplication", () => {
     );
   });
 
+  it("matches provider copies when one import omitted an address", () => {
+    const base = {
+      body: "This is a CRM email response test from inbox.",
+      direction: "OUTBOUND",
+      occurredAt: "2026-11-03T11:33:20.000Z",
+      subject: "Re: EPC CRM- Contacts section",
+      toAddress: "adam@example.com",
+    };
+
+    assert.equal(
+      emailMessagesAreDuplicates(
+        { ...base, fromAddress: null },
+        {
+          ...base,
+          fromAddress: "crm@example.com",
+          occurredAt: "2026-11-03T11:33:48.000Z",
+        },
+      ),
+      true,
+    );
+  });
+
+  it("never collapses records with distinct RFC Message-IDs", () => {
+    const base = {
+      body: "Same deliberately repeated email",
+      direction: "OUTBOUND",
+      fromAddress: "crm@example.com",
+      occurredAt: "2026-11-03T11:34:00.000Z",
+      subject: "Repeated test",
+      toAddress: "adam@example.com",
+    };
+
+    assert.equal(
+      emailMessagesAreDuplicates(
+        { ...base, internetMessageId: "first@example.com" },
+        { ...base, internetMessageId: "second@example.com" },
+      ),
+      false,
+    );
+  });
+
   it("keeps the richer Gmail card when the conversation contains duplicates", () => {
     const items = deduplicateConversationEmailItems([
       {
