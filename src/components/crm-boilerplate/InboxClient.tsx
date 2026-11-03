@@ -759,9 +759,7 @@ export default function InboxClient({
                             type="button"
                             onClick={() => setShowFullEmail((current) => !current)}
                           >
-                            {showFullEmail
-                              ? "Show latest reply"
-                              : "Show full email"}
+                            {showFullEmail ? "Show less" : "Show all"}
                           </button>
                         </div>
                       ) : null}
