@@ -782,7 +782,10 @@ export default function InboxClient({
                                 setReplyMailboxId(value);
                                 setReplyError(null);
                               }}
-                              originalMailboxId={selectedMessage.mailboxId}
+                              originalMailboxId={
+                                selectedMessage.mailboxId ??
+                                sendMailboxes[0]?.id
+                              }
                               value={replyMailboxId}
                             />
                           ) : null}
