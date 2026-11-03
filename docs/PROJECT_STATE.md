@@ -87,6 +87,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   excluding the connected CRM mailbox from the automatic recipient. Reply
   subjects default to the normalized `Re:` subject and remain editable before
   sending.
+- Sales > Conversation shows the latest reply content by default and collapses
+  strict duplicate email cards, preferring the richer Gmail copy when the same
+  RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an
+  existing cross-provider communication when identity or a strict two-minute
+  content fingerprint matches. `npm run maintenance:email-dedupe-audit --
+  --sale <id>` reports existing duplicate pairs without deleting records.
 - Settings > General stores task defaults in `CrmSettings.taskDefaults` for
   default follow-up task assignee mode, optional specific assignee and default
   due-date offset. The shared task creation API uses these defaults when AI

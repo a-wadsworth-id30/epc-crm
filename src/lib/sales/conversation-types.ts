@@ -21,6 +21,8 @@ export type SaleConversationItem = {
   summary: string;
   body: string | null;
   emailHtmlBody?: string | null;
+  emailIdentity?: string | null;
+  emailProvider?: string | null;
   fullEmailBody?: string | null;
   fullEmailHtmlBody?: string | null;
   fromAddress: string | null;

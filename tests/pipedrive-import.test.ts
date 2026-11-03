@@ -489,6 +489,7 @@ before(async () => {
         },
         emailMessage: {
           create: createEmailMessage,
+          findMany: async () => [],
           findUnique: findEmailMessage,
           update: updateEmailMessage,
         },
@@ -574,6 +575,7 @@ before(async () => {
           },
           emailMessage: {
             create: createEmailMessage,
+            findMany: async () => [],
             findUnique: findEmailMessage,
             update: updateEmailMessage,
           },

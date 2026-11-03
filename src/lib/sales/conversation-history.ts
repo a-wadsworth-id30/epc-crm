@@ -9,6 +9,7 @@ import {
   toEmailPlainText,
 } from "@/lib/email/plain-text";
 import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
+import { emailInternetMessageIdentity } from "@/lib/email/deduplication";
 import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
@@ -181,6 +182,7 @@ const communicationSelect = {
       headers: true,
       htmlBody: true,
       id: true,
+      internetMessageId: true,
       mailbox: { select: { emailAddress: true } },
       mailboxId: true,
       metadata: true,
@@ -254,6 +256,10 @@ function serializeCommunication(
     direction: communication.direction,
     emailHtmlBody:
       communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
+    emailIdentity: communication.emailMessage
+      ? emailInternetMessageIdentity(communication.emailMessage)
+      : null,
+    emailProvider: communication.emailMessage?.provider ?? null,
     fromAddress: communication.fromAddress,
     fullEmailBody:
       communication.channel === "EMAIL" &&

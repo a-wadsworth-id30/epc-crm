@@ -8,6 +8,10 @@ import {
   emailHeaderName,
   firstEmailAddress,
 } from "@/lib/email/addresses";
+import {
+  emailMessagesAreDuplicates,
+  normalizeInternetMessageId,
+} from "@/lib/email/deduplication";
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
@@ -201,9 +205,76 @@ async function importGmailMessage({
     sizeEstimate: message.sizeEstimate,
     source: "gmail-sync",
   });
+  const internetMessageId = normalizeInternetMessageId(
+    message.headers.messageId,
+  );
+  const crossProviderCandidates =
+    !existing && context.opportunityId
+      ? await prisma.emailMessage.findMany({
+          where: {
+            opportunityId: context.opportunityId,
+            provider: { not: "gmail" },
+            OR: [
+              ...(internetMessageId
+                ? [{ internetMessageId }]
+                : []),
+              {
+                direction,
+                receivedAt: {
+                  gte: new Date(date.getTime() - 2 * 60 * 1000),
+                  lte: new Date(date.getTime() + 2 * 60 * 1000),
+                },
+                subject: message.headers.subject,
+              },
+            ],
+          },
+          orderBy: { receivedAt: "desc" },
+          take: 10,
+          select: {
+            direction: true,
+            fromAddress: true,
+            headers: true,
+            id: true,
+            internetMessageId: true,
+            metadata: true,
+            receivedAt: true,
+            salesCommunicationId: true,
+            subject: true,
+            textBody: true,
+            toAddress: true,
+          },
+        })
+      : [];
+  const crossProviderDuplicate = crossProviderCandidates.find((candidate) =>
+    emailMessagesAreDuplicates(
+      {
+        body: candidate.textBody,
+        direction: candidate.direction,
+        fromAddress: candidate.fromAddress,
+        headers: candidate.headers,
+        internetMessageId: candidate.internetMessageId,
+        metadata: candidate.metadata,
+        occurredAt: candidate.receivedAt,
+        subject: candidate.subject,
+        toAddress: candidate.toAddress,
+      },
+      {
+        body: message.textBody ?? body,
+        direction,
+        fromAddress,
+        internetMessageId,
+        occurredAt: date,
+        subject: message.headers.subject,
+        toAddress,
+      },
+    ),
+  );
 
   const result = await prisma.$transaction(async (tx) => {
-    let communicationId = existing?.salesCommunicationId ?? null;
+    let communicationId =
+      existing?.salesCommunicationId ??
+      crossProviderDuplicate?.salesCommunicationId ??
+      null;
     if (context.opportunityId) {
       const communicationData = {
         body: body || null,
@@ -246,7 +317,11 @@ async function importGmailMessage({
           mailboxId: mailbox.id,
           opportunityId: context.opportunityId,
           providerThreadId: message.threadId,
-          source: existing ? "existing-message" : "automatic",
+          source: existing
+            ? "existing-message"
+            : crossProviderDuplicate
+              ? "cross-provider-match"
+              : "automatic",
         },
       });
     }
@@ -269,7 +344,7 @@ async function importGmailMessage({
       fromName,
       htmlBody: message.htmlBody,
       inReplyTo: message.headers.inReplyTo,
-      internetMessageId: message.headers.messageId,
+      internetMessageId,
       mailboxId: mailbox.id,
       metadata,
       opportunityId: context.opportunityId,
@@ -282,6 +357,17 @@ async function importGmailMessage({
       textBody: message.textBody ?? body,
       toAddress,
     };
+    if (
+      !existing &&
+      crossProviderDuplicate?.salesCommunicationId &&
+      crossProviderDuplicate.salesCommunicationId === communicationId
+    ) {
+      await tx.emailMessage.update({
+        where: { id: crossProviderDuplicate.id },
+        data: { salesCommunicationId: null },
+      });
+    }
+
     const email = existing
       ? await tx.emailMessage.update({ where: { id: existing.id }, data: emailData })
       : await tx.emailMessage.create({
