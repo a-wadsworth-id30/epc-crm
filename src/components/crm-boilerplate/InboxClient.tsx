@@ -178,8 +178,9 @@ export default function InboxClient({
   const [assignmentSearching, setAssignmentSearching] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
+  const [replyRecipient, setReplyRecipient] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
-  const [showFullEmail, setShowFullEmail] = useState(false);
+  const [showFullEmail, setShowFullEmail] = useState(true);
   const selectedSummary = useMemo(
     () => messages.find((message) => message.id === selectedId) ?? messages[0],
     [messages, selectedId],
@@ -258,8 +259,9 @@ export default function InboxClient({
     setAssignmentOpen(false);
     setReplyOpen(false);
     setReplyBody("");
+    setReplyRecipient("");
     setReplyError(null);
-    setShowFullEmail(false);
+    setShowFullEmail(true);
     setSelectedId(messageId);
     router.replace(inboxHref({ lane, messageId, page, pageSize, query }), {
       scroll: false,
@@ -275,6 +277,7 @@ export default function InboxClient({
         const result = await replyToInboxMessage(
           selectedMessage.id,
           replyBody,
+          replyRecipient,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -684,7 +687,7 @@ export default function InboxClient({
                         </button>
                       ) : null}
                       {selectedMessage.provider === "gmail" &&
-                      inboxReplyRecipient(selectedMessage) ? (
+                      selectedMessage.opportunity ? (
                         <button
                           className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
                           disabled={!selectedMessage.opportunity || isReplying}
@@ -696,6 +699,9 @@ export default function InboxClient({
                           type="button"
                           onClick={() => {
                             setReplyError(null);
+                            setReplyRecipient(
+                              inboxReplyRecipient(selectedMessage) ?? "",
+                            );
                             setReplyOpen((current) => !current);
                           }}
                         >
@@ -716,12 +722,25 @@ export default function InboxClient({
                       >
                         <div className="grid gap-3 text-sm sm:grid-cols-2">
                           <div>
-                            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                            <label
+                              className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
+                              htmlFor={`inbox-reply-recipient-${selectedMessage.id}`}
+                            >
                               To
-                            </span>
-                            <p className="mt-1 break-all text-gray-800 dark:text-white/90">
-                              {inboxReplyRecipient(selectedMessage)}
-                            </p>
+                            </label>
+                            <input
+                              className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                              disabled={isReplying}
+                              id={`inbox-reply-recipient-${selectedMessage.id}`}
+                              onChange={(event) => {
+                                setReplyRecipient(event.target.value);
+                                setReplyError(null);
+                              }}
+                              placeholder="customer@example.com"
+                              required
+                              type="email"
+                              value={replyRecipient}
+                            />
                           </div>
                           <div>
                             <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
@@ -768,7 +787,11 @@ export default function InboxClient({
                           </button>
                           <button
                             className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={isReplying || !replyBody.trim()}
+                            disabled={
+                              isReplying ||
+                              !replyBody.trim() ||
+                              !replyRecipient.trim()
+                            }
                             type="submit"
                           >
                             {isReplying ? "Sending..." : "Send Gmail reply"}
