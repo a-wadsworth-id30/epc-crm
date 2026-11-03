@@ -1232,7 +1232,7 @@ export default function SaleConversationThread({
                               sendGmailReply(communication);
                             }}
                           >
-                            <div className="grid gap-3 text-sm lg:grid-cols-3">
+                            <div className="grid items-start gap-3 text-sm md:grid-cols-3">
                               {sendMailboxes.length ? (
                                 <EmailMailboxSenderField
                                   disabled={isGmailReplying}
@@ -1264,15 +1264,15 @@ export default function SaleConversationThread({
                                   }}
                                 value={replyRecipient}
                               />
-                              <div>
+                              <div className="min-w-0">
                                 <label
-                                  className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
+                                  className="flex h-5 items-center text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
                                   htmlFor={`sale-email-subject-${communication.id}`}
                                 >
                                   Subject
                                 </label>
                                 <input
-                                  className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                                  className="mt-1 h-10 min-w-0 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
                                   disabled={isGmailReplying}
                                   id={`sale-email-subject-${communication.id}`}
                                   maxLength={200}
