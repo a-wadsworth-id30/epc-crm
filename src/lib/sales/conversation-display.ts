@@ -2,6 +2,7 @@ import { inferredEmailDirection } from "@/lib/email/direction";
 
 export type EmailConversationDisplay = {
   channel: string;
+  contactEmail?: string | null;
   contactName: string | null;
   direction: string;
   emailProvider?: string | null;
@@ -50,11 +51,24 @@ export function emailParticipantRoute(message: EmailConversationDisplay) {
   if (message.channel !== "EMAIL") return null;
 
   const direction = emailDisplayDirection(message);
+  const inferredSenderAddress =
+    direction === "INBOUND" &&
+    !message.fromAddress &&
+    message.contactEmail &&
+    sameParticipant(message.fromName, message.contactName)
+      ? message.contactEmail
+      : null;
+  const inferredSender = inferredSenderAddress
+    ? message.fromName || message.contactName
+      ? `${message.fromName || message.contactName} (${inferredSenderAddress})`
+      : inferredSenderAddress
+    : null;
 
   const sender =
     direction === "OUTBOUND" && message.userName
       ? "CRM"
-      : message.fromName ||
+      : inferredSender ||
+        message.fromName ||
         message.fromAddress ||
         (direction === "INBOUND" ? message.contactName : null) ||
         emailOriginLabel(message) ||

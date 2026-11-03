@@ -13,6 +13,7 @@ function message(
 ): EmailConversationDisplay {
   return {
     channel: "EMAIL",
+    contactEmail: "a.wadsworth@id30.com",
     contactName: "Adam Wadsworth",
     direction: "OUTBOUND",
     emailProvider: "gmail",
@@ -86,8 +87,18 @@ test("a name-only sender matching the linked lead is displayed as received", () 
   assert.equal(emailDisplayDirection(imported), "INBOUND");
   assert.equal(
     emailParticipantRoute(imported),
-    "Adam Wadsworth → CRM",
+    "Adam Wadsworth (a.wadsworth@id30.com) → CRM",
   );
+});
+
+test("a provider sender address remains authoritative", () => {
+  const imported = message({
+    direction: "INBOUND",
+    fromAddress: "adam@provider.example",
+    toAddress: null,
+  });
+
+  assert.equal(emailParticipantRoute(imported), "Adam Wadsworth → CRM");
 });
 
 test("a distinct linked lead remains a valid last-resort recipient", () => {

@@ -171,7 +171,7 @@ function formatRole(value: string) {
 const communicationSelect = {
   body: true,
   channel: true,
-  contact: { select: { firstName: true, lastName: true } },
+  contact: { select: { email: true, firstName: true, lastName: true } },
   direction: true,
   emailMessage: {
     select: {
@@ -252,6 +252,10 @@ function serializeCommunication(
   return {
     body: latestEmailBody || null,
     channel: communication.channel,
+    contactEmail:
+      communication.emailMessage?.contact?.email ??
+      communication.contact?.email ??
+      null,
     contactName: contactName(communication.contact),
     direction: communication.direction,
     emailHtmlBody:
