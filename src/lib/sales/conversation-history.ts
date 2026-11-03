@@ -261,6 +261,7 @@ function serializeCommunication(
       : null,
     emailProvider: communication.emailMessage?.provider ?? null,
     fromAddress: communication.fromAddress,
+    fromName: communication.emailMessage?.fromName ?? null,
     fullEmailBody:
       communication.channel === "EMAIL" &&
       completeEmailBody &&

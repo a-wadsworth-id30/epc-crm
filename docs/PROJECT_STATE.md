@@ -88,7 +88,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   subjects default to the normalized `Re:` subject and remain editable before
   sending. Customer-facing email direction labels use **Sent** and **Received**
   in both views while the stored direction values remain `OUTBOUND` and
-  `INBOUND`.
+  `INBOUND`. Sales > Conversation distinguishes CRM-composed email from
+  messages imported from Gmail or another provider: imported sent mail shows
+  the real email sender instead of incorrectly labelling the route as CRM, and
+  email cards show their CRM/provider origin.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

@@ -27,6 +27,10 @@ import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
+  emailOriginLabel,
+  outboundEmailRoute,
+} from "@/lib/sales/conversation-display";
+import {
   conversationItemMatchesQuery,
   saleConversationFilters,
   saleConversationPageSize,
@@ -364,12 +368,15 @@ function directionRoute(communication: SaleConversationItem) {
   }
 
   if (communication.direction === "OUTBOUND") {
-    return `CRM → ${
+    const emailRoute = outboundEmailRoute(communication);
+    if (emailRoute) return emailRoute;
+
+    const recipient =
       communication.contactName ||
       communication.toAddress ||
       communication.fromAddress ||
-      "Customer"
-    }`;
+      "Customer";
+    return `CRM → ${recipient}`;
   }
 
   if (communication.direction === "INBOUND") {
@@ -877,6 +884,7 @@ export default function SaleConversationThread({
                         communication.direction,
                         communication.channel,
                       );
+                const emailOrigin = emailOriginLabel(communication);
                 const isExpanded = visibleExpandedId === communication.id;
                 const pageHref =
                   communication.channel === "WEBSITE"
@@ -936,6 +944,11 @@ export default function SaleConversationThread({
                               </span>
                             )}
                             <ChannelBadge channel={renderedChannel} />
+                            {emailOrigin ? (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
+                                {emailOrigin}
+                              </span>
+                            ) : null}
                             {status && (
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClassName(status)}`}

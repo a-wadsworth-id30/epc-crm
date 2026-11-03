@@ -112,6 +112,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   Connected mailbox/receiving addresses are excluded from automatic defaults.
   Their editable subject is validated server-side and defaults to the original
   subject with normalized `Re:` prefixes.
+- Sale-conversation email serialization includes the provider `From` name.
+  Outbound communications with a CRM user are displayed as CRM sends; imported
+  Gmail/provider sent mail uses its actual sender name or address and carries a
+  provider-origin badge instead of being presented as CRM-authored.
 - `src/lib/email/deduplication.ts` owns provider-neutral email identity and
   strict fingerprint matching. Conversation rendering collapses duplicate
   Pipedrive/Gmail cards without deleting stored records, while Gmail import can
