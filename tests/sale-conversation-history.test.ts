@@ -25,11 +25,11 @@ const emailRows = Array.from({ length: 15 }, (_, index) => ({
           fromAddress: "customer@example.com",
           htmlBody:
             "<p>Email body 1</p><div>On Monday, customer wrote:</div><blockquote>Earlier message</blockquote>",
-          id: "gmail-email-1",
-          mailboxId: "mailbox-1",
+          id: "email-message-1",
+          mailboxId: null,
           opportunityId: "sale-1",
-          provider: "gmail",
-          providerThreadId: "thread-1",
+          provider: "mailersend",
+          providerThreadId: null,
           subject: "Re: Email 1",
           textBody: "Email body 1",
           toAddress: "sales@example.com",
@@ -228,7 +228,7 @@ describe("sale conversation history", () => {
     );
   });
 
-  it("exposes safe Gmail reply context for linked sale emails", async () => {
+  it("exposes reply context for linked sale emails regardless of provider", async () => {
     const result = await conversationHistory.listSaleConversationPage({
       filter: "EMAIL",
       page: 1,
@@ -237,8 +237,8 @@ describe("sale conversation history", () => {
     });
 
     assert.ok(result);
-    assert.deepEqual(result.items[0]?.gmailReply, {
-      emailMessageId: "gmail-email-1",
+    assert.deepEqual(result.items[0]?.emailReply, {
+      emailMessageId: "email-message-1",
       recipient: "customer@example.com",
       subject: "Re: Email 1",
     });

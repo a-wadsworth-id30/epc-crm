@@ -686,14 +686,13 @@ export default function InboxClient({
                             : "Assign to sale"}
                         </button>
                       ) : null}
-                      {selectedMessage.provider === "gmail" &&
-                      selectedMessage.opportunity ? (
+                      {selectedMessage.opportunity ? (
                         <button
                           className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
                           disabled={!selectedMessage.opportunity || isReplying}
                           title={
                             selectedMessage.opportunity
-                              ? "Reply from the connected Gmail mailbox"
+                              ? "Reply using the CRM's connected email delivery"
                               : "Assign this Gmail conversation to a sale before replying"
                           }
                           type="button"
@@ -794,7 +793,7 @@ export default function InboxClient({
                             }
                             type="submit"
                           >
-                            {isReplying ? "Sending..." : "Send Gmail reply"}
+                            {isReplying ? "Sending..." : "Send email reply"}
                           </button>
                         </div>
                       </form>

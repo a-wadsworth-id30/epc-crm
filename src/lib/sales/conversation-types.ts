@@ -29,7 +29,7 @@ export type SaleConversationItem = {
   userName: string | null;
   contactName: string | null;
   metadata: unknown;
-  gmailReply?: {
+  emailReply?: {
     emailMessageId: string;
     recipient: string | null;
     subject: string;

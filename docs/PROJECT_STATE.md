@@ -1177,6 +1177,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   sender name but no usable address. The user must enter a valid recipient,
   normal sale/contact send permissions still apply, and the confirmed address
   is stored on the source message only after a successful reply.
+- Inbox and sale Conversation expose **Reply in CRM** for every linked email
+  enquiry, not only rows with complete Gmail thread metadata. Gmail messages
+  retain exact thread replies when mailbox/thread IDs exist; MailerSend and
+  other imported email enquiries use the normal authorised sale-email delivery
+  path.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

@@ -415,20 +415,10 @@ export async function replyToInboxMessage(
   if (!message) {
     return { ok: false, message: "Email not found or unavailable." };
   }
-  if (
-    message.provider !== "gmail" ||
-    !message.mailboxId ||
-    !message.providerThreadId
-  ) {
-    return {
-      ok: false,
-      message: "In-CRM replies are currently available for Gmail conversations.",
-    };
-  }
   if (!message.opportunityId) {
     return {
       ok: false,
-      message: "Assign this Gmail conversation to a sale before replying.",
+      message: "Assign this email conversation to a sale before replying.",
     };
   }
 
@@ -442,15 +432,20 @@ export async function replyToInboxMessage(
   if (!replyRecipient) {
     return { ok: false, message: "Enter a valid reply address." };
   }
+  const isThreadedGmail = Boolean(
+    message.provider === "gmail" &&
+      message.mailboxId &&
+      message.providerThreadId,
+  );
 
   try {
     await sendSalesLeadEmail({
       body: parsed.data.body,
-      gmailThreadId: message.providerThreadId,
-      inReplyTo: message.internetMessageId,
-      mailboxId: message.mailboxId,
+      gmailThreadId: isThreadedGmail ? message.providerThreadId : null,
+      inReplyTo: isThreadedGmail ? message.internetMessageId : null,
+      mailboxId: isThreadedGmail ? message.mailboxId : null,
       opportunityId: message.opportunityId,
-      source: "inbox-reply",
+      source: isThreadedGmail ? "inbox-gmail-reply" : "inbox-email-reply",
       subject: inboxReplySubject(message.subject),
       to: replyRecipient,
       user,
@@ -468,7 +463,7 @@ export async function replyToInboxMessage(
   } catch (error) {
     return {
       ok: false,
-      message: outboundMessageError(error, "Gmail reply could not be sent."),
+      message: outboundMessageError(error, "Email reply could not be sent."),
     };
   }
 
@@ -483,7 +478,7 @@ export async function replyToInboxMessage(
   revalidatePath("/inbox");
   revalidatePath(`/sales/${message.opportunityId}`);
 
-  return { ok: true, message: `Reply sent to ${recipient}.` };
+  return { ok: true, message: `Reply sent to ${replyRecipient}.` };
 }
 
 export async function markInboxMessageRead(messageId: string) {
