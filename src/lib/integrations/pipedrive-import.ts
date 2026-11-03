@@ -11,6 +11,7 @@ import {
   emailInternetMessageIdentity,
   emailMessagesAreDuplicates,
 } from "@/lib/email/deduplication";
+import { inferredEmailDirection } from "@/lib/email/direction";
 import { emailTextSummary, toEmailPlainText } from "@/lib/email/plain-text";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
@@ -993,6 +994,8 @@ export async function syncPipedriveLeadEmailsForOpportunity({
           select: {
             email: true,
             additionalEmails: { select: { email: true } },
+            firstName: true,
+            lastName: true,
           },
         },
       },
@@ -1050,6 +1053,7 @@ export async function syncPipedriveLeadEmailsForOpportunity({
   const writeResult = await prisma.$transaction((tx) =>
     syncPipedriveLeadEmailRecords(tx, {
       contactEmails: contactEmailValues(opportunity.contact),
+      contactName: contactDisplayName(opportunity.contact),
       contactId: opportunity.contactId,
       emails: emailRead.emails,
       externalLeadId: leadLink.externalId,
@@ -1234,6 +1238,8 @@ export async function importPipedriveLeadEmailThreadPages({
         select: {
           additionalEmails: { select: { email: true } },
           email: true,
+          firstName: true,
+          lastName: true,
         },
       },
     },
@@ -1314,6 +1320,7 @@ export async function importPipedriveLeadEmailThreadPages({
 
         const writeResult = await syncPipedriveLeadEmailRecords(tx, {
           contactEmails: contactEmailValues(opportunity.contact),
+          contactName: contactDisplayName(opportunity.contact),
           contactId: opportunity.contactId,
           emails: uniqueEmails,
           externalLeadId,
@@ -3742,6 +3749,7 @@ async function syncPipedriveLeadEmailRecords(
   tx: Prisma.TransactionClient,
   {
     contactEmails,
+    contactName,
     contactId,
     emails,
     externalLeadId,
@@ -3750,6 +3758,7 @@ async function syncPipedriveLeadEmailRecords(
     opportunityId,
   }: {
     contactEmails: string[];
+    contactName: string | null;
     contactId: string | null;
     emails: PipedriveMailMessage[];
     externalLeadId: string;
@@ -3765,6 +3774,7 @@ async function syncPipedriveLeadEmailRecords(
   for (const email of emails) {
     const mapped = mapPipedriveMailMessageToSalesEmail({
       contactEmails,
+      contactName,
       contactId,
       email,
       externalLeadId,
@@ -3923,6 +3933,7 @@ async function syncPipedriveLeadEmailRecords(
 
 function mapPipedriveMailMessageToSalesEmail({
   contactEmails,
+  contactName,
   contactId,
   email,
   externalLeadId,
@@ -3931,6 +3942,7 @@ function mapPipedriveMailMessageToSalesEmail({
   opportunityId,
 }: {
   contactEmails: string[];
+  contactName: string | null;
   contactId: string | null;
   email: PipedriveMailMessage;
   externalLeadId: string;
@@ -4029,13 +4041,13 @@ function mapPipedriveMailMessageToSalesEmail({
     parsePipedriveDate(emailRecord.update_time) ??
     parsePipedriveDate(emailDataRecord.update_time) ??
     now;
-  const normalizedContactEmails = new Set(
-    contactEmails.map((value) => value.toLowerCase()),
-  );
-  const direction =
-    fromAddress && normalizedContactEmails.has(fromAddress)
-      ? ("INBOUND" as const)
-      : ("OUTBOUND" as const);
+  const direction = inferredEmailDirection({
+    contactAddresses: contactEmails,
+    contactName,
+    fromAddress,
+    fromName,
+    storedDirection: "OUTBOUND",
+  }) as "INBOUND" | "OUTBOUND";
   const providerMessageId = `${pipedriveMailExternalIdPrefix}${externalMailId}`;
   const matchedLeadId = pipedriveLeadIdFromMailMessage(email);
   const matchedDealId = pipedriveDealIdFromMailMessage(email);
@@ -4777,6 +4789,18 @@ function contactEmailValues(
   ]
     .map((value) => cleanText(value)?.toLowerCase())
     .filter((value): value is string => Boolean(value));
+}
+
+function contactDisplayName(
+  contact:
+    | {
+        firstName: string;
+        lastName: string;
+      }
+    | null,
+) {
+  if (!contact) return null;
+  return cleanText(`${contact.firstName} ${contact.lastName}`);
 }
 
 function uniqueEmailAddresses(value: unknown) {

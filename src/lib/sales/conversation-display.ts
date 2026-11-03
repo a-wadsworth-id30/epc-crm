@@ -1,3 +1,5 @@
+import { inferredEmailDirection } from "@/lib/email/direction";
+
 export type EmailConversationDisplay = {
   channel: string;
   contactName: string | null;
@@ -10,6 +12,19 @@ export type EmailConversationDisplay = {
   userName: string | null;
 };
 
+export function emailDisplayDirection(message: EmailConversationDisplay) {
+  if (message.channel !== "EMAIL" || message.userName) {
+    return message.direction;
+  }
+
+  return inferredEmailDirection({
+    contactName: message.contactName,
+    fromAddress: message.fromAddress,
+    fromName: message.fromName,
+    storedDirection: message.direction,
+  });
+}
+
 export function emailOriginLabel(message: EmailConversationDisplay) {
   if (message.channel !== "EMAIL") return null;
   if (message.direction === "OUTBOUND" && message.userName) return "CRM";
@@ -20,22 +35,41 @@ export function emailOriginLabel(message: EmailConversationDisplay) {
   return message.emailProvider ?? null;
 }
 
+function sameParticipant(
+  left: string | null | undefined,
+  right: string | null | undefined,
+) {
+  const normalizedLeft = left?.trim().toLocaleLowerCase();
+  const normalizedRight = right?.trim().toLocaleLowerCase();
+  return Boolean(
+    normalizedLeft && normalizedRight && normalizedLeft === normalizedRight,
+  );
+}
+
 export function emailParticipantRoute(message: EmailConversationDisplay) {
   if (message.channel !== "EMAIL") return null;
 
+  const direction = emailDisplayDirection(message);
+
   const sender =
-    message.direction === "OUTBOUND" && message.userName
+    direction === "OUTBOUND" && message.userName
       ? "CRM"
       : message.fromName ||
         message.fromAddress ||
-        (message.direction === "INBOUND" ? message.contactName : null) ||
+        (direction === "INBOUND" ? message.contactName : null) ||
         emailOriginLabel(message) ||
         "Mailbox";
+  const contactRecipient =
+    direction === "OUTBOUND" &&
+    !sameParticipant(message.contactName, message.fromName) &&
+    !sameParticipant(message.contactName, message.fromAddress)
+      ? message.contactName
+      : null;
   const recipient =
     message.toName ||
     message.toAddress ||
-    (message.direction === "OUTBOUND" ? message.contactName : null) ||
-    "CRM";
+    contactRecipient ||
+    (direction === "INBOUND" ? "CRM" : "Recipient unavailable");
 
   return `${sender} → ${recipient}`;
 }
