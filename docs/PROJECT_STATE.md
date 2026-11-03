@@ -1167,7 +1167,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   forwarded history. Both views render an allow-listed rich-text version when
   Gmail supplied HTML, preserving basic emphasis, lists, links, quotes and
   tables while removing scripts, event handlers, forms, remote images and
-  unsafe URL schemes; plain text remains the fallback.
+  unsafe URL schemes. If provider HTML cannot be split safely at its quoted
+  history marker, the latest view falls back to cleaned plain text so **Show
+  full email** remains meaningful.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

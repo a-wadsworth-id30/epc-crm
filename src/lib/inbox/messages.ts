@@ -3,7 +3,7 @@ import {
   completeEmailPlainText,
   latestInboundEmailPlainText,
 } from "@/lib/email/plain-text";
-import { sanitizedEmailHtml } from "@/lib/email/sanitized-html";
+import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
 import type { InboxMessageDetail, InboxMessageSummary } from "@/lib/inbox/types";
 
 export const inboxMessageSummarySelect = {
@@ -62,22 +62,27 @@ export function serializeInboxMessageDetail(
   message: InboxMessageDetailRow,
 ): InboxMessageDetail {
   const fallback = message.summary ?? "Inbound email received";
+  const fullTextBody = completeEmailPlainText({
+    fallback,
+    html: message.htmlBody,
+    text: message.textBody,
+  });
+  const latestTextBody = latestInboundEmailPlainText({
+    fallback,
+    html: message.htmlBody,
+    text: message.textBody,
+  });
+  const htmlViews = sanitizedEmailHtmlViews({
+    fullText: fullTextBody,
+    html: message.htmlBody,
+    latestText: latestTextBody,
+  });
 
   return {
     ...serializeInboxMessageSummary(message),
-    fullHtmlBody: sanitizedEmailHtml(message.htmlBody, {
-      includeQuotedHistory: true,
-    }),
-    fullTextBody: completeEmailPlainText({
-      fallback,
-      html: message.htmlBody,
-      text: message.textBody,
-    }),
-    latestHtmlBody: sanitizedEmailHtml(message.htmlBody),
-    latestTextBody: latestInboundEmailPlainText({
-      fallback,
-      html: message.htmlBody,
-      text: message.textBody,
-    }),
+    fullHtmlBody: htmlViews.fullHtml,
+    fullTextBody,
+    latestHtmlBody: htmlViews.latestHtml,
+    latestTextBody,
   };
 }

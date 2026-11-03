@@ -310,7 +310,10 @@ basic email formatting such as paragraphs, headings, emphasis, lists, links,
 quotes and tables while removing scripts, event handlers, embedded forms,
 remote images and unsafe URL schemes. The UI keeps the cleaned latest reply as
 the default and reveals sanitized quoted history only on request. Raw provider
-HTML is never inserted into the browser. Gmail sync retains the provider's
+HTML is never inserted into the browser. When the plain-text parser identifies
+quoted history that cannot be separated reliably in the sanitized HTML, the
+latest view deliberately falls back to cleaned plain text so the latest/full
+toggle still changes the visible content. Gmail sync retains the provider's
 complete text and HTML bodies on `EmailMessage`; only the linked sales
 communication is reduced to the latest reply for timeline and AI use.
 

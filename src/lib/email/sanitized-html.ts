@@ -87,3 +87,25 @@ export function sanitizedEmailHtml(
 
   return sanitized || null;
 }
+
+export function sanitizedEmailHtmlViews({
+  fullText,
+  html,
+  latestText,
+}: {
+  fullText: string;
+  html: string | null | undefined;
+  latestText: string;
+}) {
+  const latestHtml = sanitizedEmailHtml(html);
+  const fullHtml = sanitizedEmailHtml(html, { includeQuotedHistory: true });
+  const hasDistinctTextHistory = Boolean(
+    fullText && latestText && fullText !== latestText,
+  );
+
+  return {
+    fullHtml,
+    latestHtml:
+      hasDistinctTextHistory && latestHtml === fullHtml ? null : latestHtml,
+  };
+}

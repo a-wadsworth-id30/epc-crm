@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sanitizedEmailHtml } from "../src/lib/email/sanitized-html";
+import {
+  sanitizedEmailHtml,
+  sanitizedEmailHtmlViews,
+} from "../src/lib/email/sanitized-html";
 
 describe("sanitized email HTML", () => {
   it("preserves basic email formatting and safe links", () => {
@@ -36,5 +39,18 @@ describe("sanitized email HTML", () => {
     assert.match(latest ?? "", /Latest reply/);
     assert.doesNotMatch(latest ?? "", /Earlier reply/);
     assert.match(full ?? "", /Earlier reply/);
+  });
+
+  it("falls back to the cleaned latest text when provider HTML cannot be split", () => {
+    const html =
+      "<p><strong>Latest reply</strong></p><div>-----Original Message-----</div><p>Earlier reply</p>";
+    const views = sanitizedEmailHtmlViews({
+      fullText: "Latest reply\n\nEarlier reply",
+      html,
+      latestText: "Latest reply",
+    });
+
+    assert.equal(views.latestHtml, null);
+    assert.match(views.fullHtml ?? "", /Earlier reply/);
   });
 });
