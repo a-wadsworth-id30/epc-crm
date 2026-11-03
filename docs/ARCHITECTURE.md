@@ -107,6 +107,9 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `EmailAttachment`: provider attachment metadata with an optional R2-backed
   `FileAsset` archive link so imported Gmail files remain available after the
   provider is disconnected.
+- Inbox and sale-conversation reply composers derive the recipient from the
+  message `Reply-To` header first, then the inbound sender or linked contact.
+  Connected mailbox/receiving addresses are excluded from automatic defaults.
 - `CallLog`: provider-neutral phone call record.
 - `CallQueueEntry`: inbound Twilio queue state.
 - `Task`: follow-up work, including missed-call tasks.

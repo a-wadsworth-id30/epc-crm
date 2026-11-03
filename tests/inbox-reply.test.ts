@@ -17,6 +17,31 @@ describe("Inbox Gmail reply helpers", () => {
     );
   });
 
+  it("prefers reply-to and never defaults an inbound reply to the CRM mailbox", () => {
+    assert.equal(
+      inboxReplyRecipient({
+        contactAddress: "lead@example.com",
+        direction: "INBOUND",
+        fromAddress: "mailer@example.net",
+        mailboxAddress: "sales@example.com",
+        replyToAddress: "customer@example.com",
+        toAddress: "sales@example.com",
+      }),
+      "customer@example.com",
+    );
+
+    assert.equal(
+      inboxReplyRecipient({
+        contactAddress: "lead@example.com",
+        direction: "INBOUND",
+        fromAddress: "sales@example.com",
+        mailboxAddress: "sales@example.com",
+        toAddress: "sales@example.com",
+      }),
+      "lead@example.com",
+    );
+  });
+
   it("keeps replying to the customer when an outbound thread message is selected", () => {
     assert.equal(
       inboxReplyRecipient({

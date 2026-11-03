@@ -699,7 +699,10 @@ export default function InboxClient({
                           onClick={() => {
                             setReplyError(null);
                             setReplyRecipient(
-                              inboxReplyRecipient(selectedMessage) ?? "",
+                              inboxReplyRecipient({
+                                ...selectedMessage,
+                                contactAddress: selectedMessage.contact?.email,
+                              }) ?? "",
                             );
                             setReplyOpen((current) => !current);
                           }}
