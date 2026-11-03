@@ -47,6 +47,7 @@ export function resolveInboxMessageAddresses(message: InboxAddressSource) {
       : typeof headers.From === "string"
         ? headers.From
         : null;
+  const toHeader = headerText(headers, "to");
   const replyTo = headerText(headers, "reply-to", "replyTo") ??
     headerText(metadata, "reply-to", "replyTo");
   const fromAddress =
@@ -66,5 +67,6 @@ export function resolveInboxMessageAddresses(message: InboxAddressSource) {
     mailboxAddress: firstEmailAddress(message.mailbox?.emailAddress),
     replyToAddress: firstEmailAddress(replyTo),
     toAddress,
+    toName: emailHeaderName(toHeader),
   };
 }

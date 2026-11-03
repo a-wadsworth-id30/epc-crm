@@ -28,6 +28,7 @@ export type SaleConversationItem = {
   fromAddress: string | null;
   fromName?: string | null;
   toAddress: string | null;
+  toName?: string | null;
   occurredAt: string;
   userName: string | null;
   contactName: string | null;

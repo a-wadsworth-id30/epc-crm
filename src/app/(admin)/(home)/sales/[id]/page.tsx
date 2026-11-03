@@ -2233,10 +2233,11 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             : null,
         fullEmailHtmlBody:
           communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
-        fromAddress: communication.fromAddress,
+        fromAddress: emailAddresses?.fromAddress ?? communication.fromAddress,
         fromName: communication.emailMessage?.fromName ?? null,
         emailReply,
-        toAddress: communication.toAddress,
+        toAddress: emailAddresses?.toAddress ?? communication.toAddress,
+        toName: emailAddresses?.toName ?? null,
         occurredAt: communication.occurredAt.toISOString(),
         userName: communication.user?.name ?? null,
         contactName: contactName(communication.contact),

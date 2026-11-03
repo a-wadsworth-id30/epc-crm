@@ -28,7 +28,7 @@ import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
   emailOriginLabel,
-  outboundEmailRoute,
+  emailParticipantRoute,
 } from "@/lib/sales/conversation-display";
 import {
   conversationItemMatchesQuery,
@@ -367,10 +367,10 @@ function directionRoute(communication: SaleConversationItem) {
       : "Website activity";
   }
 
-  if (communication.direction === "OUTBOUND") {
-    const emailRoute = outboundEmailRoute(communication);
-    if (emailRoute) return emailRoute;
+  const emailRoute = emailParticipantRoute(communication);
+  if (emailRoute) return emailRoute;
 
+  if (communication.direction === "OUTBOUND") {
     const recipient =
       communication.contactName ||
       communication.toAddress ||

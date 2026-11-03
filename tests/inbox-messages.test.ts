@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { resolveInboxMessageAddresses } from "../src/lib/inbox/addresses";
 import { serializeInboxMessageSummary } from "../src/lib/inbox/messages";
 
 type InboxSummaryRow = Parameters<typeof serializeInboxMessageSummary>[0];
@@ -68,5 +69,13 @@ describe("inbox message serialization", () => {
     );
 
     assert.equal(result.fromAddress, "craig@epc-improvements.co.uk");
+  });
+
+  it("reads the recipient display name from stored provider headers", () => {
+    const result = resolveInboxMessageAddresses(
+      inboxRow({ headers: { To: 'Craig McAllister <craig@example.com>' } }),
+    );
+
+    assert.equal(result.toName, "Craig McAllister");
   });
 });
