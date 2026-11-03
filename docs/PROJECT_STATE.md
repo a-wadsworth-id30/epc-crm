@@ -104,6 +104,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   conversation. The linked email is visibly presented as a fallback only when
   the provider omitted its sender address. The same direction inference is
   applied during import so later syncs correct the stored direction.
+- Linked inbound emails in Inbox and Sales > Conversation include **Reply with
+  AI** beside the manual reply action. It opens the normal editable reply form,
+  keeps the existing mailbox, recipient, subject and thread safeguards, and
+  drafts against the selected email plus the wider lead history. AI never
+  sends the reply automatically.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

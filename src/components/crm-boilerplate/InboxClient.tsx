@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
+import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
@@ -186,6 +187,7 @@ export default function InboxClient({
   const [isPending, startTransition] = useTransition();
   const [isAssigning, startAssignmentTransition] = useTransition();
   const [isReplying, startReplyTransition] = useTransition();
+  const [isDraftingAI, setIsDraftingAI] = useState(false);
   const [selectedId, setSelectedId] = useState(
     selectedMessageId ?? messages[0]?.id ?? "",
   );
@@ -294,11 +296,69 @@ export default function InboxClient({
     setReplyRecipient("");
     setReplySubject("");
     setReplyError(null);
+    setIsDraftingAI(false);
     setShowFullEmail(true);
     setSelectedId(messageId);
     router.replace(inboxHref({ lane, messageId, page, pageSize, query }), {
       scroll: false,
     });
+  }
+
+  function openReplyComposer() {
+    if (!selectedMessage?.opportunity) return;
+
+    setReplyError(null);
+    setReplyMailboxId(
+      sendMailboxes.some(
+        (mailbox) => mailbox.id === selectedMessage.mailboxId,
+      )
+        ? (selectedMessage.mailboxId ?? "")
+        : (sendMailboxes[0]?.id ?? ""),
+    );
+    setReplyRecipient(resolvedReplyRecipient ?? "");
+    setReplySubject(inboxReplySubject(selectedMessage.subject));
+    setReplyOpen(true);
+  }
+
+  async function draftReplyWithAI() {
+    if (!selectedMessage?.opportunity) return;
+
+    openReplyComposer();
+    setReplyBody("");
+    setIsDraftingAI(true);
+    setReplyError(null);
+
+    try {
+      const response = await fetch("/api/ai/sales-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          saleId: selectedMessage.opportunity.id,
+          preferredChannel: "email",
+          forceRefresh: true,
+          tone: "professional",
+          focusCommunicationId:
+            selectedMessage.salesCommunicationId ?? undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { drafts?: { email?: { body?: string } }; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.drafts?.email?.body) {
+        throw new Error(payload?.error || "AI could not draft this reply.");
+      }
+
+      setReplyBody(payload.drafts.email.body);
+    } catch (error) {
+      setReplyError(
+        error instanceof Error
+          ? error.message
+          : "AI could not draft this reply. Please try again.",
+      );
+    } finally {
+      setIsDraftingAI(false);
+    }
   }
 
   function sendReply() {
@@ -740,26 +800,30 @@ export default function InboxClient({
                               : "Assign this Gmail conversation to a sale before replying"
                           }
                           type="button"
-                          onClick={() => {
-                            setReplyError(null);
-                            setReplyMailboxId(
-                              sendMailboxes.some(
-                                (mailbox) =>
-                                  mailbox.id === selectedMessage.mailboxId,
-                              )
-                                ? (selectedMessage.mailboxId ?? "")
-                                : (sendMailboxes[0]?.id ?? ""),
-                            );
-                            setReplyRecipient(resolvedReplyRecipient ?? "");
-                            setReplySubject(
-                              inboxReplySubject(selectedMessage.subject),
-                            );
-                            setReplyOpen((current) => !current);
-                          }}
+                          onClick={() =>
+                            replyOpen
+                              ? setReplyOpen(false)
+                              : openReplyComposer()
+                          }
                         >
                           {selectedMessage.opportunity
                             ? "Reply in CRM"
                             : "Assign to sale to reply"}
+                        </button>
+                      ) : null}
+                      {selectedMessage.opportunity ? (
+                        <button
+                          className="ai-gradient-button inline-flex h-10 rounded-lg p-[2px] shadow-sm shadow-cyan-100 disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none"
+                          disabled={isDraftingAI || isReplying}
+                          type="button"
+                          onClick={() => void draftReplyWithAI()}
+                        >
+                          <span className="inline-flex h-full items-center gap-2 rounded-[6px] bg-white px-4 text-sm font-semibold text-gray-900 dark:bg-gray-950 dark:text-white">
+                            <AISparkIcon />
+                            {isDraftingAI
+                              ? "Drafting reply..."
+                              : "Reply with AI"}
+                          </span>
                         </button>
                       ) : null}
                     </div>

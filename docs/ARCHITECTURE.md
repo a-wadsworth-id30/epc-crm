@@ -370,6 +370,14 @@ toggle still changes the visible content. Gmail sync retains the provider's
 complete text and HTML bodies on `EmailMessage`; only the linked sales
 communication is reduced to the latest reply for timeline and AI use.
 
+Linked inbound email cards in Inbox and Sales > Conversation expose a
+**Reply with AI** action. The browser requests `/api/ai/sales-lead` with the
+sale ID and selected `SalesCommunication` ID, then inserts the returned email
+body into the existing Gmail reply composer. Focused requests are generated
+fresh and do not replace the sale-level cached AI guidance. The normal mailbox,
+recipient and subject safeguards still apply, and the user must explicitly
+send the draft.
+
 Main files:
 
 - `src/lib/integrations/gmail.ts`
