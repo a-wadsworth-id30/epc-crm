@@ -328,7 +328,12 @@ function channelLabel(channel: string) {
   return channel.toLowerCase();
 }
 
-function directionLabel(direction: string) {
+function directionLabel(direction: string, channel: string) {
+  if (channel === "EMAIL") {
+    if (direction === "OUTBOUND") return "Sent";
+    if (direction === "INBOUND") return "Received";
+  }
+
   if (direction === "OUTBOUND") return "Outbound";
   if (direction === "INBOUND") return "Inbound";
   return "Internal";
@@ -868,7 +873,10 @@ export default function SaleConversationThread({
                   renderedChannel === "FILE" ||
                   communication.channel === "WEBSITE"
                     ? "Activity"
-                    : directionLabel(communication.direction);
+                    : directionLabel(
+                        communication.direction,
+                        communication.channel,
+                      );
                 const isExpanded = visibleExpandedId === communication.id;
                 const pageHref =
                   communication.channel === "WEBSITE"
