@@ -1005,12 +1005,14 @@ export default function SaleConversationThread({
                   canReplyToCommunication(communication) &&
                   (communication.channel !== "EMAIL" ||
                     displayDirection === "INBOUND");
+                const showOpenLeadAction =
+                  Boolean(opportunityId) && opportunityId !== saleId;
                 const hasFooterActions =
                   canShowFullEmail ||
                   showEmailReplyAction ||
                   showAIReplyAction ||
                   showReplyAction ||
-                  Boolean(opportunityId) ||
+                  showOpenLeadAction ||
                   Boolean(externalHref) ||
                   Boolean(fileDownloadUrl);
                 const cardClassName = [
@@ -1276,7 +1278,7 @@ export default function SaleConversationThread({
                                 {replyLabel(communication)}
                               </button>
                             ) : null}
-                            {opportunityId ? (
+                            {showOpenLeadAction ? (
                               <Link
                                 href={`/sales/${opportunityId}`}
                                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-theme-xs transition hover:border-brand-200 hover:text-brand-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:border-brand-900/60 dark:hover:text-brand-300"
