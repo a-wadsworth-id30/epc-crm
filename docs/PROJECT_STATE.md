@@ -95,10 +95,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   prefer stored `From` and `To` names/addresses before the linked lead identity,
   preventing a lead fallback from replacing a conflicting provider recipient.
   If Pipedrive omits sender and recipient addresses but its sender name matches
-  the linked lead, the email is treated as received and displayed as **Lead →
-  CRM** instead of fabricating a CRM send or self-to-self conversation. The
-  same inference is applied during import so later syncs correct the stored
-  direction.
+  the linked lead, the email is treated as received and displayed as **Lead
+  (linked email) → CRM** instead of fabricating a CRM send or self-to-self
+  conversation. The linked email is visibly presented as a fallback only when
+  the provider omitted its sender address. The same direction inference is
+  applied during import so later syncs correct the stored direction.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

@@ -121,7 +121,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   does not conflict with the known sender. For imported provider mail without
   sender/recipient addresses, an exact sender-name match with the linked lead
   is inferred as inbound in both the importer and display layer, producing a
-  **Lead → CRM** route instead of inventing a CRM send or self-route.
+  **Lead (linked email) → CRM** route instead of inventing a CRM send or
+  self-route. Provider-supplied sender addresses remain authoritative; the
+  linked contact email is only displayed when the provider omitted the address
+  and the provider sender name exactly matches that contact.
 - `src/lib/email/deduplication.ts` owns provider-neutral email identity and
   strict fingerprint matching. Conversation rendering collapses duplicate
   Pipedrive/Gmail cards without deleting stored records, while Gmail import can

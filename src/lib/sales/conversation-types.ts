@@ -16,6 +16,7 @@ export type SaleConversationFilter =
 export type SaleConversationItem = {
   id: string;
   channel: string;
+  contactEmail?: string | null;
   direction: string;
   subject: string | null;
   summary: string;

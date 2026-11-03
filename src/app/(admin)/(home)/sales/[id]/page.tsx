@@ -1729,6 +1729,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           occurredAt: true,
           contact: {
             select: {
+              email: true,
               firstName: true,
               lastName: true,
             },
@@ -2215,6 +2216,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       return {
         id: communication.id,
         channel: communication.channel,
+        contactEmail:
+          communication.emailMessage?.contact?.email ??
+          communication.contact?.email ??
+          null,
         direction: communication.direction,
         subject: communication.subject,
         summary: toEmailPlainText(communication.summary),
