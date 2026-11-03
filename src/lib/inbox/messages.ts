@@ -1,4 +1,9 @@
 import type { Prisma } from "@prisma/client";
+import {
+  completeEmailPlainText,
+  latestInboundEmailPlainText,
+} from "@/lib/email/plain-text";
+import { sanitizedEmailHtml } from "@/lib/email/sanitized-html";
 import type { InboxMessageDetail, InboxMessageSummary } from "@/lib/inbox/types";
 
 export const inboxMessageSummarySelect = {
@@ -56,9 +61,23 @@ export function serializeInboxMessageSummary(
 export function serializeInboxMessageDetail(
   message: InboxMessageDetailRow,
 ): InboxMessageDetail {
+  const fallback = message.summary ?? "Inbound email received";
+
   return {
     ...serializeInboxMessageSummary(message),
-    htmlBody: message.htmlBody,
-    textBody: message.textBody,
+    fullHtmlBody: sanitizedEmailHtml(message.htmlBody, {
+      includeQuotedHistory: true,
+    }),
+    fullTextBody: completeEmailPlainText({
+      fallback,
+      html: message.htmlBody,
+      text: message.textBody,
+    }),
+    latestHtmlBody: sanitizedEmailHtml(message.htmlBody),
+    latestTextBody: latestInboundEmailPlainText({
+      fallback,
+      html: message.htmlBody,
+      text: message.textBody,
+    }),
   };
 }

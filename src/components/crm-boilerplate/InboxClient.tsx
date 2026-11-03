@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
+import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -22,10 +23,6 @@ import {
   searchInboxSales,
 } from "@/lib/actions/inbox";
 import type { InboxSaleOption } from "@/lib/actions/inbox";
-import {
-  completeEmailPlainText,
-  latestInboundEmailPlainText,
-} from "@/lib/email/plain-text";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import type {
   InboxMessageDetail,
@@ -194,26 +191,24 @@ export default function InboxClient({
   );
   const selectedMessage = selectedDetail ?? selectedSummary;
   const latestEmailBody = selectedDetail
-    ? latestInboundEmailPlainText({
-        fallback: selectedDetail.summary,
-        html: selectedDetail.htmlBody,
-        text: selectedDetail.textBody,
-      })
+    ? selectedDetail.latestTextBody
     : (selectedMessage?.summary ?? "");
   const completeEmailBody = selectedDetail
-    ? completeEmailPlainText({
-        fallback: selectedDetail.summary,
-        html: selectedDetail.htmlBody,
-        text: selectedDetail.textBody,
-      })
+    ? selectedDetail.fullTextBody
     : latestEmailBody;
   const canShowFullEmail = Boolean(
     selectedDetail &&
-      completeEmailBody &&
-      completeEmailBody !== latestEmailBody,
+      ((completeEmailBody && completeEmailBody !== latestEmailBody) ||
+        (selectedDetail.fullHtmlBody &&
+          selectedDetail.fullHtmlBody !== selectedDetail.latestHtmlBody)),
   );
   const displayedEmailBody =
     showFullEmail && canShowFullEmail ? completeEmailBody : latestEmailBody;
+  const displayedEmailHtml = selectedDetail
+    ? showFullEmail && canShowFullEmail
+      ? selectedDetail.fullHtmlBody
+      : selectedDetail.latestHtmlBody
+    : null;
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -660,9 +655,10 @@ export default function InboxClient({
                           </button>
                         </div>
                       ) : null}
-                      <p className="whitespace-pre-wrap">
-                        {displayedEmailBody}
-                      </p>
+                      <SanitizedEmailBody
+                        html={displayedEmailHtml}
+                        text={displayedEmailBody}
+                      />
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">

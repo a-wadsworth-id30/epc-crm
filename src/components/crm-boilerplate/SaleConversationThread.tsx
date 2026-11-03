@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
+import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
@@ -811,8 +812,10 @@ export default function SaleConversationThread({
                 );
                 const canShowFullEmail = Boolean(
                   communication.channel === "EMAIL" &&
-                    fullEmailBody &&
-                    fullEmailBody !== plainBody,
+                    ((fullEmailBody && fullEmailBody !== plainBody) ||
+                      (communication.fullEmailHtmlBody &&
+                        communication.fullEmailHtmlBody !==
+                          communication.emailHtmlBody)),
                 );
                 const isShowingFullEmail =
                   canShowFullEmail &&
@@ -832,6 +835,12 @@ export default function SaleConversationThread({
                     : isShowingFullEmail
                       ? fullEmailBody
                       : plainBody;
+                const detailHtml =
+                  communication.channel === "EMAIL"
+                    ? isShowingFullEmail
+                      ? communication.fullEmailHtmlBody
+                      : communication.emailHtmlBody
+                    : null;
                 const displaySummary =
                   communication.channel === "WEBSITE"
                     ? compactUrlText(plainBody || plainSummary) || plainSummary
@@ -987,10 +996,13 @@ export default function SaleConversationThread({
                     {isExpanded ? (
                       <div>
                         <div className="px-4 py-4">
-                          {detailBody ? (
-                            <p className="max-h-80 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                              {detailBody}
-                            </p>
+                          {detailBody || detailHtml ? (
+                            <div className="max-h-80 overflow-y-auto text-sm leading-6 text-gray-700 dark:text-gray-300">
+                              <SanitizedEmailBody
+                                html={detailHtml}
+                                text={detailBody || displaySummary}
+                              />
+                            </div>
                           ) : (
                             <p className="text-sm leading-6 text-gray-700 dark:text-gray-300">
                               {displaySummary}

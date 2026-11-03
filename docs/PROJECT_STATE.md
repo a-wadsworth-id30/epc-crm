@@ -1164,7 +1164,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   continue the exact Gmail thread without returning to the Inbox. Inbox and
   sale Conversation views show the cleaned latest reply by default and expose
   a **Show full email** toggle when the stored Gmail HTML contains quoted or
-  forwarded history.
+  forwarded history. Both views render an allow-listed rich-text version when
+  Gmail supplied HTML, preserving basic emphasis, lists, links, quotes and
+  tables while removing scripts, event handlers, forms, remote images and
+  unsafe URL schemes; plain text remains the fallback.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.
