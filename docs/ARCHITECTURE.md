@@ -110,6 +110,8 @@ Core Prisma models are in `prisma/schema.prisma`.
 - Inbox and sale-conversation reply composers derive the recipient from the
   message `Reply-To` header first, then the inbound sender or linked contact.
   Connected mailbox/receiving addresses are excluded from automatic defaults.
+  Their editable subject is validated server-side and defaults to the original
+  subject with normalized `Re:` prefixes.
 - `CallLog`: provider-neutral phone call record.
 - `CallQueueEntry`: inbound Twilio queue state.
 - `Task`: follow-up work, including missed-call tasks.
