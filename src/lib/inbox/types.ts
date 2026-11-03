@@ -27,6 +27,8 @@ export type InboxMessageSummary = {
 };
 
 export type InboxMessageDetail = InboxMessageSummary & {
-  htmlBody: string | null;
-  textBody: string | null;
+  fullHtmlBody: string | null;
+  fullTextBody: string;
+  latestHtmlBody: string | null;
+  latestTextBody: string;
 };

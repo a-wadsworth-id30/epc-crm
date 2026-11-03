@@ -20,7 +20,9 @@ export type SaleConversationItem = {
   subject: string | null;
   summary: string;
   body: string | null;
+  emailHtmlBody?: string | null;
   fullEmailBody?: string | null;
+  fullEmailHtmlBody?: string | null;
   fromAddress: string | null;
   toAddress: string | null;
   occurredAt: string;

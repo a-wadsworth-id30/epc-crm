@@ -60,6 +60,7 @@ import {
   latestEmailReplyText,
   toEmailPlainText,
 } from "@/lib/email/plain-text";
+import { sanitizedEmailHtml } from "@/lib/email/sanitized-html";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import {
@@ -2199,11 +2200,21 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         subject: communication.subject,
         summary: toEmailPlainText(communication.summary),
         body: latestEmailBody || null,
+        emailHtmlBody:
+          communication.channel === "EMAIL"
+            ? sanitizedEmailHtml(communication.emailMessage?.htmlBody)
+            : null,
         fullEmailBody:
           communication.channel === "EMAIL" &&
           completeEmailBody &&
           completeEmailBody !== latestEmailBody
             ? completeEmailBody
+            : null,
+        fullEmailHtmlBody:
+          communication.channel === "EMAIL"
+            ? sanitizedEmailHtml(communication.emailMessage?.htmlBody, {
+                includeQuotedHistory: true,
+              })
             : null,
         fromAddress: communication.fromAddress,
         gmailReply,

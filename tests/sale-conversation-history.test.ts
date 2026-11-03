@@ -243,6 +243,15 @@ describe("sale conversation history", () => {
       subject: "Re: Email 1",
     });
     assert.match(result.items[0]?.fullEmailBody ?? "", /Earlier message/);
+    assert.match(result.items[0]?.emailHtmlBody ?? "", /Email body 1/);
+    assert.doesNotMatch(
+      result.items[0]?.emailHtmlBody ?? "",
+      /Earlier message/,
+    );
+    assert.match(
+      result.items[0]?.fullEmailHtmlBody ?? "",
+      /Earlier message/,
+    );
   });
 
   it("merges communication, file and website counts into the complete timeline", async () => {
