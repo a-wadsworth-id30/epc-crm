@@ -16,6 +16,7 @@
     "tasks:cleanup-missed-calls": "tsx scripts/maintenance/cleanup-missed-call-tasks.ts",
     "maintenance:docusign-dedupe": "tsx scripts/maintenance/cleanup-docusign-duplicate-documents.ts",
     "maintenance:docusign-dedupe:apply": "tsx scripts/maintenance/cleanup-docusign-duplicate-documents.ts --apply",
+    "maintenance:email-dedupe-audit": "tsx scripts/maintenance/audit-duplicate-sale-emails.ts",
     "db:studio": "prisma studio",
     "build": "next build",
     "build:profile": "npm run build && npm run perf:bundle",

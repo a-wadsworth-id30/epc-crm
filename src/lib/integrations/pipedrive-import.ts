@@ -7,6 +7,10 @@ import {
   type ContactEmailMethod,
   type ContactPhoneMethod,
 } from "@/lib/contact-methods";
+import {
+  emailInternetMessageIdentity,
+  emailMessagesAreDuplicates,
+} from "@/lib/email/deduplication";
 import { emailTextSummary, toEmailPlainText } from "@/lib/email/plain-text";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
@@ -3781,18 +3785,94 @@ async function syncPipedriveLeadEmailRecords(
       },
       select: { id: true },
     });
+    const crossProviderCandidates = existingCommunication
+      ? []
+      : await tx.emailMessage.findMany({
+          where: {
+            opportunityId,
+            provider: { not: pipedriveProvider },
+            OR: [
+              ...(mapped.emailData.internetMessageId
+                ? [
+                    {
+                      internetMessageId:
+                        mapped.emailData.internetMessageId,
+                    },
+                  ]
+                : []),
+              {
+                direction: mapped.emailData.direction,
+                receivedAt: {
+                  gte: new Date(
+                    mapped.emailData.receivedAt.getTime() - 2 * 60 * 1000,
+                  ),
+                  lte: new Date(
+                    mapped.emailData.receivedAt.getTime() + 2 * 60 * 1000,
+                  ),
+                },
+                subject: mapped.emailData.subject,
+              },
+            ],
+          },
+          orderBy: { receivedAt: "desc" },
+          take: 10,
+          select: {
+            direction: true,
+            fromAddress: true,
+            headers: true,
+            id: true,
+            internetMessageId: true,
+            metadata: true,
+            receivedAt: true,
+            salesCommunicationId: true,
+            subject: true,
+            textBody: true,
+            toAddress: true,
+          },
+        });
+    const crossProviderDuplicate = crossProviderCandidates.find((candidate) =>
+      emailMessagesAreDuplicates(
+        {
+          body: candidate.textBody,
+          direction: candidate.direction,
+          fromAddress: candidate.fromAddress,
+          headers: candidate.headers,
+          internetMessageId: candidate.internetMessageId,
+          metadata: candidate.metadata,
+          occurredAt: candidate.receivedAt,
+          subject: candidate.subject,
+          toAddress: candidate.toAddress,
+        },
+        {
+          body: mapped.emailData.textBody,
+          direction: mapped.emailData.direction,
+          fromAddress: mapped.emailData.fromAddress,
+          headers: mapped.emailData.headers,
+          internetMessageId: mapped.emailData.internetMessageId,
+          metadata: mapped.emailData.metadata,
+          occurredAt: mapped.emailData.receivedAt,
+          subject: mapped.emailData.subject,
+          toAddress: mapped.emailData.toAddress,
+        },
+      ),
+    );
+    const reusedCrossProviderCommunication = Boolean(
+      crossProviderDuplicate?.salesCommunicationId,
+    );
     const communication = existingCommunication
       ? await tx.salesCommunication.update({
           where: { id: existingCommunication.id },
           data: mapped.communicationData,
           select: { id: true },
         })
+      : crossProviderDuplicate?.salesCommunicationId
+        ? { id: crossProviderDuplicate.salesCommunicationId }
       : await tx.salesCommunication.create({
           data: mapped.communicationData,
           select: { id: true },
         });
 
-    if (existingCommunication) {
+    if (existingCommunication || reusedCrossProviderCommunication) {
       updated += 1;
     } else {
       created += 1;
@@ -3811,7 +3891,9 @@ async function syncPipedriveLeadEmailRecords(
       await tx.emailMessage.create({
         data: {
           ...mapped.emailData,
-          salesCommunicationId: communication.id,
+          salesCommunicationId: reusedCrossProviderCommunication
+            ? null
+            : communication.id,
         },
         select: { id: true },
       });
@@ -3827,7 +3909,9 @@ async function syncPipedriveLeadEmailRecords(
         where: { id: existingEmail.id },
         data: {
           ...mapped.emailData,
-          salesCommunicationId: communication.id,
+          salesCommunicationId: reusedCrossProviderCommunication
+            ? existingEmail.salesCommunicationId
+            : communication.id,
         },
         select: { id: true },
       });
@@ -3888,6 +3972,8 @@ function mapPipedriveMailMessageToSalesEmail({
     emailDataRecord.to_email;
   const ccValue = emailRecord.cc ?? emailDataRecord.cc;
   const bccValue = emailRecord.bcc ?? emailDataRecord.bcc;
+  const headers = emailRecord.headers ?? emailDataRecord.headers;
+  const internetMessageId = emailInternetMessageIdentity({ headers });
   const fromAddresses = uniqueEmailAddresses(fromValue);
   const toAddresses = uniqueEmailAddresses(toValue);
   const ccAddresses = uniqueEmailAddresses(ccValue);
@@ -4021,8 +4107,9 @@ function mapPipedriveMailMessageToSalesEmail({
       direction,
       fromAddress,
       fromName,
-      headers: jsonValue(emailRecord.headers ?? emailDataRecord.headers),
+      headers: jsonValue(headers),
       htmlBody,
+      internetMessageId,
       metadata,
       opportunityId,
       provider: pipedriveProvider,

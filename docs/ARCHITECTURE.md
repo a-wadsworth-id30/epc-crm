@@ -112,6 +112,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   Connected mailbox/receiving addresses are excluded from automatic defaults.
   Their editable subject is validated server-side and defaults to the original
   subject with normalized `Re:` prefixes.
+- `src/lib/email/deduplication.ts` owns provider-neutral email identity and
+  strict fingerprint matching. Conversation rendering collapses duplicate
+  Pipedrive/Gmail cards without deleting stored records, while Gmail import can
+  transfer the shared `SalesCommunication` link to the richer Gmail row and
+  leave the provider archive row intact. The email dedupe maintenance command
+  is audit-only.
 - `CallLog`: provider-neutral phone call record.
 - `CallQueueEntry`: inbound Twilio queue state.
 - `Task`: follow-up work, including missed-call tasks.

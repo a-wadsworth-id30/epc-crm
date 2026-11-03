@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
+import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
 import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
 import {
   conversationItemMatchesQuery,
@@ -474,7 +475,7 @@ export default function SaleConversationThread({
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
-  const [showingLatestEmailId, setShowingLatestEmailId] = useState<string | null>(
+  const [showingFullEmailId, setShowingFullEmailId] = useState<string | null>(
     null,
   );
   const [isGmailReplying, startGmailReplyTransition] = useTransition();
@@ -580,10 +581,12 @@ export default function SaleConversationThread({
   }, [activeFilter, activeQuery, communications, page, saleId, totalCount]);
   const orderedCommunications = useMemo(
     () =>
-      [...communications].sort(
-        (left, right) =>
-          new Date(right.occurredAt).getTime() -
-          new Date(left.occurredAt).getTime(),
+      deduplicateConversationEmailItems(
+        [...communications].sort(
+          (left, right) =>
+            new Date(right.occurredAt).getTime() -
+            new Date(left.occurredAt).getTime(),
+        ),
       ),
     [communications],
   );
@@ -601,7 +604,7 @@ export default function SaleConversationThread({
     remotePage?.filter === activeFilter &&
     remotePage.page === page;
   const visibleCommunications = hasCurrentRemotePage
-    ? remotePage.items
+    ? deduplicateConversationEmailItems(remotePage.items)
     : initialFilteredCommunications;
 
   const remoteTotal = hasCurrentRemotePage ? remotePage.total : null;
@@ -831,7 +834,7 @@ export default function SaleConversationThread({
                 );
                 const isShowingFullEmail =
                   canShowFullEmail &&
-                  showingLatestEmailId !== communication.id;
+                  showingFullEmailId === communication.id;
                 const plainSummary = toEmailPlainText(communication.summary);
                 const hasTranscript =
                   Boolean(transcript) ||
@@ -1093,7 +1096,7 @@ export default function SaleConversationThread({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setShowingLatestEmailId((current) =>
+                                  setShowingFullEmailId((current) =>
                                     current === communication.id
                                       ? null
                                       : communication.id,
