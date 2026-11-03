@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
+import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
@@ -28,6 +29,7 @@ import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import type {
   InboxMessageDetail,
   InboxMessageSummary,
+  EmailMailboxOption,
 } from "@/lib/inbox/types";
 
 export type InboxClientProps = {
@@ -44,6 +46,7 @@ export type InboxClientProps = {
   pageSize: number;
   pageSizeOptions: number[];
   query: string;
+  sendMailboxes: EmailMailboxOption[];
   selectedMessageId?: string;
   totalCount: number;
 };
@@ -174,6 +177,7 @@ export default function InboxClient({
   pageSize,
   pageSizeOptions,
   query,
+  sendMailboxes,
   selectedMessageId,
   totalCount,
 }: InboxClientProps) {
@@ -197,6 +201,7 @@ export default function InboxClient({
   const [assignmentSearching, setAssignmentSearching] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
+  const [replyMailboxId, setReplyMailboxId] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -285,6 +290,7 @@ export default function InboxClient({
     setAssignmentOpen(false);
     setReplyOpen(false);
     setReplyBody("");
+    setReplyMailboxId("");
     setReplyRecipient("");
     setReplySubject("");
     setReplyError(null);
@@ -306,6 +312,7 @@ export default function InboxClient({
           replyBody,
           replyRecipient,
           replySubject,
+          replyMailboxId || undefined,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -313,6 +320,7 @@ export default function InboxClient({
         }
 
         setReplyBody("");
+        setReplyMailboxId("");
         setReplySubject("");
         setReplyOpen(false);
         showToast(result.message);
@@ -734,6 +742,14 @@ export default function InboxClient({
                           type="button"
                           onClick={() => {
                             setReplyError(null);
+                            setReplyMailboxId(
+                              sendMailboxes.some(
+                                (mailbox) =>
+                                  mailbox.id === selectedMessage.mailboxId,
+                              )
+                                ? (selectedMessage.mailboxId ?? "")
+                                : (sendMailboxes[0]?.id ?? ""),
+                            );
                             setReplyRecipient(resolvedReplyRecipient ?? "");
                             setReplySubject(
                               inboxReplySubject(selectedMessage.subject),
@@ -756,7 +772,20 @@ export default function InboxClient({
                           sendReply();
                         }}
                       >
-                        <div className="grid gap-3 text-sm sm:grid-cols-2">
+                        <div className="grid gap-3 text-sm lg:grid-cols-3">
+                          {sendMailboxes.length ? (
+                            <EmailMailboxSenderField
+                              disabled={isReplying}
+                              id={`inbox-reply-mailbox-${selectedMessage.id}`}
+                              mailboxes={sendMailboxes}
+                              onChange={(value) => {
+                                setReplyMailboxId(value);
+                                setReplyError(null);
+                              }}
+                              originalMailboxId={selectedMessage.mailboxId}
+                              value={replyMailboxId}
+                            />
+                          ) : null}
                           <LockedEmailRecipientField
                             disabled={isReplying}
                             id={`inbox-reply-recipient-${selectedMessage.id}`}

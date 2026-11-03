@@ -15,6 +15,7 @@ import {
 } from "@/lib/navigation/pagination";
 import { prisma } from "@/lib/prisma";
 import { realtimeTopics } from "@/lib/realtime/topic-names";
+import { listGmailMailboxesForSend } from "@/lib/integrations/gmail-send";
 
 type InboxPageProps = {
   searchParams?: Promise<{
@@ -123,13 +124,16 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const page = Math.min(requestedPage, totalPages);
-  const messages = await prisma.emailMessage.findMany({
-    where,
-    orderBy: { receivedAt: "desc" },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-    select: inboxMessageSummarySelect,
-  });
+  const [messages, sendMailboxes] = await Promise.all([
+    prisma.emailMessage.findMany({
+      where,
+      orderBy: { receivedAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: inboxMessageSummarySelect,
+    }),
+    listGmailMailboxesForSend({ user }),
+  ]);
 
   return (
     <>
@@ -161,6 +165,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         pageSize={pageSize}
         pageSizeOptions={inboxPageSizes}
         query={query}
+        sendMailboxes={sendMailboxes.map(
+          ({ displayName, emailAddress, id, purpose }) => ({
+            displayName,
+            emailAddress,
+            id,
+            purpose,
+          }),
+        )}
         selectedMessageId={selectedMessageId}
         totalCount={totalCount}
       />

@@ -64,6 +64,7 @@ import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
 import { emailInternetMessageIdentity } from "@/lib/email/deduplication";
 import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
+import { listGmailMailboxesForSend } from "@/lib/integrations/gmail-send";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import {
   spruceJobExternalType,
@@ -1613,6 +1614,7 @@ function LeadAttributionCard({
 export default async function SaleDetailPage({ params }: SalePageProps) {
   const { id } = await params;
   const user = await requireUser();
+  const sendMailboxes = await listGmailMailboxesForSend({ user });
 
   if (await isPipedriveDealOpportunity(id)) {
     notFound();
@@ -2208,6 +2210,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         communication.emailMessage?.opportunityId
           ? {
               emailMessageId: communication.emailMessage.id,
+              mailboxId: communication.emailMessage.mailboxId,
               recipient,
               subject: inboxReplySubject(communication.emailMessage.subject),
             }
@@ -2739,6 +2742,14 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         }}
         communications={conversationItems}
         communicationsCount={conversationTotalCount}
+        sendMailboxes={sendMailboxes.map(
+          ({ displayName, emailAddress, id, purpose }) => ({
+            displayName,
+            emailAddress,
+            id,
+            purpose,
+          }),
+        )}
         contactId={sale.contactId}
         documents={documents}
         documentUploadPolicy={documentUploadPolicy}

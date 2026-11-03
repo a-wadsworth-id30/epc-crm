@@ -22,6 +22,7 @@ export const inboxMessageSummarySelect = {
   headers: true,
   inboundRouteId: true,
   mailbox: { select: { emailAddress: true } },
+  mailboxId: true,
   metadata: true,
   opportunity: {
     select: {
@@ -71,6 +72,7 @@ export function serializeInboxMessageSummary(
     fromName,
     id: message.id,
     inboundRouteId: message.inboundRouteId,
+    mailboxId: message.mailboxId,
     mailboxAddress,
     opportunity: message.opportunity,
     provider: message.provider,

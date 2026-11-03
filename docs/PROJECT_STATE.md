@@ -1191,7 +1191,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   receiving mailbox, preserves the exact Gmail thread and writes the outbound
   message into the linked sale conversation. Gmail email entries in the linked
   sale Conversation expose the same threaded reply composer, so users can
-  continue the exact Gmail thread without returning to the Inbox. Inbox and
+  continue the exact Gmail thread without returning to the Inbox. Both reply
+  composers expose a **From** selector containing only connected, send-enabled
+  Gmail mailboxes the current user is authorised to use. The receiving mailbox
+  remains the default for Gmail replies. Selecting another account deliberately
+  starts a new Gmail conversation, is called out in the composer and creates an
+  `email.reply.sender_overridden` audit event without storing body content.
+  Inbox and
   sale Conversation views show the complete email by default and expose a
   **Show latest reply** compact option when the stored Gmail HTML contains
   quoted or forwarded history. Both views render an allow-listed rich-text version when

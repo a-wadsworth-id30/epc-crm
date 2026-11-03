@@ -12,6 +12,10 @@ import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { isReplyRecipientOverride } from "@/lib/inbox/recipient-safety";
+import {
+  canPreserveGmailThread,
+  isReplySenderOverride,
+} from "@/lib/inbox/sender-mailbox";
 import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import {
   outboundMessageError,
@@ -47,6 +51,7 @@ export type InboxReplyResult =
 const inboxReplySchema = z.object({
   body: z.string().trim().min(1, "Enter a reply.").max(20_000),
   messageId: z.string().trim().min(1),
+  mailboxId: z.string().trim().min(1).optional(),
   recipient: z
     .string()
     .trim()
@@ -389,10 +394,12 @@ export async function replyToInboxMessage(
   body: string,
   recipient?: string,
   subject?: string,
+  mailboxId?: string,
 ): Promise<InboxReplyResult> {
   const parsed = inboxReplySchema.safeParse({
     body,
     messageId,
+    mailboxId,
     recipient,
     subject,
   });
@@ -448,18 +455,22 @@ export async function replyToInboxMessage(
   if (!replyRecipient) {
     return { ok: false, message: "Enter a valid reply address." };
   }
-  const isThreadedGmail = Boolean(
-    message.provider === "gmail" &&
-      message.mailboxId &&
-      message.providerThreadId,
-  );
+  const selectedMailboxId =
+    parsed.data.mailboxId ??
+    (message.provider === "gmail" ? message.mailboxId : null);
+  const isThreadedGmail = canPreserveGmailThread({
+    messageMailboxId: message.mailboxId,
+    provider: message.provider,
+    providerThreadId: message.providerThreadId,
+    selectedMailboxId,
+  });
 
   try {
     await sendSalesLeadEmail({
       body: parsed.data.body,
       gmailThreadId: isThreadedGmail ? message.providerThreadId : null,
       inReplyTo: isThreadedGmail ? message.internetMessageId : null,
-      mailboxId: isThreadedGmail ? message.mailboxId : null,
+      mailboxId: selectedMailboxId,
       opportunityId: message.opportunityId,
       source: isThreadedGmail ? "inbox-gmail-reply" : "inbox-email-reply",
       subject: parsed.data.subject ?? inboxReplySubject(message.subject),
@@ -480,6 +491,26 @@ export async function replyToInboxMessage(
               provider: message.provider,
               resolvedRecipient,
               selectedRecipient: replyRecipient,
+            },
+          },
+        })
+        .catch(() => null);
+    }
+
+    if (isReplySenderOverride(parsed.data.mailboxId, message.mailboxId)) {
+      await prisma.auditLog
+        .create({
+          data: {
+            action: "email.reply.sender_overridden",
+            actorId: user.id,
+            entity: "EmailMessage",
+            entityId: message.id,
+            metadata: {
+              opportunityId: message.opportunityId,
+              originalMailboxId: message.mailboxId,
+              provider: message.provider,
+              selectedMailboxId: parsed.data.mailboxId,
+              threadPreserved: isThreadedGmail,
             },
           },
         })

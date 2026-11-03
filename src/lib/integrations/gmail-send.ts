@@ -28,6 +28,28 @@ export async function findGmailMailboxForSend({
   mailboxId?: string | null;
   user: SendUser;
 }) {
+  const mailboxes = await listGmailMailboxesForSend({ user });
+
+  if (mailboxId) {
+    const selectedMailbox = mailboxes.find(
+      (mailbox) => mailbox.id === mailboxId,
+    );
+    if (!selectedMailbox) {
+      throw new Error(
+        "The selected Gmail mailbox is unavailable or you cannot send from it.",
+      );
+    }
+    return selectedMailbox;
+  }
+
+  return mailboxes[0] ?? null;
+}
+
+export async function listGmailMailboxesForSend({
+  user,
+}: {
+  user: SendUser;
+}) {
   const accessWhere =
     user.role === "ADMIN"
       ? {}
@@ -40,7 +62,6 @@ export async function findGmailMailboxForSend({
   const mailboxes = await prisma.emailMailbox.findMany({
     where: {
       ...accessWhere,
-      ...(mailboxId ? { id: mailboxId } : {}),
       sendEnabled: true,
       status: "CONNECTED",
     },
@@ -54,24 +75,21 @@ export async function findGmailMailboxForSend({
     },
   });
 
-  if (mailboxId && !mailboxes.length) {
-    throw new Error("The selected Gmail mailbox is unavailable or you cannot send from it.");
-  }
-
-  return (
-    mailboxes.sort((left, right) => {
-      const score = (mailbox: (typeof mailboxes)[number]) =>
-        (mailbox.ownerUserId === user.id ? 0 : 10) +
-        (mailbox.purpose === "PERSONAL"
-          ? 0
-          : mailbox.purpose === "SALES"
-            ? 1
-            : mailbox.purpose === "SHARED"
-              ? 2
-              : 3);
-      return score(left) - score(right);
-    })[0] ?? null
-  );
+  return mailboxes.sort((left, right) => {
+    const score = (mailbox: (typeof mailboxes)[number]) =>
+      (mailbox.ownerUserId === user.id ? 0 : 10) +
+      (mailbox.purpose === "PERSONAL"
+        ? 0
+        : mailbox.purpose === "SALES"
+          ? 1
+          : mailbox.purpose === "SHARED"
+            ? 2
+            : 3);
+    return (
+      score(left) - score(right) ||
+      left.emailAddress.localeCompare(right.emailAddress)
+    );
+  });
 }
 
 export async function sendGmailEmail({
