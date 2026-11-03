@@ -4,6 +4,7 @@ import {
   latestInboundEmailPlainText,
 } from "@/lib/email/plain-text";
 import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
+import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import type { InboxMessageDetail, InboxMessageSummary } from "@/lib/inbox/types";
 
 export const inboxMessageSummarySelect = {
@@ -18,7 +19,10 @@ export const inboxMessageSummarySelect = {
   direction: true,
   fromAddress: true,
   fromName: true,
+  headers: true,
   inboundRouteId: true,
+  mailbox: { select: { emailAddress: true } },
+  metadata: true,
   opportunity: {
     select: {
       id: true,
@@ -51,10 +55,23 @@ type InboxMessageDetailRow = Prisma.EmailMessageGetPayload<{
 export function serializeInboxMessageSummary(
   message: InboxMessageSummaryRow,
 ): InboxMessageSummary {
+  const { fromAddress, fromName, toAddress } =
+    resolveInboxMessageAddresses(message);
+
   return {
-    ...message,
+    contact: message.contact,
+    direction: message.direction,
+    fromAddress,
+    fromName,
+    id: message.id,
+    inboundRouteId: message.inboundRouteId,
+    opportunity: message.opportunity,
+    provider: message.provider,
     receivedAt: message.receivedAt.toISOString(),
+    status: message.status,
+    subject: message.subject,
     summary: message.summary ?? "Inbound email received",
+    toAddress,
   };
 }
 

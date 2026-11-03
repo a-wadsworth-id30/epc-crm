@@ -1170,6 +1170,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   unsafe URL schemes. If provider HTML cannot be split safely at its quoted
   history marker, the latest view falls back to cleaned plain text so **Show
   full email** remains meaningful.
+- Gmail sync normalizes sender and recipient headers, including `Reply-To` and
+  connected-mailbox fallbacks when Gmail omits `From` or `To`. Inbox display
+  and reply actions also recover participant addresses for older incomplete
+  rows from stored headers, the linked contact and mailbox.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

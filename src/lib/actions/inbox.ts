@@ -11,6 +11,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
+import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import {
   outboundMessageError,
   sendSalesLeadEmail,
@@ -387,9 +388,14 @@ export async function replyToInboxMessage(
   const message = await prisma.emailMessage.findFirst({
     where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
     select: {
+      contact: { select: { email: true } },
       fromAddress: true,
+      fromName: true,
+      headers: true,
       internetMessageId: true,
+      mailbox: { select: { emailAddress: true } },
       mailboxId: true,
+      metadata: true,
       opportunityId: true,
       provider: true,
       providerThreadId: true,
@@ -419,7 +425,12 @@ export async function replyToInboxMessage(
     };
   }
 
-  const recipient = inboxReplyRecipient(message);
+  const resolvedAddresses = resolveInboxMessageAddresses(message);
+  const recipient = inboxReplyRecipient({
+    ...message,
+    fromAddress: resolvedAddresses.fromAddress,
+    toAddress: resolvedAddresses.toAddress,
+  });
   if (!recipient || !z.string().email().safeParse(recipient).success) {
     return { ok: false, message: "This conversation has no valid reply address." };
   }
