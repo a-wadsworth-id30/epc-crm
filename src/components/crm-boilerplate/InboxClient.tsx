@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
+import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
@@ -210,6 +211,12 @@ export default function InboxClient({
     selectedId && !selectedDetail && !detailError,
   );
   const selectedMessage = selectedDetail ?? selectedSummary;
+  const resolvedReplyRecipient = selectedMessage
+    ? inboxReplyRecipient({
+        ...selectedMessage,
+        contactAddress: selectedMessage.contact?.email,
+      })
+    : null;
   const latestEmailBody = selectedDetail
     ? selectedDetail.latestTextBody
     : (selectedMessage?.summary ?? "");
@@ -727,12 +734,7 @@ export default function InboxClient({
                           type="button"
                           onClick={() => {
                             setReplyError(null);
-                            setReplyRecipient(
-                              inboxReplyRecipient({
-                                ...selectedMessage,
-                                contactAddress: selectedMessage.contact?.email,
-                              }) ?? "",
-                            );
+                            setReplyRecipient(resolvedReplyRecipient ?? "");
                             setReplySubject(
                               inboxReplySubject(selectedMessage.subject),
                             );
@@ -755,27 +757,19 @@ export default function InboxClient({
                         }}
                       >
                         <div className="grid gap-3 text-sm sm:grid-cols-2">
-                          <div>
-                            <label
-                              className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
-                              htmlFor={`inbox-reply-recipient-${selectedMessage.id}`}
-                            >
-                              To
-                            </label>
-                            <input
-                              className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
-                              disabled={isReplying}
-                              id={`inbox-reply-recipient-${selectedMessage.id}`}
-                              onChange={(event) => {
-                                setReplyRecipient(event.target.value);
+                          <LockedEmailRecipientField
+                            disabled={isReplying}
+                            id={`inbox-reply-recipient-${selectedMessage.id}`}
+                            linkedAddresses={[
+                              resolvedReplyRecipient,
+                              selectedMessage.contact?.email,
+                            ]}
+                            onChange={(value) => {
+                                setReplyRecipient(value);
                                 setReplyError(null);
                               }}
-                              placeholder="customer@example.com"
-                              required
-                              type="email"
-                              value={replyRecipient}
-                            />
-                          </div>
+                            value={replyRecipient}
+                          />
                           <div>
                             <label
                               className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"

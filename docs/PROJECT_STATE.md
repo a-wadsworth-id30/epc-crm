@@ -86,7 +86,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   message's `Reply-To` address, then its sender or linked lead email, while
   excluding the connected CRM mailbox from the automatic recipient. Reply
   subjects default to the normalized `Re:` subject and remain editable before
-  sending. Customer-facing email direction labels use **Sent** and **Received**
+  sending. Reply recipients are read-only by default in Inbox and Sales >
+  Conversation. Users must explicitly choose **Change recipient** to edit the
+  address; replacements outside the original reply address and linked contact
+  email show a warning, and successful recipient overrides are audited.
+  Customer-facing email direction labels use **Sent** and **Received**
   in both views while the stored direction values remain `OUTBOUND` and
   `INBOUND`. Sales > Conversation distinguishes CRM-composed email from
   messages imported from Gmail or another provider: imported sent mail shows

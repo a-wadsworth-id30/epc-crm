@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
+import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
@@ -1215,28 +1216,20 @@ export default function SaleConversationThread({
                             }}
                           >
                             <div className="grid gap-3 text-sm sm:grid-cols-2">
-                              <div>
-                                <label
-                                  className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"
-                                  htmlFor={`sale-gmail-recipient-${communication.id}`}
-                                >
-                                  To
-                                </label>
-                                <input
-                                  className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                                  disabled={isGmailReplying}
-                                  id={`sale-gmail-recipient-${communication.id}`}
-                                  onChange={(event) => {
-                                    setReplyRecipient(event.target.value);
+                              <LockedEmailRecipientField
+                                disabled={isGmailReplying}
+                                id={`sale-gmail-recipient-${communication.id}`}
+                                linkedAddresses={[
+                                  communication.emailReply.recipient,
+                                  communication.contactEmail,
+                                ]}
+                                onChange={(value) => {
+                                    setReplyRecipient(value);
                                     setReplyError(null);
                                     setReplySuccess(null);
                                   }}
-                                  placeholder="customer@example.com"
-                                  required
-                                  type="email"
-                                  value={replyRecipient}
-                                />
-                              </div>
+                                value={replyRecipient}
+                              />
                               <div>
                                 <label
                                   className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400"

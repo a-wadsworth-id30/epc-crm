@@ -111,7 +111,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   message `Reply-To` header first, then the inbound sender or linked contact.
   Connected mailbox/receiving addresses are excluded from automatic defaults.
   Their editable subject is validated server-side and defaults to the original
-  subject with normalized `Re:` prefixes.
+  subject with normalized `Re:` prefixes. Recipient fields are locked by
+  default; explicit changes outside the resolved reply address or linked
+  contact email surface a warning. Successful overrides create a compact
+  `email.reply.recipient_overridden` audit event without storing message body
+  content.
 - Sale-conversation email serialization includes the provider `From` name.
   Outbound communications with a CRM user are displayed as CRM sends; imported
   Gmail/provider sent mail uses its actual sender name or address and carries a
