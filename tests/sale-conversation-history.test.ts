@@ -21,12 +21,17 @@ const emailRows = Array.from({ length: 15 }, (_, index) => ({
   emailMessage:
     index === 0
       ? {
+          contact: { email: "lead@example.com" },
           direction: "INBOUND",
           fromAddress: "customer@example.com",
+          fromName: "Customer",
+          headers: { "Reply-To": "reply@example.com" },
           htmlBody:
             "<p>Email body 1</p><div>On Monday, customer wrote:</div><blockquote>Earlier message</blockquote>",
           id: "email-message-1",
+          mailbox: { emailAddress: "sales@example.com" },
           mailboxId: null,
+          metadata: null,
           opportunityId: "sale-1",
           provider: "mailersend",
           providerThreadId: null,
@@ -239,7 +244,7 @@ describe("sale conversation history", () => {
     assert.ok(result);
     assert.deepEqual(result.items[0]?.emailReply, {
       emailMessageId: "email-message-1",
-      recipient: "customer@example.com",
+      recipient: "reply@example.com",
       subject: "Re: Email 1",
     });
     assert.match(result.items[0]?.fullEmailBody ?? "", /Earlier message/);

@@ -424,8 +424,11 @@ export async function replyToInboxMessage(
 
   const resolvedAddresses = resolveInboxMessageAddresses(message);
   const resolvedRecipient = inboxReplyRecipient({
-    ...message,
+    contactAddress: message.contact?.email,
+    direction: message.direction,
     fromAddress: resolvedAddresses.fromAddress,
+    mailboxAddress: resolvedAddresses.mailboxAddress,
+    replyToAddress: resolvedAddresses.replyToAddress,
     toAddress: resolvedAddresses.toAddress,
   });
   const replyRecipient = parsed.data.recipient ?? resolvedRecipient;

@@ -46,6 +46,20 @@ describe("inbox message serialization", () => {
     );
 
     assert.equal(result.fromAddress, "customer@example.com");
+    assert.equal(result.replyToAddress, "customer@example.com");
+  });
+
+  it("keeps the visible sender separate from a header reply-to address", () => {
+    const result = serializeInboxMessageSummary(
+      inboxRow({
+        fromAddress: "mailer@example.net",
+        headers: { "Reply-To": 'Customer <customer@example.com>' },
+      }),
+    );
+
+    assert.equal(result.fromAddress, "mailer@example.net");
+    assert.equal(result.replyToAddress, "customer@example.com");
+    assert.equal(result.mailboxAddress, "craig@epc-improvements.co.uk");
   });
 
   it("uses the connected mailbox as the sender for existing outbound rows", () => {

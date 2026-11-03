@@ -55,7 +55,13 @@ type InboxMessageDetailRow = Prisma.EmailMessageGetPayload<{
 export function serializeInboxMessageSummary(
   message: InboxMessageSummaryRow,
 ): InboxMessageSummary {
-  const { fromAddress, fromName, toAddress } =
+  const {
+    fromAddress,
+    fromName,
+    mailboxAddress,
+    replyToAddress,
+    toAddress,
+  } =
     resolveInboxMessageAddresses(message);
 
   return {
@@ -65,9 +71,11 @@ export function serializeInboxMessageSummary(
     fromName,
     id: message.id,
     inboundRouteId: message.inboundRouteId,
+    mailboxAddress,
     opportunity: message.opportunity,
     provider: message.provider,
     receivedAt: message.receivedAt.toISOString(),
+    replyToAddress,
     status: message.status,
     subject: message.subject,
     summary: message.summary ?? "Inbound email received",

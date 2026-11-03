@@ -9,6 +9,7 @@ import {
   toEmailPlainText,
 } from "@/lib/email/plain-text";
 import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
+import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import { prisma } from "@/lib/prisma";
@@ -173,11 +174,16 @@ const communicationSelect = {
   direction: true,
   emailMessage: {
     select: {
+      contact: { select: { email: true } },
       direction: true,
       fromAddress: true,
+      fromName: true,
+      headers: true,
       htmlBody: true,
       id: true,
+      mailbox: { select: { emailAddress: true } },
       mailboxId: true,
+      metadata: true,
       opportunityId: true,
       provider: true,
       providerThreadId: true,
@@ -218,8 +224,18 @@ function serializeCommunication(
     html: communication.emailMessage?.htmlBody,
     latestText: latestEmailBody,
   });
-  const recipient = communication.emailMessage
-    ? inboxReplyRecipient(communication.emailMessage)
+  const emailAddresses = communication.emailMessage
+    ? resolveInboxMessageAddresses(communication.emailMessage)
+    : null;
+  const recipient = communication.emailMessage && emailAddresses
+    ? inboxReplyRecipient({
+        contactAddress: communication.emailMessage.contact?.email,
+        direction: communication.emailMessage.direction,
+        fromAddress: emailAddresses.fromAddress,
+        mailboxAddress: emailAddresses.mailboxAddress,
+        replyToAddress: emailAddresses.replyToAddress,
+        toAddress: emailAddresses.toAddress,
+      })
     : null;
   const emailReply =
     communication.channel === "EMAIL" &&

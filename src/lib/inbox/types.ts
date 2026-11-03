@@ -17,9 +17,11 @@ export type InboxMessageSummary = {
   fromAddress: string | null;
   fromName: string | null;
   inboundRouteId: string | null;
+  mailboxAddress: string | null;
   opportunity: InboxOpportunitySummary | null;
   provider: string;
   receivedAt: string;
+  replyToAddress: string | null;
   status: string;
   subject: string | null;
   summary: string;

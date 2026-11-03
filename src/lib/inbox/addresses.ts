@@ -17,6 +17,27 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function headerText(
+  source: Record<string, unknown>,
+  ...names: string[]
+) {
+  const normalizedNames = new Set(
+    names.map((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "")),
+  );
+
+  for (const [key, value] of Object.entries(source)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!normalizedNames.has(normalizedKey)) continue;
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      const text = value.filter((item) => typeof item === "string").join(", ");
+      if (text) return text;
+    }
+  }
+
+  return null;
+}
+
 export function resolveInboxMessageAddresses(message: InboxAddressSource) {
   const headers = objectValue(message.headers);
   const metadata = objectValue(message.metadata);
@@ -26,8 +47,8 @@ export function resolveInboxMessageAddresses(message: InboxAddressSource) {
       : typeof headers.From === "string"
         ? headers.From
         : null;
-  const replyTo =
-    typeof metadata.replyTo === "string" ? metadata.replyTo : null;
+  const replyTo = headerText(headers, "reply-to", "replyTo") ??
+    headerText(metadata, "reply-to", "replyTo");
   const fromAddress =
     firstEmailAddress(message.fromAddress, fromHeader) ??
     (message.direction === "INBOUND"
@@ -42,6 +63,8 @@ export function resolveInboxMessageAddresses(message: InboxAddressSource) {
   return {
     fromAddress,
     fromName: message.fromName ?? emailHeaderName(fromHeader),
+    mailboxAddress: firstEmailAddress(message.mailbox?.emailAddress),
+    replyToAddress: firstEmailAddress(replyTo),
     toAddress,
   };
 }
