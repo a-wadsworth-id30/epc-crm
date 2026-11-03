@@ -1244,7 +1244,8 @@ export default function SaleConversationThread({
                                     setReplySuccess(null);
                                   }}
                                   originalMailboxId={
-                                    communication.emailReply.mailboxId
+                                    communication.emailReply.mailboxId ??
+                                    sendMailboxes[0]?.id
                                   }
                                   value={replyMailboxId}
                                 />

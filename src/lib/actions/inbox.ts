@@ -21,6 +21,7 @@ import {
   outboundMessageError,
   sendSalesLeadEmail,
 } from "@/lib/sales/outbound-messages";
+import { findGmailMailboxForSend } from "@/lib/integrations/gmail-send";
 
 export type InboxSaleOption = {
   companyName: string | null;
@@ -455,9 +456,11 @@ export async function replyToInboxMessage(
   if (!replyRecipient) {
     return { ok: false, message: "Enter a valid reply address." };
   }
-  const selectedMailboxId =
-    parsed.data.mailboxId ??
-    (message.provider === "gmail" ? message.mailboxId : null);
+  const defaultMailboxId =
+    message.mailboxId ??
+    (await findGmailMailboxForSend({ user }))?.id ??
+    null;
+  const selectedMailboxId = parsed.data.mailboxId ?? defaultMailboxId;
   const isThreadedGmail = canPreserveGmailThread({
     messageMailboxId: message.mailboxId,
     provider: message.provider,
@@ -497,7 +500,7 @@ export async function replyToInboxMessage(
         .catch(() => null);
     }
 
-    if (isReplySenderOverride(parsed.data.mailboxId, message.mailboxId)) {
+    if (isReplySenderOverride(parsed.data.mailboxId, defaultMailboxId)) {
       await prisma.auditLog
         .create({
           data: {
@@ -507,8 +510,9 @@ export async function replyToInboxMessage(
             entityId: message.id,
             metadata: {
               opportunityId: message.opportunityId,
-              originalMailboxId: message.mailboxId,
+              defaultMailboxId,
               provider: message.provider,
+              sourceMailboxId: message.mailboxId,
               selectedMailboxId: parsed.data.mailboxId,
               threadPreserved: isThreadedGmail,
             },

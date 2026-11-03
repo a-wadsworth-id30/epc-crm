@@ -12,7 +12,9 @@ type EmailMailboxSenderFieldProps = {
 };
 
 function mailboxLabel(mailbox: EmailMailboxOption) {
-  return mailbox.displayName
+  return mailbox.displayName &&
+    mailbox.displayName.trim().toLowerCase() !==
+      mailbox.emailAddress.trim().toLowerCase()
     ? `${mailbox.displayName} <${mailbox.emailAddress}>`
     : mailbox.emailAddress;
 }
