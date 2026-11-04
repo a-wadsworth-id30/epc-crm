@@ -333,7 +333,9 @@ open sale. Ambiguous contact matches remain in the inbox rather than being
 attached to the wrong sale. CRM-originated Gmail sends create the thread link
 immediately, allowing replies to return to the correct sale. Attachment bytes
 are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
-when R2 is configured.
+when R2 is configured. Gmail image attachments use a SHA-256 content key and a
+shared `FileAsset`, so repeated inline signature/footer images reuse the same
+R2 object. Non-image attachments remain message-owned files.
 
 Gmail participant addresses are normalized from provider headers. When Gmail
 omits `From`, inbound sync falls back to `Reply-To` and outbound sync falls back

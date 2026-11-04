@@ -12,12 +12,19 @@ import {
   emailMessagesAreDuplicates,
   normalizeInternetMessageId,
 } from "@/lib/email/deduplication";
+import {
+  attachmentChecksum,
+  gmailSharedImageEntityType,
+  gmailSharedImageKey,
+  gmailSharedImageTag,
+  isImageAttachment,
+} from "@/lib/email/attachment-deduplication";
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { runSalesAutomationTrigger } from "@/lib/sales/automation";
-import { getR2Config, putR2Object } from "@/lib/storage/r2";
+import { getR2Config, headR2Object, putR2Object } from "@/lib/storage/r2";
 
 const attachmentSchema = z.object({
   attachmentId: z.string().nullable(),
@@ -486,31 +493,83 @@ async function archiveMessageAttachments({
       if (!encodedData) throw new Error("Gmail attachment data was unavailable.");
       const buffer = Buffer.from(encodedData, "base64url");
       if (buffer.byteLength > maxBytes) throw new Error("Attachment exceeds the R2 upload limit.");
-      const key = `${r2Config.uploadPrefix || "crm-assets"}/gmail/${mailbox.id}/${message.id}/${crypto.randomUUID()}-${safeFileName(attachment.fileName)}`;
-      const upload = await putR2Object({
-        body: buffer,
-        contentType: attachment.mimeType ?? "application/octet-stream",
-        key,
-      });
-      const file = await prisma.fileAsset.create({
-        data: {
-          bucket: upload.bucketName,
-          entityId: opportunityId ?? contactId ?? emailId,
-          entityType: opportunityId
-            ? "sales_opportunity"
-            : contactId
-              ? "contact"
-              : "email_message",
-          key: upload.key,
-          mimeType: attachment.mimeType ?? "application/octet-stream",
-          originalName: attachment.fileName,
-          sizeBytes: buffer.byteLength,
-          tags: ["email-attachment", "gmail"],
-        },
-      });
+      const checksum = attachmentChecksum(buffer);
+      const mimeType = attachment.mimeType ?? "application/octet-stream";
+      const sharedImage = isImageAttachment(mimeType);
+      const key = sharedImage
+        ? gmailSharedImageKey({
+            checksum,
+            uploadPrefix: r2Config.uploadPrefix,
+          })
+        : `${r2Config.uploadPrefix || "crm-assets"}/gmail/${mailbox.id}/${message.id}/${crypto.randomUUID()}-${safeFileName(attachment.fileName)}`;
+      let file = sharedImage
+        ? await prisma.fileAsset.findUnique({ where: { key } })
+        : null;
+      let objectAvailable = false;
+
+      if (file) {
+        try {
+          const storedObject = await headR2Object({ key });
+          objectAvailable = storedObject.contentLength === buffer.byteLength;
+        } catch {
+          objectAvailable = false;
+        }
+      }
+
+      if (!file || !objectAvailable) {
+        const upload = await putR2Object({
+          body: buffer,
+          contentType: mimeType,
+          key,
+        });
+
+        file = sharedImage
+          ? await prisma.fileAsset.upsert({
+              where: { key: upload.key },
+              update: {
+                bucket: upload.bucketName,
+                checksum,
+                mimeType,
+                sizeBytes: buffer.byteLength,
+              },
+              create: {
+                bucket: upload.bucketName,
+                checksum,
+                entityId: checksum,
+                entityType: gmailSharedImageEntityType,
+                key: upload.key,
+                mimeType,
+                originalName: attachment.fileName,
+                sizeBytes: buffer.byteLength,
+                tags: ["email-attachment", "gmail", gmailSharedImageTag],
+              },
+            })
+          : await prisma.fileAsset.create({
+              data: {
+                bucket: upload.bucketName,
+                checksum,
+                entityId: opportunityId ?? contactId ?? emailId,
+                entityType: opportunityId
+                  ? "sales_opportunity"
+                  : contactId
+                    ? "contact"
+                    : "email_message",
+                key: upload.key,
+                mimeType,
+                originalName: attachment.fileName,
+                sizeBytes: buffer.byteLength,
+                tags: ["email-attachment", "gmail"],
+              },
+            });
+      }
+
       await prisma.emailAttachment.update({
         where: { id: row.id },
-        data: { archiveStatus: "STORED", fileAssetId: file.id, lastError: null },
+        data: {
+          archiveStatus: "STORED",
+          fileAssetId: file.id,
+          lastError: null,
+        },
       });
       archived += 1;
     } catch (error) {

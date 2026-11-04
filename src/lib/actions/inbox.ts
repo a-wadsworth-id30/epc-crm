@@ -332,7 +332,10 @@ export async function assignInboxThreadToSale(
 
     if (fileAssetIds.length) {
       await tx.fileAsset.updateMany({
-        where: { id: { in: fileAssetIds } },
+        where: {
+          id: { in: fileAssetIds },
+          entityType: { not: "gmail_attachment_image" },
+        },
         data: { entityId: opportunity.id, entityType: "sales_opportunity" },
       });
     }
