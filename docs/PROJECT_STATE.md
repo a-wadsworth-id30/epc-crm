@@ -116,7 +116,8 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Inbox keeps normal page scrolling on every breakpoint. On desktop, the
   opened-email main column stays below the sticky application header while the
   longer message-list aside continues through the page; neither column uses an
-  independent viewport-height scroll panel.
+  independent viewport-height scroll panel. The shared aside/main wrapper uses
+  the same background colour as the opened-email main panel.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an
