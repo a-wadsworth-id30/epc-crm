@@ -6,7 +6,7 @@ import { authorizeFileAssetAccess } from "@/lib/storage/authorization";
 import { createR2DownloadUrl } from "@/lib/storage/r2";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ fileAssetId: string }> },
 ) {
   const { fileAssetId } = await context.params;
@@ -31,6 +31,9 @@ export async function GET(
   }
 
   const url = await createR2DownloadUrl({
+    downloadName: new URL(request.url).searchParams.has("download")
+      ? fileAsset.originalName
+      : null,
     key: fileAsset.key,
     expiresIn: 300,
   });

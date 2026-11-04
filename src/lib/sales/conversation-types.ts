@@ -1,3 +1,5 @@
+import type { EmailAttachmentDisplay } from "@/lib/email/attachment-display";
+
 export const saleConversationFilters = [
   { value: "ALL", label: "All" },
   { value: "PHONE", label: "Calls" },
@@ -22,6 +24,7 @@ export type SaleConversationItem = {
   summary: string;
   body: string | null;
   emailHtmlBody?: string | null;
+  emailAttachments?: EmailAttachmentDisplay[];
   emailIdentity?: string | null;
   emailProvider?: string | null;
   focusCommunicationId?: string | null;

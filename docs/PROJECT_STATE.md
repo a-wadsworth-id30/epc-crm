@@ -1234,6 +1234,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   tables while removing scripts, event handlers, forms, remote images and
   unsafe URL schemes. If provider HTML cannot be split safely at its quoted
   history marker, the optional latest view falls back to cleaned plain text.
+  Stored email attachments appear below the body in all three views. Safe
+  raster images render as authenticated thumbnails so signature/footer artwork
+  is visible, while PDFs, text files and other documents provide secure preview
+  and download actions. Shared deduplicated Gmail images use the same
+  related-email permission checks and do not expose R2 object keys.
   Their email-card actions share the same styling and order: full-email toggle,
   **Reply**, **Reply with AI**, then **Open lead** when relevant. Inbox-only
   assignment controls follow those shared actions.

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { ExternalLink, Mail, Reply } from "lucide-react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
+import EmailAttachmentGallery from "@/components/crm-boilerplate/EmailAttachmentGallery";
 import {
   conversationEmailActionButtonClass,
   conversationEmailAIButtonClass,
@@ -757,6 +758,11 @@ export default function InboxClient({
                         html={displayedEmailHtml}
                         text={displayedEmailBody}
                       />
+                      {selectedDetail?.attachments.length ? (
+                        <EmailAttachmentGallery
+                          attachments={selectedDetail.attachments}
+                        />
+                      ) : null}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">

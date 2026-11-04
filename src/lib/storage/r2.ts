@@ -314,9 +314,11 @@ export async function headR2Object({ key }: { key: string }) {
 }
 
 export async function createR2DownloadUrl({
+  downloadName,
   key,
   expiresIn = 900,
 }: {
+  downloadName?: string | null;
   key: string;
   expiresIn?: number;
 }) {
@@ -327,6 +329,11 @@ export async function createR2DownloadUrl({
     new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
+      ...(downloadName
+        ? {
+            ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+          }
+        : {}),
     }),
     { expiresIn },
   );

@@ -1,5 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import {
+  emailAttachmentDisplaySelect,
+  serializeEmailAttachments,
+} from "@/lib/email/attachment-display";
+import {
   completeEmailPlainText,
   latestInboundEmailPlainText,
 } from "@/lib/email/plain-text";
@@ -42,6 +46,7 @@ export const inboxMessageSummarySelect = {
 
 export const inboxMessageDetailSelect = {
   ...inboxMessageSummarySelect,
+  attachmentsArchive: { select: emailAttachmentDisplaySelect },
   htmlBody: true,
   textBody: true,
 } satisfies Prisma.EmailMessageSelect;
@@ -109,6 +114,7 @@ export function serializeInboxMessageDetail(
 
   return {
     ...serializeInboxMessageSummary(message),
+    attachments: serializeEmailAttachments(message.attachmentsArchive),
     fullHtmlBody: htmlViews.fullHtml,
     fullTextBody,
     latestHtmlBody: htmlViews.latestHtml,

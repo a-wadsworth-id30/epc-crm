@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
+import EmailAttachmentGallery from "@/components/crm-boilerplate/EmailAttachmentGallery";
 import {
   conversationEmailActionButtonClass,
   conversationEmailAIButtonClass,
@@ -892,7 +893,12 @@ export default function SaleConversationThread({
                   communication.channel === "EMAIL"
                     ? emailAttachments(communication.metadata)
                     : [];
+                const storedAttachments =
+                  communication.channel === "EMAIL"
+                    ? (communication.emailAttachments ?? [])
+                    : [];
                 const attachmentCount = Math.max(
+                  storedAttachments.length,
                   attachments.length,
                   metadataNumber(
                     communication.metadata,
@@ -1173,7 +1179,11 @@ export default function SaleConversationThread({
                               </p>
                             </div>
                           ) : null}
-                          {attachmentCount ? (
+                          {storedAttachments.length ? (
+                            <EmailAttachmentGallery
+                              attachments={storedAttachments}
+                            />
+                          ) : attachmentCount ? (
                             <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.04]">
                               <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
                                 Email attachments
