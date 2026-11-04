@@ -90,6 +90,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Conversation. Users must explicitly choose **Change recipient** to edit the
   address; replacements outside the original reply address and linked contact
   email show a warning, and successful recipient overrides are audited.
+  The From control remains visible in Inbox, Sales and Contact conversation
+  reply forms even when no authorised connected Gmail sender is available; in
+  that state it shows that the configured CRM/MailerSend sender will be used.
   Customer-facing email direction labels use **Sent** and **Received**
   in both views while the stored direction values remain `OUTBOUND` and
   `INBOUND`. Sales > Conversation distinguishes CRM-composed email from
