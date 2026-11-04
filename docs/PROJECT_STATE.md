@@ -1201,7 +1201,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   in the central inbox. CRM-originated Gmail sends persist an exact
   Gmail-thread-to-sale link so replies return to the correct sale. Gmail
   attachment references are copied into R2-backed `FileAsset` rows when storage
-  is configured. Inbox users can assign or move a complete Gmail thread to an
+  is configured. Exact duplicate Gmail images, including repeated signature
+  and footer artwork, reuse one SHA-256-addressed R2 object and shared
+  `FileAsset`; other attachment types remain message-owned. Inbox users can
+  assign or move a complete Gmail thread to an
   accessible sale; the CRM moves its email/timeline records and archived
   attachments together, stores a durable manual route for later replies, and
   writes an audit entry. Manual sync is available from Gmail settings. A
