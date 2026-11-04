@@ -20,7 +20,10 @@ function inboxRow(
     headers: null,
     id: "message-1",
     inboundRouteId: null,
-    mailbox: { emailAddress: "craig@epc-improvements.co.uk" },
+    mailbox: {
+      emailAddress: "craig@epc-improvements.co.uk",
+      owner: null,
+    },
     mailboxId: "mailbox-1",
     metadata: null,
     opportunity: null,
@@ -71,6 +74,29 @@ describe("inbox message serialization", () => {
     );
 
     assert.equal(result.fromAddress, "craig@epc-improvements.co.uk");
+  });
+
+  it("uses only a CRM mailbox owner's avatar for outbound mail", () => {
+    const outbound = serializeInboxMessageSummary(
+      inboxRow({
+        direction: "OUTBOUND",
+        mailbox: {
+          emailAddress: "craig@epc-improvements.co.uk",
+          owner: { avatarUrl: "/api/media/avatar-1" },
+        },
+      }),
+    );
+    const inbound = serializeInboxMessageSummary(
+      inboxRow({
+        mailbox: {
+          emailAddress: "craig@epc-improvements.co.uk",
+          owner: { avatarUrl: "/api/media/avatar-1" },
+        },
+      }),
+    );
+
+    assert.equal(outbound.avatarUrl, "/api/media/avatar-1");
+    assert.equal(inbound.avatarUrl, null);
   });
 
   it("reads the recipient display name from stored provider headers", () => {

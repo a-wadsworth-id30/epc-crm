@@ -12,6 +12,7 @@ export type InboxOpportunitySummary = {
 };
 
 export type InboxMessageSummary = {
+  avatarUrl: string | null;
   id: string;
   contact: InboxContactSummary | null;
   direction: string;

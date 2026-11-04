@@ -189,7 +189,12 @@ export const conversationCommunicationSelect = {
       htmlBody: true,
       id: true,
       internetMessageId: true,
-      mailbox: { select: { emailAddress: true } },
+      mailbox: {
+        select: {
+          emailAddress: true,
+          owner: { select: { avatarUrl: true } },
+        },
+      },
       mailboxId: true,
       metadata: true,
       opportunityId: true,
@@ -211,7 +216,7 @@ export const conversationCommunicationSelect = {
   summary: true,
   toAddress: true,
   updatedAt: true,
-  user: { select: { name: true } },
+  user: { select: { avatarUrl: true, name: true } },
 } satisfies Prisma.SalesCommunicationSelect;
 
 type CommunicationRow = Prisma.SalesCommunicationGetPayload<{
@@ -270,6 +275,13 @@ export function serializeConversationCommunication(
       : null;
 
   return {
+    avatarUrl:
+      communication.channel === "EMAIL" &&
+      communication.direction === "OUTBOUND"
+        ? (communication.user?.avatarUrl ??
+          communication.emailMessage?.mailbox?.owner?.avatarUrl ??
+          null)
+        : null,
     body: latestEmailBody || null,
     channel: communication.channel,
     contactEmail:
@@ -336,7 +348,12 @@ export const conversationEmailMessageSelect = {
   htmlBody: true,
   id: true,
   internetMessageId: true,
-  mailbox: { select: { emailAddress: true } },
+  mailbox: {
+    select: {
+      emailAddress: true,
+      owner: { select: { avatarUrl: true } },
+    },
+  },
   mailboxId: true,
   metadata: true,
   opportunity: { select: { title: true } },
@@ -390,6 +407,10 @@ export function serializeConversationEmailMessage(
   });
 
   return {
+    avatarUrl:
+      message.direction === "OUTBOUND"
+        ? (message.mailbox?.owner?.avatarUrl ?? null)
+        : null,
     body: latestEmailBody || null,
     channel: "EMAIL",
     contactEmail: message.contact?.email ?? null,

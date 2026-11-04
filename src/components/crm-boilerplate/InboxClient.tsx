@@ -7,6 +7,7 @@ import { ExternalLink, Mail, Reply } from "lucide-react";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
 import EmailAttachmentGallery from "@/components/crm-boilerplate/EmailAttachmentGallery";
+import EmailParticipantAvatar from "@/components/crm-boilerplate/EmailParticipantAvatar";
 import {
   conversationEmailActionButtonClass,
   conversationEmailAIButtonClass,
@@ -89,17 +90,6 @@ function inboxHref({
 
   const suffix = params.toString();
   return suffix ? `/inbox?${suffix}` : "/inbox";
-}
-
-function initials(value: string) {
-  return (
-    value
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || "?"
-  );
 }
 
 function senderName(message: InboxMessageSummary) {
@@ -541,9 +531,11 @@ export default function InboxClient({
                         onClick={() => selectMessage(message.id)}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-                            {initials(displayName)}
-                          </div>
+                          <EmailParticipantAvatar
+                            avatarUrl={message.avatarUrl}
+                            email={message.fromAddress}
+                            name={displayName}
+                          />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <p className="truncate text-sm font-semibold text-gray-900 dark:text-white/90">
@@ -763,9 +755,12 @@ export default function InboxClient({
                 <div className="flex-1 p-4 sm:p-6">
                   <div className="rounded-xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
                     <div className="flex items-start gap-4 border-b border-gray-100 px-5 py-5 dark:border-gray-800">
-                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-                        {initials(senderName(selectedMessage))}
-                      </div>
+                      <EmailParticipantAvatar
+                        avatarUrl={selectedMessage.avatarUrl}
+                        email={selectedMessage.fromAddress}
+                        name={senderName(selectedMessage)}
+                        size="lg"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">

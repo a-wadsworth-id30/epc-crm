@@ -16,6 +16,7 @@ export type SaleConversationFilter =
   (typeof saleConversationFilters)[number]["value"];
 
 export type SaleConversationItem = {
+  avatarUrl?: string | null;
   id: string;
   channel: string;
   contactEmail?: string | null;

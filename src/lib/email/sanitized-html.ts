@@ -42,6 +42,7 @@ const quotedHistoryMarkers = [
   /<(?:div|table)\b[^>]*\bclass=(?:"[^"]*\bOutlookMessageHeader\b[^"]*"|'[^']*\bOutlookMessageHeader\b[^']*')[^>]*>/i,
   /<div\b[^>]*\bid=(?:"divRplyFwdMsg"|'divRplyFwdMsg')[^>]*>/i,
   /<(?:div|p)\b[^>]*>\s*-{2,}\s*(?:Original|Forwarded) Message\s*-{2,}/i,
+  /<(?:div|p)\b[^>]*>\s*On\b[^<]{0,500}\bwrote:\s*<\/(?:div|p)>/i,
   /<blockquote\b[^>]*(?:type=(?:"cite"|'cite')|class=(?:"[^"]*\b(?:gmail_quote|protonmail_quote)\b[^"]*"|'[^']*\b(?:gmail_quote|protonmail_quote)\b[^']*'))[^>]*>/i,
 ];
 

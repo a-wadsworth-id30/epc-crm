@@ -123,6 +123,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   and **Show all** appends a separately styled previous-conversation section
   without changing the latest content. CID signature images use authorised
   media previews in the body and are not repeated as attachment cards.
+- Email cards use an existing CRM user or mailbox-owner avatar for outbound
+  messages when available. All other senders use stable coloured initials;
+  external avatar services are intentionally not contacted.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

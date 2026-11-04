@@ -24,6 +24,11 @@
 - `InboxClient` uses the document as its only vertical scroll container. Its
   desktop main/detail grid item is sticky below `AppHeader`; the message-list
   aside remains in normal flow so this does not reintroduce nested scrolling.
+- Email participant avatars use only existing CRM-managed user media under
+  `/api/media`. Outbound messages can inherit the CRM author or connected
+  mailbox owner's uploaded avatar. External senders do not trigger Google,
+  Gravatar or sender-hosted image requests; they use deterministic coloured
+  initials until the CRM has a managed contact-avatar field.
 
 ## Auth
 
