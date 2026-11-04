@@ -499,8 +499,8 @@ export default function InboxClient({
         </div>
       )}
 
-      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="grid min-h-[680px] lg:grid-cols-[380px_1fr]">
+      <section className="rounded-lg border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+        <div className="grid min-h-[680px] items-start lg:grid-cols-[380px_1fr]">
           <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white lg:border-r lg:border-b-0 dark:border-gray-800 dark:bg-white/[0.02]">
             <div className="border-b border-gray-200 p-4 dark:border-gray-800">
               <form action="/inbox" className="flex items-center gap-2">
@@ -644,7 +644,7 @@ export default function InboxClient({
             </div>
           </aside>
 
-          <main className="min-w-0 bg-gray-50 dark:bg-black/10">
+          <main className="min-w-0 bg-gray-50 lg:sticky lg:top-24 lg:self-start dark:bg-black/10">
             {selectedMessage ? (
               <div className="flex min-h-full flex-col">
                 <div className="border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-white/[0.02]">
