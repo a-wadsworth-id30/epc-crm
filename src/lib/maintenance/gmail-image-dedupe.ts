@@ -1,3 +1,10 @@
+import crypto from "node:crypto";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   attachmentChecksum,
@@ -6,12 +13,15 @@ import {
   gmailSharedImageKey,
   gmailSharedImageTag,
 } from "@/lib/email/attachment-deduplication";
-import {
-  deleteR2Object,
-  getR2Config,
-  getR2ObjectBytes,
-  putR2Object,
-} from "@/lib/storage/r2";
+
+const cloudflareR2Provider = "cloudflare-r2";
+const credentialEncryptionAlgorithm = "aes-256-gcm";
+
+type R2MaintenanceClient = {
+  bucketName: string;
+  client: S3Client;
+  uploadPrefix: string;
+};
 
 type CandidateFile = Prisma.FileAssetGetPayload<{
   select: {
@@ -47,6 +57,132 @@ function prefix(value: string | null | undefined) {
   return value ? value.slice(0, 10) : null;
 }
 
+function getEncryptionKey() {
+  const secret = process.env.CREDENTIAL_ENCRYPTION_KEY;
+  if (!secret) return null;
+
+  const base64Key = Buffer.from(secret, "base64");
+  if (base64Key.length === 32) return base64Key;
+
+  const hexKey = Buffer.from(secret, "hex");
+  if (hexKey.length === 32) return hexKey;
+
+  if (secret.length >= 32) {
+    return crypto.createHash("sha256").update(secret).digest();
+  }
+
+  return null;
+}
+
+function decryptSecret(value: string) {
+  const key = getEncryptionKey();
+  if (!key) {
+    throw new Error("CREDENTIAL_ENCRYPTION_KEY is missing or invalid.");
+  }
+
+  const [version, iv, tag, encrypted] = value.split(":");
+  if (version !== "v1" || !iv || !tag || !encrypted) {
+    throw new Error("Encrypted secret has an unsupported format.");
+  }
+
+  const decipher = crypto.createDecipheriv(
+    credentialEncryptionAlgorithm,
+    key,
+    Buffer.from(iv, "base64url"),
+  );
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(encrypted, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function configObject(value: Prisma.JsonValue | null | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, Prisma.JsonValue>)
+    : null;
+}
+
+async function createR2MaintenanceClient(prismaClient: PrismaClient) {
+  const integration = await prismaClient.integrationConnection.findUnique({
+    where: { provider: cloudflareR2Provider },
+    select: { config: true },
+  });
+  const config = configObject(integration?.config);
+  const credentials = configObject(config?.credentials);
+  const accountId = config?.accountId;
+  const bucketName = config?.bucketName;
+  const accessKeyId = credentials?.accessKeyId;
+  const secretAccessKey = credentials?.secretAccessKey;
+
+  if (
+    typeof accountId !== "string" ||
+    typeof bucketName !== "string" ||
+    typeof accessKeyId !== "string" ||
+    typeof secretAccessKey !== "string"
+  ) {
+    throw new Error("Cloudflare R2 credentials are not configured.");
+  }
+
+  return {
+    bucketName,
+    client: new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: decryptSecret(accessKeyId),
+        secretAccessKey: decryptSecret(secretAccessKey),
+      },
+    }),
+    uploadPrefix:
+      typeof config?.uploadPrefix === "string"
+        ? config.uploadPrefix
+        : "crm-assets",
+  } satisfies R2MaintenanceClient;
+}
+
+async function getR2Bytes(r2: R2MaintenanceClient, key: string) {
+  const response = await r2.client.send(
+    new GetObjectCommand({ Bucket: r2.bucketName, Key: key }),
+  );
+
+  if (!response.Body || !("transformToByteArray" in response.Body)) {
+    throw new Error("R2 object body could not be read.");
+  }
+
+  return Buffer.from(await response.Body.transformToByteArray());
+}
+
+async function putR2Image({
+  body,
+  contentType,
+  key,
+  r2,
+}: {
+  body: Buffer;
+  contentType: string;
+  key: string;
+  r2: R2MaintenanceClient;
+}) {
+  await r2.client.send(
+    new PutObjectCommand({
+      Body: body,
+      Bucket: r2.bucketName,
+      ContentType: contentType,
+      Key: key,
+    }),
+  );
+
+  return { bucketName: r2.bucketName, key };
+}
+
+async function deleteR2Image(r2: R2MaintenanceClient, key: string) {
+  await r2.client.send(
+    new DeleteObjectCommand({ Bucket: r2.bucketName, Key: key }),
+  );
+}
+
 function protectedReferenceCount(file: Pick<CandidateFile, "_count">) {
   return (
     file._count.customerDocumentShareFiles +
@@ -80,13 +216,13 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-async function hashCandidate(file: CandidateFile) {
+async function hashCandidate(file: CandidateFile, r2: R2MaintenanceClient) {
   if (file.checksum) {
     return { file: { ...file, contentChecksum: file.checksum }, error: null };
   }
 
   try {
-    const body = await getR2ObjectBytes({ key: file.key });
+    const body = await getR2Bytes(r2, file.key);
 
     if (body.byteLength !== file.sizeBytes) {
       throw new Error("Stored size does not match the R2 object.");
@@ -129,6 +265,7 @@ export async function runGmailImageDedupe({
   concurrency = 6,
   prismaClient,
 }: GmailImageDedupeOptions) {
+  const r2 = await createR2MaintenanceClient(prismaClient);
   const files = await prismaClient.fileAsset.findMany({
     where: {
       mimeType: { startsWith: "image/", mode: "insensitive" },
@@ -167,7 +304,7 @@ export async function runGmailImageDedupe({
   const hashedResults = await mapWithConcurrency(
     possibleDuplicates,
     Math.max(1, Math.min(12, concurrency)),
-    hashCandidate,
+    (file) => hashCandidate(file, r2),
   );
   const hashErrors = hashedResults.flatMap((result) =>
     result.error ? [result.error] : [],
@@ -205,9 +342,6 @@ export async function runGmailImageDedupe({
 
   if (!applyChanges || duplicateGroups.length === 0) return summary;
 
-  const r2Config = await getR2Config();
-  if (!r2Config) throw new Error("Cloudflare R2 is not configured.");
-
   let canonicalImages = 0;
   let deletedDatabaseFiles = 0;
   let deletedR2Objects = 0;
@@ -219,10 +353,10 @@ export async function runGmailImageDedupe({
     const checksum = group[0]!.contentChecksum;
     const canonicalKey = gmailSharedImageKey({
       checksum,
-      uploadPrefix: r2Config.uploadPrefix,
+      uploadPrefix: r2.uploadPrefix,
     });
     const source = group[0]!;
-    const body = await getR2ObjectBytes({ key: source.key });
+    const body = await getR2Bytes(r2, source.key);
 
     if (
       body.byteLength !== source.sizeBytes ||
@@ -233,10 +367,11 @@ export async function runGmailImageDedupe({
       );
     }
 
-    const upload = await putR2Object({
+    const upload = await putR2Image({
       body,
       contentType: source.mimeType,
       key: canonicalKey,
+      r2,
     });
     const canonical = await prismaClient.fileAsset.upsert({
       where: { key: canonicalKey },
@@ -330,7 +465,7 @@ export async function runGmailImageDedupe({
       if (file.key === canonicalKey) continue;
 
       try {
-        await deleteR2Object({ key: file.key });
+        await deleteR2Image(r2, file.key);
         deletedR2Objects += 1;
       } catch {
         failedR2Deletes += 1;
