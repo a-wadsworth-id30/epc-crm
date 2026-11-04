@@ -31,11 +31,11 @@ type AccessWhere = (user: User) => unknown;
 
 let contactAccessWhere: AccessWhere;
 let companyAccessWhere: AccessWhere;
+let emailMessageAccessWhere: AccessWhere;
 
 before(async () => {
-  ({ contactAccessWhere, companyAccessWhere } = await import(
-    "../src/lib/crm-resource-access"
-  ));
+  ({ contactAccessWhere, companyAccessWhere, emailMessageAccessWhere } =
+    await import("../src/lib/crm-resource-access"));
 });
 
 describe("CRM resource access", () => {
@@ -61,5 +61,29 @@ describe("CRM resource access", () => {
 
     assert.deepEqual(contactAccessWhere(admin), {});
     assert.deepEqual(companyAccessWhere(admin), {});
+  });
+
+  it("lets users read email for an accessible lead or connected mailbox", () => {
+    const user = { id: "user-1", role: "USER" } satisfies User;
+
+    assert.deepEqual(emailMessageAccessWhere(user), {
+      OR: [
+        { opportunity: { OR: [{ ownerId: user.id }, { ownerId: null }] } },
+        {
+          mailbox: {
+            OR: [
+              { ownerUserId: user.id },
+              { userAccess: { some: { userId: user.id } } },
+            ],
+          },
+        },
+      ],
+    });
+  });
+
+  it("keeps admin email access unscoped", () => {
+    const admin = { id: "admin-1", role: "ADMIN" } satisfies User;
+
+    assert.deepEqual(emailMessageAccessWhere(admin), {});
   });
 });

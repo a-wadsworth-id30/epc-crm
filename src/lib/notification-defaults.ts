@@ -7,6 +7,11 @@ export const notificationCategoryDefinitions = [
     description: "New contacts and people activity.",
   },
   {
+    key: "Email",
+    label: "Email",
+    description: "New inbound email requiring review.",
+  },
+  {
     key: "Marketing",
     label: "Marketing",
     description: "Attribution, conversion uploads and marketing sync activity.",
@@ -68,6 +73,7 @@ export const defaultNotificationDefaults: NotificationDefaults = {
 
 const notificationCategoriesSchema = z.object({
   Contacts: z.boolean().default(true),
+  Email: z.boolean().default(true),
   Marketing: z.boolean().default(true),
   Sales: z.boolean().default(true),
   Storage: z.boolean().default(true),

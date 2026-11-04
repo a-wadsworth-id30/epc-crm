@@ -1,5 +1,6 @@
 export const realtimeTopics = {
   inbox: "inbox",
+  notifications: "notifications",
   tasks: "tasks",
   telephony: "telephony",
   contactConversation: (contactId: string) => `conversation:contact:${contactId}`,

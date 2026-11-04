@@ -9,6 +9,7 @@ import {
   salesOpportunityWhereWithAccess,
 } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { isReplyRecipientOverride } from "@/lib/inbox/recipient-safety";
@@ -544,8 +545,10 @@ export async function replyToInboxMessage(
     where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
     data: { readAt: new Date(), status: "READ" },
   });
+  revalidateHeaderNotifications();
   await bumpRealtimeTopics([
     realtimeTopics.inbox,
+    realtimeTopics.notifications,
     realtimeTopics.saleConversation(message.opportunityId),
   ]);
   revalidatePath("/inbox");
@@ -562,6 +565,9 @@ export async function markInboxMessageRead(messageId: string) {
     data: { status: "READ" },
   });
 
+  revalidateHeaderNotifications();
+  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+
   revalidatePath("/inbox");
 }
 
@@ -573,6 +579,9 @@ export async function archiveInboxMessage(messageId: string) {
     data: { status: "ARCHIVED" },
   });
 
+  revalidateHeaderNotifications();
+  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+
   revalidatePath("/inbox");
 }
 
@@ -583,6 +592,9 @@ export async function restoreInboxMessage(messageId: string) {
     where: emailMessageWhereWithAccess(user, { id: messageId }),
     data: { status: "READ" },
   });
+
+  revalidateHeaderNotifications();
+  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
 
   revalidatePath("/inbox");
 }

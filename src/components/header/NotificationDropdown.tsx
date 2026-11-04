@@ -44,6 +44,10 @@ export default function NotificationDropdown({
       : notifications.filter((item) => item.category === filter);
 
   useEffect(() => {
+    setNotifications(initialNotifications);
+  }, [initialNotifications]);
+
+  useEffect(() => {
     if (autoOpen) {
       setIsOpen(true);
     }
