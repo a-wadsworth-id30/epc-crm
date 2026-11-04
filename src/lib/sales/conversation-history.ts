@@ -2,6 +2,10 @@ import "server-only";
 
 import type { CommunicationChannel, Prisma } from "@prisma/client";
 import type { CurrentUser } from "@/lib/auth";
+import {
+  emailAttachmentDisplaySelect,
+  serializeEmailAttachments,
+} from "@/lib/email/attachment-display";
 import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
 import {
   completeEmailPlainText,
@@ -175,6 +179,7 @@ export const conversationCommunicationSelect = {
   direction: true,
   emailMessage: {
     select: {
+      attachmentsArchive: { select: emailAttachmentDisplaySelect },
       contact: { select: { email: true } },
       direction: true,
       fromAddress: true,
@@ -265,6 +270,9 @@ export function serializeConversationCommunication(
     direction: communication.direction,
     emailHtmlBody:
       communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
+    emailAttachments: serializeEmailAttachments(
+      communication.emailMessage?.attachmentsArchive,
+    ),
     emailIdentity: communication.emailMessage
       ? emailInternetMessageIdentity(communication.emailMessage)
       : null,
@@ -299,6 +307,7 @@ export function serializeConversationCommunication(
 }
 
 export const conversationEmailMessageSelect = {
+  attachmentsArchive: { select: emailAttachmentDisplaySelect },
   contact: {
     select: { email: true, firstName: true, lastName: true },
   },
@@ -360,6 +369,7 @@ export function serializeConversationEmailMessage(
     contactName: contactName(message.contact),
     direction: message.direction,
     emailHtmlBody: emailHtmlViews.latestHtml,
+    emailAttachments: serializeEmailAttachments(message.attachmentsArchive),
     emailIdentity: emailInternetMessageIdentity(message),
     emailProvider: message.provider,
     emailReply: message.opportunityId

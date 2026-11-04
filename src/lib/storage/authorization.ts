@@ -3,6 +3,8 @@ import "server-only";
 import { FileAssetVisibility, type FileAsset } from "@prisma/client";
 import type { CurrentUser } from "@/lib/auth";
 import {
+  contactAccessWhere,
+  salesOpportunityAccessWhere,
   userCanAccessCallLogRecord,
   userCanAccessCompanyRecord,
   userCanAccessContactRecord,
@@ -12,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 
 type AuthorizableFileAsset = Pick<
   FileAsset,
-  "entityId" | "entityType" | "uploadedById" | "visibility"
+  "entityId" | "entityType" | "id" | "uploadedById" | "visibility"
 >;
 
 export type FileAssetAccessResult =
@@ -59,33 +61,44 @@ export async function authorizeFileAssetAccess(
 
   const { entityId, entityType } = fileAsset;
 
-  if (!entityId || !entityType) {
-    return {
-      ok: false,
-      message: "You do not have access to this file.",
-      status: 403,
-    };
-  }
-
   if (entityType === "User" && entityId === user.id) {
     return { ok: true };
   }
 
   let hasEntityAccess = false;
 
-  if (entityType === "SalesOpportunity") {
+  if (entityType === "SalesOpportunity" && entityId) {
     hasEntityAccess = await userCanAccessOpportunityRecord(entityId, user);
-  } else if (entityType === "Contact") {
+  } else if (entityType === "sales_opportunity" && entityId) {
+    hasEntityAccess = await userCanAccessOpportunityRecord(entityId, user);
+  } else if (entityType === "Contact" && entityId) {
     hasEntityAccess = await userCanAccessContactRecord(entityId, user);
-  } else if (entityType === "Company") {
+  } else if (entityType === "contact" && entityId) {
+    hasEntityAccess = await userCanAccessContactRecord(entityId, user);
+  } else if (entityType === "Company" && entityId) {
     hasEntityAccess = await userCanAccessCompanyRecord(entityId, user);
-  } else if (entityType === "CallLog") {
+  } else if (entityType === "CallLog" && entityId) {
     hasEntityAccess = await userCanAccessCallLogMedia(entityId, user);
   }
 
   if (hasEntityAccess) {
     return { ok: true };
   }
+
+  const accessibleEmailAttachment = await prisma.emailAttachment.findFirst({
+    where: {
+      fileAssetId: fileAsset.id,
+      emailMessage: {
+        OR: [
+          { opportunity: salesOpportunityAccessWhere(user) },
+          { contact: contactAccessWhere(user) },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  if (accessibleEmailAttachment) return { ok: true };
 
   return {
     ok: false,

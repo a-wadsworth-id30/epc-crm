@@ -1,9 +1,10 @@
+import type { EmailAttachmentDisplay } from "@/lib/email/attachment-display";
+
 export type InboxContactSummary = {
   firstName: string;
   lastName: string;
   email: string | null;
 };
-
 export type InboxOpportunitySummary = {
   id: string;
   stage: string;
@@ -38,6 +39,7 @@ export type EmailMailboxOption = {
 };
 
 export type InboxMessageDetail = InboxMessageSummary & {
+  attachments: EmailAttachmentDisplay[];
   fullHtmlBody: string | null;
   fullTextBody: string;
   latestHtmlBody: string | null;

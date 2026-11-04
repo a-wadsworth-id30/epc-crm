@@ -391,6 +391,13 @@ latest view deliberately falls back to cleaned plain text so the latest/full
 toggle still changes the visible content. Gmail sync retains the provider's
 complete text and HTML bodies on `EmailMessage`; only the linked sales
 communication is reduced to the latest reply for timeline and AI use.
+Archived Gmail attachments are serialized alongside those body views for
+Inbox, Sales Conversation and Contact Conversation. Stored safe raster images
+render as authenticated inline thumbnails below the message, while PDFs, text
+files and other documents expose authenticated preview/download actions. File
+access is checked against any related email contact or sale, including shared
+content-addressed signature images; raw R2 object keys are never sent to the
+browser.
 
 Linked inbound email cards in Inbox and Sales > Conversation expose a
 consistent **Reply** action plus **Reply with AI**. Sent emails expose neither
