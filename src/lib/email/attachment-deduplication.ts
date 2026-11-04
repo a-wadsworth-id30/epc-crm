@@ -22,3 +22,13 @@ export function gmailSharedImageKey({
 
   return `${prefix}/gmail/shared-images/${checksum}`;
 }
+
+export function duplicateContentKey({
+  checksum,
+  sizeBytes,
+}: {
+  checksum: string;
+  sizeBytes: number;
+}) {
+  return `${sizeBytes}:${checksum}`;
+}

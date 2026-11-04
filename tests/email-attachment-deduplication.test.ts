@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   attachmentChecksum,
+  duplicateContentKey,
   gmailSharedImageKey,
   isImageAttachment,
 } from "../src/lib/email/attachment-deduplication";
@@ -33,4 +34,11 @@ test("only declared image attachments use shared image storage", () => {
   assert.equal(isImageAttachment(" IMAGE/JPEG "), true);
   assert.equal(isImageAttachment("application/pdf"), false);
   assert.equal(isImageAttachment(null), false);
+});
+
+test("duplicate grouping includes size as well as content checksum", () => {
+  assert.equal(
+    duplicateContentKey({ checksum: "abc123", sizeBytes: 512 }),
+    "512:abc123",
+  );
 });

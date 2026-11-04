@@ -17,6 +17,8 @@
     "maintenance:docusign-dedupe": "tsx scripts/maintenance/cleanup-docusign-duplicate-documents.ts",
     "maintenance:docusign-dedupe:apply": "tsx scripts/maintenance/cleanup-docusign-duplicate-documents.ts --apply",
     "maintenance:email-dedupe-audit": "tsx scripts/maintenance/audit-duplicate-sale-emails.ts",
+    "maintenance:gmail-image-dedupe": "tsx scripts/maintenance/cleanup-gmail-duplicate-images.ts",
+    "maintenance:gmail-image-dedupe:apply": "tsx scripts/maintenance/cleanup-gmail-duplicate-images.ts --apply",
     "db:studio": "prisma studio",
     "build": "next build",
     "build:profile": "npm run build && npm run perf:bundle",

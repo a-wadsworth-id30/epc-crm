@@ -1203,8 +1203,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   attachment references are copied into R2-backed `FileAsset` rows when storage
   is configured. Exact duplicate Gmail images, including repeated signature
   and footer artwork, reuse one SHA-256-addressed R2 object and shared
-  `FileAsset`; other attachment types remain message-owned. Inbox users can
-  assign or move a complete Gmail thread to an
+  `FileAsset`; other attachment types remain message-owned. The audit-first
+  `maintenance:gmail-image-dedupe` command hashes existing R2 image bytes and
+  previews reclaimable copies; only the explicit `:apply` command relinks and
+  deletes verified duplicates. Inbox users can assign or move a complete Gmail
+  thread to an
   accessible sale; the CRM moves its email/timeline records and archived
   attachments together, stores a durable manual route for later replies, and
   writes an audit entry. Manual sync is available from Gmail settings. A
