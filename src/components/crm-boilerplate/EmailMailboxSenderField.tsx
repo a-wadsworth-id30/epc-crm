@@ -28,6 +28,7 @@ export default function EmailMailboxSenderField({
   value,
 }: EmailMailboxSenderFieldProps) {
   const changesMailbox = Boolean(value && value !== originalMailboxId);
+  const hasMailboxes = mailboxes.length > 0;
 
   return (
     <div className="min-w-0">
@@ -44,13 +45,22 @@ export default function EmailMailboxSenderField({
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
-        {mailboxes.map((mailbox) => (
-          <option key={mailbox.id} value={mailbox.id}>
-            {mailboxLabel(mailbox)}
-          </option>
-        ))}
+        {hasMailboxes ? (
+          mailboxes.map((mailbox) => (
+            <option key={mailbox.id} value={mailbox.id}>
+              {mailboxLabel(mailbox)}
+            </option>
+          ))
+        ) : (
+          <option value="">CRM default sender (MailerSend)</option>
+        )}
       </select>
-      {changesMailbox ? (
+      {!hasMailboxes ? (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          No authorised Gmail account is available, so the CRM sender will be
+          used.
+        </p>
+      ) : changesMailbox ? (
         <p className="mt-1 text-xs font-medium text-warning-600 dark:text-warning-400">
           This account cannot continue the original Gmail thread. The sender
           change is recorded in the audit log.

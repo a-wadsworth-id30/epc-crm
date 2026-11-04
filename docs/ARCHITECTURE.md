@@ -16,6 +16,11 @@
 - `src/layout/AdminShell.tsx` wraps the main app shell and global softphone.
 - `src/layout/AppSidebar.tsx` owns the main navigation.
 - `src/components/crm-boilerplate` contains project-specific reusable UI.
+- `EmailMailboxSenderField` is the shared From-account control for Inbox,
+  Sales and Contact conversation replies. It must remain rendered when the
+  sender list is empty so mailbox access failures are visible rather than
+  silently removing the field; the empty Gmail state represents the existing
+  MailerSend fallback.
 
 ## Auth
 

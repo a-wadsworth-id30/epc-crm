@@ -1334,23 +1334,21 @@ export default function SaleConversationThread({
                             }}
                           >
                             <div className="grid items-start gap-3 text-sm md:grid-cols-3">
-                              {sendMailboxes.length ? (
-                                <EmailMailboxSenderField
-                                  disabled={isGmailReplying}
-                                  id={`sale-gmail-mailbox-${communication.id}`}
-                                  mailboxes={sendMailboxes}
-                                  onChange={(value) => {
-                                    setReplyMailboxId(value);
-                                    setReplyError(null);
-                                    setReplySuccess(null);
-                                  }}
-                                  originalMailboxId={
-                                    communication.emailReply.mailboxId ??
-                                    sendMailboxes[0]?.id
-                                  }
-                                  value={replyMailboxId}
-                                />
-                              ) : null}
+                              <EmailMailboxSenderField
+                                disabled={isGmailReplying}
+                                id={`sale-gmail-mailbox-${communication.id}`}
+                                mailboxes={sendMailboxes}
+                                onChange={(value) => {
+                                  setReplyMailboxId(value);
+                                  setReplyError(null);
+                                  setReplySuccess(null);
+                                }}
+                                originalMailboxId={
+                                  communication.emailReply.mailboxId ??
+                                  sendMailboxes[0]?.id
+                                }
+                                value={replyMailboxId}
+                              />
                               <LockedEmailRecipientField
                                 disabled={isGmailReplying}
                                 id={`sale-gmail-recipient-${communication.id}`}

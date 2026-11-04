@@ -835,22 +835,19 @@ export default function InboxClient({
                         }}
                       >
                         <div className="grid items-start gap-3 text-sm md:grid-cols-3">
-                          {sendMailboxes.length ? (
-                            <EmailMailboxSenderField
-                              disabled={isReplying}
-                              id={`inbox-reply-mailbox-${selectedMessage.id}`}
-                              mailboxes={sendMailboxes}
-                              onChange={(value) => {
-                                setReplyMailboxId(value);
-                                setReplyError(null);
-                              }}
-                              originalMailboxId={
-                                selectedMessage.mailboxId ??
-                                sendMailboxes[0]?.id
-                              }
-                              value={replyMailboxId}
-                            />
-                          ) : null}
+                          <EmailMailboxSenderField
+                            disabled={isReplying}
+                            id={`inbox-reply-mailbox-${selectedMessage.id}`}
+                            mailboxes={sendMailboxes}
+                            onChange={(value) => {
+                              setReplyMailboxId(value);
+                              setReplyError(null);
+                            }}
+                            originalMailboxId={
+                              selectedMessage.mailboxId ?? sendMailboxes[0]?.id
+                            }
+                            value={replyMailboxId}
+                          />
                           <LockedEmailRecipientField
                             disabled={isReplying}
                             id={`inbox-reply-recipient-${selectedMessage.id}`}
