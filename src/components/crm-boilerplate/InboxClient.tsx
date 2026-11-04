@@ -15,7 +15,7 @@ import {
 } from "@/components/crm-boilerplate/conversationEmailActionStyles";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
-import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
+import EmailContent from "@/components/crm-boilerplate/EmailContent";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -214,7 +214,7 @@ export default function InboxClient({
   const [replyRecipient, setReplyRecipient] = useState("");
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
-  const [showFullEmail, setShowFullEmail] = useState(true);
+  const [showFullEmail, setShowFullEmail] = useState(false);
   const selectedSummary = useMemo(
     () => messages.find((message) => message.id === selectedId) ?? messages[0],
     [messages, selectedId],
@@ -237,22 +237,11 @@ export default function InboxClient({
   const latestEmailBody = selectedDetail
     ? selectedDetail.latestTextBody
     : (selectedMessage?.summary ?? "");
-  const completeEmailBody = selectedDetail
-    ? selectedDetail.fullTextBody
-    : latestEmailBody;
   const canShowFullEmail = Boolean(
     selectedDetail &&
-      ((completeEmailBody && completeEmailBody !== latestEmailBody) ||
-        (selectedDetail.fullHtmlBody &&
-          selectedDetail.fullHtmlBody !== selectedDetail.latestHtmlBody)),
+      (selectedDetail.quotedHistoryHtmlBody ||
+        selectedDetail.quotedHistoryTextBody),
   );
-  const displayedEmailBody =
-    showFullEmail && canShowFullEmail ? completeEmailBody : latestEmailBody;
-  const displayedEmailHtml = selectedDetail
-    ? showFullEmail && canShowFullEmail
-      ? selectedDetail.fullHtmlBody
-      : selectedDetail.latestHtmlBody
-    : null;
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -307,7 +296,7 @@ export default function InboxClient({
     setReplySubject("");
     setReplyError(null);
     setIsDraftingAI(false);
-    setShowFullEmail(true);
+    setShowFullEmail(false);
     setSelectedId(messageId);
     router.replace(inboxHref({ lane, messageId, page, pageSize, query }), {
       scroll: false,
@@ -657,7 +646,6 @@ export default function InboxClient({
                             ? "Matched lead"
                             : "Unmatched"}
                         </Badge>
-                        <StatusBadge>{selectedMessage.status}</StatusBadge>
                         <Badge
                           className={emailDirectionTone(
                             selectedMessage.direction,
@@ -665,16 +653,72 @@ export default function InboxClient({
                         >
                           {emailDirectionLabel(selectedMessage.direction)}
                         </Badge>
-                        <span className="text-xs text-gray-400">
+                        <StatusBadge>{selectedMessage.status}</StatusBadge>
+                        <Badge className="bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
+                          {selectedMessage.provider}
+                        </Badge>
+                        <span
+                          className="text-xs text-gray-400"
+                          title={new Date(
+                            selectedMessage.receivedAt,
+                          ).toLocaleString()}
+                        >
                           {formatDateTime(selectedMessage.receivedAt)}
                         </span>
                       </div>
-                      <h2 className="truncate text-xl font-semibold text-gray-900 dark:text-white/90">
+                      <h2 className="text-xl leading-snug font-semibold break-words text-gray-900 dark:text-white/90">
                         {selectedMessage.subject ?? "No subject"}
                       </h2>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        From {senderName(selectedMessage)}
-                      </p>
+                      <div className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
+                        <p className="break-all">
+                          From{" "}
+                          <span className="font-medium text-gray-700 dark:text-gray-200">
+                            {senderName(selectedMessage)}
+                          </span>
+                          {selectedMessage.fromAddress &&
+                          selectedMessage.fromAddress !==
+                            senderName(selectedMessage)
+                            ? ` <${selectedMessage.fromAddress}>`
+                            : ""}
+                        </p>
+                        <p className="break-all">
+                          To{" "}
+                          {selectedMessage.toAddress ??
+                            selectedMessage.mailboxAddress ??
+                            "CRM inbox"}
+                        </p>
+                        {selectedDetail?.ccAddresses.length ? (
+                          <p className="break-all">Cc {selectedDetail.ccAddresses.join(", ")}</p>
+                        ) : null}
+                      </div>
+                      {selectedMessage.providerLabels.length ? (
+                        <div
+                          aria-label="Gmail labels"
+                          className="mt-2 flex flex-wrap items-center gap-1.5"
+                        >
+                          <span className="text-xs text-gray-400">Gmail:</span>
+                          {selectedMessage.providerLabels.map((label) => (
+                            <span
+                              className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-white/[0.06] dark:text-gray-300"
+                              key={label}
+                            >
+                              {label.replaceAll("_", " ").toLowerCase()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="mt-3 text-sm">
+                        {selectedMessage.opportunity ? (
+                          <Link
+                            className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                            href={`/sales/${selectedMessage.opportunity.id}`}
+                          >
+                            Linked lead: {selectedMessage.opportunity.title}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400">No lead linked</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {selectedMessage.status === "UNREAD" ? (
@@ -754,9 +798,17 @@ export default function InboxClient({
                           {detailError}
                         </p>
                       ) : null}
-                      <SanitizedEmailBody
-                        html={displayedEmailHtml}
-                        text={displayedEmailBody}
+                      <EmailContent
+                        historyHtml={selectedDetail?.quotedHistoryHtmlBody}
+                        historyId={
+                          selectedDetail
+                            ? `inbox-email-history-${selectedDetail.id}`
+                            : undefined
+                        }
+                        historyText={selectedDetail?.quotedHistoryTextBody}
+                        latestHtml={selectedDetail?.latestHtmlBody}
+                        latestText={latestEmailBody}
+                        showHistory={showFullEmail && canShowFullEmail}
                       />
                       {selectedDetail?.attachments.length ? (
                         <EmailAttachmentGallery
@@ -768,6 +820,8 @@ export default function InboxClient({
                     <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">
                       {canShowFullEmail ? (
                         <button
+                          aria-controls={`inbox-email-history-${selectedDetail?.id}`}
+                          aria-expanded={showFullEmail}
                           className={conversationEmailActionButtonClass}
                           type="button"
                           onClick={() => setShowFullEmail((current) => !current)}

@@ -30,6 +30,8 @@ export type SaleConversationItem = {
   focusCommunicationId?: string | null;
   fullEmailBody?: string | null;
   fullEmailHtmlBody?: string | null;
+  quotedEmailBody?: string | null;
+  quotedEmailHtmlBody?: string | null;
   fromAddress: string | null;
   fromName?: string | null;
   toAddress: string | null;

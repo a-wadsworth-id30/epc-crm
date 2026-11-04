@@ -32,10 +32,11 @@ import {
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
-import SanitizedEmailBody from "@/components/crm-boilerplate/SanitizedEmailBody";
+import EmailContent from "@/components/crm-boilerplate/EmailContent";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
+import { visibleEmailAttachments } from "@/lib/email/attachment-display";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
-import { latestEmailReplyText, toEmailPlainText } from "@/lib/email/plain-text";
+import { toEmailPlainText } from "@/lib/email/plain-text";
 import type { EmailMailboxOption } from "@/lib/inbox/types";
 import {
   emailDisplayDirection,
@@ -897,8 +898,11 @@ export default function SaleConversationThread({
                   communication.channel === "EMAIL"
                     ? (communication.emailAttachments ?? [])
                     : [];
+                const visibleStoredAttachments = visibleEmailAttachments(
+                  storedAttachments,
+                );
                 const attachmentCount = Math.max(
-                  storedAttachments.length,
+                  visibleStoredAttachments.length,
                   attachments.length,
                   metadataNumber(
                     communication.metadata,
@@ -930,19 +934,11 @@ export default function SaleConversationThread({
                   "opportunityTitle",
                 );
                 const normalizedBody = toEmailPlainText(communication.body);
-                const plainBody =
-                  communication.channel === "EMAIL"
-                    ? latestEmailReplyText(normalizedBody)
-                    : normalizedBody;
-                const fullEmailBody = toEmailPlainText(
-                  communication.fullEmailBody,
-                );
+                const plainBody = normalizedBody;
                 const canShowFullEmail = Boolean(
                   communication.channel === "EMAIL" &&
-                    ((fullEmailBody && fullEmailBody !== plainBody) ||
-                      (communication.fullEmailHtmlBody &&
-                        communication.fullEmailHtmlBody !==
-                          communication.emailHtmlBody)),
+                    (communication.quotedEmailBody ||
+                      communication.quotedEmailHtmlBody),
                 );
                 const isShowingFullEmail =
                   canShowFullEmail &&
@@ -959,14 +955,10 @@ export default function SaleConversationThread({
                   communication.channel === "PHONE" &&
                   (recordingUrl || hasTranscript)
                     ? null
-                    : isShowingFullEmail
-                      ? fullEmailBody
-                      : plainBody;
+                    : plainBody;
                 const detailHtml =
                   communication.channel === "EMAIL"
-                    ? isShowingFullEmail
-                      ? communication.fullEmailHtmlBody
-                      : communication.emailHtmlBody
+                    ? communication.emailHtmlBody
                     : null;
                 const displaySummary =
                   communication.channel === "WEBSITE"
@@ -1106,7 +1098,12 @@ export default function SaleConversationThread({
                       </div>
 
                       <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <span
+                          className="text-sm font-medium text-gray-500 dark:text-gray-400"
+                          title={new Date(
+                            communication.occurredAt,
+                          ).toLocaleString()}
+                        >
                           {formatThreadTime(communication.occurredAt)}
                         </span>
                         <span
@@ -1118,6 +1115,7 @@ export default function SaleConversationThread({
                           {direction}
                         </span>
                         <button
+                          aria-expanded={isExpanded}
                           type="button"
                           onClick={() =>
                             setExpandedId((current) =>
@@ -1146,10 +1144,14 @@ export default function SaleConversationThread({
                       <div>
                         <div className="px-4 py-4">
                           {detailBody || detailHtml ? (
-                            <div className="max-h-80 overflow-y-auto text-sm leading-6 text-gray-700 dark:text-gray-300">
-                              <SanitizedEmailBody
-                                html={detailHtml}
-                                text={detailBody || displaySummary}
+                            <div className="text-sm leading-6 text-gray-700 dark:text-gray-300">
+                              <EmailContent
+                                historyHtml={communication.quotedEmailHtmlBody}
+                                historyId={`conversation-email-history-${communication.id}`}
+                                historyText={communication.quotedEmailBody}
+                                latestHtml={detailHtml}
+                                latestText={detailBody || displaySummary}
+                                showHistory={isShowingFullEmail}
                               />
                             </div>
                           ) : (
@@ -1179,9 +1181,9 @@ export default function SaleConversationThread({
                               </p>
                             </div>
                           ) : null}
-                          {storedAttachments.length ? (
+                          {visibleStoredAttachments.length ? (
                             <EmailAttachmentGallery
-                              attachments={storedAttachments}
+                              attachments={visibleStoredAttachments}
                             />
                           ) : attachmentCount ? (
                             <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.04]">
@@ -1232,6 +1234,8 @@ export default function SaleConversationThread({
                           <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-gray-800 dark:bg-white/[0.03]">
                             {canShowFullEmail ? (
                               <button
+                                aria-controls={`conversation-email-history-${communication.id}`}
+                                aria-expanded={isShowingFullEmail}
                                 type="button"
                                 onClick={() =>
                                   setShowingFullEmailId((current) =>

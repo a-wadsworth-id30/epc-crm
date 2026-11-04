@@ -41,16 +41,54 @@ describe("sanitized email HTML", () => {
     assert.match(full ?? "", /Earlier reply/);
   });
 
-  it("falls back to the cleaned latest text when provider HTML cannot be split", () => {
+  it("uses the same formatted latest HTML when expanded", () => {
     const html =
       "<p><strong>Latest reply</strong></p><div>-----Original Message-----</div><p>Earlier reply</p>";
+    const views = sanitizedEmailHtmlViews({ html });
+
+    assert.match(views.latestHtml ?? "", /<strong>Latest reply<\/strong>/);
+    assert.match(views.quotedHistoryHtml ?? "", /Earlier reply/);
+    assert.equal(
+      `${views.latestHtml}${views.quotedHistoryHtml}`,
+      views.fullHtml,
+    );
+  });
+
+  it("separates Gmail and Outlook quote wrappers without reformatting the latest reply", () => {
+    for (const history of [
+      '<div class="gmail_quote"><blockquote>Gmail history</blockquote></div>',
+      '<div id="divRplyFwdMsg">Outlook history</div>',
+    ]) {
+      const views = sanitizedEmailHtmlViews({
+        html: `<p><em>Formatted latest</em></p>${history}`,
+      });
+
+      assert.equal(views.latestHtml, "<p><em>Formatted latest</em></p>");
+      assert.ok(views.quotedHistoryHtml);
+    }
+  });
+
+  it("does not mistake an ordinary authored blockquote for conversation history", () => {
     const views = sanitizedEmailHtmlViews({
-      fullText: "Latest reply\n\nEarlier reply",
-      html,
-      latestText: "Latest reply",
+      html: "<p>Proposal notes</p><blockquote>Customer requirement</blockquote>",
     });
 
-    assert.equal(views.latestHtml, null);
-    assert.match(views.fullHtml ?? "", /Earlier reply/);
+    assert.match(views.latestHtml ?? "", /Customer requirement/);
+    assert.equal(views.quotedHistoryHtml, null);
+  });
+
+  it("replaces known CID images with authorised previews and removes unknown images", () => {
+    const result = sanitizedEmailHtml(
+      '<p>Signature</p><img src="cid:known-logo"><img src="cid:unknown"><img src="https://tracker.example/pixel">',
+      {
+        includeQuotedHistory: true,
+        inlineImages: [
+          { contentId: "known-logo", previewUrl: "/api/media/asset/preview" },
+        ],
+      },
+    );
+
+    assert.match(result ?? "", /src="\/api\/media\/asset\/preview"/);
+    assert.doesNotMatch(result ?? "", /unknown|tracker\.example/);
   });
 });

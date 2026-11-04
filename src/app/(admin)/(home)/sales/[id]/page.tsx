@@ -55,15 +55,6 @@ import {
   type DisplayFormattingContext,
 } from "@/lib/display-defaults";
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
-import {
-  completeEmailPlainText,
-  latestEmailReplyText,
-  toEmailPlainText,
-} from "@/lib/email/plain-text";
-import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
-import { emailInternetMessageIdentity } from "@/lib/email/deduplication";
-import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
-import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import { listGmailMailboxesForSend } from "@/lib/integrations/gmail-send";
 import { pipedriveProvider } from "@/lib/integrations/pipedrive";
 import {
@@ -77,6 +68,10 @@ import {
   spruceProvider,
 } from "@/lib/integrations/spruce-zapier";
 import { prisma } from "@/lib/prisma";
+import {
+  conversationCommunicationSelect,
+  serializeConversationCommunication,
+} from "@/lib/sales/conversation-history";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
 import { getCrmSettings } from "@/lib/settings";
 import { listRecordSignatureRequests } from "@/lib/signature-request-list";
@@ -1697,51 +1692,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       communications: {
         orderBy: { occurredAt: "desc" },
         take: initialConversationLimit,
-        select: {
-          id: true,
-          channel: true,
-          direction: true,
-          emailMessage: {
-            select: {
-              contact: { select: { email: true } },
-              direction: true,
-              fromAddress: true,
-              fromName: true,
-              headers: true,
-              htmlBody: true,
-              id: true,
-              internetMessageId: true,
-              mailbox: { select: { emailAddress: true } },
-              mailboxId: true,
-              metadata: true,
-              opportunityId: true,
-              provider: true,
-              providerThreadId: true,
-              subject: true,
-              textBody: true,
-              toAddress: true,
-            },
-          },
-          subject: true,
-          summary: true,
-          body: true,
-          fromAddress: true,
-          toAddress: true,
-          metadata: true,
-          occurredAt: true,
-          contact: {
-            select: {
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          user: {
-            select: {
-              name: true,
-            },
-          },
-        },
+        select: conversationCommunicationSelect,
       },
       scoreEvents: {
         orderBy: { createdAt: "desc" },
@@ -2176,84 +2127,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     sale,
   });
   const communicationConversationItems = sale.communications.map(
-    (communication) => {
-      const body = toEmailPlainText(communication.body);
-      const latestEmailBody =
-        communication.channel === "EMAIL" ? latestEmailReplyText(body) : body;
-      const completeEmailBody = communication.emailMessage
-        ? completeEmailPlainText({
-            fallback: body,
-            html: communication.emailMessage.htmlBody,
-            text: communication.emailMessage.textBody,
-          })
-        : body;
-      const emailHtmlViews = sanitizedEmailHtmlViews({
-        fullText: completeEmailBody,
-        html: communication.emailMessage?.htmlBody,
-        latestText: latestEmailBody,
-      });
-      const emailAddresses = communication.emailMessage
-        ? resolveInboxMessageAddresses(communication.emailMessage)
-        : null;
-      const recipient = communication.emailMessage && emailAddresses
-        ? inboxReplyRecipient({
-            contactAddress: communication.emailMessage.contact?.email,
-            direction: communication.emailMessage.direction,
-            fromAddress: emailAddresses.fromAddress,
-            mailboxAddress: emailAddresses.mailboxAddress,
-            replyToAddress: emailAddresses.replyToAddress,
-            toAddress: emailAddresses.toAddress,
-          })
-        : null;
-      const emailReply =
-        communication.channel === "EMAIL" &&
-        communication.emailMessage?.opportunityId
-          ? {
-              emailMessageId: communication.emailMessage.id,
-              mailboxId: communication.emailMessage.mailboxId,
-              recipient,
-              subject: inboxReplySubject(communication.emailMessage.subject),
-            }
-          : null;
-
-      return {
-        id: communication.id,
-        channel: communication.channel,
-        contactEmail:
-          communication.emailMessage?.contact?.email ??
-          communication.contact?.email ??
-          null,
-        direction: communication.direction,
-        subject: communication.subject,
-        summary: toEmailPlainText(communication.summary),
-        body: latestEmailBody || null,
-        emailHtmlBody:
-          communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
-        emailIdentity: communication.emailMessage
-          ? emailInternetMessageIdentity(communication.emailMessage)
-          : null,
-        emailProvider: communication.emailMessage?.provider ?? null,
-        fullEmailBody:
-          communication.channel === "EMAIL" &&
-          completeEmailBody &&
-          completeEmailBody !== latestEmailBody
-            ? completeEmailBody
-            : null,
-        fullEmailHtmlBody:
-          communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
-        fromAddress:
-          communication.emailMessage?.fromAddress ?? communication.fromAddress,
-        fromName: communication.emailMessage?.fromName ?? null,
-        emailReply,
-        toAddress:
-          communication.emailMessage?.toAddress ?? communication.toAddress,
-        toName: emailAddresses?.toName ?? null,
-        occurredAt: communication.occurredAt.toISOString(),
-        userName: communication.user?.name ?? null,
-        contactName: contactName(communication.contact),
-        metadata: communication.metadata,
-      };
-    },
+    serializeConversationCommunication,
   );
   const websiteConversationItems = buildWebsiteConversationItems({
     attributionRecords,

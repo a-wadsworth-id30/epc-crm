@@ -69,24 +69,37 @@ export function completeEmailPlainText({
 }
 
 export function latestEmailReplyText(value: string | null | undefined) {
-  const plainText = toEmailPlainText(value);
+  const views = emailPlainTextViews(value);
 
-  if (!plainText) return "";
+  return stripClientSignature(views.latestText) || views.fullText;
+}
 
-  const latestLines: string[] = [];
-  const lines = plainText.split("\n");
+export function emailPlainTextViews(value: string | null | undefined) {
+  const fullText = toEmailPlainText(value);
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    const trimmed = line.trim();
-
-    if (!trimmed && latestLines.length === 0) continue;
-    if (isQuotedReplyStart(trimmed, lines, index)) break;
-
-    latestLines.push(line);
+  if (!fullText) {
+    return { fullText: "", latestText: "", quotedHistoryText: "" };
   }
 
-  return stripClientSignature(cleanPlainText(latestLines.join("\n"))) || plainText;
+  const lines = fullText.split("\n");
+  const quoteIndex = lines.findIndex((line, index) =>
+    isQuotedReplyStart(line.trim(), lines, index),
+  );
+
+  if (quoteIndex <= 0) {
+    return { fullText, latestText: fullText, quotedHistoryText: "" };
+  }
+
+  const latestText = cleanPlainText(lines.slice(0, quoteIndex).join("\n"));
+  const quotedHistoryText = cleanPlainText(
+    lines.slice(quoteIndex).join("\n"),
+  );
+
+  if (!latestText || !quotedHistoryText) {
+    return { fullText, latestText: fullText, quotedHistoryText: "" };
+  }
+
+  return { fullText, latestText, quotedHistoryText };
 }
 
 export function latestInboundEmailPlainText({

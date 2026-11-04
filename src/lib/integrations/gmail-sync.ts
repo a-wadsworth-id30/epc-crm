@@ -29,8 +29,12 @@ import { getR2Config, headR2Object, putR2Object } from "@/lib/storage/r2";
 
 const attachmentSchema = z.object({
   attachmentId: z.string().nullable(),
+  contentId: z.string().nullable().optional(),
+  contentDisposition: z.string().nullable().optional(),
+  disposition: z.string().nullable().optional(),
   fileName: z.string().min(1),
   inlineData: z.string().nullable().default(null),
+  isInline: z.boolean().optional(),
   mimeType: z.string().nullable(),
   sizeBytes: z.number().int().nonnegative().nullable(),
 });
@@ -337,9 +341,14 @@ async function importGmailMessage({
     const emailData = {
       attachments: jsonValue(
         message.attachments.map(
-          ({ attachmentId, fileName, mimeType, sizeBytes }) => ({
+          ({ attachmentId, contentDisposition, contentId, disposition, fileName, isInline, mimeType, sizeBytes }, index) => ({
             attachmentId,
+            contentId: contentId ?? null,
+            disposition:
+              disposition ?? contentDisposition ?? (isInline ? "inline" : null),
             fileName,
+            providerAttachmentId:
+              attachmentId ?? `inline:${index}:${fileName}`,
             mimeType,
             sizeBytes,
           }),

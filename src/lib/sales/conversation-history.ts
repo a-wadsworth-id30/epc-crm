@@ -9,7 +9,7 @@ import {
 import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
 import {
   completeEmailPlainText,
-  latestEmailReplyText,
+  emailPlainTextViews,
   toEmailPlainText,
 } from "@/lib/email/plain-text";
 import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
@@ -179,6 +179,7 @@ export const conversationCommunicationSelect = {
   direction: true,
   emailMessage: {
     select: {
+      attachments: true,
       attachmentsArchive: { select: emailAttachmentDisplaySelect },
       contact: { select: { email: true } },
       direction: true,
@@ -221,8 +222,6 @@ export function serializeConversationCommunication(
   communication: CommunicationRow,
 ): SaleConversationItem {
   const body = toEmailPlainText(communication.body);
-  const latestEmailBody =
-    communication.channel === "EMAIL" ? latestEmailReplyText(body) : body;
   const completeEmailBody = communication.emailMessage
     ? completeEmailPlainText({
         fallback: body,
@@ -230,10 +229,21 @@ export function serializeConversationCommunication(
         text: communication.emailMessage.textBody,
       })
     : body;
+  const plainTextViews = emailPlainTextViews(completeEmailBody);
+  const latestEmailBody =
+    communication.channel === "EMAIL" ? plainTextViews.latestText : body;
+  const emailAttachments = serializeEmailAttachments(
+    communication.emailMessage?.attachmentsArchive,
+    communication.emailMessage?.attachments,
+    communication.emailMessage?.htmlBody,
+  );
   const emailHtmlViews = sanitizedEmailHtmlViews({
-    fullText: completeEmailBody,
     html: communication.emailMessage?.htmlBody,
-    latestText: latestEmailBody,
+    inlineImages: emailAttachments.flatMap((attachment) =>
+      attachment.isEmbedded && attachment.contentId && attachment.previewUrl
+        ? [{ contentId: attachment.contentId, previewUrl: attachment.previewUrl }]
+        : [],
+    ),
   });
   const emailAddresses = communication.emailMessage
     ? resolveInboxMessageAddresses(communication.emailMessage)
@@ -270,9 +280,7 @@ export function serializeConversationCommunication(
     direction: communication.direction,
     emailHtmlBody:
       communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
-    emailAttachments: serializeEmailAttachments(
-      communication.emailMessage?.attachmentsArchive,
-    ),
+    emailAttachments,
     emailIdentity: communication.emailMessage
       ? emailInternetMessageIdentity(communication.emailMessage)
       : null,
@@ -289,6 +297,15 @@ export function serializeConversationCommunication(
         : null,
     fullEmailHtmlBody:
       communication.channel === "EMAIL" ? emailHtmlViews.fullHtml : null,
+    quotedEmailBody:
+      communication.channel === "EMAIL" &&
+      !communication.emailMessage?.htmlBody?.trim()
+        ? plainTextViews.quotedHistoryText || null
+        : null,
+    quotedEmailHtmlBody:
+      communication.channel === "EMAIL"
+        ? emailHtmlViews.quotedHistoryHtml
+        : null,
     emailReply,
     id: communication.id,
     metadata: {
@@ -307,6 +324,7 @@ export function serializeConversationCommunication(
 }
 
 export const conversationEmailMessageSelect = {
+  attachments: true,
   attachmentsArchive: { select: emailAttachmentDisplaySelect },
   contact: {
     select: { email: true, firstName: true, lastName: true },
@@ -346,11 +364,20 @@ export function serializeConversationEmailMessage(
     html: message.htmlBody,
     text: message.textBody,
   });
-  const latestEmailBody = latestEmailReplyText(completeEmailBody);
+  const plainTextViews = emailPlainTextViews(completeEmailBody);
+  const latestEmailBody = plainTextViews.latestText;
+  const emailAttachments = serializeEmailAttachments(
+    message.attachmentsArchive,
+    message.attachments,
+    message.htmlBody,
+  );
   const emailHtmlViews = sanitizedEmailHtmlViews({
-    fullText: completeEmailBody,
     html: message.htmlBody,
-    latestText: latestEmailBody,
+    inlineImages: emailAttachments.flatMap((attachment) =>
+      attachment.isEmbedded && attachment.contentId && attachment.previewUrl
+        ? [{ contentId: attachment.contentId, previewUrl: attachment.previewUrl }]
+        : [],
+    ),
   });
   const emailAddresses = resolveInboxMessageAddresses(message);
   const recipient = inboxReplyRecipient({
@@ -369,7 +396,7 @@ export function serializeConversationEmailMessage(
     contactName: contactName(message.contact),
     direction: message.direction,
     emailHtmlBody: emailHtmlViews.latestHtml,
-    emailAttachments: serializeEmailAttachments(message.attachmentsArchive),
+    emailAttachments,
     emailIdentity: emailInternetMessageIdentity(message),
     emailProvider: message.provider,
     emailReply: message.opportunityId
@@ -388,6 +415,10 @@ export function serializeConversationEmailMessage(
         ? completeEmailBody
         : null,
     fullEmailHtmlBody: emailHtmlViews.fullHtml,
+    quotedEmailBody: message.htmlBody?.trim()
+      ? null
+      : plainTextViews.quotedHistoryText || null,
+    quotedEmailHtmlBody: emailHtmlViews.quotedHistoryHtml,
     id: `email-${message.id}`,
     metadata: {
       ...objectValue(message.metadata),
