@@ -25,7 +25,12 @@ export const inboxMessageSummarySelect = {
   fromName: true,
   headers: true,
   inboundRouteId: true,
-  mailbox: { select: { emailAddress: true } },
+  mailbox: {
+    select: {
+      emailAddress: true,
+      owner: { select: { avatarUrl: true } },
+    },
+  },
   mailboxId: true,
   metadata: true,
   opportunity: {
@@ -92,6 +97,10 @@ export function serializeInboxMessageSummary(
     resolveInboxMessageAddresses(message);
 
   return {
+    avatarUrl:
+      message.direction === "OUTBOUND"
+        ? (message.mailbox?.owner?.avatarUrl ?? null)
+        : null,
     contact: message.contact,
     direction: message.direction,
     fromAddress,

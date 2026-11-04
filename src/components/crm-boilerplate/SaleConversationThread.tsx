@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { AISparkIcon } from "@/components/crm-boilerplate/AITheme";
 import EmailAttachmentGallery from "@/components/crm-boilerplate/EmailAttachmentGallery";
+import EmailParticipantAvatar from "@/components/crm-boilerplate/EmailParticipantAvatar";
 import {
   conversationEmailActionButtonClass,
   conversationEmailAIButtonClass,
@@ -978,6 +979,16 @@ export default function SaleConversationThread({
                       );
                 const displayDirection =
                   emailDisplayDirection(communication);
+                const emailAvatarName =
+                  displayDirection === "OUTBOUND"
+                    ? communication.fromName ||
+                      communication.userName ||
+                      communication.fromAddress ||
+                      "CRM"
+                    : communication.fromName ||
+                      communication.contactName ||
+                      communication.fromAddress ||
+                      "Unknown sender";
                 const emailOrigin = emailOriginLabel(communication);
                 const isExpanded = visibleExpandedId === communication.id;
                 const pageHref =
@@ -1036,7 +1047,15 @@ export default function SaleConversationThread({
                       }`}
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <CommunicationIcon channel={renderedChannel} />
+                        {communication.channel === "EMAIL" ? (
+                          <EmailParticipantAvatar
+                            avatarUrl={communication.avatarUrl}
+                            email={communication.fromAddress}
+                            name={emailAvatarName}
+                          />
+                        ) : (
+                          <CommunicationIcon channel={renderedChannel} />
+                        )}
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="text-sm leading-5 font-semibold text-gray-900 dark:text-white/90">
