@@ -1,6 +1,9 @@
 import { Download, ExternalLink, FileText, Paperclip } from "lucide-react";
 import Image from "next/image";
-import type { EmailAttachmentDisplay } from "@/lib/email/attachment-display";
+import {
+  type EmailAttachmentDisplay,
+  visibleEmailAttachments,
+} from "@/lib/email/attachment-display";
 
 function formatFileSize(sizeBytes: number | null) {
   if (sizeBytes === null || sizeBytes < 0) return null;
@@ -15,9 +18,10 @@ export default function EmailAttachmentGallery({
 }: {
   attachments: EmailAttachmentDisplay[];
 }) {
-  if (!attachments.length) return null;
+  const visibleAttachments = visibleEmailAttachments(attachments);
+  if (!visibleAttachments.length) return null;
 
-  const images = attachments.filter(
+  const images = visibleAttachments.filter(
     (attachment) => attachment.isImage && attachment.previewUrl,
   );
 
@@ -25,7 +29,8 @@ export default function EmailAttachmentGallery({
     <section className="mt-4 rounded-xl border border-gray-200 bg-gray-50/80 p-3 dark:border-gray-800 dark:bg-white/[0.03]">
       <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
         <Paperclip className="h-4 w-4" />
-        {attachments.length} attachment{attachments.length === 1 ? "" : "s"}
+        {visibleAttachments.length} attachment
+        {visibleAttachments.length === 1 ? "" : "s"}
       </div>
 
       {images.length ? (
@@ -57,7 +62,7 @@ export default function EmailAttachmentGallery({
       ) : null}
 
       <div className="mt-3 space-y-2">
-        {attachments.map((attachment) => {
+        {visibleAttachments.map((attachment) => {
           const size = formatFileSize(attachment.sizeBytes);
 
           return (

@@ -382,25 +382,30 @@ enquiries. Complete Gmail mailbox/thread metadata preserves the exact Gmail
 thread; other providers use the CRM's normal authorised sale-email delivery
 path with a `Re:` subject and the reviewed recipient instead of hiding the
 composer.
-Inbox and sale Conversation serializers derive both plain-text fallbacks and
-sanitized rich-text views from the stored Gmail body. The allow-list preserves
-basic email formatting such as paragraphs, headings, emphasis, lists, links,
-quotes and tables while removing scripts, event handlers, embedded forms,
-remote images and unsafe URL schemes. The UI keeps the cleaned latest reply as
-an optional compact view and shows sanitized quoted history by default. Raw provider
-HTML is never inserted into the browser. When the plain-text parser identifies
-quoted history that cannot be separated reliably in the sanitized HTML, the
-latest view deliberately falls back to cleaned plain text so the latest/full
-toggle still changes the visible content. Gmail sync retains the provider's
-complete text and HTML bodies on `EmailMessage`; only the linked sales
-communication is reduced to the latest reply for timeline and AI use.
+Inbox and sale Conversation serializers derive a latest-response section,
+quoted-history section and plain-text fallback from the stored Gmail body.
+`EmailContent` renders both sections through the same `SanitizedEmailBody`
+component, so **Show all** adds the previous conversation without changing the
+latest response's formatting. Gmail, Outlook and common provider quote wrappers
+are recognised structurally. When HTML history cannot be split confidently,
+the complete sanitized message is preserved rather than removing content or
+mixing an HTML latest view with a plain-text expanded view. The allow-list
+preserves paragraphs, headings, emphasis, lists, links, quotes and tables while
+removing scripts, event handlers, embedded forms, remote images and unsafe URL
+schemes. Raw provider HTML is never inserted into the browser. Gmail sync
+retains the provider's complete text and HTML bodies on `EmailMessage`; only
+the linked sales communication is reduced for timeline and AI use.
 Archived Gmail attachments are serialized alongside those body views for
 Inbox, Sales Conversation and Contact Conversation. Stored safe raster images
-render as authenticated inline thumbnails below the message, while PDFs, text
-files and other documents expose authenticated preview/download actions. File
-access is checked against any related email contact or sale, including shared
-content-addressed signature images; raw R2 object keys are never sent to the
-browser.
+referenced by a MIME Content-ID render at their `cid:` position through the
+authenticated media preview route. Provider attachment IDs are used to join
+MIME metadata to archived files; a one-to-one ordered CID/image fallback covers
+older Gmail records that lack Content-ID metadata. Embedded signature images
+are excluded from the attachment gallery to prevent duplication. Genuine image
+attachments render as thumbnails, while PDFs, text files and other documents
+expose authenticated preview/download actions. File access is checked against
+any related email contact or sale, including shared content-addressed signature
+images; raw R2 object keys are never sent to the browser.
 
 Linked inbound email cards in Inbox and Sales > Conversation expose a
 consistent **Reply** action plus **Reply with AI**. Sent emails expose neither

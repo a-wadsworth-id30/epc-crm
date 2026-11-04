@@ -22,6 +22,7 @@ export type InboxMessageSummary = {
   mailboxAddress: string | null;
   opportunity: InboxOpportunitySummary | null;
   provider: string;
+  providerLabels: string[];
   receivedAt: string;
   replyToAddress: string | null;
   salesCommunicationId: string | null;
@@ -40,8 +41,11 @@ export type EmailMailboxOption = {
 
 export type InboxMessageDetail = InboxMessageSummary & {
   attachments: EmailAttachmentDisplay[];
+  ccAddresses: string[];
   fullHtmlBody: string | null;
   fullTextBody: string;
   latestHtmlBody: string | null;
   latestTextBody: string;
+  quotedHistoryHtmlBody: string | null;
+  quotedHistoryTextBody: string;
 };
