@@ -499,7 +499,7 @@ export default function InboxClient({
         </div>
       )}
 
-      <section className="rounded-lg border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+      <section className="rounded-lg border border-gray-200 bg-gray-50 shadow-theme-xs dark:border-gray-800 dark:bg-black/10">
         <div className="grid min-h-[680px] items-start lg:grid-cols-[380px_1fr]">
           <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white lg:border-r lg:border-b-0 dark:border-gray-800 dark:bg-white/[0.02]">
             <div className="border-b border-gray-200 p-4 dark:border-gray-800">
