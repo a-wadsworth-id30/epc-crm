@@ -21,6 +21,9 @@
   sender list is empty so mailbox access failures are visible rather than
   silently removing the field; the empty Gmail state represents the existing
   MailerSend fallback.
+- `InboxClient` uses the document as its only vertical scroll container. Its
+  desktop main/detail grid item is sticky below `AppHeader`; the message-list
+  aside remains in normal flow so this does not reintroduce nested scrolling.
 
 ## Auth
 
