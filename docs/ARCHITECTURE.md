@@ -335,7 +335,11 @@ immediately, allowing replies to return to the correct sale. Attachment bytes
 are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
 when R2 is configured. Gmail image attachments use a SHA-256 content key and a
 shared `FileAsset`, so repeated inline signature/footer images reuse the same
-R2 object. Non-image attachments remain message-owned files.
+R2 object. Non-image attachments remain message-owned files. Existing Gmail
+image archives can be inspected with the dry-run
+`npm run maintenance:gmail-image-dedupe`; the separate `:apply` command hashes
+the R2 bytes again, relinks attachment records, preserves files with unrelated
+references and removes only verified surplus objects.
 
 Gmail participant addresses are normalized from provider headers. When Gmail
 omits `From`, inbound sync falls back to `Reply-To` and outbound sync falls back
