@@ -110,9 +110,29 @@ async function loadGeneratedHeaderNotificationsUncached(
   const dniRuleDelegate = (
     prisma as unknown as { attributionDniRule?: DniRuleDelegate }
   ).attributionDniRule;
+  const currentUser = await prisma.user.findUnique({
+    where: { id: currentUserId },
+    select: { role: true },
+  });
+  const recentInboundEmailAccess =
+    currentUser?.role === "ADMIN"
+      ? {}
+      : {
+          OR: [
+            { opportunity: { ownerId: currentUserId } },
+            { contact: { createdByUserId: currentUserId } },
+            {
+              mailbox: {
+                OR: [
+                  { ownerUserId: currentUserId },
+                  { userAccess: { some: { userId: currentUserId } } },
+                ],
+              },
+            },
+          ],
+        };
 
   const [
-    currentUser,
     twilioConnection,
     activeTrackingNumbers,
     activeDomains,
@@ -134,11 +154,8 @@ async function loadGeneratedHeaderNotificationsUncached(
     newContacts,
     recentFiles,
     recentAccountRemovalRequests,
+    recentInboundEmails,
   ] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { role: true },
-    }),
     prisma.integrationConnection.findUnique({
       where: { provider: twilioProvider },
     }),
@@ -247,6 +264,23 @@ async function loadGeneratedHeaderNotificationsUncached(
         createdAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
       },
     }),
+    prisma.emailMessage.findMany({
+      where: {
+        ...recentInboundEmailAccess,
+        direction: "INBOUND",
+        receivedAt: { gte: dayAgo },
+        status: "UNREAD",
+      },
+      orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
+      select: {
+        fromAddress: true,
+        fromName: true,
+        id: true,
+        opportunity: { select: { title: true } },
+        subject: true,
+      },
+      take: 5,
+    }),
   ]);
   const backgroundJobHealth =
     currentUser?.role === "ADMIN"
@@ -262,6 +296,22 @@ async function loadGeneratedHeaderNotificationsUncached(
     twilio.data.webhookBaseUrl,
   );
   const notifications: GeneratedHeaderNotification[] = [];
+
+  for (const email of recentInboundEmails) {
+    const sender =
+      email.fromName?.trim() || email.fromAddress?.trim() || "Unknown sender";
+    const subject = email.subject?.trim() || "No subject";
+    const lead = email.opportunity?.title?.trim();
+
+    notifications.push({
+      id: `new-email:${email.id}`,
+      category: "Email",
+      detail: lead ? `${subject} · ${lead}` : subject,
+      href: `/inbox?message=${encodeURIComponent(email.id)}`,
+      severity: "warning",
+      title: `New email from ${sender}`,
+    });
+  }
 
   if (!twilioReady) {
     notifications.push({

@@ -821,7 +821,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   remain visible until the underlying condition is fixed. Admins receive System
   alerts for failed background jobs and for running jobs that exceed the stale
   threshold. Dismissed alerts reappear unread if their generated fingerprint
-  changes.
+  changes. Recent unread inbound emails generate individual Email alerts for
+  admins, the connected mailbox owner/access list and the linked lead owner.
+  Each alert opens the exact Inbox message. Gmail and MailerSend imports bump a
+  shared notification realtime topic, so a visible header bell refreshes within
+  seconds after the CRM receives the email; Gmail receipt still depends on the
+  scheduled mailbox sync interval.
 - Hot CRM list and activity tables have supporting indexes for common
   dashboard, sales, contacts, tasks, storage and activity sort/filter paths.
 - Header search uses normalized and typo-tolerant matching for CRM records,

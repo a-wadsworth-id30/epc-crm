@@ -118,7 +118,17 @@ export function emailMessageAccessWhere(
   if (user.role === "ADMIN") return {};
 
   return {
-    opportunity: salesOpportunityAccessWhere(user),
+    OR: [
+      { opportunity: salesOpportunityAccessWhere(user) },
+      {
+        mailbox: {
+          OR: [
+            { ownerUserId: user.id },
+            { userAccess: { some: { userId: user.id } } },
+          ],
+        },
+      },
+    ],
   };
 }
 

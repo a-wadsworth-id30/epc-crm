@@ -37,6 +37,8 @@ export default function LazyNotificationDropdown({
 
   useEffect(() => {
     let cancelled = false;
+    let eventSource: EventSource | null = null;
+    let fallbackTimer: number | null = null;
 
     async function loadNotificationCounts() {
       try {
@@ -59,10 +61,40 @@ export default function LazyNotificationDropdown({
       }
     }
 
-    loadNotificationCounts();
+    function startRealtimeUpdates() {
+      if (eventSource || !("EventSource" in window)) return;
+
+      eventSource = new EventSource(
+        "/api/realtime/events?topic=notifications",
+      );
+      eventSource.addEventListener("update", loadNotificationCounts);
+      eventSource.addEventListener("error", loadNotificationCounts);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      void loadNotificationCounts();
+      startRealtimeUpdates();
+    }
+
+    void loadNotificationCounts();
+    startRealtimeUpdates();
+    fallbackTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadNotificationCounts();
+      }
+    }, 60_000);
+    window.addEventListener("focus", loadNotificationCounts);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       cancelled = true;
+      eventSource?.removeEventListener("update", loadNotificationCounts);
+      eventSource?.removeEventListener("error", loadNotificationCounts);
+      eventSource?.close();
+      if (fallbackTimer !== null) window.clearInterval(fallbackTimer);
+      window.removeEventListener("focus", loadNotificationCounts);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 

@@ -14,6 +14,7 @@ import {
   latestInboundEmailPlainText,
 } from "@/lib/email/plain-text";
 import { prisma } from "@/lib/prisma";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { runSalesAutomationTrigger } from "@/lib/sales/automation";
 
@@ -310,8 +311,10 @@ export async function POST(request: Request) {
   }
 
   const realtimeContactId = contact?.id ?? opportunity?.contactId ?? null;
+  revalidateHeaderNotifications();
   await bumpRealtimeTopics([
     realtimeTopics.inbox,
+    realtimeTopics.notifications,
     created.opportunityId
       ? realtimeTopics.saleConversation(created.opportunityId)
       : null,

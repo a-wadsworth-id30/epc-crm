@@ -156,6 +156,9 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `Task`: follow-up work, including missed-call tasks.
 - `NotificationState`: per-user review/dismiss state for generated header
   notifications keyed by notification ID and fingerprint.
+  Recent unread inbound-email alerts are generated per user from mailbox access,
+  contact creation and linked lead ownership rather than duplicating email data
+  into a second notification table.
 - `FileAsset`: R2-backed media/file metadata, including linked CRM entity,
   optional document-library folder slug, controlled document upload type,
   uploader, notes and lightweight tags for structured record documents.
@@ -679,7 +682,10 @@ emits an `update` event when a topic version changes. Client pages mount
 Publishers should call `bumpRealtimeTopics()` after durable writes. Shared
 topic names live in `src/lib/realtime/topic-names.ts`; phone call publishers
 can use `bumpCallRealtimeTopics()` to update telephony, tasks and linked
-conversation topics together.
+conversation topics together. Gmail and MailerSend inbound publishers also
+invalidate generated header notifications and bump the `notifications` topic;
+the header bell subscribes directly and falls back to a one-minute visible-tab
+refresh.
 
 ### Attribution
 

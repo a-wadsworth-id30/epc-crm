@@ -22,6 +22,7 @@ import {
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { runSalesAutomationTrigger } from "@/lib/sales/automation";
 import { getR2Config, headR2Object, putR2Object } from "@/lib/storage/r2";
@@ -427,7 +428,12 @@ async function importGmailMessage({
     });
   }
 
-  return { ...result, contactId: context.contactId, opportunityId: context.opportunityId };
+  return {
+    ...result,
+    contactId: context.contactId,
+    direction,
+    opportunityId: context.opportunityId,
+  };
 }
 
 function safeFileName(value: string) {
@@ -658,6 +664,7 @@ export async function syncGmailMailbox(
 
   let created = 0;
   let updated = 0;
+  let createdInbound = 0;
   let archivedAttachments = 0;
   let failedAttachments = 0;
   const realtimeTopicsToBump = new Set<string>([realtimeTopics.inbox]);
@@ -665,6 +672,9 @@ export async function syncGmailMailbox(
     const imported = await importGmailMessage({ mailbox, message });
     if (imported.created) created += 1;
     else updated += 1;
+    if (imported.created && imported.direction === "INBOUND") {
+      createdInbound += 1;
+    }
     if (imported.opportunityId) {
       realtimeTopicsToBump.add(realtimeTopics.saleConversation(imported.opportunityId));
     }
@@ -704,6 +714,10 @@ export async function syncGmailMailbox(
       status: "CONNECTED",
     },
   });
+  if (createdInbound > 0) {
+    revalidateHeaderNotifications();
+    realtimeTopicsToBump.add(realtimeTopics.notifications);
+  }
   await bumpRealtimeTopics([...realtimeTopicsToBump]);
 
   return {
