@@ -9,6 +9,7 @@ import {
   findGmailMailboxForSend,
   sendGmailEmail,
 } from "@/lib/integrations/gmail-send";
+import { reconciledGmailSendMetadata } from "@/lib/integrations/gmail-message-identity";
 import {
   getStoredTwilioConfig,
   getTwilioMessagingRuntime,
@@ -320,84 +321,160 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
   const externalId = gmailResult?.messageId ?? mailerSendResult!.messageId;
 
   const communication = await prisma.$transaction(async (tx) => {
-    const created = await tx.salesCommunication.create({
-      data: {
+    const communicationData = {
       opportunityId: opportunity.id,
       contactId: input.contactId ?? opportunity.contactId,
       userId: input.user.id,
-      channel: "EMAIL",
-      direction: "OUTBOUND",
+      channel: "EMAIL" as const,
+      direction: "OUTBOUND" as const,
       subject,
       summary: messageSummary(body),
       body,
       fromAddress: fromEmail,
       toAddress: recipient,
       externalId,
-      metadata: {
-        provider,
-        fromEmail,
-        messageId: externalId,
-        ...(gmailResult
-          ? {
-              gmailMessageId: gmailResult.providerMessageId,
-              gmailThreadId: gmailResult.providerThreadId,
-              mailboxId: gmailResult.mailboxId,
-            }
-          : {
-              replyToEmail: mailerSendResult!.replyToEmail,
-              statusCode: mailerSendResult!.statusCode,
-            }),
-        source: input.source,
-      },
-    },
-    include: { contact: true, user: true },
-    });
+    };
 
-    if (gmailResult) {
-      await tx.emailMessage.create({
+    if (!gmailResult) {
+      return tx.salesCommunication.create({
         data: {
-          contactId: created.contactId,
-          direction: "OUTBOUND",
-          fromAddress: gmailResult.fromEmail,
-          inReplyTo: input.inReplyTo ?? null,
-          internetMessageId: gmailResult.internetMessageId,
-          mailboxId: gmailResult.mailboxId,
+          ...communicationData,
           metadata: {
-            gmailMessageId: gmailResult.providerMessageId,
-            gmailThreadId: gmailResult.providerThreadId,
+            provider,
+            fromEmail,
+            messageId: externalId,
+            replyToEmail: mailerSendResult!.replyToEmail,
+            statusCode: mailerSendResult!.statusCode,
             source: input.source,
           },
-          opportunityId: opportunity.id,
-          provider: "gmail",
-          providerMessageId: gmailResult.messageId,
-          providerThreadId: gmailResult.providerThreadId,
-          receivedAt: created.occurredAt,
-          salesCommunicationId: created.id,
-          status: "READ",
-          subject,
-          summary: messageSummary(body),
-          textBody: body,
-          toAddress: recipient,
         },
+        include: { contact: true, user: true },
       });
-      await tx.emailThreadLink.upsert({
-        where: {
-          mailboxId_providerThreadId: {
-            mailboxId: gmailResult.mailboxId,
-            providerThreadId: gmailResult.providerThreadId,
-          },
-        },
-        update: {
-          contactId: created.contactId,
-          opportunityId: opportunity.id,
-          source: "crm-send",
-        },
-        create: {
-          contactId: created.contactId,
+    }
+
+    const claimedEmail = await tx.emailMessage.upsert({
+      where: { providerMessageId: gmailResult.messageId },
+      update: {
+        contactId: communicationData.contactId,
+        direction: "OUTBOUND",
+        fromAddress: gmailResult.fromEmail,
+        inReplyTo: input.inReplyTo ?? null,
+        internetMessageId: gmailResult.internetMessageId,
+        mailboxId: gmailResult.mailboxId,
+        opportunityId: opportunity.id,
+        provider: "gmail",
+        providerThreadId: gmailResult.providerThreadId,
+        status: "READ",
+        subject,
+        summary: messageSummary(body),
+        textBody: body,
+        toAddress: recipient,
+      },
+      create: {
+        contactId: communicationData.contactId,
+        direction: "OUTBOUND",
+        fromAddress: gmailResult.fromEmail,
+        inReplyTo: input.inReplyTo ?? null,
+        internetMessageId: gmailResult.internetMessageId,
+        mailboxId: gmailResult.mailboxId,
+        metadata: reconciledGmailSendMetadata({
+          fromEmail: gmailResult.fromEmail,
+          gmailMessageId: gmailResult.providerMessageId,
+          gmailThreadId: gmailResult.providerThreadId,
           mailboxId: gmailResult.mailboxId,
-          opportunityId: opportunity.id,
+          source: input.source,
+        }),
+        opportunityId: opportunity.id,
+        provider: "gmail",
+        providerMessageId: gmailResult.messageId,
+        providerThreadId: gmailResult.providerThreadId,
+        status: "READ",
+        subject,
+        summary: messageSummary(body),
+        textBody: body,
+        toAddress: recipient,
+      },
+      select: {
+        id: true,
+        metadata: true,
+        salesCommunicationId: true,
+      },
+    });
+
+    const existingCommunication = claimedEmail.salesCommunicationId
+      ? await tx.salesCommunication.findUnique({
+          where: { id: claimedEmail.salesCommunicationId },
+          select: { id: true, metadata: true },
+        })
+      : null;
+    const gmailMetadata = reconciledGmailSendMetadata({
+      existing: existingCommunication?.metadata ?? claimedEmail.metadata,
+      fromEmail: gmailResult.fromEmail,
+      gmailMessageId: gmailResult.providerMessageId,
+      gmailThreadId: gmailResult.providerThreadId,
+      mailboxId: gmailResult.mailboxId,
+      source: input.source,
+    });
+    const created = existingCommunication
+      ? await tx.salesCommunication.update({
+          where: { id: existingCommunication.id },
+          data: { ...communicationData, metadata: gmailMetadata },
+          include: { contact: true, user: true },
+        })
+      : await tx.salesCommunication.create({
+          data: { ...communicationData, metadata: gmailMetadata },
+          include: { contact: true, user: true },
+        });
+
+    await tx.emailMessage.update({
+      where: { id: claimedEmail.id },
+      data: {
+        metadata: reconciledGmailSendMetadata({
+          existing: claimedEmail.metadata,
+          fromEmail: gmailResult.fromEmail,
+          gmailMessageId: gmailResult.providerMessageId,
+          gmailThreadId: gmailResult.providerThreadId,
+          mailboxId: gmailResult.mailboxId,
+          source: input.source,
+        }),
+        salesCommunicationId: created.id,
+      },
+    });
+
+    await tx.emailThreadLink.upsert({
+      where: {
+        mailboxId_providerThreadId: {
+          mailboxId: gmailResult.mailboxId,
           providerThreadId: gmailResult.providerThreadId,
-          source: "crm-send",
+        },
+      },
+      update: {
+        contactId: created.contactId,
+        opportunityId: opportunity.id,
+        source: "crm-send",
+      },
+      create: {
+        contactId: created.contactId,
+        mailboxId: gmailResult.mailboxId,
+        opportunityId: opportunity.id,
+        providerThreadId: gmailResult.providerThreadId,
+        source: "crm-send",
+      },
+    });
+
+    if (existingCommunication) {
+      await tx.auditLog.create({
+        data: {
+          action: "gmail.send.reconciled",
+          actorId: input.user.id,
+          entity: "EmailMessage",
+          entityId: claimedEmail.id,
+          metadata: {
+            mailboxId: gmailResult.mailboxId,
+            opportunityId: opportunity.id,
+            providerMessageId: gmailResult.messageId,
+            salesCommunicationId: created.id,
+          },
         },
       });
     }

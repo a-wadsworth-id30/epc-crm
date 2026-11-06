@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
+import { gmailProviderMessageId } from "@/lib/integrations/gmail-message-identity";
 import { prisma } from "@/lib/prisma";
 
 type SendUser = Pick<CurrentUser, "id" | "role">;
@@ -182,7 +183,7 @@ export async function sendGmailEmail({
     fromEmail: mailbox.emailAddress,
     internetMessageId: messageId,
     mailboxId: mailbox.id,
-    messageId: `gmail:${mailbox.id}:${providerMessageId}`,
+    messageId: gmailProviderMessageId(mailbox.id, providerMessageId),
     providerMessageId,
     providerThreadId,
   };

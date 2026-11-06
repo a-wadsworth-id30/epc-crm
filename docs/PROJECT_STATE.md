@@ -1263,8 +1263,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   budget; bounded environment overrides can tune those caps. Matched Gmail messages
   can be replied to directly from the Inbox; the composer sends from the
   receiving mailbox, preserves the exact Gmail thread and writes the outbound
-  message into the linked sale conversation. Gmail email entries in the linked
-  sale Conversation expose the same threaded reply composer, so users can
+  message into the linked sale conversation. Outbound persistence claims the
+  same stable mailbox/message identity used by Gmail sync. If sync imported the
+  sent copy before the send request finishes its CRM write, the CRM reuses that
+  email and sale communication, preserves provider metadata and records a
+  compact `gmail.send.reconciled` audit event instead of returning a false
+  failure or creating a duplicate timeline entry. Gmail email entries in the
+  linked sale Conversation expose the same threaded reply composer, so users can
   continue the exact Gmail thread without returning to the Inbox. Both reply
   composers expose a **From** selector containing only connected, send-enabled
   Gmail mailboxes the current user is authorised to use. The receiving mailbox
