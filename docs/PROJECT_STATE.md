@@ -1296,6 +1296,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   connected-mailbox fallbacks when Gmail omits `From` or `To`. Inbox display
   and reply actions also recover participant addresses for older incomplete
   rows from stored headers, the linked contact and mailbox.
+- Automatic Gmail contact matching now requires exactly one matching CRM
+  contact across the external participants. Shared addresses and messages that
+  match multiple contacts remain unlinked in the Inbox instead of selecting the
+  most recently updated contact. The connected mailbox is excluded, and
+  inbound `Reply-To` is considered only when `From` has no usable address.
 - Gmail reply composers remain available when an older imported message has a
   sender name but no usable address. The user must enter a valid recipient,
   normal sale/contact send permissions still apply, and the confirmed address
