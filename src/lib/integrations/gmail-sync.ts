@@ -1,6 +1,5 @@
 import "server-only";
 
-import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
@@ -12,20 +11,15 @@ import {
   emailMessagesAreDuplicates,
   normalizeInternetMessageId,
 } from "@/lib/email/deduplication";
-import {
-  attachmentChecksum,
-  gmailSharedImageEntityType,
-  gmailSharedImageKey,
-  gmailSharedImageTag,
-  isImageAttachment,
-} from "@/lib/email/attachment-deduplication";
+import { shouldRetainGmailAttachmentDuringSync } from "@/lib/email/attachment-policy";
+import { archiveGmailAttachmentSource } from "@/lib/email/gmail-attachment-storage";
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { runSalesAutomationTrigger } from "@/lib/sales/automation";
-import { getR2Config, headR2Object, putR2Object } from "@/lib/storage/r2";
+import { getR2Config } from "@/lib/storage/r2";
 
 const attachmentSchema = z.object({
   attachmentId: z.string().nullable(),
@@ -72,15 +66,6 @@ const syncResponseSchema = z.object({
     historyId: z.string().nullable(),
     messages: z.array(gmailMessageSchema),
     nextPageToken: z.string().nullable(),
-  }),
-});
-
-const attachmentResponseSchema = z.object({
-  ok: z.literal(true),
-  provider: z.literal("gmail"),
-  result: z.object({
-    data: z.string().min(1).nullable(),
-    size: z.number().int().nonnegative().nullable(),
   }),
 });
 
@@ -445,10 +430,6 @@ async function importGmailMessage({
   };
 }
 
-function safeFileName(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "attachment";
-}
-
 async function archiveMessageAttachments({
   mailbox,
   message,
@@ -462,19 +443,17 @@ async function archiveMessageAttachments({
   contactId: string | null;
   opportunityId: string | null;
 }) {
-  const r2Config = await getR2Config();
-  if (!r2Config) return { archived: 0, failed: 0 };
-  const maxBytes = r2Config.maxUploadMb * 1024 * 1024;
+  if (!(await getR2Config())) return { archived: 0, failed: 0 };
+
   let archived = 0;
   let failed = 0;
 
   for (const [index, attachment] of message.attachments.entries()) {
-    if (
-      (!attachment.attachmentId && !attachment.inlineData) ||
-      (attachment.sizeBytes ?? 0) > maxBytes
-    ) {
-      continue;
-    }
+    // Gmail-backed attachments stay provider-hosted until a user downloads or
+    // explicitly saves them. Only MIME parts with no retrievable Gmail ID must
+    // be retained during sync, otherwise their bytes would be lost.
+    if (!shouldRetainGmailAttachmentDuringSync(attachment)) continue;
+
     const providerAttachmentId =
       attachment.attachmentId ?? `inline:${index}:${attachment.fileName}`;
     const row = await prisma.emailAttachment.findUnique({
@@ -489,113 +468,26 @@ async function archiveMessageAttachments({
     if (!row || row.fileAssetId) continue;
 
     try {
-      let encodedData = attachment.inlineData;
-      if (!encodedData && attachment.attachmentId) {
-        const pathname = `/api/crm/connections/${encodeURIComponent(mailbox.authConnectionId)}/gmail/attachment`;
-        const response = await id30AuthBrokerRequest({
-          body: { attachmentId: attachment.attachmentId, messageId: message.id },
-          connectionId: mailbox.authConnectionId,
-          method: "POST",
-          pathname,
-        });
-        if (!response.ok) throw new Error(response.message);
-        const parsed = attachmentResponseSchema.safeParse(response.body);
-        if (!parsed.success || !parsed.data.result.data) {
-          throw new Error("Gmail attachment response was incomplete.");
-        }
-        encodedData = parsed.data.result.data;
-      }
-      if (!encodedData) throw new Error("Gmail attachment data was unavailable.");
-      const buffer = Buffer.from(encodedData, "base64url");
-      if (buffer.byteLength > maxBytes) throw new Error("Attachment exceeds the R2 upload limit.");
-      const checksum = attachmentChecksum(buffer);
-      const mimeType = attachment.mimeType ?? "application/octet-stream";
-      const sharedImage = isImageAttachment(mimeType);
-      const key = sharedImage
-        ? gmailSharedImageKey({
-            checksum,
-            uploadPrefix: r2Config.uploadPrefix,
-          })
-        : `${r2Config.uploadPrefix || "crm-assets"}/gmail/${mailbox.id}/${message.id}/${crypto.randomUUID()}-${safeFileName(attachment.fileName)}`;
-      let file = sharedImage
-        ? await prisma.fileAsset.findUnique({ where: { key } })
-        : null;
-      let objectAvailable = false;
-
-      if (file) {
-        try {
-          const storedObject = await headR2Object({ key });
-          objectAvailable = storedObject.contentLength === buffer.byteLength;
-        } catch {
-          objectAvailable = false;
-        }
-      }
-
-      if (!file || !objectAvailable) {
-        const upload = await putR2Object({
-          body: buffer,
-          contentType: mimeType,
-          key,
-        });
-
-        file = sharedImage
-          ? await prisma.fileAsset.upsert({
-              where: { key: upload.key },
-              update: {
-                bucket: upload.bucketName,
-                checksum,
-                mimeType,
-                sizeBytes: buffer.byteLength,
-              },
-              create: {
-                bucket: upload.bucketName,
-                checksum,
-                entityId: checksum,
-                entityType: gmailSharedImageEntityType,
-                key: upload.key,
-                mimeType,
-                originalName: attachment.fileName,
-                sizeBytes: buffer.byteLength,
-                tags: ["email-attachment", "gmail", gmailSharedImageTag],
-              },
-            })
-          : await prisma.fileAsset.create({
-              data: {
-                bucket: upload.bucketName,
-                checksum,
-                entityId: opportunityId ?? contactId ?? emailId,
-                entityType: opportunityId
-                  ? "sales_opportunity"
-                  : contactId
-                    ? "contact"
-                    : "email_message",
-                key: upload.key,
-                mimeType,
-                originalName: attachment.fileName,
-                sizeBytes: buffer.byteLength,
-                tags: ["email-attachment", "gmail"],
-              },
-            });
-      }
-
-      await prisma.emailAttachment.update({
-        where: { id: row.id },
-        data: {
-          archiveStatus: "STORED",
-          fileAssetId: file.id,
-          lastError: null,
-        },
+      await archiveGmailAttachmentSource({
+        authConnectionId: mailbox.authConnectionId,
+        contactId,
+        emailAttachmentId: row.id,
+        emailMessageId: emailId,
+        fileName: attachment.fileName,
+        gmailMessageId: message.id,
+        inlineData: attachment.inlineData,
+        mailboxId: mailbox.id,
+        mimeType: attachment.mimeType,
+        opportunityId,
+        providerAttachmentId,
+        sizeBytes: attachment.sizeBytes,
       });
       archived += 1;
     } catch (error) {
       failed += 1;
-      await prisma.emailAttachment.update({
-        where: { id: row.id },
-        data: {
-          archiveStatus: "FAILED",
-          lastError:
-            error instanceof Error ? error.message.slice(0, 500) : "Attachment archive failed.",
-        },
+      console.error("Inline Gmail attachment archive failed", {
+        attachmentId: row.id,
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }
@@ -712,7 +604,7 @@ export async function syncGmailMailbox(
     data: {
       emailAddress: parsed.data.result.emailAddress?.toLowerCase() ?? mailbox.emailAddress,
       lastError: failedAttachments
-        ? `${failedAttachments} Gmail attachment${failedAttachments === 1 ? "" : "s"} could not be archived.`
+        ? `${failedAttachments} inline Gmail attachment${failedAttachments === 1 ? "" : "s"} could not be retained.`
         : null,
       lastFullSyncAt: !mailbox.lastHistoryId && !nextPageToken ? new Date() : undefined,
       lastHistoryId: nextPageToken

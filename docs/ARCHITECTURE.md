@@ -339,12 +339,16 @@ Gmail history cursor. Imported messages are idempotent, become central
 Gmail thread link identifies the sale or when the participant has exactly one
 open sale. Ambiguous contact matches remain in the inbox rather than being
 attached to the wrong sale. CRM-originated Gmail sends create the thread link
-immediately, allowing replies to return to the correct sale. Attachment bytes
-are copied into Cloudflare R2 and linked through `EmailAttachment`/`FileAsset`
-when R2 is configured. Gmail image attachments use a SHA-256 content key and a
-shared `FileAsset`, so repeated inline signature/footer images reuse the same
-R2 object. Non-image attachments remain message-owned files. Existing Gmail
-image archives can be inspected with the dry-run
+immediately, allowing replies to return to the correct sale. Gmail sync stores
+attachment metadata in `EmailAttachment` but leaves retrievable attachment
+bytes in Gmail. Authenticated Preview and Download requests proxy the selected
+file through iD30 Auth without creating an R2 object. **Save to CRM** explicitly
+archives a selected attachment through `FileAsset`; MIME parts supplied only as
+inline data and without a later-retrievable Gmail attachment ID are retained
+during sync because otherwise their bytes would be lost. Saved Gmail image
+attachments use a SHA-256 content key and a shared `FileAsset`, so repeated
+inline signature/footer images reuse the same R2 object. Existing Gmail image
+archives can be inspected with the dry-run
 `npm run maintenance:gmail-image-dedupe`; the separate `:apply` command hashes
 the R2 bytes again, relinks attachment records, preserves files with unrelated
 references and removes only verified surplus objects.
@@ -400,17 +404,18 @@ removing scripts, event handlers, embedded forms, remote images and unsafe URL
 schemes. Raw provider HTML is never inserted into the browser. Gmail sync
 retains the provider's complete text and HTML bodies on `EmailMessage`; only
 the linked sales communication is reduced for timeline and AI use.
-Archived Gmail attachments are serialized alongside those body views for
-Inbox, Sales Conversation and Contact Conversation. Stored safe raster images
-referenced by a MIME Content-ID render at their `cid:` position through the
-authenticated media preview route. Provider attachment IDs are used to join
-MIME metadata to archived files; a one-to-one ordered CID/image fallback covers
-older Gmail records that lack Content-ID metadata. Embedded signature images
-are excluded from the attachment gallery to prevent duplication. Genuine image
-attachments render as thumbnails, while PDFs, text files and other documents
-expose authenticated preview/download actions. File access is checked against
-any related email contact or sale, including shared content-addressed signature
-images; raw R2 object keys are never sent to the browser.
+Gmail attachment metadata is serialized alongside those body views for Inbox,
+Sales Conversation and Contact Conversation. Safe raster images referenced by
+a MIME Content-ID render at their `cid:` position through either the authorised
+Gmail proxy or the authenticated media route when explicitly saved. Provider
+attachment IDs join MIME metadata to the provider file; a one-to-one ordered
+CID/image fallback covers older Gmail records that lack Content-ID metadata.
+Embedded signature images are excluded from the attachment gallery to prevent
+duplication. Genuine image attachments render as thumbnails, while PDFs and
+safe text formats expose authenticated preview/download actions. Attachment
+cards identify whether the file remains in Gmail or has been saved to CRM.
+Access is checked against the related email and mailbox/sale permissions; raw
+R2 object keys and Gmail credentials are never sent to the browser.
 
 Linked inbound email cards in Inbox and Sales > Conversation expose a
 consistent **Reply** action plus **Reply with AI**. Sent emails expose neither

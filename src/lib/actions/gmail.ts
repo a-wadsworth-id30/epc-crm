@@ -205,7 +205,7 @@ export async function syncGmailMailboxAction(
     revalidatePath("/settings/integrations/gmail");
     return actionResult(
       true,
-      `Read ${result.read} message${result.read === 1 ? "" : "s"}; created ${result.created}, updated ${result.updated}, archived ${result.archivedAttachments} attachment${result.archivedAttachments === 1 ? "" : "s"}${result.hasMore ? ". More history remains for the next sync" : ""}.`,
+      `Read ${result.read} message${result.read === 1 ? "" : "s"}; created ${result.created}, updated ${result.updated}${result.archivedAttachments ? `, retained ${result.archivedAttachments} inline attachment${result.archivedAttachments === 1 ? "" : "s"}` : ""}${result.hasMore ? ". More history remains for the next sync" : ""}.`,
     );
   } catch (error) {
     return actionResult(

@@ -136,6 +136,7 @@ export function serializeInboxMessageDetail(
     message.attachmentsArchive,
     message.attachments,
     message.htmlBody,
+    message.provider,
   );
   const htmlViews = sanitizedEmailHtmlViews({
     html: message.htmlBody,

@@ -54,24 +54,66 @@ test("SVG email attachments are downloadable but never embedded inline", () => {
   assert.ok(attachment.downloadUrl);
 });
 
-test("unarchived email attachments retain metadata without file URLs", () => {
-  const [attachment] = serializeEmailAttachments([
-    {
-      archiveStatus: "REFERENCE",
-      fileAsset: null,
-      fileName: "proposal.docx",
-      id: "attachment-doc",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      providerAttachmentId: "gmail-doc-1",
-      sizeBytes: 4096,
-    },
-  ]);
+test("Gmail-hosted attachments receive on-demand download and save actions", () => {
+  const [attachment] = serializeEmailAttachments(
+    [
+      {
+        archiveStatus: "REFERENCE",
+        fileAsset: null,
+        fileName: "proposal.docx",
+        id: "attachment-doc",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        providerAttachmentId: "gmail-doc-1",
+        sizeBytes: 4096,
+      },
+    ],
+    undefined,
+    null,
+    "gmail",
+  );
 
   assert.equal(attachment.name, "proposal.docx");
-  assert.equal(attachment.downloadUrl, null);
+  assert.equal(
+    attachment.downloadUrl,
+    "/api/email-attachments/attachment-doc?download=1",
+  );
   assert.equal(attachment.previewUrl, null);
+  assert.equal(attachment.canSaveToCrm, true);
+  assert.equal(attachment.storageLabel, "Gmail");
   assert.equal(attachment.sizeBytes, 4096);
+});
+
+test("Gmail-hosted CID images render through the authorised on-demand route", () => {
+  const [attachment] = serializeEmailAttachments(
+    [
+      {
+        archiveStatus: "REFERENCE",
+        fileAsset: null,
+        fileName: "signature.png",
+        id: "attachment-inline",
+        mimeType: "image/png",
+        providerAttachmentId: "gmail-inline-1",
+        sizeBytes: 512,
+      },
+    ],
+    [
+      {
+        attachmentId: "gmail-inline-1",
+        contentId: "signature-logo",
+        disposition: "inline",
+      },
+    ],
+    '<img src="cid:signature-logo">',
+    "gmail",
+  );
+
+  assert.equal(attachment.isEmbedded, true);
+  assert.equal(
+    attachment.previewUrl,
+    "/api/email-attachments/attachment-inline",
+  );
+  assert.equal(attachment.storageLabel, "Gmail");
 });
 
 test("CID images referenced by the body are marked embedded using provider metadata", () => {
