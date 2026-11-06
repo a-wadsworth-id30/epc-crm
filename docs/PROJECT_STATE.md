@@ -134,6 +134,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   attachment ID is retained during sync to avoid data loss.
   Deliberate saves carry uploader ownership plus a `gmail-user-saved` marker so
   guarded legacy-R2 cleanup cannot remove them.
+- Shared Gmail unread state is tracked per CRM user. Marking as read or replying to a
+  message clears that user's Inbox badge and header alert without clearing the
+  same message for other authorised mailbox users. Existing shared archive and
+  restore behaviour remains unchanged, and inbound messages can be marked
+  unread again without changing another user's Inbox.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

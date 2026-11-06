@@ -541,9 +541,19 @@ export async function replyToInboxMessage(
     };
   }
 
-  await prisma.emailMessage.updateMany({
-    where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
-    data: { readAt: new Date(), status: "READ" },
+  await prisma.emailMessageUserState.upsert({
+    where: {
+      emailMessageId_userId: {
+        emailMessageId: parsed.data.messageId,
+        userId: user.id,
+      },
+    },
+    update: { readAt: new Date() },
+    create: {
+      emailMessageId: parsed.data.messageId,
+      userId: user.id,
+      readAt: new Date(),
+    },
   });
   revalidateHeaderNotifications();
   await bumpRealtimeTopics([
@@ -560,9 +570,49 @@ export async function replyToInboxMessage(
 export async function markInboxMessageRead(messageId: string) {
   const user = await requireUser();
 
-  await prisma.emailMessage.updateMany({
+  const message = await prisma.emailMessage.findFirst({
     where: emailMessageWhereWithAccess(user, { id: messageId }),
-    data: { status: "READ" },
+    select: { id: true },
+  });
+  if (!message) return;
+
+  await prisma.emailMessageUserState.upsert({
+    where: {
+      emailMessageId_userId: { emailMessageId: message.id, userId: user.id },
+    },
+    update: { readAt: new Date() },
+    create: {
+      emailMessageId: message.id,
+      userId: user.id,
+      readAt: new Date(),
+    },
+  });
+
+  revalidateHeaderNotifications();
+  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+
+  revalidatePath("/inbox");
+}
+
+export async function markInboxMessageUnread(messageId: string) {
+  const user = await requireUser();
+
+  const message = await prisma.emailMessage.findFirst({
+    where: emailMessageWhereWithAccess(user, { id: messageId }),
+    select: { id: true },
+  });
+  if (!message) return;
+
+  await prisma.emailMessageUserState.upsert({
+    where: {
+      emailMessageId_userId: { emailMessageId: message.id, userId: user.id },
+    },
+    update: { readAt: null },
+    create: {
+      emailMessageId: message.id,
+      userId: user.id,
+      readAt: null,
+    },
   });
 
   revalidateHeaderNotifications();

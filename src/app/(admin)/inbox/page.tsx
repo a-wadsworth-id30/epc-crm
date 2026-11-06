@@ -6,9 +6,10 @@ import RealtimePageRefresh from "@/components/crm-boilerplate/RealtimePageRefres
 import { requireUser } from "@/lib/auth";
 import { emailMessageWhereWithAccess } from "@/lib/crm-resource-access";
 import {
-  inboxMessageSummarySelect,
+  inboxMessageSummarySelectForUser,
   serializeInboxMessageSummary,
 } from "@/lib/inbox/messages";
+import { emailMessageUnreadWhere } from "@/lib/inbox/read-state";
 import {
   parsePageSize,
   parsePositiveInteger,
@@ -34,8 +35,8 @@ function singleParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function laneWhere(lane: string): Prisma.EmailMessageWhereInput {
-  if (lane === "unread") return { status: "UNREAD" };
+function laneWhere(lane: string, userId: string): Prisma.EmailMessageWhereInput {
+  if (lane === "unread") return emailMessageUnreadWhere(userId);
   if (lane === "matched") return { opportunityId: { not: null } };
   if (lane === "unmatched") return { opportunityId: null };
   if (lane === "archived") return { status: "ARCHIVED" };
@@ -86,7 +87,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const where: Prisma.EmailMessageWhereInput = {
     AND: [
       emailMessageWhereWithAccess(user),
-      laneWhere(lane),
+      laneWhere(lane, user.id),
       searchWhere(query),
     ],
   };
@@ -104,7 +105,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       where: emailMessageWhereWithAccess(user, { status: { not: "ARCHIVED" } }),
     }),
     prisma.emailMessage.count({
-      where: emailMessageWhereWithAccess(user, { status: "UNREAD" }),
+      where: emailMessageWhereWithAccess(user, emailMessageUnreadWhere(user.id)),
     }),
     prisma.emailMessage.count({
       where: emailMessageWhereWithAccess(user, {
@@ -130,7 +131,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       orderBy: { receivedAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      select: inboxMessageSummarySelect,
+      select: inboxMessageSummarySelectForUser(user.id),
     }),
     listGmailMailboxesForSend({ user }),
   ]);
