@@ -395,6 +395,13 @@ and the change is recorded in `AuditLog`.
 Matched Gmail conversations expose an inline Inbox reply composer. Replies use
 the receiving mailbox, exact Gmail thread ID and original internet message ID,
 then write the outbound email into `EmailMessage` and the sale conversation.
+Inbox, Sales Conversation and Contact Conversation replies share a compact
+rich-text composer supporting emphasis, underlining, links and ordered or
+unordered lists. The browser always submits a plain-text representation beside
+the authored HTML. The server sanitises the HTML against a narrow outbound
+allow-list, MailerSend receives both representations and Gmail sends a proper
+`multipart/alternative` MIME message. The plain body remains the timeline and
+AI representation, while the sanitised HTML is stored on Gmail email records.
 The outbound write and Gmail sync share `gmail:<mailboxId>:<messageId>` as the
 provider identity. The outbound transaction upserts that identity before it
 creates a sale communication and reuses an already-linked communication when
