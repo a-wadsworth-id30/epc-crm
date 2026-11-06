@@ -11,7 +11,19 @@ export type InboxOpportunitySummary = {
   title: string;
 };
 
+export type InboxAssigneeSummary = {
+  avatarUrl: string | null;
+  id: string;
+  name: string;
+};
+
+export type InboxAssigneeOption = InboxAssigneeSummary & {
+  email: string;
+};
+
 export type InboxMessageSummary = {
+  assignedAt: string | null;
+  assignedUser: InboxAssigneeSummary | null;
   avatarUrl: string | null;
   id: string;
   contact: InboxContactSummary | null;
@@ -28,6 +40,7 @@ export type InboxMessageSummary = {
   replyToAddress: string | null;
   salesCommunicationId: string | null;
   status: string;
+  teamStatus: string;
   subject: string | null;
   summary: string;
   toAddress: string | null;

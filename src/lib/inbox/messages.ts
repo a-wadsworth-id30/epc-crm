@@ -13,6 +13,14 @@ import type { InboxMessageDetail, InboxMessageSummary } from "@/lib/inbox/types"
 import { effectiveEmailMessageStatus } from "@/lib/inbox/read-state";
 
 export const inboxMessageSummarySelect = {
+  assignedAt: true,
+  assignedUser: {
+    select: {
+      avatarUrl: true,
+      id: true,
+      name: true,
+    },
+  },
   id: true,
   contact: {
     select: {
@@ -45,6 +53,7 @@ export const inboxMessageSummarySelect = {
   receivedAt: true,
   salesCommunicationId: true,
   status: true,
+  teamStatus: true,
   subject: true,
   summary: true,
   toAddress: true,
@@ -120,6 +129,8 @@ export function serializeInboxMessageSummary(
     resolveInboxMessageAddresses(message);
 
   return {
+    assignedAt: message.assignedAt?.toISOString() ?? null,
+    assignedUser: message.assignedUser,
     avatarUrl:
       message.direction === "OUTBOUND"
         ? (message.mailbox?.owner?.avatarUrl ?? null)
@@ -139,6 +150,7 @@ export function serializeInboxMessageSummary(
     replyToAddress,
     salesCommunicationId: message.salesCommunicationId,
     status: effectiveEmailMessageStatus(message),
+    teamStatus: message.teamStatus,
     subject: message.subject,
     summary: message.summary ?? "Inbound email received",
     toAddress,

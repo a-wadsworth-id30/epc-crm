@@ -9,7 +9,7 @@ import {
   inboxMessageSummarySelectForUser,
   serializeInboxMessageSummary,
 } from "@/lib/inbox/messages";
-import { emailMessageUnreadWhere } from "@/lib/inbox/read-state";
+import { emailTeamLaneWhere } from "@/lib/inbox/team-workflow";
 import {
   parsePageSize,
   parsePositiveInteger,
@@ -33,14 +33,6 @@ const defaultInboxPageSize = 25;
 
 function singleParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function laneWhere(lane: string, userId: string): Prisma.EmailMessageWhereInput {
-  if (lane === "unread") return emailMessageUnreadWhere(userId);
-  if (lane === "matched") return { opportunityId: { not: null } };
-  if (lane === "unmatched") return { opportunityId: null };
-  if (lane === "archived") return { status: "ARCHIVED" };
-  return { status: { not: "ARCHIVED" } };
 }
 
 function searchWhere(query: string): Prisma.EmailMessageWhereInput {
@@ -87,7 +79,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const where: Prisma.EmailMessageWhereInput = {
     AND: [
       emailMessageWhereWithAccess(user),
-      laneWhere(lane, user.id),
+      emailTeamLaneWhere(lane, user.id),
       searchWhere(query),
     ],
   };
@@ -96,28 +88,38 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     totalCount,
     allCount,
     unreadCount,
+    mineCount,
+    unassignedCount,
+    waitingCount,
+    resolvedCount,
     matchedCount,
     unmatchedCount,
     archivedCount,
   ] = await Promise.all([
     prisma.emailMessage.count({ where }),
     prisma.emailMessage.count({
-      where: emailMessageWhereWithAccess(user, { status: { not: "ARCHIVED" } }),
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("", user.id)),
     }),
     prisma.emailMessage.count({
-      where: emailMessageWhereWithAccess(user, emailMessageUnreadWhere(user.id)),
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("unread", user.id)),
     }),
     prisma.emailMessage.count({
-      where: emailMessageWhereWithAccess(user, {
-        status: { not: "ARCHIVED" },
-        opportunityId: { not: null },
-      }),
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("mine", user.id)),
     }),
     prisma.emailMessage.count({
-      where: emailMessageWhereWithAccess(user, {
-        status: { not: "ARCHIVED" },
-        opportunityId: null,
-      }),
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("unassigned", user.id)),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("waiting", user.id)),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("resolved", user.id)),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("matched", user.id)),
+    }),
+    prisma.emailMessage.count({
+      where: emailMessageWhereWithAccess(user, emailTeamLaneWhere("unmatched", user.id)),
     }),
     prisma.emailMessage.count({
       where: emailMessageWhereWithAccess(user, { status: "ARCHIVED" }),
@@ -125,7 +127,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const page = Math.min(requestedPage, totalPages);
-  const [messages, sendMailboxes] = await Promise.all([
+  const [messages, sendMailboxes, assignees] = await Promise.all([
     prisma.emailMessage.findMany({
       where,
       orderBy: { receivedAt: "desc" },
@@ -134,6 +136,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       select: inboxMessageSummarySelectForUser(user.id),
     }),
     listGmailMailboxesForSend({ user }),
+    prisma.user.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: { name: "asc" },
+      select: { avatarUrl: true, email: true, id: true, name: true },
+    }),
   ]);
 
   return (
@@ -157,9 +164,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           all: allCount,
           archived: archivedCount,
           matched: matchedCount,
+          mine: mineCount,
+          resolved: resolvedCount,
           unmatched: unmatchedCount,
+          unassigned: unassignedCount,
           unread: unreadCount,
+          waiting: waitingCount,
         }}
+        assignees={assignees}
+        currentUserId={user.id}
         lane={lane}
         messages={messages.map(serializeInboxMessageSummary)}
         page={page}

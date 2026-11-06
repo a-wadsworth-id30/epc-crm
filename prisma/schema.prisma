@@ -160,6 +160,13 @@ enum EmailMessageStatus {
   ARCHIVED
 }
 
+enum EmailTeamStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+}
+
 enum EmailMailboxStatus {
   CONNECTED
   NEEDS_REAUTH
@@ -438,6 +445,7 @@ model User {
   createdSignatureRequests   SignatureRequest[]           @relation("SignatureRequestCreator")
   notificationStates         NotificationState[]
   emailMessageStates         EmailMessageUserState[]
+  assignedEmailMessages      EmailMessage[]               @relation("EmailMessageAssignee")
   backgroundJobRuns          BackgroundJobRun[]
   dashboardLayout            DashboardUserLayout?
   ownedEmailMailboxes        EmailMailbox[]               @relation("EmailMailboxOwner")
@@ -1169,6 +1177,7 @@ model EmailMessage {
   providerMessageId    String?                @unique
   inboundRouteId       String?
   status               EmailMessageStatus     @default(UNREAD)
+  teamStatus           EmailTeamStatus        @default(OPEN)
   direction            CommunicationDirection @default(INBOUND)
   fromName             String?
   fromAddress          String?
@@ -1197,10 +1206,15 @@ model EmailMessage {
   inReplyTo            String?
   attachmentsArchive   EmailAttachment[]
   userStates           EmailMessageUserState[]
+  assignedUserId       String?
+  assignedUser         User?                   @relation("EmailMessageAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedAt           DateTime?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
   @@index([status, receivedAt])
+  @@index([teamStatus, receivedAt])
+  @@index([assignedUserId, teamStatus])
   @@index([fromAddress])
   @@index([contactId, receivedAt])
   @@index([opportunityId, receivedAt])

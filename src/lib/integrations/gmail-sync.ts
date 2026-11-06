@@ -14,6 +14,7 @@ import {
 import { shouldRetainGmailAttachmentDuringSync } from "@/lib/email/attachment-policy";
 import { archiveGmailAttachmentSource } from "@/lib/email/gmail-attachment-storage";
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
+import { newEmailWorkflowState } from "@/lib/inbox/team-workflow";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
@@ -172,6 +173,21 @@ async function importGmailMessage({
     where: { providerMessageId },
     select: { id: true, salesCommunicationId: true },
   });
+  const threadWorkflow = !existing
+    ? await prisma.emailMessage.findFirst({
+        where: {
+          mailboxId: mailbox.id,
+          provider: "gmail",
+          providerThreadId: message.threadId,
+        },
+        orderBy: { receivedAt: "desc" },
+        select: {
+          assignedAt: true,
+          assignedUserId: true,
+          teamStatus: true,
+        },
+      })
+    : null;
   const body =
     direction === "INBOUND"
       ? latestInboundEmailPlainText({
@@ -370,11 +386,24 @@ async function importGmailMessage({
       });
     }
 
+    if (!existing && direction === "INBOUND") {
+      await tx.emailMessage.updateMany({
+        where: {
+          mailboxId: mailbox.id,
+          provider: "gmail",
+          providerThreadId: message.threadId,
+        },
+        data: { teamStatus: "OPEN" },
+      });
+    }
+
+    const newWorkflowState = newEmailWorkflowState(direction, threadWorkflow);
     const email = existing
       ? await tx.emailMessage.update({ where: { id: existing.id }, data: emailData })
       : await tx.emailMessage.create({
           data: {
             ...emailData,
+            ...newWorkflowState,
             providerMessageId,
             status: direction === "INBOUND" ? "UNREAD" : "READ",
           },

@@ -33,12 +33,14 @@ import {
   replyToInboxMessage,
   restoreInboxMessage,
   searchInboxSales,
+  updateInboxTeamWorkflow,
 } from "@/lib/actions/inbox";
 import type { InboxSaleOption } from "@/lib/actions/inbox";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
 import type {
   InboxMessageDetail,
   InboxMessageSummary,
+  InboxAssigneeOption,
   EmailMailboxOption,
 } from "@/lib/inbox/types";
 
@@ -47,9 +49,15 @@ export type InboxClientProps = {
     all: number;
     archived: number;
     matched: number;
+    mine: number;
+    resolved: number;
     unmatched: number;
+    unassigned: number;
     unread: number;
+    waiting: number;
   };
+  assignees: InboxAssigneeOption[];
+  currentUserId: string;
   lane: string;
   messages: InboxMessageSummary[];
   page: number;
@@ -62,12 +70,27 @@ export type InboxClientProps = {
 };
 
 const lanes = [
-  { key: "", label: "All" },
+  { key: "", label: "Open" },
   { key: "unread", label: "Unread" },
+  { key: "mine", label: "Mine" },
+  { key: "unassigned", label: "Unassigned" },
+  { key: "waiting", label: "Waiting" },
+  { key: "resolved", label: "Resolved" },
   { key: "matched", label: "Matched" },
   { key: "unmatched", label: "Unmatched" },
   { key: "archived", label: "Archived" },
 ] as const;
+
+const teamStatusOptions = [
+  { label: "Open", value: "OPEN" },
+  { label: "In progress", value: "IN_PROGRESS" },
+  { label: "Waiting on customer", value: "WAITING" },
+  { label: "Resolved", value: "RESOLVED" },
+] as const;
+
+function teamStatusLabel(status: string) {
+  return teamStatusOptions.find((option) => option.value === status)?.label ?? status;
+}
 
 function inboxHref({
   lane,
@@ -169,7 +192,9 @@ function Badge({
 }
 
 export default function InboxClient({
+  assignees,
   counts,
+  currentUserId,
   lane,
   messages,
   page,
@@ -185,6 +210,7 @@ export default function InboxClient({
   const [isPending, startTransition] = useTransition();
   const [isAssigning, startAssignmentTransition] = useTransition();
   const [isReplying, startReplyTransition] = useTransition();
+  const [isUpdatingWorkflow, startWorkflowTransition] = useTransition();
   const [isDraftingAI, setIsDraftingAI] = useState(false);
   const [selectedId, setSelectedId] = useState(
     selectedMessageId ?? messages[0]?.id ?? "",
@@ -206,6 +232,9 @@ export default function InboxClient({
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [showFullEmail, setShowFullEmail] = useState(false);
+  const [workflowAssigneeId, setWorkflowAssigneeId] = useState("");
+  const [workflowStatus, setWorkflowStatus] = useState("OPEN");
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
   const selectedSummary = useMemo(
     () => messages.find((message) => message.id === selectedId) ?? messages[0],
     [messages, selectedId],
@@ -235,6 +264,16 @@ export default function InboxClient({
   );
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  useEffect(() => {
+    setWorkflowAssigneeId(selectedMessage?.assignedUser?.id ?? "");
+    setWorkflowStatus(selectedMessage?.teamStatus ?? "OPEN");
+    setWorkflowError(null);
+  }, [
+    selectedMessage?.assignedUser?.id,
+    selectedMessage?.id,
+    selectedMessage?.teamStatus,
+  ]);
 
   useEffect(() => {
     if (!selectedId || selectedDetail || detailError) return;
@@ -458,19 +497,74 @@ export default function InboxClient({
     });
   }
 
+  function saveTeamWorkflow(
+    nextStatus = workflowStatus,
+    nextAssigneeId = workflowAssigneeId,
+  ) {
+    if (!selectedMessage) return;
+    setWorkflowError(null);
+    startWorkflowTransition(async () => {
+      try {
+        const result = await updateInboxTeamWorkflow(
+          selectedMessage.id,
+          nextStatus as "OPEN" | "IN_PROGRESS" | "WAITING" | "RESOLVED",
+          nextAssigneeId || null,
+        );
+        if (!result.ok) {
+          setWorkflowError(result.message);
+          return;
+        }
+        setWorkflowAssigneeId(nextAssigneeId);
+        setWorkflowStatus(nextStatus);
+        setMessageDetails((current) => {
+          const existing = current[selectedMessage.id];
+          if (!existing) return current;
+          const assignee = assignees.find(
+            (option) => option.id === nextAssigneeId,
+          );
+
+          return {
+            ...current,
+            [selectedMessage.id]: {
+              ...existing,
+              assignedAt: nextAssigneeId
+                ? existing.assignedUser?.id === nextAssigneeId
+                  ? existing.assignedAt
+                  : new Date().toISOString()
+                : null,
+              assignedUser: assignee
+                ? {
+                    avatarUrl: assignee.avatarUrl,
+                    id: assignee.id,
+                    name: assignee.name,
+                  }
+                : null,
+              teamStatus: nextStatus,
+            },
+          };
+        });
+        showToast(result.message);
+        router.refresh();
+      } catch {
+        setWorkflowError("The team workflow could not be updated.");
+      }
+    });
+  }
+
   return (
     <>
       {hasMessages ? (
         <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="grid gap-2 text-xs sm:grid-cols-5">
+          <div className="flex gap-2 overflow-x-auto pb-1 text-xs">
             {lanes.map((item) => (
-              <MailboxLink
-                key={item.key}
-                active={lane === item.key}
-                href={inboxHref({ lane: item.key, query })}
-                label={item.label}
-                value={counts[item.key || "all"]}
-              />
+              <div className="min-w-[112px] flex-1" key={item.key}>
+                <MailboxLink
+                  active={lane === item.key}
+                  href={inboxHref({ lane: item.key, query })}
+                  label={item.label}
+                  value={counts[item.key || "all"]}
+                />
+              </div>
             ))}
           </div>
         </div>
@@ -566,6 +660,14 @@ export default function InboxClient({
                                   Unread
                                 </Badge>
                               ) : null}
+                              <Badge className="bg-gray-100 text-gray-700 ring-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:ring-gray-800">
+                                {teamStatusLabel(message.teamStatus)}
+                              </Badge>
+                              {message.assignedUser ? (
+                                <Badge className="bg-brand-50 text-brand-700 ring-brand-200 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-900/40">
+                                  {message.assignedUser.name}
+                                </Badge>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -647,6 +749,7 @@ export default function InboxClient({
                           {emailDirectionLabel(selectedMessage.direction)}
                         </Badge>
                         <StatusBadge>{selectedMessage.status}</StatusBadge>
+                        <StatusBadge>{selectedMessage.teamStatus}</StatusBadge>
                         <Badge className="bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
                           {selectedMessage.provider}
                         </Badge>
@@ -714,6 +817,23 @@ export default function InboxClient({
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {selectedMessage.assignedUser?.id !== currentUserId ? (
+                        <button
+                          className="inline-flex h-9 items-center rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                          disabled={isUpdatingWorkflow}
+                          type="button"
+                          onClick={() =>
+                            saveTeamWorkflow(
+                              selectedMessage.teamStatus === "RESOLVED"
+                                ? "IN_PROGRESS"
+                                : selectedMessage.teamStatus,
+                              currentUserId,
+                            )
+                          }
+                        >
+                          Take ownership
+                        </button>
+                      ) : null}
                       {selectedMessage.status === "UNREAD" ? (
                         <IconButton
                           label="Mark read"
@@ -1034,6 +1154,78 @@ export default function InboxClient({
 
                     <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
                       <div className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                        Team workflow
+                      </div>
+                      <div className="mt-3 space-y-3">
+                        <div>
+                          <label
+                            className="block text-xs font-medium text-gray-500 dark:text-gray-400"
+                            htmlFor={`inbox-assignee-${selectedMessage.id}`}
+                          >
+                            Owner
+                          </label>
+                          <select
+                            className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                            disabled={isUpdatingWorkflow}
+                            id={`inbox-assignee-${selectedMessage.id}`}
+                            value={workflowAssigneeId}
+                            onChange={(event) => {
+                              setWorkflowAssigneeId(event.target.value);
+                              setWorkflowError(null);
+                            }}
+                          >
+                            <option value="">Unassigned</option>
+                            {assignees.map((assignee) => (
+                              <option key={assignee.id} value={assignee.id}>
+                                {assignee.name} ({assignee.email})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label
+                            className="block text-xs font-medium text-gray-500 dark:text-gray-400"
+                            htmlFor={`inbox-team-status-${selectedMessage.id}`}
+                          >
+                            Team status
+                          </label>
+                          <select
+                            className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                            disabled={isUpdatingWorkflow}
+                            id={`inbox-team-status-${selectedMessage.id}`}
+                            value={workflowStatus}
+                            onChange={(event) => {
+                              setWorkflowStatus(event.target.value);
+                              setWorkflowError(null);
+                            }}
+                          >
+                            {teamStatusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {workflowError ? (
+                          <p className="text-xs font-medium text-error-600 dark:text-error-400">
+                            {workflowError}
+                          </p>
+                        ) : null}
+                        <button
+                          className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={
+                            isUpdatingWorkflow ||
+                            (workflowAssigneeId ===
+                              (selectedMessage.assignedUser?.id ?? "") &&
+                              workflowStatus === selectedMessage.teamStatus)
+                          }
+                          type="button"
+                          onClick={() => saveTeamWorkflow()}
+                        >
+                          {isUpdatingWorkflow ? "Saving..." : "Save workflow"}
+                        </button>
+                      </div>
+                      <div className="mt-5 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-500 uppercase dark:border-gray-800 dark:text-gray-400">
                         Message state
                       </div>
                       <div className="mt-3 space-y-3 text-gray-600 dark:text-gray-300">
@@ -1060,6 +1252,10 @@ export default function InboxClient({
                         <StateRow
                           label="Status"
                           value={selectedMessage.status}
+                        />
+                        <StateRow
+                          label="Team"
+                          value={teamStatusLabel(selectedMessage.teamStatus)}
                         />
                       </div>
                     </div>
