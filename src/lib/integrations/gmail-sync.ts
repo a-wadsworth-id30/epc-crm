@@ -16,6 +16,7 @@ import { archiveGmailAttachmentSource } from "@/lib/email/gmail-attachment-stora
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { newEmailWorkflowState } from "@/lib/inbox/team-workflow";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
+import { gmailProviderMessageId as gmailMessageKey } from "@/lib/integrations/gmail-message-identity";
 import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
@@ -168,7 +169,7 @@ async function importGmailMessage({
     mailboxId: mailbox.id,
     message,
   });
-  const providerMessageId = `gmail:${mailbox.id}:${message.id}`;
+  const providerMessageId = gmailMessageKey(mailbox.id, message.id);
   const existing = await prisma.emailMessage.findUnique({
     where: { providerMessageId },
     select: { id: true, salesCommunicationId: true },

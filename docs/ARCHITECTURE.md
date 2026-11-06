@@ -388,6 +388,13 @@ and the change is recorded in `AuditLog`.
 Matched Gmail conversations expose an inline Inbox reply composer. Replies use
 the receiving mailbox, exact Gmail thread ID and original internet message ID,
 then write the outbound email into `EmailMessage` and the sale conversation.
+The outbound write and Gmail sync share `gmail:<mailboxId>:<messageId>` as the
+provider identity. The outbound transaction upserts that identity before it
+creates a sale communication and reuses an already-linked communication when
+sync won the race. Provider sync metadata is merged with the CRM send metadata;
+the reconciliation path writes `gmail.send.reconciled` without storing message
+body content in the audit log. This prevents a successfully accepted Gmail send
+from surfacing as failed solely because its sent copy was imported first.
 The existing per-user mailbox send permissions and sale access checks apply.
 If an older Gmail record has a sender name but no machine-readable address, the
 composer requires the user to enter and review a valid recipient instead of

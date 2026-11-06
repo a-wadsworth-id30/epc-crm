@@ -23,6 +23,7 @@ import {
   sendSalesLeadEmail,
 } from "@/lib/sales/outbound-messages";
 import { findGmailMailboxForSend } from "@/lib/integrations/gmail-send";
+import { gmailProviderMessageId } from "@/lib/integrations/gmail-message-identity";
 import { emailWorkflowScopeWhere } from "@/lib/inbox/team-workflow";
 
 export type InboxSaleOption = {
@@ -304,7 +305,7 @@ export async function assignInboxThreadToSale(
           data: {
             ...communicationData,
             externalId:
-              item.providerMessageId ?? `gmail:${mailboxId}:${item.id}`,
+              item.providerMessageId ?? gmailProviderMessageId(mailboxId, item.id),
           },
           select: { id: true },
         });
