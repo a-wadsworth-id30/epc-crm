@@ -125,6 +125,11 @@ Customer Success and Support to `EmailMailboxPurpose` and changes the default
 for new mailbox rows to Sales. Existing Accounts and Shared values are retained
 so the migration does not rewrite connected mailbox classifications.
 
+The migration `20261106120000_email_message_user_state` adds per-user Gmail
+read tracking. It does not rewrite existing `EmailMessage` rows: legacy READ
+messages remain read for everyone, while newly imported UNREAD messages stay
+unread independently until each authorised CRM user opens or replies to them.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

@@ -10,6 +10,7 @@ import {
 import { sanitizedEmailHtmlViews } from "@/lib/email/sanitized-html";
 import { resolveInboxMessageAddresses } from "@/lib/inbox/addresses";
 import type { InboxMessageDetail, InboxMessageSummary } from "@/lib/inbox/types";
+import { effectiveEmailMessageStatus } from "@/lib/inbox/read-state";
 
 export const inboxMessageSummarySelect = {
   id: true,
@@ -58,13 +59,35 @@ export const inboxMessageDetailSelect = {
   textBody: true,
 } satisfies Prisma.EmailMessageSelect;
 
+export function inboxMessageSummarySelectForUser(userId: string) {
+  return {
+    ...inboxMessageSummarySelect,
+    userStates: {
+      where: { userId },
+      select: { readAt: true },
+      take: 1,
+    },
+  } satisfies Prisma.EmailMessageSelect;
+}
+
+export function inboxMessageDetailSelectForUser(userId: string) {
+  return {
+    ...inboxMessageDetailSelect,
+    userStates: {
+      where: { userId },
+      select: { readAt: true },
+      take: 1,
+    },
+  } satisfies Prisma.EmailMessageSelect;
+}
+
 type InboxMessageSummaryRow = Prisma.EmailMessageGetPayload<{
   select: typeof inboxMessageSummarySelect;
-}>;
+}> & { userStates?: Array<{ readAt: Date | null }> };
 
 type InboxMessageDetailRow = Prisma.EmailMessageGetPayload<{
   select: typeof inboxMessageDetailSelect;
-}>;
+}> & { userStates?: Array<{ readAt: Date | null }> };
 
 function providerLabels(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -115,7 +138,7 @@ export function serializeInboxMessageSummary(
     receivedAt: message.receivedAt.toISOString(),
     replyToAddress,
     salesCommunicationId: message.salesCommunicationId,
-    status: message.status,
+    status: effectiveEmailMessageStatus(message),
     subject: message.subject,
     summary: message.summary ?? "Inbound email received",
     toAddress,

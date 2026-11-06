@@ -17,6 +17,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { parseSalesDefaults } from "@/lib/sales/defaults";
 import { getCrmSettings } from "@/lib/settings";
+import { emailMessageUnreadWhere } from "@/lib/inbox/read-state";
 
 const headerNotificationCacheTag = "header-notifications";
 
@@ -267,9 +268,9 @@ async function loadGeneratedHeaderNotificationsUncached(
     prisma.emailMessage.findMany({
       where: {
         ...recentInboundEmailAccess,
+        ...emailMessageUnreadWhere(currentUserId),
         direction: "INBOUND",
         receivedAt: { gte: dayAgo },
-        status: "UNREAD",
       },
       orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
       select: {

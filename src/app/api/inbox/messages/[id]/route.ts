@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { emailMessageWhereWithAccess } from "@/lib/crm-resource-access";
 import {
-  inboxMessageDetailSelect,
+  inboxMessageDetailSelectForUser,
   serializeInboxMessageDetail,
 } from "@/lib/inbox/messages";
 import { prisma } from "@/lib/prisma";
@@ -17,7 +17,7 @@ export async function GET(_: Request, context: RouteContext) {
   const { id } = await context.params;
   const message = await prisma.emailMessage.findFirst({
     where: emailMessageWhereWithAccess(user, { id }),
-    select: inboxMessageDetailSelect,
+    select: inboxMessageDetailSelectForUser(user.id),
   });
 
   if (!message) {

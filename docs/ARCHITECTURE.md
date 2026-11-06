@@ -164,6 +164,9 @@ Core Prisma models are in `prisma/schema.prisma`.
   Recent unread inbound-email alerts are generated per user from mailbox access,
   contact creation and linked lead ownership rather than duplicating email data
   into a second notification table.
+- `EmailMessageUserState`: per-user email read state. Marking or replying to a
+  shared-mailbox message marks it read only for that CRM user; the shared
+  `EmailMessage.status` remains responsible for the existing archive lifecycle.
 - `FileAsset`: R2-backed media/file metadata, including linked CRM entity,
   optional document-library folder slug, controlled document upload type,
   uploader, notes and lightweight tags for structured record documents.

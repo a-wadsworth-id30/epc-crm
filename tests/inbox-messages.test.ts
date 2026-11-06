@@ -114,4 +114,26 @@ describe("inbox message serialization", () => {
 
     assert.equal(result.salesCommunicationId, "communication-1");
   });
+
+  it("uses the current user's read state without changing the shared message", () => {
+    const result = serializeInboxMessageSummary(
+      inboxRow({
+        status: "UNREAD",
+        userStates: [{ readAt: new Date("2026-11-06T12:00:00.000Z") }],
+      }),
+    );
+
+    assert.equal(result.status, "READ");
+  });
+
+  it("keeps archived messages archived even when the user has read them", () => {
+    const result = serializeInboxMessageSummary(
+      inboxRow({
+        status: "ARCHIVED",
+        userStates: [{ readAt: new Date("2026-11-06T12:00:00.000Z") }],
+      }),
+    );
+
+    assert.equal(result.status, "ARCHIVED");
+  });
 });

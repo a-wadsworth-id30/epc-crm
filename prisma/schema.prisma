@@ -437,6 +437,7 @@ model User {
   createdDocumentPortals     CustomerDocumentPortal[]     @relation("CustomerDocumentPortalCreator")
   createdSignatureRequests   SignatureRequest[]           @relation("SignatureRequestCreator")
   notificationStates         NotificationState[]
+  emailMessageStates         EmailMessageUserState[]
   backgroundJobRuns          BackgroundJobRun[]
   dashboardLayout            DashboardUserLayout?
   ownedEmailMailboxes        EmailMailbox[]               @relation("EmailMailboxOwner")
@@ -1195,6 +1196,7 @@ model EmailMessage {
   internetMessageId    String?
   inReplyTo            String?
   attachmentsArchive   EmailAttachment[]
+  userStates           EmailMessageUserState[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
@@ -1206,6 +1208,20 @@ model EmailMessage {
   @@index([mailboxId, receivedAt])
   @@index([mailboxId, providerThreadId])
   @@index([internetMessageId])
+}
+
+model EmailMessageUserState {
+  id             String       @id @default(cuid())
+  emailMessageId String
+  emailMessage   EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([emailMessageId, userId])
+  @@index([userId, readAt])
 }
 
 model EmailMailbox {

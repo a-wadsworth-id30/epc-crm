@@ -29,6 +29,7 @@ import {
   assignInboxThreadToSale,
   archiveInboxMessage,
   markInboxMessageRead,
+  markInboxMessageUnread,
   replyToInboxMessage,
   restoreInboxMessage,
   searchInboxSales,
@@ -725,6 +726,20 @@ export default function InboxClient({
                           }
                         >
                           <StarLine className="h-4 w-4" />
+                        </IconButton>
+                      ) : selectedMessage.status === "READ" &&
+                        selectedMessage.direction === "INBOUND" ? (
+                        <IconButton
+                          label="Mark unread"
+                          disabled={isPending}
+                          onClick={() =>
+                            runMessageAction(
+                              () => markInboxMessageUnread(selectedMessage.id),
+                              "Message marked as unread.",
+                            )
+                          }
+                        >
+                          <Mail className="h-4 w-4" />
                         </IconButton>
                       ) : null}
                       <IconButton
