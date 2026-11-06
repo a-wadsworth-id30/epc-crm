@@ -1234,7 +1234,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `:apply` variant verifies Gmail bytes again and removes at most 100 R2 files
   per run by default. Deliberate saves, files referenced by another CRM
   workflow, inline-only MIME data and disconnected/unavailable mailbox files
-  are retained. Inbox users can assign or move a complete Gmail
+  are retained. Settings > Integrations > Gmail includes an admin-only,
+  report-only safe scan that exposes estimated reclaimable storage, protection
+  reasons, retryable R2 deletions, opaque candidate previews and failure totals
+  from the last applied cleanup. The scan writes a compact audit event but
+  cannot detach attachment links or delete R2 objects; apply remains a separate
+  maintenance operation. Inbox users can assign or move a complete Gmail
   thread to an
   accessible sale; the CRM moves its email/timeline records and archived
   attachments together, stores a durable manual route for later replies, and

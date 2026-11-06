@@ -6,6 +6,7 @@ import {
   assessGmailLegacyFileCleanup,
   gmailMessageIdFromCleanupMetadata,
   type GmailLegacyCleanupAttachment,
+  summarizeGmailLegacyCleanupAssessments,
   withGmailCleanupPendingTag,
 } from "@/lib/maintenance/gmail-r2-legacy-cleanup-policy";
 
@@ -423,34 +424,20 @@ export async function runGmailR2LegacyCleanup({
     file,
   }));
   const candidates = assessed.filter((item) => item.assessment.eligible);
-  const skippedByReason = assessed.reduce<Record<string, number>>(
-    (counts, item) => {
-      if (!item.assessment.eligible) {
-        counts[item.assessment.reason] =
-          (counts[item.assessment.reason] ?? 0) + 1;
-      }
-      return counts;
-    },
-    {},
+  const assessmentSummary = summarizeGmailLegacyCleanupAssessments(
+    assessed.map((item) => ({
+      assessment: item.assessment,
+      attachmentLinks: item.file.emailAttachments.length,
+      sizeBytes: item.file.sizeBytes,
+    })),
   );
   const baseSummary = {
+    ...assessmentSummary,
     candidateFilesPreview: candidates
       .slice(0, cleanupPreviewLimit)
       .map((item) => candidateSummary(item.file)),
     gmailFilesScanned: files.length,
     mode: applyChanges ? "apply" : "dry-run",
-    protectedFiles: skippedByReason["protected-reference"] ?? 0,
-    providerUnavailableFiles: skippedByReason["provider-unavailable"] ?? 0,
-    explicitlySavedFiles: skippedByReason["explicitly-saved"] ?? 0,
-    wouldDetachAttachments: candidates.reduce(
-      (total, item) => total + item.file.emailAttachments.length,
-      0,
-    ),
-    wouldRemoveBytes: candidates.reduce(
-      (total, item) => total + item.file.sizeBytes,
-      0,
-    ),
-    wouldRemoveFiles: candidates.length,
   };
 
   if (!applyChanges || candidates.length === 0) return baseSummary;

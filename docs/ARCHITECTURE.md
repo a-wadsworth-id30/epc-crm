@@ -427,6 +427,13 @@ attachment and verifies its size/checksum before detaching the legacy
 Failed R2 deletion leaves a tagged database record so a later run can retry.
 Manual **Save to CRM** writes both uploader ownership and the
 `gmail-user-saved` tag, including when it reuses a shared signature image.
+Settings > Integrations > Gmail exposes the same policy through an admin-only
+safe-scan server action and report component. The report reads current
+candidate/protection totals plus `gmail-cleanup-pending` retry state and the
+latest applied-cleanup audit metadata. It displays only opaque file ID prefixes
+and aggregate counts/sizes; it does not expose R2 keys, provider content or an
+apply control. Report generation writes
+`maintenance.gmail_legacy_r2.report` with compact aggregate metadata.
 
 Linked inbound email cards in Inbox and Sales > Conversation expose a
 consistent **Reply** action plus **Reply with AI**. Sent emails expose neither

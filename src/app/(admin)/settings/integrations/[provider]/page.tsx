@@ -4,6 +4,7 @@ import { BackgroundJobRunStatus, type Prisma } from "@prisma/client";
 import type { ReactNode } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import GmailIntegrationForm from "@/components/crm-boilerplate/GmailIntegrationForm";
+import GmailR2CleanupReport from "@/components/crm-boilerplate/GmailR2CleanupReport";
 import {
   BingAdsIntegrationForm,
   CloudflareR2SettingsForm,
@@ -391,6 +392,9 @@ export default async function IntegrationSettingsPage({
               canUsePersonalMailbox: canOwnPersonalGmailMailbox(user),
             }))}
           />
+        </div>
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+          <GmailR2CleanupReport />
         </div>
       </>
     );

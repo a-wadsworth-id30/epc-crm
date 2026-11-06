@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   assessGmailLegacyFileCleanup,
   hasExplicitGmailSaveEvidence,
+  summarizeGmailLegacyCleanupAssessments,
 } from "../src/lib/maintenance/gmail-r2-legacy-cleanup-policy";
 
 const retrievableAttachment = {
@@ -95,5 +96,50 @@ test("unreferenced legacy Gmail objects are safe cleanup candidates", () => {
       uploadedById: null,
     }),
     { eligible: true, reason: "orphan" },
+  );
+});
+
+test("cleanup report totals separate candidates from protected storage", () => {
+  assert.deepEqual(
+    summarizeGmailLegacyCleanupAssessments([
+      {
+        assessment: { eligible: true, reason: "provider-backed" },
+        attachmentLinks: 2,
+        sizeBytes: 1_000,
+      },
+      {
+        assessment: { eligible: true, reason: "orphan" },
+        attachmentLinks: 0,
+        sizeBytes: 250,
+      },
+      {
+        assessment: { eligible: false, reason: "explicitly-saved" },
+        attachmentLinks: 1,
+        sizeBytes: 2_000,
+      },
+      {
+        assessment: { eligible: false, reason: "protected-reference" },
+        attachmentLinks: 1,
+        sizeBytes: 3_000,
+      },
+      {
+        assessment: { eligible: false, reason: "provider-unavailable" },
+        attachmentLinks: 1,
+        sizeBytes: 4_000,
+      },
+    ]),
+    {
+      explicitlySavedBytes: 2_000,
+      explicitlySavedFiles: 1,
+      orphanFiles: 1,
+      protectedBytes: 3_000,
+      protectedFiles: 1,
+      providerBackedFiles: 1,
+      providerUnavailableBytes: 4_000,
+      providerUnavailableFiles: 1,
+      wouldDetachAttachments: 2,
+      wouldRemoveBytes: 1_250,
+      wouldRemoveFiles: 2,
+    },
   );
 });
