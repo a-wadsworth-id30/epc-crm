@@ -9,6 +9,8 @@ function inboxRow(
   overrides: Partial<InboxSummaryRow> = {},
 ): InboxSummaryRow {
   return {
+    assignedAt: null,
+    assignedUser: null,
     contact: {
       email: "linked-contact@example.com",
       firstName: "Linked",
@@ -31,6 +33,7 @@ function inboxRow(
     receivedAt: new Date("2026-11-03T10:00:00.000Z"),
     salesCommunicationId: null,
     status: "UNREAD",
+    teamStatus: "OPEN",
     subject: "Imported message",
     summary: "Hello",
     toAddress: null,
@@ -39,6 +42,26 @@ function inboxRow(
 }
 
 describe("inbox message serialization", () => {
+  it("serializes shared team workflow separately from personal read state", () => {
+    const assignedAt = new Date("2026-11-06T14:30:00.000Z");
+    const result = serializeInboxMessageSummary(
+      inboxRow({
+        assignedAt,
+        assignedUser: {
+          avatarUrl: null,
+          id: "user-1",
+          name: "Craig",
+        },
+        teamStatus: "WAITING",
+      }),
+    );
+
+    assert.equal(result.assignedAt, assignedAt.toISOString());
+    assert.equal(result.assignedUser?.name, "Craig");
+    assert.equal(result.teamStatus, "WAITING");
+    assert.equal(result.status, "UNREAD");
+  });
+
   it("uses the linked contact for an existing inbound Gmail row with no sender", () => {
     const result = serializeInboxMessageSummary(inboxRow());
 

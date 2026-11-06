@@ -139,6 +139,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   same message for other authorised mailbox users. Existing shared archive and
   restore behaviour remains unchanged, and inbound messages can be marked
   unread again without changing another user's Inbox.
+- Shared email workflow is tracked separately from personal read state. Inbox
+  users can take ownership, assign an authorised active CRM user and move a
+  conversation through Open, In progress, Waiting on customer and Resolved.
+  Gmail workflow changes apply to the complete mailbox/thread, CRM replies move
+  the thread to Waiting, and a new inbound Gmail reply reopens it while retaining
+  its owner. Workflow changes are written to the audit log.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

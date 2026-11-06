@@ -167,6 +167,11 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `EmailMessageUserState`: per-user email read state. Marking or replying to a
   shared-mailbox message marks it read only for that CRM user; the shared
   `EmailMessage.status` remains responsible for the existing archive lifecycle.
+- `EmailMessage.teamStatus`, `assignedUserId` and `assignedAt`: shared team Inbox
+  workflow, kept independent from personal read state. Gmail changes are applied
+  to every message with the same mailbox/thread identity; non-Gmail changes are
+  scoped to the selected message. Assignment targets must be active and able to
+  access the selected mailbox or linked lead.
 - `FileAsset`: R2-backed media/file metadata, including linked CRM entity,
   optional document-library folder slug, controlled document upload type,
   uploader, notes and lightweight tags for structured record documents.

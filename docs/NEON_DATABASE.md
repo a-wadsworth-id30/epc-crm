@@ -130,6 +130,12 @@ read tracking. It does not rewrite existing `EmailMessage` rows: legacy READ
 messages remain read for everyone, while newly imported UNREAD messages stay
 unread independently until each authorised CRM user opens or replies to them.
 
+The migration `20261106143000_email_team_workflow` adds the
+`EmailTeamStatus` enum plus shared owner, assignment timestamp and team-status
+fields to `EmailMessage`. Existing rows default to Open. These fields do not
+replace `EmailMessageUserState`: read/unread remains personal, while assignment
+and Open/In progress/Waiting/Resolved are shared operational state.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

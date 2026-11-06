@@ -1,6 +1,6 @@
 "use server";
 
-import type { Prisma } from "@prisma/client";
+import type { EmailTeamStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -23,6 +23,7 @@ import {
   sendSalesLeadEmail,
 } from "@/lib/sales/outbound-messages";
 import { findGmailMailboxForSend } from "@/lib/integrations/gmail-send";
+import { emailWorkflowScopeWhere } from "@/lib/inbox/team-workflow";
 
 export type InboxSaleOption = {
   companyName: string | null;
@@ -49,6 +50,16 @@ export type InboxThreadAssignmentResult =
 export type InboxReplyResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
+
+export type InboxTeamWorkflowResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+const inboxTeamWorkflowSchema = z.object({
+  assignedUserId: z.string().trim().min(1).nullable(),
+  messageId: z.string().trim().min(1),
+  teamStatus: z.enum(["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED"]),
+});
 
 const inboxReplySchema = z.object({
   body: z.string().trim().min(1, "Enter a reply.").max(20_000),
@@ -419,6 +430,8 @@ export async function replyToInboxMessage(
   const message = await prisma.emailMessage.findFirst({
     where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
     select: {
+      assignedAt: true,
+      assignedUserId: true,
       contact: { select: { email: true } },
       fromAddress: true,
       fromName: true,
@@ -555,6 +568,39 @@ export async function replyToInboxMessage(
       readAt: new Date(),
     },
   });
+  const replyWorkflowWhere = emailWorkflowScopeWhere(message);
+  await prisma.emailMessage.updateMany({
+    where: replyWorkflowWhere,
+    data: {
+      assignedAt: message.assignedUserId
+        ? message.assignedAt
+        : new Date(),
+      assignedUserId: message.assignedUserId ?? user.id,
+      teamStatus: "WAITING",
+    },
+  });
+  await prisma.auditLog
+    .create({
+      data: {
+        action: "email.team_workflow.reply_waiting",
+        actorId: user.id,
+        entity:
+          message.provider === "gmail" && message.providerThreadId
+            ? "EmailThread"
+            : "EmailMessage",
+        entityId:
+          message.provider === "gmail" &&
+          message.mailboxId &&
+          message.providerThreadId
+            ? `${message.mailboxId}:${message.providerThreadId}`
+            : message.id,
+        metadata: {
+          assignedUserId: message.assignedUserId ?? user.id,
+          selectedMessageId: message.id,
+        },
+      },
+    })
+    .catch(() => null);
   revalidateHeaderNotifications();
   await bumpRealtimeTopics([
     realtimeTopics.inbox,
@@ -619,6 +665,118 @@ export async function markInboxMessageUnread(messageId: string) {
   await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
 
   revalidatePath("/inbox");
+}
+
+export async function updateInboxTeamWorkflow(
+  messageId: string,
+  teamStatus: EmailTeamStatus,
+  assignedUserId: string | null,
+): Promise<InboxTeamWorkflowResult> {
+  const user = await requireUser();
+  const parsed = inboxTeamWorkflowSchema.safeParse({
+    assignedUserId,
+    messageId,
+    teamStatus,
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a valid owner and team status." };
+  }
+
+  const message = await prisma.emailMessage.findFirst({
+    where: emailMessageWhereWithAccess(user, { id: parsed.data.messageId }),
+    select: {
+      assignedAt: true,
+      assignedUserId: true,
+      id: true,
+      mailboxId: true,
+      provider: true,
+      providerThreadId: true,
+      teamStatus: true,
+    },
+  });
+
+  if (!message) {
+    return { ok: false, message: "Email not found or unavailable." };
+  }
+
+  if (parsed.data.assignedUserId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: parsed.data.assignedUserId, status: "ACTIVE" },
+      select: { id: true, role: true },
+    });
+
+    if (!assignee) {
+      return { ok: false, message: "The selected CRM user is not active." };
+    }
+
+    const accessibleMessage = await prisma.emailMessage.findFirst({
+      where: emailMessageWhereWithAccess(assignee, { id: message.id }),
+      select: { id: true },
+    });
+
+    if (!accessibleMessage) {
+      return {
+        ok: false,
+        message: "That user does not have access to this mailbox or linked lead.",
+      };
+    }
+  }
+
+  const threadWhere = emailWorkflowScopeWhere(message);
+  const assignmentChanged =
+    message.assignedUserId !== parsed.data.assignedUserId;
+  const assignedAt = parsed.data.assignedUserId
+    ? assignmentChanged
+      ? new Date()
+      : message.assignedAt
+    : null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.emailMessage.updateMany({
+      where: threadWhere,
+      data: {
+        assignedAt,
+        assignedUserId: parsed.data.assignedUserId,
+        teamStatus: parsed.data.teamStatus,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: "email.team_workflow.updated",
+        actorId: user.id,
+        entity:
+          message.provider === "gmail" && message.providerThreadId
+            ? "EmailThread"
+            : "EmailMessage",
+        entityId:
+          message.provider === "gmail" &&
+          message.mailboxId &&
+          message.providerThreadId
+            ? `${message.mailboxId}:${message.providerThreadId}`
+            : message.id,
+        metadata: {
+          assignedUserId: parsed.data.assignedUserId,
+          messageCount: updated.count,
+          previousAssignedUserId: message.assignedUserId,
+          previousTeamStatus: message.teamStatus,
+          selectedMessageId: message.id,
+          teamStatus: parsed.data.teamStatus,
+        },
+      },
+    });
+
+    return updated;
+  });
+
+  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+  revalidatePath("/inbox");
+
+  return {
+    ok: true,
+    message: `Team workflow updated for ${result.count} email${result.count === 1 ? "" : "s"}.`,
+  };
 }
 
 export async function archiveInboxMessage(messageId: string) {
