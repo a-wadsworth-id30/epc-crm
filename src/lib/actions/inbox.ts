@@ -64,6 +64,7 @@ const inboxTeamWorkflowSchema = z.object({
 
 const inboxReplySchema = z.object({
   body: z.string().trim().min(1, "Enter a reply.").max(20_000),
+  htmlBody: z.string().trim().max(100_000).optional(),
   messageId: z.string().trim().min(1),
   mailboxId: z.string().trim().min(1).optional(),
   recipient: z
@@ -412,9 +413,11 @@ export async function replyToInboxMessage(
   recipient?: string,
   subject?: string,
   mailboxId?: string,
+  htmlBody?: string,
 ): Promise<InboxReplyResult> {
   const parsed = inboxReplySchema.safeParse({
     body,
+    htmlBody,
     messageId,
     mailboxId,
     recipient,
@@ -489,6 +492,7 @@ export async function replyToInboxMessage(
   try {
     await sendSalesLeadEmail({
       body: parsed.data.body,
+      htmlBody: parsed.data.htmlBody,
       gmailThreadId: isThreadedGmail ? message.providerThreadId : null,
       inReplyTo: isThreadedGmail ? message.internetMessageId : null,
       mailboxId: selectedMailboxId,

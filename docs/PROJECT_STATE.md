@@ -1310,6 +1310,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   messages retain exact thread replies when mailbox/thread IDs exist;
   MailerSend and other imported email enquiries use the normal authorised
   sale-email delivery path. Outbound emails do not expose reply controls.
+- Inbox, Sales and Contact conversation email replies now share a rich composer
+  for bold, italic, underline, links and lists. Outbound HTML is sanitised on
+  the server, sent with a plain-text fallback, and Gmail uses
+  `multipart/alternative`; the plain representation remains available for CRM
+  summaries, timelines and AI context.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

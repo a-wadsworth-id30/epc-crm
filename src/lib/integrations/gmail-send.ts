@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { gmailProviderMessageId } from "@/lib/integrations/gmail-message-identity";
+import { gmailMultipartAlternative } from "@/lib/email/gmail-mime";
 import { prisma } from "@/lib/prisma";
 
 type SendUser = Pick<CurrentUser, "id" | "role">;
@@ -101,6 +102,7 @@ export async function listGmailMailboxesForSend({
 
 export async function sendGmailEmail({
   body,
+  htmlBody,
   inReplyTo,
   mailbox,
   opportunityId,
@@ -110,6 +112,7 @@ export async function sendGmailEmail({
   toName,
 }: {
   body: string;
+  htmlBody: string;
   inReplyTo?: string | null;
   mailbox: NonNullable<Awaited<ReturnType<typeof findGmailMailboxForSend>>>;
   opportunityId: string;
@@ -132,6 +135,7 @@ export async function sendGmailEmail({
   const recipient = toName
     ? `${encodeHeader(toName)} <${to}>`
     : to;
+  const boundary = `id30-${crypto.randomUUID()}`;
   const raw = [
     `From: ${from}`,
     `To: ${recipient}`,
@@ -144,11 +148,7 @@ export async function sendGmailEmail({
         ]
       : []),
     `Date: ${new Date().toUTCString()}`,
-    "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    body,
+    ...gmailMultipartAlternative({ boundary, html: htmlBody, text: body }),
   ].join("\r\n");
   const pathname = `/api/crm/connections/${encodeURIComponent(mailbox.authConnectionId)}/gmail/send`;
   const response = await id30AuthBrokerRequest({

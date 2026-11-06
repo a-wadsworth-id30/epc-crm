@@ -17,6 +17,7 @@ import {
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import EmailContent from "@/components/crm-boilerplate/EmailContent";
+import RichEmailComposer from "@/components/crm-boilerplate/RichEmailComposer";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -227,6 +228,7 @@ export default function InboxClient({
   const [assignmentSearching, setAssignmentSearching] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
+  const [replyHtml, setReplyHtml] = useState("");
   const [replyMailboxId, setReplyMailboxId] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
   const [replySubject, setReplySubject] = useState("");
@@ -321,6 +323,7 @@ export default function InboxClient({
     setAssignmentOpen(false);
     setReplyOpen(false);
     setReplyBody("");
+    setReplyHtml("");
     setReplyMailboxId("");
     setReplyRecipient("");
     setReplySubject("");
@@ -354,6 +357,7 @@ export default function InboxClient({
 
     openReplyComposer();
     setReplyBody("");
+    setReplyHtml("");
     setIsDraftingAI(true);
     setReplyError(null);
 
@@ -379,6 +383,7 @@ export default function InboxClient({
       }
 
       setReplyBody(payload.drafts.email.body);
+      setReplyHtml("");
     } catch (error) {
       setReplyError(
         error instanceof Error
@@ -402,6 +407,7 @@ export default function InboxClient({
           replyRecipient,
           replySubject,
           replyMailboxId || undefined,
+          replyHtml || undefined,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -409,6 +415,7 @@ export default function InboxClient({
         }
 
         setReplyBody("");
+        setReplyHtml("");
         setReplyMailboxId("");
         setReplySubject("");
         setReplyOpen(false);
@@ -1079,16 +1086,18 @@ export default function InboxClient({
                         >
                           Reply
                         </label>
-                        <textarea
+                        <RichEmailComposer
                           autoFocus
-                          className="mt-2 min-h-36 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                          className="mt-2 disabled:opacity-60"
                           disabled={isReplying}
                           id={`inbox-reply-${selectedMessage.id}`}
-                          maxLength={20_000}
                           placeholder="Write your reply..."
-                          required
                           value={replyBody}
-                          onChange={(event) => setReplyBody(event.target.value)}
+                          onChange={(text, html) => {
+                            setReplyBody(text.slice(0, 20_000));
+                            setReplyHtml(html);
+                            setReplyError(null);
+                          }}
                         />
                         {replyError ? (
                           <p className="mt-2 text-sm font-medium text-error-600 dark:text-error-400">
@@ -1102,6 +1111,8 @@ export default function InboxClient({
                             type="button"
                             onClick={() => {
                               setReplyOpen(false);
+                              setReplyBody("");
+                              setReplyHtml("");
                               setReplyError(null);
                             }}
                           >

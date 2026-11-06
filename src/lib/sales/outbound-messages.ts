@@ -10,6 +10,7 @@ import {
   sendGmailEmail,
 } from "@/lib/integrations/gmail-send";
 import { reconciledGmailSendMetadata } from "@/lib/integrations/gmail-message-identity";
+import { sanitizeOutboundEmailHtml } from "@/lib/email/outbound-html";
 import {
   getStoredTwilioConfig,
   getTwilioMessagingRuntime,
@@ -29,6 +30,7 @@ type OutboundMessageUser = Pick<CurrentUser, "id" | "role">;
 
 type SendSalesLeadEmailInput = {
   body: string;
+  htmlBody?: string | null;
   contactId?: string | null;
   gmailThreadId?: string | null;
   inReplyTo?: string | null;
@@ -282,6 +284,12 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
   if (!body) {
     throw new Error("Message became empty after resolving placeholders.");
   }
+  const htmlBody = sanitizeOutboundEmailHtml(
+    input.htmlBody
+      ? personaliseOutboundMessage(input.htmlBody, messageContext)
+      : null,
+    body,
+  );
 
   const gmailMailbox = await findGmailMailboxForSend({
     mailboxId: input.mailboxId,
@@ -290,6 +298,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
   const gmailResult = gmailMailbox
     ? await sendGmailEmail({
         body,
+        htmlBody,
         inReplyTo: input.inReplyTo,
         mailbox: gmailMailbox,
         opportunityId: opportunity.id,
@@ -306,6 +315,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
           opportunity.id,
         );
         return sendMailerSendEmail({
+          html: htmlBody,
           subject,
           text: body,
           replyToEmail,
@@ -367,6 +377,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
         status: "READ",
         subject,
         summary: messageSummary(body),
+        htmlBody,
         textBody: body,
         toAddress: recipient,
       },
@@ -391,6 +402,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
         status: "READ",
         subject,
         summary: messageSummary(body),
+        htmlBody,
         textBody: body,
         toAddress: recipient,
       },

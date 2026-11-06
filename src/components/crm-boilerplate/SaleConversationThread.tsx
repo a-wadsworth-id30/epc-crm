@@ -34,6 +34,7 @@ import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailRecipientField";
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import EmailContent from "@/components/crm-boilerplate/EmailContent";
+import RichEmailComposer from "@/components/crm-boilerplate/RichEmailComposer";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { visibleEmailAttachments } from "@/lib/email/attachment-display";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
@@ -517,6 +518,7 @@ export default function SaleConversationThread({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [replyHtml, setReplyHtml] = useState("");
   const [replyMailboxId, setReplyMailboxId] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
   const [replySubject, setReplySubject] = useState("");
@@ -541,6 +543,7 @@ export default function SaleConversationThread({
     setReplySubject(communication.emailReply?.subject ?? "");
     setReplyError(null);
     setReplySuccess(null);
+    setReplyHtml("");
   }
 
   async function draftEmailReplyWithAI(communication: SaleConversationItem) {
@@ -553,6 +556,7 @@ export default function SaleConversationThread({
 
     openEmailReply(communication);
     setReplyBody("");
+    setReplyHtml("");
     setAiDraftingForId(communication.id);
 
     try {
@@ -576,6 +580,7 @@ export default function SaleConversationThread({
       }
 
       setReplyBody(payload.drafts.email.body);
+      setReplyHtml("");
     } catch (error) {
       setReplyError(
         error instanceof Error
@@ -606,6 +611,7 @@ export default function SaleConversationThread({
           replyRecipient,
           replySubject,
           replyMailboxId || undefined,
+          replyHtml || undefined,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -613,6 +619,7 @@ export default function SaleConversationThread({
         }
 
         setReplyBody("");
+        setReplyHtml("");
         setReplyMailboxId("");
         setReplyRecipient("");
         setReplySubject("");
@@ -1278,6 +1285,7 @@ export default function SaleConversationThread({
                                     return;
                                   }
                                   setReplyBody("");
+                                  setReplyHtml("");
                                   openEmailReply(communication);
                                 }}
                                 className={conversationEmailReplyButtonClass}
@@ -1425,17 +1433,16 @@ export default function SaleConversationThread({
                             >
                               Reply
                             </label>
-                            <textarea
+                            <RichEmailComposer
                               autoFocus
-                              className="mt-2 min-h-32 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                              className="mt-2 disabled:opacity-60"
                               disabled={isGmailReplying}
                               id={`sale-gmail-reply-${communication.id}`}
-                              maxLength={20_000}
                               placeholder="Write your reply..."
-                              required
                               value={replyBody}
-                              onChange={(event) => {
-                                setReplyBody(event.target.value);
+                              onChange={(text, html) => {
+                                setReplyBody(text.slice(0, 20_000));
+                                setReplyHtml(html);
                                 setReplyError(null);
                                 setReplySuccess(null);
                               }}
@@ -1458,6 +1465,7 @@ export default function SaleConversationThread({
                                 onClick={() => {
                                   setReplyingToId(null);
                                   setReplyBody("");
+                                  setReplyHtml("");
                                   setReplyMailboxId("");
                                   setReplyRecipient("");
                                   setReplySubject("");
