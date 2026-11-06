@@ -1256,10 +1256,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   attachments together, stores a durable manual route for later replies, and
   writes an audit entry. Manual sync is available from Gmail settings. A
   Netlify Scheduled Function calls the protected `/api/maintenance/gmail-sync`
-  route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`, using
-  `GMAIL_SYNC_SECRET` or `CRON_SECRET`. Scheduled runs select the least recently
-  synced mailbox and read at most 10 messages so provider, attachment and CRM
-  writes complete inside the Netlify execution window. Matched Gmail messages
+  route every 5 minutes when `GMAIL_SYNC_CRON_ENABLED=true`, using
+  `GMAIL_SYNC_SECRET` or `CRON_SECRET`. Scheduled runs prioritise pending Gmail
+  continuation pages, then the least recently synced mailbox. The defaults
+  process two mailboxes with up to 15 messages each inside a 20-second route
+  budget; bounded environment overrides can tune those caps. Matched Gmail messages
   can be replied to directly from the Inbox; the composer sends from the
   receiving mailbox, preserves the exact Gmail thread and writes the outbound
   message into the linked sale conversation. Gmail email entries in the linked

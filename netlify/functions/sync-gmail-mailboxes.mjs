@@ -1,5 +1,5 @@
 export const config = {
-  schedule: "*/10 * * * *",
+  schedule: "*/5 * * * *",
 };
 
 function booleanEnv(name, defaultValue = false) {
@@ -7,6 +7,13 @@ function booleanEnv(name, defaultValue = false) {
   if (!value) return defaultValue;
 
   return ["1", "true", "yes", "on"].includes(value);
+}
+
+function integerEnv(name, defaultValue, maximum) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return defaultValue;
+
+  return Math.min(Math.max(Math.trunc(value), 1), maximum);
 }
 
 function crmBaseUrl() {
@@ -41,6 +48,10 @@ function compactSyncResult(body) {
   const results = Array.isArray(body?.results) ? body.results : [];
 
   return {
+    backlogPending: Number.isFinite(body?.backlogPending)
+      ? body.backlogPending
+      : null,
+    deferred: Number.isFinite(body?.deferred) ? body.deferred : null,
     failed: Number.isFinite(body?.failed) ? body.failed : null,
     processed: Number.isFinite(body?.processed) ? body.processed : null,
     succeeded: results.filter((result) => result?.ok === true).length,
@@ -90,8 +101,15 @@ export default async function handler() {
   }
 
   const url = new URL("/api/maintenance/gmail-sync", baseUrl.url);
-  url.searchParams.set("mailboxLimit", "1");
-  url.searchParams.set("maxResults", "10");
+  url.searchParams.set(
+    "mailboxLimit",
+    String(integerEnv("GMAIL_SYNC_MAILBOX_LIMIT", 2, 3)),
+  );
+  url.searchParams.set(
+    "maxResults",
+    String(integerEnv("GMAIL_SYNC_MAX_RESULTS", 15, 25)),
+  );
+  url.searchParams.set("timeBudgetMs", "20000");
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",

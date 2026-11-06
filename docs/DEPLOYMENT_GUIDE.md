@@ -130,10 +130,14 @@ Optional:
 - `MARKETING_UPLOAD_CRON_LIMIT`: optional per-run upload row cap, default `50`,
   maximum `250`.
 - `GMAIL_SYNC_SECRET`: shared secret for `/api/maintenance/gmail-sync`;
-  `CRON_SECRET` can be used instead. The job processes up to five connected
+  `CRON_SECRET` can be used instead. The route processes up to three connected
   mailboxes per request and each mailbox reads at most 25 Gmail messages.
 - `GMAIL_SYNC_CRON_ENABLED`: set to `true` to let the scheduled Netlify
-  function sync connected Gmail mailboxes every 10 minutes.
+  function sync connected Gmail mailboxes every 5 minutes.
+- `GMAIL_SYNC_MAILBOX_LIMIT`: optional scheduled-run mailbox cap; defaults to
+  `2` and cannot exceed `3`.
+- `GMAIL_SYNC_MAX_RESULTS`: optional per-mailbox Gmail message cap; defaults to
+  `15` and cannot exceed `25`.
 - `OPERATIONAL_RETENTION_SECRET`: shared secret for
   `/api/maintenance/retention`; `CRON_SECRET` can be used instead when a single
   maintenance secret is preferred.
@@ -313,14 +317,14 @@ latency later justifies a server-function warmup, document the invocation and
 Neon compute cost before adding one.
 
 The repository also includes
-`netlify/functions/sync-gmail-mailboxes.mjs`, scheduled every 10 minutes. It is
+`netlify/functions/sync-gmail-mailboxes.mjs`, scheduled every 5 minutes. It is
 disabled unless `GMAIL_SYNC_CRON_ENABLED=true` is set. When enabled, it calls
 `/api/maintenance/gmail-sync` with `GMAIL_SYNC_SECRET` or `CRON_SECRET` and
 processes the same bounded mailbox sync used by the manual **Sync Gmail now**
-action. Each scheduled invocation selects the least recently synced mailbox and
-reads at most 10 messages so Auth, attachment and CRM writes stay inside the
-Netlify execution window. The function logs only compact counts and does not
-include mailbox addresses or message content.
+action. Each scheduled invocation prioritises pending continuation pages, then
+the least recently synced mailbox. Defaults are two mailboxes, 15 messages per
+mailbox and a 20-second route budget. The function logs only compact counts and
+does not include mailbox addresses or message content.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.
