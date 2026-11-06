@@ -369,11 +369,14 @@ reply server action uses the same resolution so display and sending cannot
 disagree about the recipient.
 
 `netlify/functions/sync-gmail-mailboxes.mjs` invokes the protected maintenance
-route every 10 minutes when `GMAIL_SYNC_CRON_ENABLED=true`. It reuses the
+route every 5 minutes when `GMAIL_SYNC_CRON_ENABLED=true`. It reuses the
 bounded sync path behind the manual action and authenticates with
-`GMAIL_SYNC_SECRET` or the shared `CRON_SECRET`. Scheduled runs process the
-least recently synced mailbox and at most 10 messages per invocation to stay
-inside Netlify's execution window; repeated runs drain any remaining pages.
+`GMAIL_SYNC_SECRET` or the shared `CRON_SECRET`. Scheduled runs prioritise
+mailboxes with a pending Gmail page, then the least recently synced mailbox.
+The defaults process two mailboxes with up to 15 messages each inside a
+20-second route budget. `GMAIL_SYNC_MAILBOX_LIMIT` and
+`GMAIL_SYNC_MAX_RESULTS` provide bounded operational tuning without a code
+deploy; repeated runs drain remaining pages.
 
 Inbox users can manually assign or move a Gmail conversation to an accessible
 sale. The action moves every imported message and sales communication in the

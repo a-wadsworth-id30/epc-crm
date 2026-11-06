@@ -9,6 +9,8 @@ const envNames = [
   "CRON_SECRET",
   "DEPLOY_URL",
   "GMAIL_SYNC_CRON_ENABLED",
+  "GMAIL_SYNC_MAILBOX_LIMIT",
+  "GMAIL_SYNC_MAX_RESULTS",
   "GMAIL_SYNC_SECRET",
   "NEXT_PUBLIC_APP_URL",
   "URL",
@@ -32,8 +34,8 @@ afterEach(() => {
 });
 
 describe("scheduled Gmail sync Netlify function", () => {
-  it("runs every 10 minutes", () => {
-    assert.equal(config.schedule, "*/10 * * * *");
+  it("runs every 5 minutes", () => {
+    assert.equal(config.schedule, "*/5 * * * *");
   });
 
   it("does not call the maintenance route while disabled", async () => {
@@ -79,6 +81,8 @@ describe("scheduled Gmail sync Netlify function", () => {
       requestUrl = String(input);
       requestInit = init;
       return Response.json({
+        backlogPending: 1,
+        deferred: 0,
         ok: true,
         processed: 2,
         failed: 0,
@@ -95,7 +99,7 @@ describe("scheduled Gmail sync Netlify function", () => {
     assert.equal(response.status, 200);
     assert.equal(
       requestUrl,
-      "https://crm.example.test/api/maintenance/gmail-sync?mailboxLimit=1&maxResults=10",
+      "https://crm.example.test/api/maintenance/gmail-sync?mailboxLimit=2&maxResults=15&timeBudgetMs=20000",
     );
     assert.equal(requestInit?.method, "POST");
     assert.equal(
@@ -106,7 +110,13 @@ describe("scheduled Gmail sync Netlify function", () => {
       ok: true,
       status: 200,
       endpoint: "/api/maintenance/gmail-sync",
-      summary: { failed: 0, processed: 2, succeeded: 2 },
+      summary: {
+        backlogPending: 1,
+        deferred: 0,
+        failed: 0,
+        processed: 2,
+        succeeded: 2,
+      },
     });
     assert.equal(JSON.stringify(body).includes("private@example.test"), false);
   });
@@ -128,7 +138,34 @@ describe("scheduled Gmail sync Netlify function", () => {
       ok: false,
       status: 502,
       endpoint: "/api/maintenance/gmail-sync",
-      summary: { failed: 1, processed: 1, succeeded: 0 },
+      summary: {
+        backlogPending: null,
+        deferred: null,
+        failed: 1,
+        processed: 1,
+        succeeded: 0,
+      },
     });
+  });
+
+  it("allows bounded throughput tuning without a code deploy", async () => {
+    process.env.GMAIL_SYNC_CRON_ENABLED = "true";
+    process.env.GMAIL_SYNC_SECRET = "gmail-test-secret";
+    process.env.APP_BASE_URL = "https://crm.example.test";
+    process.env.GMAIL_SYNC_MAILBOX_LIMIT = "99";
+    process.env.GMAIL_SYNC_MAX_RESULTS = "20";
+    let requestUrl = "";
+    globalThis.fetch = (async (input) => {
+      requestUrl = String(input);
+      return Response.json({ ok: true, processed: 0, failed: 0, results: [] });
+    }) as typeof fetch;
+
+    const response = await handler();
+
+    assert.equal(response.status, 200);
+    assert.equal(
+      requestUrl,
+      "https://crm.example.test/api/maintenance/gmail-sync?mailboxLimit=3&maxResults=20&timeBudgetMs=20000",
+    );
   });
 });
