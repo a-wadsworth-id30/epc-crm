@@ -241,6 +241,7 @@ export function serializeConversationCommunication(
     communication.emailMessage?.attachmentsArchive,
     communication.emailMessage?.attachments,
     communication.emailMessage?.htmlBody,
+    communication.emailMessage?.provider,
   );
   const emailHtmlViews = sanitizedEmailHtmlViews({
     html: communication.emailMessage?.htmlBody,
@@ -387,6 +388,7 @@ export function serializeConversationEmailMessage(
     message.attachmentsArchive,
     message.attachments,
     message.htmlBody,
+    message.provider,
   );
   const emailHtmlViews = sanitizedEmailHtmlViews({
     html: message.htmlBody,

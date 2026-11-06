@@ -126,6 +126,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Email cards use an existing CRM user or mailbox-owner avatar for outbound
   messages when available. All other senders use stable coloured initials;
   external avatar services are intentionally not contacted.
+- Gmail sync now stores normal attachment metadata without copying every file
+  into R2. Preview and Download retrieve selected files through an authorised
+  CRM proxy, while **Save to CRM** deliberately archives important documents.
+  Existing archived files remain unchanged, and inline MIME data with no
+  retrievable Gmail attachment ID is retained during sync to avoid data loss.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an

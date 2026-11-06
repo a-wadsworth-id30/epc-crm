@@ -23,6 +23,7 @@ type EmailAttachmentDisplayRow = Prisma.EmailAttachmentGetPayload<{
 
 export type EmailAttachmentDisplay = {
   archiveStatus: string;
+  canSaveToCrm: boolean;
   canPreview: boolean;
   downloadUrl: string | null;
   id: string;
@@ -34,6 +35,7 @@ export type EmailAttachmentDisplay = {
   name: string;
   previewUrl: string | null;
   sizeBytes: number | null;
+  storageLabel: "Gmail" | "CRM" | "Unavailable";
 };
 
 type SourceAttachment = {
@@ -95,7 +97,9 @@ function canPreviewFile(mimeType: string, name: string) {
   if (mimeType === "application/pdf" || mimeType === "application/json") {
     return true;
   }
-  if (mimeType.startsWith("text/")) return true;
+  if (["text/csv", "text/markdown", "text/plain"].includes(mimeType)) {
+    return true;
+  }
 
   return /\.(csv|json|log|md|pdf|txt)$/i.test(name);
 }
@@ -104,6 +108,7 @@ export function serializeEmailAttachments(
   attachments: EmailAttachmentDisplayRow[] | null | undefined,
   sourceValue?: unknown,
   html?: string | null,
+  provider?: string | null,
 ): EmailAttachmentDisplay[] {
   const source = sourceAttachments(sourceValue);
   const sourceByProviderId = new Map(
@@ -151,7 +156,13 @@ export function serializeEmailAttachments(
       fileAsset?.mimeType || attachment.mimeType,
     );
     const stored = attachment.archiveStatus === "STORED" && Boolean(fileAsset);
-    const previewable = stored && canPreviewFile(mimeType, name);
+    const providerAvailable = Boolean(
+      provider === "gmail" &&
+        attachment.providerAttachmentId &&
+        !attachment.providerAttachmentId.startsWith("inline:"),
+    );
+    const previewable =
+      (stored || providerAvailable) && canPreviewFile(mimeType, name);
     const sourceAttachment = sourceByProviderId.get(
       attachment.providerAttachmentId ?? "",
     );
@@ -161,7 +172,7 @@ export function serializeEmailAttachments(
       null;
     const disposition = textValue(sourceAttachment?.disposition)?.toLowerCase() ?? null;
     const isEmbedded = Boolean(
-      stored &&
+      (stored || providerAvailable) &&
         isSafeInlineImage(mimeType) &&
         contentId &&
         htmlReferencesContentId(html, contentId),
@@ -170,21 +181,31 @@ export function serializeEmailAttachments(
     return {
       archiveStatus: attachment.archiveStatus,
       canPreview: previewable,
+      canSaveToCrm: !stored && providerAvailable,
       contentId,
       disposition,
-      downloadUrl: fileAsset && stored
-        ? `/api/media/${encodeURIComponent(fileAsset.id)}?download=1`
-        : null,
+      downloadUrl:
+        fileAsset && stored
+          ? `/api/media/${encodeURIComponent(fileAsset.id)}?download=1`
+          : providerAvailable
+            ? `/api/email-attachments/${encodeURIComponent(attachment.id)}?download=1`
+            : null,
       id: attachment.id,
       isEmbedded,
-      isImage: stored && isSafeInlineImage(mimeType),
+      isImage: (stored || providerAvailable) && isSafeInlineImage(mimeType),
       mimeType: mimeType || null,
       name,
-      previewUrl:
-        fileAsset && previewable
+      previewUrl: previewable
+        ? fileAsset && stored
           ? `/api/media/${encodeURIComponent(fileAsset.id)}/preview`
-          : null,
+          : `/api/email-attachments/${encodeURIComponent(attachment.id)}`
+        : null,
       sizeBytes: fileAsset?.sizeBytes ?? attachment.sizeBytes,
+      storageLabel: stored
+        ? "CRM"
+        : providerAvailable
+          ? "Gmail"
+          : "Unavailable",
     };
   });
 }
