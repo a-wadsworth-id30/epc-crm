@@ -16,6 +16,10 @@ import { archiveGmailAttachmentSource } from "@/lib/email/gmail-attachment-stora
 import { emailTextSummary, latestInboundEmailPlainText } from "@/lib/email/plain-text";
 import { newEmailWorkflowState } from "@/lib/inbox/team-workflow";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
+import {
+  gmailParticipantAddressesForMatch,
+  unambiguousContactId,
+} from "@/lib/integrations/gmail-contact-matching";
 import { gmailProviderMessageId as gmailMessageKey } from "@/lib/integrations/gmail-message-identity";
 import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
@@ -103,10 +107,12 @@ const contactMatchesEmail = (email: string) => ({
 
 async function resolveMessageContext({
   direction,
+  mailboxAddress,
   mailboxId,
   message,
 }: {
   direction: "INBOUND" | "OUTBOUND";
+  mailboxAddress: string;
   mailboxId: string;
   message: GmailMessage;
 }) {
@@ -121,21 +127,26 @@ async function resolveMessageContext({
   });
   if (threadLink?.opportunityId || threadLink?.contactId) return threadLink;
 
-  const candidates = emailAddresses(
-    direction === "INBOUND" ? message.headers.from : message.headers.to,
-  );
+  const candidates = gmailParticipantAddressesForMatch({
+    direction,
+    from: message.headers.from,
+    mailboxAddress,
+    replyTo: message.headers.replyTo,
+    to: message.headers.to,
+  });
   if (!candidates.length) return { contactId: null, opportunityId: null };
 
-  const contact = await prisma.contact.findFirst({
+  const contactMatches = await prisma.contact.findMany({
     where: { OR: candidates.map(contactMatchesEmail) },
     select: { id: true },
-    orderBy: { updatedAt: "desc" },
+    take: 2,
   });
-  if (!contact) return { contactId: null, opportunityId: null };
+  const contactId = unambiguousContactId(contactMatches);
+  if (!contactId) return { contactId: null, opportunityId: null };
 
   const opportunities = await prisma.salesOpportunity.findMany({
     where: {
-      contactId: contact.id,
+      contactId,
       stage: { notIn: ["WON", "LOST"] },
     },
     orderBy: { updatedAt: "desc" },
@@ -144,7 +155,7 @@ async function resolveMessageContext({
   });
 
   return {
-    contactId: contact.id,
+    contactId,
     opportunityId: opportunities.length === 1 ? opportunities[0].id : null,
   };
 }
@@ -166,6 +177,7 @@ async function importGmailMessage({
   const direction = sent ? "OUTBOUND" : "INBOUND";
   const context = await resolveMessageContext({
     direction,
+    mailboxAddress: mailbox.emailAddress,
     mailboxId: mailbox.id,
     message,
   });

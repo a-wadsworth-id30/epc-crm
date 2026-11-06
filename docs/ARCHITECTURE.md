@@ -368,6 +368,13 @@ rows from stored headers, `Reply-To`, the linked contact or mailbox, and the
 reply server action uses the same resolution so display and sending cannot
 disagree about the recipient.
 
+Automatic contact matching excludes the connected mailbox address and requires
+exactly one CRM contact across all external participants. A shared address or a
+multi-recipient message that matches more than one contact remains unlinked in
+the Inbox. Inbound `Reply-To` participates only when `From` has no usable email,
+so it cannot compete with a valid sender. Existing mailbox/thread links remain
+authoritative and bypass participant matching.
+
 `netlify/functions/sync-gmail-mailboxes.mjs` invokes the protected maintenance
 route every 5 minutes when `GMAIL_SYNC_CRON_ENABLED=true`. It reuses the
 bounded sync path behind the manual action and authenticates with
