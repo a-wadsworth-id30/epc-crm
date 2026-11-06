@@ -7,6 +7,8 @@ import {
   gmailSharedImageEntityType,
   gmailSharedImageKey,
   gmailSharedImageTag,
+  gmailCleanupPendingTag,
+  gmailUserSavedTag,
   isImageAttachment,
 } from "@/lib/email/attachment-deduplication";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
@@ -113,6 +115,12 @@ export async function archiveGmailAttachmentSource(
     const checksum = attachmentChecksum(buffer);
     const mimeType = source.mimeType ?? "application/octet-stream";
     const sharedImage = isImageAttachment(mimeType);
+    const savedTags = [
+      "email-attachment",
+      "gmail",
+      ...(sharedImage ? [gmailSharedImageTag] : []),
+      ...(source.uploadedById ? [gmailUserSavedTag] : []),
+    ];
     const key = sharedImage
       ? gmailSharedImageKey({
           checksum,
@@ -148,6 +156,10 @@ export async function archiveGmailAttachmentSource(
               checksum,
               mimeType,
               sizeBytes: buffer.byteLength,
+              tags: savedTags,
+              ...(source.uploadedById
+                ? { uploadedById: source.uploadedById }
+                : {}),
             },
             create: {
               bucket: upload.bucketName,
@@ -158,7 +170,7 @@ export async function archiveGmailAttachmentSource(
               mimeType,
               originalName: source.fileName,
               sizeBytes: buffer.byteLength,
-              tags: ["email-attachment", "gmail", gmailSharedImageTag],
+              tags: savedTags,
               uploadedById: source.uploadedById ?? null,
             },
           })
@@ -179,10 +191,28 @@ export async function archiveGmailAttachmentSource(
               mimeType,
               originalName: source.fileName,
               sizeBytes: buffer.byteLength,
-              tags: ["email-attachment", "gmail"],
+              tags: savedTags,
               uploadedById: source.uploadedById ?? null,
             },
           });
+    }
+
+    if (source.uploadedById && file) {
+      const tags = Array.from(
+        new Set(
+          [...file.tags, gmailUserSavedTag].filter(
+            (tag) => tag !== gmailCleanupPendingTag,
+          ),
+        ),
+      );
+
+      file = await prisma.fileAsset.update({
+        where: { id: file.id },
+        data: {
+          tags,
+          uploadedById: file.uploadedById ?? source.uploadedById,
+        },
+      });
     }
 
     await prisma.emailAttachment.update({

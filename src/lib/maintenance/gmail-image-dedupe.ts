@@ -12,6 +12,7 @@ import {
   gmailSharedImageEntityType,
   gmailSharedImageKey,
   gmailSharedImageTag,
+  gmailUserSavedTag,
 } from "@/lib/email/attachment-deduplication";
 
 const cloudflareR2Provider = "cloudflare-r2";
@@ -42,6 +43,7 @@ type CandidateFile = Prisma.FileAssetGetPayload<{
     originalName: true;
     sizeBytes: true;
     tags: true;
+    uploadedById: true;
   };
 }>;
 
@@ -238,7 +240,9 @@ async function hashCandidate(file: CandidateFile, r2: R2MaintenanceClient) {
       error: {
         fileIdPrefix: prefix(file.id),
         message:
-          error instanceof Error ? error.message : "R2 image could not be hashed.",
+          error instanceof Error
+            ? error.message
+            : "R2 image could not be hashed.",
       },
     };
   }
@@ -290,6 +294,7 @@ export async function runGmailImageDedupe({
       originalName: true,
       sizeBytes: true,
       tags: true,
+      uploadedById: true,
     },
   });
   const sizeCounts = new Map<number, number>();
@@ -328,7 +333,10 @@ export async function runGmailImageDedupe({
     duplicateGroupsPreview: duplicateGroups.slice(0, 25).map((group) => ({
       checksumPrefix: prefix(group[0]?.contentChecksum),
       copies: group.length,
-      names: Array.from(new Set(group.map((file) => file.originalName))).slice(0, 5),
+      names: Array.from(new Set(group.map((file) => file.originalName))).slice(
+        0,
+        5,
+      ),
       reclaimableBytes: (group.length - 1) * group[0]!.sizeBytes,
       sizeBytes: group[0]!.sizeBytes,
     })),
@@ -351,6 +359,16 @@ export async function runGmailImageDedupe({
 
   for (const group of duplicateGroups) {
     const checksum = group[0]!.contentChecksum;
+    const explicitlySaved = group.find(
+      (file) =>
+        Boolean(file.uploadedById) || file.tags.includes(gmailUserSavedTag),
+    );
+    const canonicalTags = [
+      "email-attachment",
+      "gmail",
+      gmailSharedImageTag,
+      ...(explicitlySaved ? [gmailUserSavedTag] : []),
+    ];
     const canonicalKey = gmailSharedImageKey({
       checksum,
       uploadPrefix: r2.uploadPrefix,
@@ -382,7 +400,8 @@ export async function runGmailImageDedupe({
         entityType: gmailSharedImageEntityType,
         mimeType: source.mimeType,
         sizeBytes: source.sizeBytes,
-        tags: ["email-attachment", "gmail", gmailSharedImageTag],
+        tags: canonicalTags,
+        uploadedById: explicitlySaved?.uploadedById ?? undefined,
       },
       create: {
         bucket: upload.bucketName,
@@ -393,7 +412,8 @@ export async function runGmailImageDedupe({
         mimeType: source.mimeType,
         originalName: source.originalName,
         sizeBytes: source.sizeBytes,
-        tags: ["email-attachment", "gmail", gmailSharedImageTag],
+        tags: canonicalTags,
+        uploadedById: explicitlySaved?.uploadedById ?? null,
       },
     });
     canonicalImages += 1;
@@ -424,10 +444,7 @@ export async function runGmailImageDedupe({
         }),
       ]);
       const uploadRequestCountById = new Map(
-        uploadRequestCounts.map((item) => [
-          item.fileAssetId,
-          item._count._all,
-        ]),
+        uploadRequestCounts.map((item) => [item.fileAssetId, item._count._all]),
       );
       const deletableFileIds = currentFiles
         .filter(

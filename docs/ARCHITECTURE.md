@@ -417,6 +417,17 @@ cards identify whether the file remains in Gmail or has been saved to CRM.
 Access is checked against the related email and mailbox/sale permissions; raw
 R2 object keys and Gmail credentials are never sent to the browser.
 
+Legacy attachment cleanup is audit-first. `npm run maintenance:gmail-r2-cleanup`
+only reports automatically archived Gmail files with no uploader/save marker,
+no non-email CRM references and complete connected Gmail retrieval metadata.
+`npm run maintenance:gmail-r2-cleanup:apply` re-fetches every linked provider
+attachment and verifies its size/checksum before detaching the legacy
+`FileAsset`; it processes at most 100 files by default and accepts
+`-- --limit=<n>` up to 500. Failed provider verification preserves the R2 copy.
+Failed R2 deletion leaves a tagged database record so a later run can retry.
+Manual **Save to CRM** writes both uploader ownership and the
+`gmail-user-saved` tag, including when it reuses a shared signature image.
+
 Linked inbound email cards in Inbox and Sales > Conversation expose a
 consistent **Reply** action plus **Reply with AI**. Sent emails expose neither
 reply control. The browser requests `/api/ai/sales-lead` with the

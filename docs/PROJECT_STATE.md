@@ -129,14 +129,18 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Gmail sync now stores normal attachment metadata without copying every file
   into R2. Preview and Download retrieve selected files through an authorised
   CRM proxy, while **Save to CRM** deliberately archives important documents.
-  Existing archived files remain unchanged, and inline MIME data with no
-  retrievable Gmail attachment ID is retained during sync to avoid data loss.
+  Existing archived files remain unchanged unless the guarded legacy cleanup
+  is explicitly applied, and inline MIME data with no retrievable Gmail
+  attachment ID is retained during sync to avoid data loss.
+  Deliberate saves carry uploader ownership plus a `gmail-user-saved` marker so
+  guarded legacy-R2 cleanup cannot remove them.
 - Sales > Conversation shows the latest reply content by default and collapses
   strict duplicate email cards, preferring the richer Gmail copy when the same
   RFC `Message-ID` was also imported from Pipedrive. Gmail sync reuses an
   existing cross-provider communication when identity or a strict two-minute
-  content fingerprint matches. `npm run maintenance:email-dedupe-audit --
-  --sale <id>` reports existing duplicate pairs without deleting records. The
+  content fingerprint matches.
+  `npm run maintenance:email-dedupe-audit -- --sale <id>` reports existing
+  duplicate pairs without deleting records. The
   fallback tolerates a missing sender/recipient on one provider copy while
   preserving separately sent messages with distinct RFC `Message-ID` values.
 - Settings > General stores task defaults in `CrmSettings.taskDefaults` for
@@ -1218,13 +1222,19 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   thread link or unambiguous open-sale match exists, and leaves ambiguous mail
   in the central inbox. CRM-originated Gmail sends persist an exact
   Gmail-thread-to-sale link so replies return to the correct sale. Gmail
-  attachment references are copied into R2-backed `FileAsset` rows when storage
-  is configured. Exact duplicate Gmail images, including repeated signature
-  and footer artwork, reuse one SHA-256-addressed R2 object and shared
-  `FileAsset`; other attachment types remain message-owned. The audit-first
-  `maintenance:gmail-image-dedupe` command hashes existing R2 image bytes and
-  previews reclaimable copies; only the explicit `:apply` command relinks and
-  deletes verified duplicates. Inbox users can assign or move a complete Gmail
+  attachment references remain provider-hosted unless a user explicitly
+  chooses **Save to CRM**. Exact duplicate saved Gmail images, including
+  repeated signature and footer artwork, reuse one SHA-256-addressed R2 object
+  and shared `FileAsset`; other saved attachment types remain message-owned.
+  The audit-first `maintenance:gmail-image-dedupe` command hashes existing R2
+  image bytes and previews reclaimable copies; only the explicit `:apply`
+  command relinks and deletes verified duplicates. The separate dry-run
+  `maintenance:gmail-r2-cleanup` command identifies legacy automatically
+  archived Gmail files whose provider copies remain available. Its explicit
+  `:apply` variant verifies Gmail bytes again and removes at most 100 R2 files
+  per run by default. Deliberate saves, files referenced by another CRM
+  workflow, inline-only MIME data and disconnected/unavailable mailbox files
+  are retained. Inbox users can assign or move a complete Gmail
   thread to an
   accessible sale; the CRM moves its email/timeline records and archived
   attachments together, stores a durable manual route for later replies, and
