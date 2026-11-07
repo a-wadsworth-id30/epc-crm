@@ -1315,6 +1315,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   the server, sent with a plain-text fallback, and Gmail uses
   `multipart/alternative`; the plain representation remains available for CRM
   summaries, timelines and AI context.
+- Unsent Inbox, Sales and Contact email replies autosave locally per logged-in
+  user and Gmail message, restore after navigation or refresh, and retain rich
+  formatting plus From, To and Subject values. Drafts expire after 14 days and
+  are cleared only on a successful send or explicit discard.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

@@ -55,6 +55,7 @@ type ContactSummaryMethod = {
 
 export type ContactConversationWorkspaceProps = {
   communications: SaleConversationItem[];
+  currentUserId: string;
   communicationsCount?: number;
   contactId: string;
   contactName: string;
@@ -411,6 +412,7 @@ function ConversationThreadSkeleton() {
 export default function ContactConversationWorkspace({
   communications,
   communicationsCount,
+  currentUserId,
   contactId,
   contactName,
   closedLeadCount,
@@ -791,6 +793,7 @@ export default function ContactConversationWorkspace({
                 {activeTab === "conversation" ? (
                   <SaleConversationThread
                     communications={communications}
+                    currentUserId={currentUserId}
                     title="Customer conversation"
                     description="Calls, SMS, email and website activity across every linked lead."
                     embedded

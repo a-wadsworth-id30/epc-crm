@@ -7,6 +7,7 @@ type RichEmailComposerProps = {
   autoFocus?: boolean;
   className?: string;
   disabled?: boolean;
+  htmlValue?: string;
   id: string;
   onChange: (text: string, html: string) => void;
   placeholder?: string;
@@ -28,10 +29,42 @@ function plainTextHtml(value: string) {
     .join("");
 }
 
+function safeEditorHtml(value: string) {
+  const template = document.createElement("template");
+  template.innerHTML = value;
+  const allowedTags = new Set([
+    "A", "B", "BLOCKQUOTE", "BR", "DIV", "EM", "I", "LI", "OL", "P",
+    "SPAN", "STRONG", "U", "UL",
+  ]);
+
+  for (const element of Array.from(template.content.querySelectorAll("*"))) {
+    if (!allowedTags.has(element.tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      continue;
+    }
+
+    for (const attribute of Array.from(element.attributes)) {
+      if (element.tagName !== "A" || !["href", "title"].includes(attribute.name)) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+
+    if (element.tagName === "A") {
+      const href = element.getAttribute("href") ?? "";
+      if (!/^(?:https?:|mailto:)/i.test(href)) element.removeAttribute("href");
+      element.setAttribute("rel", "noopener noreferrer");
+      element.setAttribute("target", "_blank");
+    }
+  }
+
+  return template.innerHTML;
+}
+
 export default function RichEmailComposer({
   autoFocus = false,
   className = "",
   disabled = false,
+  htmlValue = "",
   id,
   onChange,
   placeholder = "Write your reply...",
@@ -54,9 +87,11 @@ export default function RichEmailComposer({
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || editor.innerText.replace(/\u00a0/g, " ") === value) return;
-    editor.innerHTML = plainTextHtml(value);
-  }, [value]);
+    if (!editor) return;
+    const nextHtml = htmlValue ? safeEditorHtml(htmlValue) : plainTextHtml(value);
+    if (editor.innerHTML === nextHtml) return;
+    editor.innerHTML = nextHtml;
+  }, [htmlValue, value]);
 
   useEffect(() => {
     if (autoFocus && !disabled) editorRef.current?.focus();

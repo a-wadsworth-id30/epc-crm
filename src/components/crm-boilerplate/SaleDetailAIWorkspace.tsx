@@ -105,6 +105,7 @@ type SalesLeadAIResult = {
 };
 
 type SaleDetailAIWorkspaceProps = {
+  currentUserId: string;
   initialResult?: SalesLeadAIResult | null;
   saleId: string;
   sale: {
@@ -1479,6 +1480,7 @@ function SalesAIReplyFloat({
 }
 
 export default function SaleDetailAIWorkspace({
+  currentUserId,
   initialResult,
   saleId,
   sale,
@@ -2012,6 +2014,7 @@ export default function SaleDetailAIWorkspace({
                 {activeTab === "conversation" ? (
                   <SaleConversationThread
                     communications={communications}
+                    currentUserId={currentUserId}
                     embedded
                     onReply={(channel = "email") => {
                       setSelectedChannel(channel);
