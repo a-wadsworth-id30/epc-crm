@@ -402,6 +402,12 @@ the authored HTML. The server sanitises the HTML against a narrow outbound
 allow-list, MailerSend receives both representations and Gmail sends a proper
 `multipart/alternative` MIME message. The plain body remains the timeline and
 AI representation, while the sanitised HTML is stored on Gmail email records.
+Unsent replies are autosaved in browser storage after a short debounce and are
+scoped by the authenticated user ID plus Gmail message ID. Inbox, Sales and
+Contact conversations restore the same body, formatting, mailbox, recipient and
+subject after navigation or refresh. Drafts expire after 14 days and are removed
+only after a successful send or the user's explicit **Discard draft** action.
+The editor sanitises restored HTML before adding it back to the DOM.
 The outbound write and Gmail sync share `gmail:<mailboxId>:<messageId>` as the
 provider identity. The outbound transaction upserts that identity before it
 creates a sale communication and reuses an already-linked communication when

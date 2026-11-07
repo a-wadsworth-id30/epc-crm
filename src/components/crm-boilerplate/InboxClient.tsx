@@ -18,6 +18,7 @@ import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailR
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import EmailContent from "@/components/crm-boilerplate/EmailContent";
 import RichEmailComposer from "@/components/crm-boilerplate/RichEmailComposer";
+import useEmailReplyDraft from "@/components/crm-boilerplate/useEmailReplyDraft";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -266,6 +267,25 @@ export default function InboxClient({
   );
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const replyDraft = useEmailReplyDraft({
+    fields: {
+      body: replyBody,
+      htmlBody: replyHtml,
+      mailboxId: replyMailboxId,
+      recipient: replyRecipient,
+      subject: replySubject,
+    },
+    messageId: selectedMessage?.id,
+    onRestore: (draft) => {
+      setReplyBody(draft.body);
+      setReplyHtml(draft.htmlBody);
+      setReplyMailboxId(draft.mailboxId);
+      setReplyRecipient(draft.recipient);
+      setReplySubject(draft.subject);
+    },
+    open: replyOpen,
+    ownerId: currentUserId,
+  });
 
   useEffect(() => {
     setWorkflowAssigneeId(selectedMessage?.assignedUser?.id ?? "");
@@ -320,6 +340,7 @@ export default function InboxClient({
   }, [detailError, selectedDetail, selectedId]);
 
   function selectMessage(messageId: string) {
+    replyDraft.saveNow();
     setAssignmentOpen(false);
     setReplyOpen(false);
     setReplyBody("");
@@ -340,6 +361,8 @@ export default function InboxClient({
     if (!canReplyToSelectedEmail || !selectedMessage?.opportunity) return;
 
     setReplyError(null);
+    setReplyBody("");
+    setReplyHtml("");
     setReplyMailboxId(
       sendMailboxes.some(
         (mailbox) => mailbox.id === selectedMessage.mailboxId,
@@ -419,6 +442,7 @@ export default function InboxClient({
         setReplyMailboxId("");
         setReplySubject("");
         setReplyOpen(false);
+        replyDraft.discard();
         showToast(result.message);
         router.refresh();
       } catch {
@@ -1091,6 +1115,7 @@ export default function InboxClient({
                           className="mt-2 disabled:opacity-60"
                           disabled={isReplying}
                           id={`inbox-reply-${selectedMessage.id}`}
+                          htmlValue={replyHtml}
                           placeholder="Write your reply..."
                           value={replyBody}
                           onChange={(text, html) => {
@@ -1104,19 +1129,42 @@ export default function InboxClient({
                             {replyError}
                           </p>
                         ) : null}
-                        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <span className="mr-auto text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+                            {replyDraft.status === "restored"
+                              ? "Draft restored"
+                              : replyDraft.status === "saving"
+                                ? "Saving draft..."
+                                : replyDraft.status === "saved"
+                                  ? "Draft saved"
+                                  : null}
+                          </span>
+                          {replyBody.trim() ? (
+                            <button
+                              className="inline-flex h-10 items-center px-2 text-sm font-semibold text-error-600 hover:text-error-700 disabled:opacity-50 dark:text-error-400"
+                              disabled={isReplying}
+                              type="button"
+                              onClick={() => {
+                                replyDraft.discard();
+                                setReplyBody("");
+                                setReplyHtml("");
+                                setReplyError(null);
+                              }}
+                            >
+                              Discard draft
+                            </button>
+                          ) : null}
                           <button
                             className="inline-flex h-10 items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
                             disabled={isReplying}
                             type="button"
                             onClick={() => {
+                              replyDraft.saveNow();
                               setReplyOpen(false);
-                              setReplyBody("");
-                              setReplyHtml("");
                               setReplyError(null);
                             }}
                           >
-                            Cancel
+                            Close
                           </button>
                           <button
                             className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"

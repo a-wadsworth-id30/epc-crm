@@ -2595,6 +2595,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       ) : null}
 
       <SaleDetailAIWorkspace
+        currentUserId={user.id}
         initialResult={initialSalesLeadGuidance}
         saleId={sale.id}
         sale={{

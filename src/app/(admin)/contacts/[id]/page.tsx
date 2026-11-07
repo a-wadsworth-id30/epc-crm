@@ -1229,6 +1229,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         communicationsCount={conversationItems.length}
         contactId={contact.id}
         contactName={name}
+        currentUserId={user.id}
         documentCount={recordDocuments.length}
         documentPanel={contactDocumentsPanel}
         leadsPanel={contactLeadsPanel}

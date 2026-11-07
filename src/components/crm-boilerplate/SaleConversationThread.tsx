@@ -35,6 +35,7 @@ import LockedEmailRecipientField from "@/components/crm-boilerplate/LockedEmailR
 import EmailMailboxSenderField from "@/components/crm-boilerplate/EmailMailboxSenderField";
 import EmailContent from "@/components/crm-boilerplate/EmailContent";
 import RichEmailComposer from "@/components/crm-boilerplate/RichEmailComposer";
+import useEmailReplyDraft from "@/components/crm-boilerplate/useEmailReplyDraft";
 import { replyToInboxMessage } from "@/lib/actions/inbox";
 import { visibleEmailAttachments } from "@/lib/email/attachment-display";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
@@ -58,6 +59,7 @@ export type { SaleConversationItem } from "@/lib/sales/conversation-types";
 
 export type SaleConversationThreadProps = {
   communications: SaleConversationItem[];
+  currentUserId: string;
   description?: string;
   embedded?: boolean;
   emptyLabel?: string;
@@ -493,6 +495,7 @@ function replyLabel(communication: SaleConversationItem) {
 
 export default function SaleConversationThread({
   communications,
+  currentUserId,
   description = "Calls, SMS, email and notes in one lead timeline.",
   embedded = false,
   emptyLabel = "No conversation yet. Calls, SMS and email will appear here.",
@@ -517,6 +520,7 @@ export default function SaleConversationThread({
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyMessageId, setReplyMessageId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [replyHtml, setReplyHtml] = useState("");
   const [replyMailboxId, setReplyMailboxId] = useState("");
@@ -529,9 +533,32 @@ export default function SaleConversationThread({
     null,
   );
   const [isGmailReplying, startGmailReplyTransition] = useTransition();
+  const replyDraft = useEmailReplyDraft({
+    fields: {
+      body: replyBody,
+      htmlBody: replyHtml,
+      mailboxId: replyMailboxId,
+      recipient: replyRecipient,
+      subject: replySubject,
+    },
+    messageId: replyMessageId,
+    onRestore: (draft) => {
+      setReplyBody(draft.body);
+      setReplyHtml(draft.htmlBody);
+      setReplyMailboxId(draft.mailboxId);
+      setReplyRecipient(draft.recipient);
+      setReplySubject(draft.subject);
+    },
+    open: Boolean(replyingToId),
+    ownerId: currentUserId,
+  });
 
   function openEmailReply(communication: SaleConversationItem) {
+    replyDraft.saveNow();
     setReplyingToId(communication.id);
+    setReplyMessageId(communication.emailReply?.emailMessageId ?? null);
+    setReplyBody("");
+    setReplyHtml("");
     setReplyMailboxId(
       sendMailboxes.some(
         (mailbox) => mailbox.id === communication.emailReply?.mailboxId,
@@ -543,7 +570,6 @@ export default function SaleConversationThread({
     setReplySubject(communication.emailReply?.subject ?? "");
     setReplyError(null);
     setReplySuccess(null);
-    setReplyHtml("");
   }
 
   async function draftEmailReplyWithAI(communication: SaleConversationItem) {
@@ -623,6 +649,9 @@ export default function SaleConversationThread({
         setReplyMailboxId("");
         setReplyRecipient("");
         setReplySubject("");
+        setReplyMessageId(null);
+        setReplyingToId(null);
+        replyDraft.discard();
         setReplySuccess(result.message);
         router.refresh();
       } catch {
@@ -1281,11 +1310,10 @@ export default function SaleConversationThread({
                                 type="button"
                                 onClick={() => {
                                   if (replyingToId === communication.id) {
+                                    replyDraft.saveNow();
                                     setReplyingToId(null);
                                     return;
                                   }
-                                  setReplyBody("");
-                                  setReplyHtml("");
                                   openEmailReply(communication);
                                 }}
                                 className={conversationEmailReplyButtonClass}
@@ -1438,6 +1466,7 @@ export default function SaleConversationThread({
                               className="mt-2 disabled:opacity-60"
                               disabled={isGmailReplying}
                               id={`sale-gmail-reply-${communication.id}`}
+                              htmlValue={replyHtml}
                               placeholder="Write your reply..."
                               value={replyBody}
                               onChange={(text, html) => {
@@ -1457,23 +1486,44 @@ export default function SaleConversationThread({
                                 {replySuccess}
                               </p>
                             ) : null}
-                            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                            <div className="mt-4 flex flex-wrap items-center gap-2">
+                              <span className="mr-auto text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+                                {replyDraft.status === "restored"
+                                  ? "Draft restored"
+                                  : replyDraft.status === "saving"
+                                    ? "Saving draft..."
+                                    : replyDraft.status === "saved"
+                                      ? "Draft saved"
+                                      : null}
+                              </span>
+                              {replyBody.trim() ? (
+                                <button
+                                  className="inline-flex h-10 items-center px-2 text-sm font-semibold text-error-600 hover:text-error-700 disabled:opacity-50 dark:text-error-400"
+                                  disabled={isGmailReplying}
+                                  type="button"
+                                  onClick={() => {
+                                    replyDraft.discard();
+                                    setReplyBody("");
+                                    setReplyHtml("");
+                                    setReplyError(null);
+                                    setReplySuccess(null);
+                                  }}
+                                >
+                                  Discard draft
+                                </button>
+                              ) : null}
                               <button
                                 className="inline-flex h-10 items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
                                 disabled={isGmailReplying}
                                 type="button"
                                 onClick={() => {
+                                  replyDraft.saveNow();
                                   setReplyingToId(null);
-                                  setReplyBody("");
-                                  setReplyHtml("");
-                                  setReplyMailboxId("");
-                                  setReplyRecipient("");
-                                  setReplySubject("");
                                   setReplyError(null);
                                   setReplySuccess(null);
                                 }}
                               >
-                                Cancel
+                                Close
                               </button>
                               <button
                                 className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
