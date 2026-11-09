@@ -327,7 +327,14 @@ export default async function IntegrationSettingsPage({
 
   if (provider === gmailProvider) {
     const authRuntime = await getId30AuthRuntimeConfig();
-    const [mailboxes, users, readiness, syncOperations, watchOperations] = await Promise.all([
+    const [
+      mailboxes,
+      users,
+      readiness,
+      authDiagnostics,
+      syncOperations,
+      watchOperations,
+    ] = await Promise.all([
       prisma.emailMailbox.findMany({
         where: { provider: gmailProvider },
         orderBy: [{ status: "asc" }, { emailAddress: "asc" }],
@@ -365,6 +372,11 @@ export default async function IntegrationSettingsPage({
       authRuntime
         ? fetchMarketingAuthBrokerProviderReadiness()
         : Promise.resolve(null),
+      authRuntime
+        ? fetchMarketingAuthBrokerProviderDiagnostics({
+            provider: gmailProvider,
+          })
+        : Promise.resolve(null),
       prisma.backgroundJobRun
         .findMany({
           where: { jobName: gmailSyncJobName },
@@ -386,7 +398,10 @@ export default async function IntegrationSettingsPage({
         .then((runs) => ({ available: true as const, runs }))
         .catch((error: unknown) => {
           if (!isBackgroundJobSchemaPending(error)) {
-            console.error("Gmail sync operation history could not be loaded.", error);
+            console.error(
+              "Gmail sync operation history could not be loaded.",
+              error,
+            );
           }
           return { available: false as const, runs: [] };
         }),
@@ -411,17 +426,42 @@ export default async function IntegrationSettingsPage({
         .then((runs) => ({ available: true as const, runs }))
         .catch((error: unknown) => {
           if (!isBackgroundJobSchemaPending(error)) {
-            console.error("Gmail watch operation history could not be loaded.", error);
+            console.error(
+              "Gmail watch operation history could not be loaded.",
+              error,
+            );
           }
           return { available: false as const, runs: [] };
         }),
     ]);
-    const gmailReadiness =
-      readiness?.ok
-        ? readiness.providers.find((item) => item.slug === gmailProvider)
-        : null;
+    const gmailReadiness = readiness?.ok
+      ? readiness.providers.find((item) => item.slug === gmailProvider)
+      : null;
     const providerReady = Boolean(gmailReadiness?.ready);
     const pushEnabled = booleanEnv(process.env.GMAIL_PUSH_ENABLED);
+    const authPushReadiness = authDiagnostics?.ok
+      ? authDiagnostics.gmailPush
+      : null;
+    const authPushReady = Boolean(authPushReadiness?.ready);
+    const authPushMessage = !authRuntime
+      ? "Connect iD30 Auth before configuring Gmail push delivery."
+      : !authDiagnostics
+        ? "Gmail push readiness has not been loaded from iD30 Auth."
+        : !authDiagnostics.ok
+          ? authDiagnostics.message
+          : !authPushReadiness
+            ? "This iD30 Auth deployment does not report Gmail push readiness yet."
+            : authPushReadiness.ready
+              ? "iD30 Auth topic, subscription, audience and service-account checks pass."
+              : `iD30 Auth needs ${
+                  [
+                    ...authPushReadiness.missingEnv,
+                    ...authPushReadiness.invalidEnv,
+                  ].join(", ") || "Gmail Pub/Sub configuration"
+                }.`;
+    const eligibleMailboxCount = mailboxes.filter(
+      (mailbox) => mailbox.status === "CONNECTED" && mailbox.syncEnabled,
+    ).length;
     const providerMessage = !authRuntime
       ? "Connect iD30 Auth before adding Gmail mailboxes."
       : providerReady
@@ -477,6 +517,9 @@ export default async function IntegrationSettingsPage({
         <div className="mt-6">
           <GmailWatchOperationsPanel
             available={watchOperations.available}
+            authPushMessage={authPushMessage}
+            authPushReady={authPushReady}
+            eligibleMailboxCount={eligibleMailboxCount}
             pushEnabled={pushEnabled}
             runs={watchOperations.runs}
             secretConfigured={Boolean(
