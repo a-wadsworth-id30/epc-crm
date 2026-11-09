@@ -10,6 +10,7 @@ import {
   findGmailMailboxForSend,
   sendGmailEmail,
 } from "@/lib/integrations/gmail-send";
+import { GmailSendError } from "@/lib/integrations/gmail-send-operation";
 import { reconciledGmailSendMetadata } from "@/lib/integrations/gmail-message-identity";
 import { sanitizeOutboundEmailHtml } from "@/lib/email/outbound-html";
 import {
@@ -123,6 +124,12 @@ async function recordGmailSendFailure({
     provider: "gmail",
     sendState: "failed",
     source,
+    ...(error instanceof GmailSendError
+      ? {
+          internetMessageId: error.internetMessageId,
+          operationId: error.operationId,
+        }
+      : {}),
   };
 
   const communication = await prisma.$transaction(async (tx) => {
@@ -530,6 +537,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
           gmailMessageId: gmailResult.providerMessageId,
           gmailThreadId: gmailResult.providerThreadId,
           mailboxId: gmailResult.mailboxId,
+          operationId: gmailResult.operationId,
           source: input.source,
         }),
         opportunityId: opportunity.id,
@@ -563,6 +571,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
       gmailMessageId: gmailResult.providerMessageId,
       gmailThreadId: gmailResult.providerThreadId,
       mailboxId: gmailResult.mailboxId,
+      operationId: gmailResult.operationId,
       source: input.source,
     });
     const created = existingCommunication
@@ -586,6 +595,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
           gmailMessageId: gmailResult.providerMessageId,
           gmailThreadId: gmailResult.providerThreadId,
           mailboxId: gmailResult.mailboxId,
+          operationId: gmailResult.operationId,
           source: input.source,
         }),
         salesCommunicationId: created.id,

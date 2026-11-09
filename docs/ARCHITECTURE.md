@@ -353,6 +353,12 @@ disconnected and reauthorisation states. Actionable connection failures reuse
 the existing iD30 Auth connection flow, while credentials and provider tokens
 remain outside the browser and CRM database.
 
+Each CRM Gmail send creates one operation ID shared by its RFC `Message-ID` and
+all broker attempts. Auth persists that operation fingerprint and accepted
+provider result, allowing CRM to retry one transient 503 safely without sending
+a duplicate. The operation ID is retained in message metadata for support and
+reconciliation without storing a second copy of the email body.
+
 Initial sync reads bounded pages from the most recent year, then switches to a
 Gmail history cursor. Imported messages are idempotent, become central
 `EmailMessage` rows and are attached to a sale conversation when an existing
