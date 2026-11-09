@@ -378,6 +378,7 @@ export default async function IntegrationSettingsPage({
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <GmailIntegrationForm
             authConfigured={Boolean(authRuntime)}
+            healthNow={new Date().toISOString()}
             mailboxes={mailboxes.map((mailbox) => ({
               ...mailbox,
               lastSyncAt: mailbox.lastSyncAt?.toISOString() ?? null,

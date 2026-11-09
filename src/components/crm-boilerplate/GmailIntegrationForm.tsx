@@ -10,6 +10,10 @@ import {
   gmailMailboxTeamPurposeOptions,
   type GmailMailboxPurpose,
 } from "@/lib/integrations/gmail-mailbox-purpose";
+import {
+  gmailMailboxHealth,
+  type GmailMailboxHealthState,
+} from "@/lib/integrations/gmail-mailbox-health";
 
 type GmailMailboxRow = {
   id: string;
@@ -34,19 +38,56 @@ type UserOption = {
 
 const initialState = { ok: false, message: "", savedAt: null };
 
+function formatMailboxSyncTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/London",
+  }).format(new Date(value));
+}
+
+function healthTone(state: GmailMailboxHealthState) {
+  if (state === "healthy") {
+    return "border-success-200 bg-success-50 text-success-700 dark:border-success-900/50 dark:bg-success-500/10 dark:text-success-300";
+  }
+  if (state === "attention") {
+    return "border-error-200 bg-error-50 text-error-700 dark:border-error-900/50 dark:bg-error-500/10 dark:text-error-300";
+  }
+  if (state === "delayed" || state === "warning") {
+    return "border-warning-200 bg-warning-50 text-warning-700 dark:border-warning-900/50 dark:bg-warning-500/10 dark:text-warning-300";
+  }
+  return "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-white/[0.04] dark:text-gray-300";
+}
+
 export default function GmailIntegrationForm({
   authConfigured,
+  healthNow,
   mailboxes,
   providerReady,
   providerMessage,
   users,
 }: {
   authConfigured: boolean;
+  healthNow: string;
   mailboxes: GmailMailboxRow[];
   providerReady: boolean;
   providerMessage: string;
   users: UserOption[];
 }) {
+  const healthReference = new Date(healthNow);
+  const mailboxHealth = mailboxes.map((mailbox) =>
+    gmailMailboxHealth(mailbox, healthReference),
+  );
+  const healthyCount = mailboxHealth.filter(
+    (health) => health.state === "healthy",
+  ).length;
+  const attentionCount = mailboxHealth.filter((health) =>
+    ["attention", "delayed", "warning"].includes(health.state),
+  ).length;
+  const inactiveCount = mailboxHealth.filter((health) =>
+    ["paused", "pending"].includes(health.state),
+  ).length;
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.03]">
@@ -77,9 +118,48 @@ export default function GmailIntegrationForm({
       </div>
 
       {mailboxes.length ? (
+        <section
+          aria-label="Gmail mailbox health summary"
+          className="grid gap-3 sm:grid-cols-3"
+        >
+          <div className="rounded-xl border border-success-200 bg-success-50 p-4 dark:border-success-900/50 dark:bg-success-500/10">
+            <p className="text-2xl font-semibold text-success-700 dark:text-success-300">
+              {healthyCount}
+            </p>
+            <p className="mt-1 text-sm font-medium text-success-700 dark:text-success-300">
+              Healthy
+            </p>
+          </div>
+          <div className="rounded-xl border border-warning-200 bg-warning-50 p-4 dark:border-warning-900/50 dark:bg-warning-500/10">
+            <p className="text-2xl font-semibold text-warning-700 dark:text-warning-300">
+              {attentionCount}
+            </p>
+            <p className="mt-1 text-sm font-medium text-warning-700 dark:text-warning-300">
+              Need attention
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-white/[0.04]">
+            <p className="text-2xl font-semibold text-gray-700 dark:text-gray-200">
+              {inactiveCount}
+            </p>
+            <p className="mt-1 text-sm font-medium text-gray-600 dark:text-gray-300">
+              Paused or pending
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {mailboxes.length ? (
         <div className="space-y-4">
           {mailboxes.map((mailbox) => (
-            <MailboxCard key={mailbox.id} mailbox={mailbox} users={users} />
+            <MailboxCard
+              key={mailbox.id}
+              authConfigured={authConfigured}
+              healthNow={healthNow}
+              mailbox={mailbox}
+              providerReady={providerReady}
+              users={users}
+            />
           ))}
         </div>
       ) : (
@@ -96,7 +176,19 @@ export default function GmailIntegrationForm({
   );
 }
 
-function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: UserOption[] }) {
+function MailboxCard({
+  authConfigured,
+  healthNow,
+  mailbox,
+  providerReady,
+  users,
+}: {
+  authConfigured: boolean;
+  healthNow: string;
+  mailbox: GmailMailboxRow;
+  providerReady: boolean;
+  users: UserOption[];
+}) {
   const [saveState, saveAction, saving] = useActionState(
     updateGmailMailboxAction,
     initialState,
@@ -110,6 +202,7 @@ function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: User
     initialState,
   );
   const connected = mailbox.status === "CONNECTED";
+  const health = gmailMailboxHealth(mailbox, new Date(healthNow));
   const [ownerUserId, setOwnerUserId] = useState(mailbox.ownerUserId ?? "");
   const [purpose, setPurpose] = useState<GmailMailboxPurpose>(mailbox.purpose);
   const ownerCanUsePersonalMailbox = Boolean(
@@ -125,13 +218,56 @@ function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: User
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">{mailbox.emailAddress}</p>
         </div>
-        <span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${
-          connected
-            ? "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-400"
-            : "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400"
-        }`}>
-          {mailbox.status.replaceAll("_", " ").toLowerCase()}
+        <span className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${healthTone(health.state)}`}>
+          {health.label}
         </span>
+      </div>
+
+      <div
+        className={`mb-4 rounded-lg border px-4 py-3 ${healthTone(health.state)}`}
+        role={health.state === "attention" ? "alert" : undefined}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">{health.label}</p>
+            <p className="mt-1 text-sm leading-6">{health.detail}</p>
+          </div>
+          {health.canReconnect ? (
+            <a
+              href="/api/integrations/gmail/connect"
+              aria-disabled={!authConfigured || !providerReady}
+              className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg px-3 text-sm font-semibold ${
+                authConfigured && providerReady
+                  ? "bg-white text-gray-800 shadow-theme-xs ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:ring-gray-700 dark:hover:bg-gray-800"
+                  : "pointer-events-none bg-gray-200 text-gray-400 dark:bg-gray-800"
+              }`}
+            >
+              Reconnect Gmail
+            </a>
+          ) : null}
+        </div>
+        <dl className="mt-3 grid gap-2 border-t border-current/15 pt-3 text-xs sm:grid-cols-3">
+          <div>
+            <dt className="font-medium opacity-70">Last successful sync</dt>
+            <dd className="mt-0.5 font-semibold">
+              {mailbox.lastSyncAt
+                ? formatMailboxSyncTime(mailbox.lastSyncAt)
+                : "Not yet synced"}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium opacity-70">Email import</dt>
+            <dd className="mt-0.5 font-semibold">
+              {mailbox.syncEnabled ? "Enabled" : "Paused"}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium opacity-70">CRM sending</dt>
+            <dd className="mt-0.5 font-semibold">
+              {mailbox.sendEnabled && connected ? "Enabled" : "Unavailable"}
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <form action={saveAction} className="grid gap-4 md:grid-cols-2">
@@ -236,9 +372,6 @@ function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: User
               {saveState.message}
             </span>
           ) : null}
-          {mailbox.lastSyncAt ? (
-            <span className="text-xs text-gray-500">Last sync: {new Date(mailbox.lastSyncAt).toLocaleString()}</span>
-          ) : null}
         </div>
       </form>
 
@@ -276,7 +409,6 @@ function MailboxCard({ mailbox, users }: { mailbox: GmailMailboxRow; users: User
           </form>
         </div>
       ) : null}
-      {mailbox.lastError ? <p className="mt-3 text-xs text-error-600">{mailbox.lastError}</p> : null}
     </article>
   );
 }
