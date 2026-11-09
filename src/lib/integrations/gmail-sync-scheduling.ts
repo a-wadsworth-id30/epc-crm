@@ -1,3 +1,5 @@
+import { gmailSyncRetryState } from "@/lib/integrations/gmail-sync-retry-policy";
+
 type GmailSyncMailboxCandidate = {
   id: string;
   lastHistoryId: string | null;
@@ -37,4 +39,18 @@ export function prioritizeGmailSyncMailboxes<
 
     return left.id.localeCompare(right.id);
   });
+}
+
+export function scheduledGmailSyncCandidates<
+  T extends GmailSyncMailboxCandidate,
+>(mailboxes: T[], now = new Date()) {
+  const prioritized = prioritizeGmailSyncMailboxes(mailboxes);
+  const eligible = prioritized.filter(
+    (mailbox) => !gmailSyncRetryState(mailbox.metadata, now).coolingDown,
+  );
+
+  return {
+    coolingDown: prioritized.length - eligible.length,
+    eligible,
+  };
 }

@@ -94,6 +94,7 @@ import {
 } from "@/lib/marketing/oauth";
 import { gmailProvider } from "@/lib/integrations/gmail";
 import { gmailSyncJobName } from "@/lib/integrations/gmail-sync-operations";
+import { gmailSyncRetryState } from "@/lib/integrations/gmail-sync-retry-policy";
 import { prisma } from "@/lib/prisma";
 import {
   hasStoredOpenAICredentials,
@@ -334,6 +335,7 @@ export default async function IntegrationSettingsPage({
           emailAddress: true,
           lastError: true,
           lastSyncAt: true,
+          metadata: true,
           ownerUserId: true,
           purpose: true,
           sendEnabled: true,
@@ -409,8 +411,10 @@ export default async function IntegrationSettingsPage({
           <GmailIntegrationForm
             authConfigured={Boolean(authRuntime)}
             healthNow={new Date().toISOString()}
-            mailboxes={mailboxes.map((mailbox) => ({
+            mailboxes={mailboxes.map(({ metadata, ...mailbox }) => ({
               ...mailbox,
+              automaticRetryAt:
+                gmailSyncRetryState(metadata).retryAfter?.toISOString() ?? null,
               lastSyncAt: mailbox.lastSyncAt?.toISOString() ?? null,
               sendUserIds: mailbox.userAccess.map((access) => access.userId),
             }))}

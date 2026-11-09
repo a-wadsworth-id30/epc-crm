@@ -12,6 +12,7 @@ import {
   isLegacyGmailMailboxPurpose,
 } from "@/lib/integrations/gmail-mailbox-purpose";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
+import { recordGmailSyncFailure } from "@/lib/integrations/gmail-sync-retry";
 import {
   gmailSyncJobName,
   gmailSyncJobType,
@@ -238,6 +239,7 @@ export async function syncGmailMailboxAction(
       `Read ${result.read} message${result.read === 1 ? "" : "s"}; created ${result.created}, updated ${result.updated}${result.archivedAttachments ? `, retained ${result.archivedAttachments} inline attachment${result.archivedAttachments === 1 ? "" : "s"}` : ""}${result.hasMore ? ". More history remains for the next sync" : ""}.`,
     );
   } catch (error) {
+    await recordGmailSyncFailure(parsed.data, error);
     await failBackgroundJobRun(jobRun, {
       error,
       message: "Manual Gmail mailbox sync failed.",

@@ -21,6 +21,7 @@ import {
   unambiguousContactId,
 } from "@/lib/integrations/gmail-contact-matching";
 import { gmailProviderMessageId as gmailMessageKey } from "@/lib/integrations/gmail-message-identity";
+import { clearGmailSyncRetryMetadata } from "@/lib/integrations/gmail-sync-retry-policy";
 import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
@@ -642,7 +643,7 @@ export async function syncGmailMailbox(
 
   const nextPageToken = parsed.data.result.nextPageToken;
   const nextMetadata = {
-    ...metadata,
+    ...clearGmailSyncRetryMetadata(metadata),
     initialSyncPageToken: mailbox.lastHistoryId ? null : nextPageToken,
     historySyncPageToken: mailbox.lastHistoryId ? nextPageToken : null,
   };

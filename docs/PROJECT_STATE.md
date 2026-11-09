@@ -1265,7 +1265,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `GMAIL_SYNC_SECRET` or `CRON_SECRET`. Scheduled runs prioritise pending Gmail
   continuation pages, then the least recently synced mailbox. The defaults
   process two mailboxes with up to 15 messages each inside a 20-second route
-  budget; bounded environment overrides can tune those caps. Scheduled and
+  budget; bounded environment overrides can tune those caps. Transient
+  failures now receive exponential scheduled retry delays from 5 minutes up to
+  1 hour, preventing one failing connected mailbox from consuming every batch;
+  manual admin sync remains an immediate override and successful sync clears
+  the delay. Scheduled and
   manual runs now record privacy-safe aggregate results in `BackgroundJobRun`,
   and Gmail settings displays scheduler readiness, recent throughput, failures
   and continuation backlog without storing mailbox identities or message
