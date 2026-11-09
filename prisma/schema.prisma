@@ -184,6 +184,12 @@ enum EmailMailboxPurpose {
   SHARED
 }
 
+enum GmailPushReceiptStatus {
+  PENDING
+  PROCESSED
+  IGNORED
+}
+
 enum VoiceRoutingMode {
   BROWSER
   MOBILE
@@ -1260,6 +1266,7 @@ model EmailMailbox {
   messages         EmailMessage[]
   threadLinks      EmailThreadLink[]
   userAccess       EmailMailboxAccess[]
+  pushReceipts     GmailPushReceipt[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -1268,6 +1275,21 @@ model EmailMailbox {
   @@index([ownerUserId])
   @@index([purpose])
   @@index([syncLeaseUntil])
+}
+
+model GmailPushReceipt {
+  id          String                 @id @default(cuid())
+  messageId   String                 @unique
+  mailboxId   String
+  mailbox     EmailMailbox           @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  historyId   String
+  status      GmailPushReceiptStatus @default(PENDING)
+  publishedAt DateTime?
+  receivedAt  DateTime               @default(now())
+  processedAt DateTime?
+
+  @@index([mailboxId, status, receivedAt])
+  @@index([status, receivedAt])
 }
 
 model EmailMailboxAccess {

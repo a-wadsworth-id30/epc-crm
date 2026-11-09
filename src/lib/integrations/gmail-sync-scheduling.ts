@@ -6,6 +6,7 @@ type GmailSyncMailboxCandidate = {
   lastHistoryId: string | null;
   lastSyncAt: Date | null;
   metadata: unknown;
+  pushPending?: boolean;
   syncLeaseUntil?: Date | null;
 };
 
@@ -34,6 +35,10 @@ export function prioritizeGmailSyncMailboxes<
       Number(gmailMailboxHasContinuation(right)) -
       Number(gmailMailboxHasContinuation(left));
     if (continuationDifference) return continuationDifference;
+
+    const pushDifference =
+      Number(Boolean(right.pushPending)) - Number(Boolean(left.pushPending));
+    if (pushDifference) return pushDifference;
 
     const leftTime = left.lastSyncAt?.getTime() ?? 0;
     const rightTime = right.lastSyncAt?.getTime() ?? 0;

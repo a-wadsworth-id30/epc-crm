@@ -2,18 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 import { decryptSecret } from "@/lib/crypto/secrets";
+import { id30AuthIdentifierSchema } from "@/lib/integrations/id30-auth-identifiers";
 import { prisma } from "@/lib/prisma";
 
-export const id30AuthProvider = "id30-auth";
+export { id30AuthIdentifierSchema } from "@/lib/integrations/id30-auth-identifiers";
 
-export const id30AuthIdentifierSchema = z
-  .string()
-  .trim()
-  .min(1, "Enter the exact iD30 Auth ID.")
-  .max(160, "iD30 Auth IDs must be 160 characters or fewer.")
-  .refine((value) => !value.includes("*"), {
-    message: "Use the exact ID from iD30 Auth. Wildcards are not valid.",
-  });
+export const id30AuthProvider = "id30-auth";
 
 export const id30AuthConfigSchema = z
   .object({
