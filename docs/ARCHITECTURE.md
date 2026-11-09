@@ -402,6 +402,13 @@ state, and Gmail settings shows the next automatic retry time when one is
 pending. This uses the existing `EmailMailbox.metadata` JSON and requires no
 schema migration.
 
+Every Gmail sync acquires an atomic per-mailbox database lease before calling
+the provider. Scheduled and manual invocations therefore cannot import the
+same mailbox concurrently, while unrelated mailboxes continue normally. An
+active lease is reported as deferred rather than failed and does not increase
+the retry backoff. Leases expire after five minutes so a terminated serverless
+invocation cannot leave a mailbox permanently locked.
+
 Scheduled batches and admin-triggered manual syncs write a privacy-safe
 `BackgroundJobRun` record under `gmail-mailbox-sync`. The summary contains only
 aggregate mailbox, message, CRM-write, failure, deferred and continuation-page

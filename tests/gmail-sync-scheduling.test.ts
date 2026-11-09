@@ -92,7 +92,54 @@ describe("Gmail sync scheduling", () => {
     );
 
     assert.equal(result.coolingDown, 1);
+    assert.equal(result.leased, 0);
     assert.deepEqual(result.eligible.map((mailbox) => mailbox.id), ["ready"]);
+  });
+
+  it("defers actively leased mailboxes without blocking healthy candidates", () => {
+    const now = new Date("2026-11-09T10:00:00.000Z");
+    const result = scheduledGmailSyncCandidates(
+      [
+        {
+          id: "leased",
+          lastHistoryId: "history-1",
+          lastSyncAt: null,
+          metadata: {},
+          syncLeaseUntil: new Date("2026-11-09T10:05:00.000Z"),
+        },
+        {
+          id: "ready",
+          lastHistoryId: "history-2",
+          lastSyncAt: new Date("2026-11-09T09:55:00.000Z"),
+          metadata: {},
+          syncLeaseUntil: null,
+        },
+      ],
+      now,
+    );
+
+    assert.equal(result.coolingDown, 0);
+    assert.equal(result.leased, 1);
+    assert.deepEqual(result.eligible.map((mailbox) => mailbox.id), ["ready"]);
+  });
+
+  it("allows an expired mailbox lease to be scheduled", () => {
+    const now = new Date("2026-11-09T10:00:00.000Z");
+    const result = scheduledGmailSyncCandidates(
+      [
+        {
+          id: "expired",
+          lastHistoryId: "history-1",
+          lastSyncAt: null,
+          metadata: {},
+          syncLeaseUntil: new Date("2026-11-09T09:59:59.999Z"),
+        },
+      ],
+      now,
+    );
+
+    assert.equal(result.leased, 0);
+    assert.deepEqual(result.eligible.map((mailbox) => mailbox.id), ["expired"]);
   });
 
   it("increments retry metadata and clears it after a successful sync", () => {
