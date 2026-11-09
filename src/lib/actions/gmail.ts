@@ -11,6 +11,7 @@ import {
   gmailMailboxPurposeValues,
   isLegacyGmailMailboxPurpose,
 } from "@/lib/integrations/gmail-mailbox-purpose";
+import { gmailMailboxConfigurationChanges } from "@/lib/integrations/gmail-mailbox-audit";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
 import { recordGmailSyncFailure } from "@/lib/integrations/gmail-sync-retry";
 import {
@@ -49,7 +50,7 @@ export async function updateGmailMailboxAction(
   _previous: GmailMailboxActionState,
   formData: FormData,
 ): Promise<GmailMailboxActionState> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const parsed = mailboxSettingsSchema.safeParse({
     mailboxId: formData.get("mailboxId"),
     ownerUserId: formData.get("ownerUserId") || undefined,
@@ -97,7 +98,14 @@ export async function updateGmailMailboxAction(
 
   const mailbox = await prisma.emailMailbox.findUnique({
     where: { id: parsed.data.mailboxId },
-    select: { id: true, purpose: true },
+    select: {
+      id: true,
+      ownerUserId: true,
+      purpose: true,
+      sendEnabled: true,
+      syncEnabled: true,
+      userAccess: { select: { userId: true } },
+    },
   });
   if (!mailbox) return actionResult(false, "Gmail mailbox was not found.");
   if (
@@ -106,6 +114,29 @@ export async function updateGmailMailboxAction(
   ) {
     return actionResult(false, "Choose a current Phone System team purpose.");
   }
+
+  const nextAccessUserIds = [
+    ...new Set([
+      ...permittedUserIds,
+      ...(parsed.data.ownerUserId ? [parsed.data.ownerUserId] : []),
+    ]),
+  ];
+  const changes = gmailMailboxConfigurationChanges(
+    {
+      accessUserIds: mailbox.userAccess.map((access) => access.userId),
+      ownerUserId: mailbox.ownerUserId,
+      purpose: mailbox.purpose,
+      sendEnabled: mailbox.sendEnabled,
+      syncEnabled: mailbox.syncEnabled,
+    },
+    {
+      accessUserIds: nextAccessUserIds,
+      ownerUserId: parsed.data.ownerUserId ?? null,
+      purpose: parsed.data.purpose,
+      sendEnabled: parsed.data.sendEnabled,
+      syncEnabled: parsed.data.syncEnabled,
+    },
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.emailMailbox.update({
@@ -154,6 +185,19 @@ export async function updateGmailMailboxAction(
         },
       });
     }
+
+    const changedFields = Object.keys(changes);
+    if (changedFields.length) {
+      await tx.auditLog.create({
+        data: {
+          action: "gmail.mailbox.settings_updated",
+          actorId: user.id,
+          entity: "EmailMailbox",
+          entityId: mailbox.id,
+          metadata: { changedFields, changes },
+        },
+      });
+    }
   });
 
   await refreshGmailIntegrationSummary();
@@ -165,13 +209,20 @@ export async function disconnectGmailMailboxAction(
   _previous: GmailMailboxActionState,
   formData: FormData,
 ): Promise<GmailMailboxActionState> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const parsed = mailboxIdSchema.safeParse(formData.get("mailboxId"));
   if (!parsed.success) return actionResult(false, "Gmail mailbox was not found.");
 
   const mailbox = await prisma.emailMailbox.findUnique({
     where: { id: parsed.data },
-    select: { authConnectionId: true, emailAddress: true, id: true },
+    select: {
+      authConnectionId: true,
+      emailAddress: true,
+      id: true,
+      sendEnabled: true,
+      status: true,
+      syncEnabled: true,
+    },
   });
   if (!mailbox) return actionResult(false, "Gmail mailbox was not found.");
 
@@ -186,14 +237,32 @@ export async function disconnectGmailMailboxAction(
     return actionResult(false, `Gmail could not be disconnected. ${result.message}`);
   }
 
-  await prisma.emailMailbox.update({
-    where: { id: mailbox.id },
-    data: {
-      sendEnabled: false,
-      status: "DISCONNECTED",
-      syncEnabled: false,
-      lastError: null,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.emailMailbox.update({
+      where: { id: mailbox.id },
+      data: {
+        sendEnabled: false,
+        status: "DISCONNECTED",
+        syncEnabled: false,
+        lastError: null,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        action: "gmail.mailbox.disconnected",
+        actorId: user.id,
+        entity: "EmailMailbox",
+        entityId: mailbox.id,
+        metadata: {
+          previousSendEnabled: mailbox.sendEnabled,
+          previousStatus: mailbox.status,
+          previousSyncEnabled: mailbox.syncEnabled,
+          sendEnabled: false,
+          status: "DISCONNECTED",
+          syncEnabled: false,
+        },
+      },
+    });
   });
 
   await refreshGmailIntegrationSummary();
