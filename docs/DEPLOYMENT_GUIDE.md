@@ -351,6 +351,13 @@ privacy-safe `gmail-watch-renewal` background job with aggregate counts. The
 Gmail integration settings page shows recent renewal status and duration
 without recording mailbox identities, Gmail history IDs or message content.
 
+`netlify/functions/reconcile-gmail-connections.mjs` runs every 15 minutes and
+calls the protected `/api/maintenance/gmail-connections` route with the same
+Gmail/cron secret. It checks Auth connection state only; it does not reconnect
+mailboxes, alter OAuth credentials, or enable Gmail Pub/Sub. Confirmed state
+changes update CRM automatically, while transient Auth failures leave the
+current mailbox state intact.
+
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.
 It is disabled unless `MARKETING_UPLOAD_CRON_ENABLED=true` is set. When enabled,

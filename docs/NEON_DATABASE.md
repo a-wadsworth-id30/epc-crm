@@ -157,6 +157,12 @@ without scanning mailbox JSON metadata. Existing mailboxes start with no watch
 expiry and remain on the five-minute polling fallback until Gmail push is
 explicitly enabled and a watch is successfully registered.
 
+The migration `20261109161000_gmail_connection_reconciliation` adds
+`authStatusCheckedAt` and `authStatusLastError` to `EmailMailbox`, plus an index
+used to process the least recently checked mailboxes first. These fields contain
+only operational timing/error state; provider tokens and mailbox content remain
+in iD30 Auth and Gmail respectively.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run
