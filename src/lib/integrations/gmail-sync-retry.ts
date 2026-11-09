@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { gmailSyncFailureMetadata } from "@/lib/integrations/gmail-sync-retry-policy";
 import { prisma } from "@/lib/prisma";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 
 function jsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -32,6 +33,7 @@ export async function recordGmailSyncFailure(
         metadata: jsonValue(gmailSyncFailureMetadata(mailbox.metadata, now)),
       },
     });
+    revalidateHeaderNotifications();
   } catch (recordingError) {
     console.error("Gmail sync retry state could not be recorded.", recordingError);
   }

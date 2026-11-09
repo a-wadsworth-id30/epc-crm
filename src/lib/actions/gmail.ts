@@ -26,6 +26,7 @@ import {
   startBackgroundJobRun,
 } from "@/lib/maintenance/background-jobs";
 import { prisma } from "@/lib/prisma";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 
 type GmailMailboxActionState = {
   ok: boolean;
@@ -202,6 +203,7 @@ export async function updateGmailMailboxAction(
   });
 
   await refreshGmailIntegrationSummary();
+  revalidateHeaderNotifications();
   revalidatePath("/settings/integrations/gmail");
   return actionResult(true, "Gmail mailbox settings saved.");
 }
@@ -267,6 +269,7 @@ export async function disconnectGmailMailboxAction(
   });
 
   await refreshGmailIntegrationSummary();
+  revalidateHeaderNotifications();
   revalidatePath("/settings/integrations");
   revalidatePath("/settings/integrations/gmail");
   return actionResult(true, `${mailbox.emailAddress} disconnected. Existing CRM email history was retained.`);
