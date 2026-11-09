@@ -365,6 +365,11 @@ slot. CRM signs new requests with the new key but verifies Auth completion and
 Gmail push callbacks against either key until the overlap expires. No secret is
 included in audit logs or exposed to the browser.
 
+A ten-minute signed cross-system canary validates CRM request signing, Auth
+request verification, Auth callback signing and the CRM callback receiver in
+one non-destructive round trip. Results are stored in `BackgroundJobRun` under
+`id30-auth-cross-system-canary`, using only status and latency aggregates.
+
 Initial sync reads bounded pages from the most recent year, then switches to a
 Gmail history cursor. Imported messages are idempotent, become central
 `EmailMessage` rows and are attached to a sale conversation when an existing
