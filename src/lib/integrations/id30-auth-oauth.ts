@@ -150,8 +150,13 @@ export async function verifyId30AuthBrokerCompletion(body: unknown): Promise<
     };
   }
 
-  const expected = signPayload(segments.payloadSegment, authBroker.sharedSecret);
-  if (!signaturesMatch(expected, segments.signatureSegment)) {
+  const signatureValid = authBroker.verificationSecrets.some((secret) =>
+    signaturesMatch(
+      signPayload(segments.payloadSegment, secret),
+      segments.signatureSegment,
+    ),
+  );
+  if (!signatureValid) {
     return {
       ok: false,
       status: 401,

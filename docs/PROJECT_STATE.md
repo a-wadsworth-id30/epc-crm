@@ -139,6 +139,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Auth returns the stored Gmail result or blocks an unresolved attempt instead
   of sending a duplicate. Success and failure metadata retain the operation ID
   for support tracing.
+- iD30 Auth signing secrets support a bounded rotation overlap. Saving a new
+  broker secret retains the previous encrypted secret for 24 hours. New
+  requests use the current key, while completion and Gmail push callbacks
+  accept either key only during the overlap. Environment-only setup requires
+  an explicit previous-secret expiry.
 - Shared Gmail unread state is tracked per CRM user. Marking as read or replying to a
   message clears that user's Inbox badge and header alert without clearing the
   same message for other authorised mailbox users. Existing shared archive and

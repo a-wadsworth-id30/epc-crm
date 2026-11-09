@@ -70,12 +70,14 @@ export function verifyGmailPushPayload({
   crmClientId,
   now = new Date(),
   sharedSecret,
+  verificationSecrets,
   workspaceId,
 }: {
   body: unknown;
   crmClientId: string;
   now?: Date;
   sharedSecret: string;
+  verificationSecrets?: string[];
   workspaceId: string;
 }):
   | { ok: true; payload: GmailPushPayload }
@@ -89,11 +91,17 @@ export function verifyGmailPushPayload({
     };
   }
 
-  const expected = crypto
-    .createHmac("sha256", sharedSecret)
-    .update(segments.payloadSegment)
-    .digest("base64url");
-  if (!signaturesMatch(expected, segments.signatureSegment)) {
+  const signatureValid = (verificationSecrets ?? [sharedSecret]).some(
+    (secret) =>
+      signaturesMatch(
+        crypto
+          .createHmac("sha256", secret)
+          .update(segments.payloadSegment)
+          .digest("base64url"),
+        segments.signatureSegment,
+      ),
+  );
+  if (!signatureValid) {
     return {
       ok: false,
       status: 401,

@@ -359,6 +359,12 @@ provider result, allowing CRM to retry one transient 503 safely without sending
 a duplicate. The operation ID is retained in message metadata for support and
 reconciliation without storing a second copy of the email body.
 
+iD30 Auth signing-key changes use a 24-hour CRM overlap window. Saving a new
+broker secret moves the encrypted existing secret into a time-bounded previous
+slot. CRM signs new requests with the new key but verifies Auth completion and
+Gmail push callbacks against either key until the overlap expires. No secret is
+included in audit logs or exposed to the browser.
+
 Initial sync reads bounded pages from the most recent year, then switches to a
 Gmail history cursor. Imported messages are idempotent, become central
 `EmailMessage` rows and are attached to a sale conversation when an existing
