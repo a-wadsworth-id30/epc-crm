@@ -108,11 +108,23 @@ export async function saveId30AuthIntegrationConfig({
       connectedAt:
         stringValue(jsonObject(existing?.config).connectedAt) ?? new Date().toISOString(),
       lastSavedAt: new Date().toISOString(),
+      previousSecretExpiresAt:
+        sharedSecret && existingSecret
+          ? new Date(Date.now() + 24 * 60 * 60_000).toISOString()
+          : stringValue(jsonObject(existing?.config).previousSecretExpiresAt) ??
+            undefined,
       source,
       credentials: {
         sharedSecret: sharedSecret
           ? encryptSecret(sharedSecret)
           : existingSecret,
+        previousSharedSecret:
+          sharedSecret && existingSecret
+            ? existingSecret
+            : stringValue(
+                jsonObject(jsonObject(existing?.config).credentials)
+                  .previousSharedSecret,
+              ) ?? undefined,
       },
     });
 

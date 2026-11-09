@@ -1283,12 +1283,14 @@ export async function verifyMarketingAuthBrokerCompletion(
     };
   }
 
-  const expectedSignature = signAuthBrokerPayload(
-    segments.payloadSegment,
-    authBroker.sharedSecret,
+  const signatureValid = authBroker.verificationSecrets.some((secret) =>
+    signaturesMatch(
+      signAuthBrokerPayload(segments.payloadSegment, secret),
+      segments.signatureSegment,
+    ),
   );
 
-  if (!signaturesMatch(expectedSignature, segments.signatureSegment)) {
+  if (!signatureValid) {
     return {
       ok: false,
       status: 401,

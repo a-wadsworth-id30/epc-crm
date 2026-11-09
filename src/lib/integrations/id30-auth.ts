@@ -20,10 +20,12 @@ export const id30AuthConfigSchema = z
     workspaceId: id30AuthIdentifierSchema,
     connectedAt: z.string().datetime().optional(),
     lastSavedAt: z.string().datetime().optional(),
+    previousSecretExpiresAt: z.string().datetime().optional(),
     source: z.enum(["manual", "setup-code", "bootstrap", "env"]).optional(),
     credentials: z
       .object({
         sharedSecret: z.string().trim().min(1).optional(),
+        previousSharedSecret: z.string().trim().min(1).optional(),
       })
       .optional(),
   })
@@ -38,6 +40,7 @@ export type Id30AuthRuntimeConfig = {
   crmClientId: string;
   source: "database" | "environment";
   sharedSecret: string;
+  verificationSecrets: string[];
   workspaceId: string;
 };
 
@@ -70,6 +73,10 @@ export function getEnvId30AuthRuntimeConfig(): Id30AuthRuntimeConfig | null {
   const workspaceId =
     process.env.ID30_AUTH_WORKSPACE_ID?.trim() || process.env.ID30_AUTH_CRM_CLIENT_ID?.trim();
   const sharedSecret = process.env.ID30_AUTH_SHARED_SECRET?.trim();
+  const previousSecret = process.env.ID30_AUTH_PREVIOUS_SHARED_SECRET?.trim();
+  const previousExpiresAt = Date.parse(
+    process.env.ID30_AUTH_PREVIOUS_SHARED_SECRET_EXPIRES_AT || "",
+  );
 
   if (!baseUrl || !crmClientId || !workspaceId || !sharedSecret || sharedSecret.length < 32) {
     return null;
@@ -90,6 +97,15 @@ export function getEnvId30AuthRuntimeConfig(): Id30AuthRuntimeConfig | null {
     baseUrl: parsed.data.baseUrl,
     crmClientId: parsed.data.crmClientId,
     sharedSecret,
+    verificationSecrets: [
+      sharedSecret,
+      ...(previousSecret &&
+      previousSecret.length >= 32 &&
+      Number.isFinite(previousExpiresAt) &&
+      previousExpiresAt > Date.now()
+        ? [previousSecret]
+        : []),
+    ],
     source: "environment",
     workspaceId: parsed.data.workspaceId,
   };
@@ -120,10 +136,34 @@ export async function getSavedId30AuthRuntimeConfig(): Promise<Id30AuthRuntimeCo
     return null;
   }
 
+  const encryptedPreviousSecret =
+    parsed.data.credentials?.previousSharedSecret;
+  const previousExpiresAt = Date.parse(
+    parsed.data.previousSecretExpiresAt ?? "",
+  );
+  let previousSharedSecret: string | null = null;
+  if (
+    encryptedPreviousSecret &&
+    Number.isFinite(previousExpiresAt) &&
+    previousExpiresAt > Date.now()
+  ) {
+    try {
+      previousSharedSecret = decryptSecret(encryptedPreviousSecret);
+    } catch {
+      previousSharedSecret = null;
+    }
+  }
+
   return {
     baseUrl: parsed.data.baseUrl,
     crmClientId: parsed.data.crmClientId,
     sharedSecret,
+    verificationSecrets: [
+      sharedSecret,
+      ...(previousSharedSecret && previousSharedSecret !== sharedSecret
+        ? [previousSharedSecret]
+        : []),
+    ],
     source: "database",
     workspaceId: parsed.data.workspaceId,
   };

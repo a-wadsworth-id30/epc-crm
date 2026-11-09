@@ -203,6 +203,10 @@ Optional:
   `ID30_AUTH_WORKSPACE_ID`: identify the Auth broker and workspace expected in
   signed MCP requests. These IDs are not secrets, but they must match the Auth
   client registration used by `mcp.id30.com`.
+- `ID30_AUTH_PREVIOUS_SHARED_SECRET` and
+  `ID30_AUTH_PREVIOUS_SHARED_SECRET_EXPIRES_AT`: optional, temporary values for
+  environment-based key rotation. The expiry must be a future ISO timestamp;
+  remove both values after the overlap window.
 - `ID30_AUTH_REQUEST_TIMEOUT_MS`: optional CRM-to-Auth request timeout, default
   `8000`, bounded between `1000` and `30000` milliseconds.
 - `ID30_AUTH_GET_MAX_ATTEMPTS`: optional maximum attempts for safe signed GET

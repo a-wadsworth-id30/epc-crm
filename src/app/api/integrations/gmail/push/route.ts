@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     body: parsedBody.body,
     crmClientId: runtime.crmClientId,
     sharedSecret: runtime.sharedSecret,
+    verificationSecrets: runtime.verificationSecrets,
     workspaceId: runtime.workspaceId,
   });
   if (!verification.ok) {

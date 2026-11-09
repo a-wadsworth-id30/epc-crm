@@ -6,7 +6,10 @@ import { verifyGmailPushPayload } from "../src/lib/integrations/gmail-push-contr
 const sharedSecret = "a".repeat(48);
 const now = new Date("2026-11-09T12:00:00.000Z");
 
-function signedToken(overrides: Record<string, unknown> = {}) {
+function signedToken(
+  overrides: Record<string, unknown> = {},
+  signingSecret = sharedSecret,
+) {
   const payload = {
     event: "gmail.history.available",
     version: 1,
@@ -24,7 +27,7 @@ function signedToken(overrides: Record<string, unknown> = {}) {
   };
   const payloadSegment = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = crypto
-    .createHmac("sha256", sharedSecret)
+    .createHmac("sha256", signingSecret)
     .update(payloadSegment)
     .digest("base64url");
 
@@ -47,6 +50,20 @@ describe("Gmail push contract", () => {
 
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.payload.historyId, "123456");
+  });
+
+  it("accepts the temporary previous key during a rotation window", () => {
+    const previousSecret = "p".repeat(48);
+    const result = verifyGmailPushPayload({
+      body: { token: signedToken({}, previousSecret) },
+      crmClientId: "epc-crm",
+      now,
+      sharedSecret,
+      verificationSecrets: [sharedSecret, previousSecret],
+      workspaceId: "epc-production",
+    });
+
+    assert.equal(result.ok, true);
   });
 
   it("rejects a token with an invalid signature", () => {
