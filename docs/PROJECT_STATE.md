@@ -1228,7 +1228,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Accounts and Shared classifications remain readable until an admin moves
   them to a current team. Admins can
   assign a primary user and grant send access to additional CRM users without
-  storing Google tokens in CRM. Bounded initial/history sync writes idempotent
+  storing Google tokens in CRM. Gmail settings also show an admin-only health
+  summary and per-mailbox guidance derived from connection state, sync
+  enablement, the latest safe error and the last successful sync. A connected
+  mailbox becomes delayed after 30 minutes without a successful sync;
+  disconnected, errored and expired-authorisation states offer the existing
+  iD30 Auth reconnect flow. Bounded initial/history sync writes idempotent
   `EmailMessage` rows, creates sale conversation email events when an exact
   thread link or unambiguous open-sale match exists, and leaves ambiguous mail
   in the central inbox. CRM-originated Gmail sends persist an exact

@@ -341,6 +341,14 @@ values remain readable for existing records but are not offered for new
 selections. New connections default to Personal for a matching Owner account
 and Sales otherwise.
 
+The admin Gmail settings page derives a mailbox health state from connection
+status, sync enablement, the latest successful sync and the latest safe error.
+Connected mailboxes are healthy when they have synced within 30 minutes;
+otherwise the UI distinguishes first-sync pending, paused, delayed, warning,
+disconnected and reauthorisation states. Actionable connection failures reuse
+the existing iD30 Auth connection flow, while credentials and provider tokens
+remain outside the browser and CRM database.
+
 Initial sync reads bounded pages from the most recent year, then switches to a
 Gmail history cursor. Imported messages are idempotent, become central
 `EmailMessage` rows and are attached to a sale conversation when an existing

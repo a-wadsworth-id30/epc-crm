@@ -208,6 +208,7 @@ export async function syncGmailMailboxAction(
       `Read ${result.read} message${result.read === 1 ? "" : "s"}; created ${result.created}, updated ${result.updated}${result.archivedAttachments ? `, retained ${result.archivedAttachments} inline attachment${result.archivedAttachments === 1 ? "" : "s"}` : ""}${result.hasMore ? ". More history remains for the next sync" : ""}.`,
     );
   } catch (error) {
+    revalidatePath("/settings/integrations/gmail");
     return actionResult(
       false,
       error instanceof Error ? error.message : "Gmail mailbox sync failed.",
