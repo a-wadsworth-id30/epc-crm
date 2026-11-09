@@ -1273,7 +1273,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   manual runs now record privacy-safe aggregate results in `BackgroundJobRun`,
   and Gmail settings displays scheduler readiness, recent throughput, failures
   and continuation backlog without storing mailbox identities or message
-  content in operation history. Matched Gmail messages
+  content in operation history. Admin changes to Gmail mailbox purpose, owner,
+  import/send status and authorised-user access are written as field-level
+  audit events without credentials or message content; disconnects have a
+  separate audit event. No-op settings saves do not create audit noise. Matched Gmail messages
   can be replied to directly from the Inbox; the composer sends from the
   receiving mailbox, preserves the exact Gmail thread and writes the outbound
   message into the linked sale conversation. Outbound persistence claims the

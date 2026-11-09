@@ -536,6 +536,13 @@ Main files:
 - `netlify/functions/sync-gmail-mailboxes.mjs`
 - `/settings/integrations/gmail`
 
+Admin mailbox configuration saves compare a normalized before/after snapshot
+for purpose, owner, sync/send flags and authorised user IDs. Real changes write
+`gmail.mailbox.settings_updated` in the same database transaction; no-op saves
+do not create an audit row. Successful disconnects write
+`gmail.mailbox.disconnected`. Neither event stores OAuth connection IDs,
+credentials or message content.
+
 ### Geoapify
 
 Geoapify config is stored in `IntegrationConnection` with provider
