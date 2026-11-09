@@ -184,7 +184,7 @@ async function importGmailMessage({
   const providerMessageId = gmailMessageKey(mailbox.id, message.id);
   const existing = await prisma.emailMessage.findUnique({
     where: { providerMessageId },
-    select: { id: true, salesCommunicationId: true },
+    select: { id: true, metadata: true, salesCommunicationId: true },
   });
   const threadWorkflow = !existing
     ? await prisma.emailMessage.findFirst({
@@ -220,7 +220,9 @@ async function importGmailMessage({
   const toAddress =
     firstEmailAddress(message.headers.to) ??
     (direction === "INBOUND" ? mailbox.emailAddress : null);
+  const existingMetadata = jsonObject(existing?.metadata);
   const metadata = jsonValue({
+    ...existingMetadata,
     bcc: emailAddresses(message.headers.bcc),
     gmailHistoryId: message.historyId,
     gmailLabelIds: message.labelIds,
@@ -229,7 +231,10 @@ async function importGmailMessage({
     references: message.headers.references,
     replyTo: message.headers.replyTo,
     sizeEstimate: message.sizeEstimate,
-    source: "gmail-sync",
+    source:
+      typeof existingMetadata.sendState === "string"
+        ? existingMetadata.source ?? "crm-send"
+        : "gmail-sync",
   });
   const internetMessageId = normalizeInternetMessageId(
     message.headers.messageId,

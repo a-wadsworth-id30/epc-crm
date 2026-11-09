@@ -16,6 +16,7 @@ describe("Gmail send reconciliation", () => {
   it("preserves provider sync metadata while recording the CRM send", () => {
     assert.deepEqual(
       reconciledGmailSendMetadata({
+        acceptedAt: "2026-11-07T12:00:00.000Z",
         existing: {
           gmailHistoryId: "history-1",
           gmailLabelIds: ["SENT"],
@@ -28,6 +29,7 @@ describe("Gmail send reconciliation", () => {
         source: "inbox-gmail-reply",
       }),
       {
+        acceptedAt: "2026-11-07T12:00:00.000Z",
         fromEmail: "sales@example.test",
         gmailHistoryId: "history-1",
         gmailLabelIds: ["SENT"],
@@ -36,7 +38,7 @@ describe("Gmail send reconciliation", () => {
         mailboxId: "mailbox-1",
         messageId: "gmail:mailbox-1:gmail-message-1",
         provider: "gmail",
-        sendState: "sent",
+        sendState: "accepted",
         source: "inbox-gmail-reply",
       },
     );

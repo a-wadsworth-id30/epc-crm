@@ -1,4 +1,5 @@
 type GmailSendMetadataInput = {
+  acceptedAt?: string;
   existing?: unknown;
   fromEmail: string;
   gmailMessageId: string;
@@ -21,6 +22,7 @@ export function gmailProviderMessageId(
 }
 
 export function reconciledGmailSendMetadata({
+  acceptedAt,
   existing,
   fromEmail,
   gmailMessageId,
@@ -28,15 +30,23 @@ export function reconciledGmailSendMetadata({
   mailboxId,
   source,
 }: GmailSendMetadataInput) {
+  const existingMetadata = jsonObject(existing);
+  const existingAcceptedAt = existingMetadata.acceptedAt;
+
   return {
-    ...jsonObject(existing),
+    ...existingMetadata,
     fromEmail,
     gmailMessageId,
     gmailThreadId,
     mailboxId,
     messageId: gmailProviderMessageId(mailboxId, gmailMessageId),
     provider: "gmail",
-    sendState: "sent",
+    sendState: "accepted",
+    acceptedAt:
+      acceptedAt ??
+      (typeof existingAcceptedAt === "string"
+        ? existingAcceptedAt
+        : null),
     source,
   };
 }

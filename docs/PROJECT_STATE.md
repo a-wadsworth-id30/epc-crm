@@ -1319,6 +1319,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   user and Gmail message, restore after navigation or refresh, and retain rich
   formatting plus From, To and Subject values. Drafts expire after 14 days and
   are cleared only on a successful send or explicit discard.
+- CRM-originated Gmail messages now distinguish provider acceptance from final
+  delivery. Successful sends display **Accepted by Gmail** in Inbox and linked
+  conversations; rejected sends remain visible as failed outbound attempts with
+  a safe reason and audit event. Gmail sync preserves that send state instead of
+  replacing it with generic provider metadata.
 - CRM-managed Twilio voice setup, including TwiML App and Voice Intelligence
   service provisioning.
 - Browser softphone registration, outbound calling and inbound ringing.

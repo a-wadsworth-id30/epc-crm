@@ -1005,10 +1005,13 @@ export default function SaleConversationThread({
                   communication.channel === "WEBSITE"
                     ? status || compactUrlText(plainBody || plainSummary)
                     : null;
+                const emailDelivery = communication.emailDeliveryStatus;
                 const direction =
                   renderedChannel === "FILE" ||
                   communication.channel === "WEBSITE"
                     ? "Activity"
+                    : emailDelivery?.state === "failed"
+                      ? "Outbound"
                     : directionLabel(
                         emailDisplayDirection(communication),
                         communication.channel,
@@ -1109,6 +1112,18 @@ export default function SaleConversationThread({
                                 {emailOrigin}
                               </span>
                             ) : null}
+                            {emailDelivery ? (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                  emailDelivery.state === "failed"
+                                    ? "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400"
+                                    : "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400"
+                                }`}
+                                title={emailDelivery.detail ?? undefined}
+                              >
+                                {emailDelivery.label}
+                              </span>
+                            ) : null}
                             {status && (
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClassName(status)}`}
@@ -1198,6 +1213,25 @@ export default function SaleConversationThread({
                     {isExpanded ? (
                       <div>
                         <div className="px-4 py-4">
+                          {emailDelivery ? (
+                            <div
+                              className={`mb-4 rounded-lg border px-4 py-3 text-sm leading-6 ${
+                                emailDelivery.state === "failed"
+                                  ? "border-error-200 bg-error-50 text-error-700 dark:border-error-900/50 dark:bg-error-500/10 dark:text-error-300"
+                                  : "border-success-200 bg-success-50 text-success-700 dark:border-success-900/50 dark:bg-success-500/10 dark:text-success-300"
+                              }`}
+                              role={
+                                emailDelivery.state === "failed"
+                                  ? "alert"
+                                  : undefined
+                              }
+                            >
+                              <span className="font-semibold">
+                                {emailDelivery.label}.
+                              </span>{" "}
+                              {emailDelivery.detail}
+                            </div>
+                          ) : null}
                           {detailBody || detailHtml ? (
                             <div className="text-sm leading-6 text-gray-700 dark:text-gray-300">
                               <EmailContent

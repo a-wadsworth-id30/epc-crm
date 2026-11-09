@@ -6,6 +6,7 @@ import {
   emailAttachmentDisplaySelect,
   serializeEmailAttachments,
 } from "@/lib/email/attachment-display";
+import { emailDeliveryStatus } from "@/lib/email/delivery-status";
 import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
 import {
   completeEmailPlainText,
@@ -294,6 +295,14 @@ export function serializeConversationCommunication(
     emailHtmlBody:
       communication.channel === "EMAIL" ? emailHtmlViews.latestHtml : null,
     emailAttachments,
+    emailDeliveryStatus: emailDeliveryStatus({
+      direction: communication.direction,
+      metadata:
+        communication.emailMessage?.metadata ?? communication.metadata,
+      provider:
+        communication.emailMessage?.provider ??
+        stringValue(objectValue(communication.metadata).provider),
+    }),
     emailIdentity: communication.emailMessage
       ? emailInternetMessageIdentity(communication.emailMessage)
       : null,
@@ -420,6 +429,11 @@ export function serializeConversationEmailMessage(
     direction: message.direction,
     emailHtmlBody: emailHtmlViews.latestHtml,
     emailAttachments,
+    emailDeliveryStatus: emailDeliveryStatus({
+      direction: message.direction,
+      metadata: message.metadata,
+      provider: message.provider,
+    }),
     emailIdentity: emailInternetMessageIdentity(message),
     emailProvider: message.provider,
     emailReply: message.opportunityId

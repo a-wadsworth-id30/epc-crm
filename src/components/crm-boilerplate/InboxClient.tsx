@@ -177,6 +177,14 @@ function emailDirectionTone(direction: string) {
   return "bg-gray-100 text-gray-700 ring-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:ring-gray-800";
 }
 
+function deliveryStatusTone(state: "accepted" | "failed" | "provider-sent") {
+  if (state === "failed") {
+    return "bg-error-50 text-error-700 ring-error-200 dark:bg-error-500/10 dark:text-error-300 dark:ring-error-900/40";
+  }
+
+  return "bg-success-50 text-success-700 ring-success-200 dark:bg-success-500/10 dark:text-success-300 dark:ring-success-900/40";
+}
+
 function Badge({
   children,
   className,
@@ -691,6 +699,15 @@ export default function InboxClient({
                                   Unread
                                 </Badge>
                               ) : null}
+                              {message.deliveryStatus ? (
+                                <Badge
+                                  className={deliveryStatusTone(
+                                    message.deliveryStatus.state,
+                                  )}
+                                >
+                                  {message.deliveryStatus.label}
+                                </Badge>
+                              ) : null}
                               <Badge className="bg-gray-100 text-gray-700 ring-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:ring-gray-800">
                                 {teamStatusLabel(message.teamStatus)}
                               </Badge>
@@ -777,8 +794,19 @@ export default function InboxClient({
                             selectedMessage.direction,
                           )}
                         >
-                          {emailDirectionLabel(selectedMessage.direction)}
+                          {selectedMessage.deliveryStatus?.state === "failed"
+                            ? "Outbound"
+                            : emailDirectionLabel(selectedMessage.direction)}
                         </Badge>
+                        {selectedMessage.deliveryStatus ? (
+                          <Badge
+                            className={deliveryStatusTone(
+                              selectedMessage.deliveryStatus.state,
+                            )}
+                          >
+                            {selectedMessage.deliveryStatus.label}
+                          </Badge>
+                        ) : null}
                         <StatusBadge>{selectedMessage.status}</StatusBadge>
                         <StatusBadge>{selectedMessage.teamStatus}</StatusBadge>
                         <Badge className="bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
@@ -949,6 +977,25 @@ export default function InboxClient({
                     </div>
 
                     <div className="space-y-4 px-5 py-6 text-sm leading-7 break-words text-gray-700 dark:text-gray-300">
+                      {selectedMessage.deliveryStatus ? (
+                        <div
+                          className={`rounded-lg border px-4 py-3 text-sm leading-6 ${
+                            selectedMessage.deliveryStatus.state === "failed"
+                              ? "border-error-200 bg-error-50 text-error-700 dark:border-error-900/50 dark:bg-error-500/10 dark:text-error-300"
+                              : "border-success-200 bg-success-50 text-success-700 dark:border-success-900/50 dark:bg-success-500/10 dark:text-success-300"
+                          }`}
+                          role={
+                            selectedMessage.deliveryStatus.state === "failed"
+                              ? "alert"
+                              : undefined
+                          }
+                        >
+                          <span className="font-semibold">
+                            {selectedMessage.deliveryStatus.label}.
+                          </span>{" "}
+                          {selectedMessage.deliveryStatus.detail}
+                        </div>
+                      ) : null}
                       {isDetailLoading && !selectedDetail ? (
                         <p className="text-xs font-medium text-gray-400 dark:text-gray-500">
                           Loading full email content...
@@ -1304,10 +1351,18 @@ export default function InboxClient({
                         />
                         <StateRow
                           label="Direction"
-                          value={emailDirectionLabel(
-                            selectedMessage.direction,
-                          )}
+                          value={
+                            selectedMessage.deliveryStatus?.state === "failed"
+                              ? "Outbound"
+                              : emailDirectionLabel(selectedMessage.direction)
+                          }
                         />
+                        {selectedMessage.deliveryStatus ? (
+                          <StateRow
+                            label="Delivery"
+                            value={selectedMessage.deliveryStatus.label}
+                          />
+                        ) : null}
                         <StateRow
                           label="Status"
                           value={selectedMessage.status}

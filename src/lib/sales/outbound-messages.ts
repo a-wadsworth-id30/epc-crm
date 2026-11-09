@@ -1,5 +1,6 @@
 import "server-only";
 
+import crypto from "node:crypto";
 import twilio from "twilio";
 import {
   getMailerSendOpportunityReplyAddress,
@@ -76,6 +77,119 @@ function messageSummary(body: string, maxLength = 180) {
   return trimmed.length > maxLength
     ? `${trimmed.slice(0, maxLength - 3)}...`
     : trimmed;
+}
+
+function safeGmailFailureReason(error: unknown) {
+  return outboundMessageError(error, "Gmail rejected the send request.")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
+}
+
+async function recordGmailSendFailure({
+  body,
+  contactId,
+  error,
+  fromAddress,
+  htmlBody,
+  mailboxId,
+  opportunityId,
+  source,
+  subject,
+  toAddress,
+  userId,
+}: {
+  body: string;
+  contactId: string | null;
+  error: unknown;
+  fromAddress: string;
+  htmlBody: string;
+  mailboxId: string;
+  opportunityId: string;
+  source: string;
+  subject: string;
+  toAddress: string;
+  userId: string;
+}) {
+  const failedAt = new Date();
+  const failureReason = safeGmailFailureReason(error);
+  const attemptId = `gmail-failed:${crypto.randomUUID()}`;
+  const metadata = {
+    failedAt: failedAt.toISOString(),
+    failureReason,
+    fromEmail: fromAddress,
+    mailboxId,
+    provider: "gmail",
+    sendState: "failed",
+    source,
+  };
+
+  const communication = await prisma.$transaction(async (tx) => {
+    const created = await tx.salesCommunication.create({
+      data: {
+        body,
+        channel: "EMAIL",
+        contactId,
+        direction: "OUTBOUND",
+        externalId: attemptId,
+        fromAddress,
+        metadata,
+        occurredAt: failedAt,
+        opportunityId,
+        subject,
+        summary: messageSummary(body),
+        toAddress,
+        userId,
+      },
+    });
+
+    const email = await tx.emailMessage.create({
+      data: {
+        contactId,
+        direction: "OUTBOUND",
+        fromAddress,
+        htmlBody,
+        mailboxId,
+        metadata,
+        opportunityId,
+        provider: "gmail",
+        receivedAt: failedAt,
+        salesCommunicationId: created.id,
+        status: "READ",
+        subject,
+        summary: messageSummary(body),
+        textBody: body,
+        toAddress,
+      },
+      select: { id: true },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: "gmail.send.failed",
+        actorId: userId,
+        entity: "EmailMessage",
+        entityId: email.id,
+        metadata: {
+          failureReason,
+          mailboxId,
+          opportunityId,
+          source,
+          toAddress,
+        },
+      },
+    });
+
+    return created;
+  });
+
+  await bumpRealtimeTopics([
+    realtimeTopics.saleConversation(opportunityId),
+    contactId ? realtimeTopics.contactConversation(contactId) : null,
+  ]);
+
+  return communication;
 }
 
 function statusCallbackOrigin(configuredBaseUrl?: string | null) {
@@ -295,8 +409,10 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
     mailboxId: input.mailboxId,
     user: input.user,
   });
-  const gmailResult = gmailMailbox
-    ? await sendGmailEmail({
+  let gmailResult: Awaited<ReturnType<typeof sendGmailEmail>> | null = null;
+  if (gmailMailbox) {
+    try {
+      gmailResult = await sendGmailEmail({
         body,
         htmlBody,
         inReplyTo: input.inReplyTo,
@@ -306,8 +422,28 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
         subject,
         to: recipient,
         toName: contactName(opportunity.contact),
-      })
-    : null;
+      });
+    } catch (error) {
+      try {
+        await recordGmailSendFailure({
+          body,
+          contactId: input.contactId ?? opportunity.contactId,
+          error,
+          fromAddress: gmailMailbox.emailAddress,
+          htmlBody,
+          mailboxId: gmailMailbox.id,
+          opportunityId: opportunity.id,
+          source: input.source,
+          subject,
+          toAddress: recipient,
+          userId: input.user.id,
+        });
+      } catch (recordError) {
+        console.error("Gmail send failure could not be recorded", recordError);
+      }
+      throw error;
+    }
+  }
   const mailerSendResult = gmailResult
     ? null
     : await (async () => {
@@ -389,6 +525,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
         internetMessageId: gmailResult.internetMessageId,
         mailboxId: gmailResult.mailboxId,
         metadata: reconciledGmailSendMetadata({
+          acceptedAt: gmailResult.acceptedAt,
           fromEmail: gmailResult.fromEmail,
           gmailMessageId: gmailResult.providerMessageId,
           gmailThreadId: gmailResult.providerThreadId,
@@ -420,6 +557,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
         })
       : null;
     const gmailMetadata = reconciledGmailSendMetadata({
+      acceptedAt: gmailResult.acceptedAt,
       existing: existingCommunication?.metadata ?? claimedEmail.metadata,
       fromEmail: gmailResult.fromEmail,
       gmailMessageId: gmailResult.providerMessageId,
@@ -442,6 +580,7 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
       where: { id: claimedEmail.id },
       data: {
         metadata: reconciledGmailSendMetadata({
+          acceptedAt: gmailResult.acceptedAt,
           existing: claimedEmail.metadata,
           fromEmail: gmailResult.fromEmail,
           gmailMessageId: gmailResult.providerMessageId,

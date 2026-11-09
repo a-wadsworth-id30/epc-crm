@@ -180,6 +180,7 @@ export async function sendGmailEmail({
   }
 
   return {
+    acceptedAt: new Date().toISOString(),
     fromEmail: mailbox.emailAddress,
     internetMessageId: messageId,
     mailboxId: mailbox.id,
