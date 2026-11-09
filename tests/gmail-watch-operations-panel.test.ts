@@ -10,6 +10,8 @@ function renderPanel(
   return renderToStaticMarkup(
     createElement(GmailWatchOperationsPanel, {
       available: true,
+      authContractMessage: "iD30 Auth CRM contract v1 is compatible.",
+      authContractReady: true,
       authPushMessage: "iD30 Auth Gmail push checks pass.",
       authPushReady: true,
       eligibleMailboxCount: 1,
