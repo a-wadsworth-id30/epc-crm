@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import GmailIntegrationForm from "@/components/crm-boilerplate/GmailIntegrationForm";
 import GmailR2CleanupReport from "@/components/crm-boilerplate/GmailR2CleanupReport";
+import GmailSyncOperationsPanel from "@/components/crm-boilerplate/GmailSyncOperationsPanel";
 import {
   BingAdsIntegrationForm,
   CloudflareR2SettingsForm,
@@ -92,6 +93,7 @@ import {
   type MarketingAuthBrokerProviderDiagnosticsResult,
 } from "@/lib/marketing/oauth";
 import { gmailProvider } from "@/lib/integrations/gmail";
+import { gmailSyncJobName } from "@/lib/integrations/gmail-sync-operations";
 import { prisma } from "@/lib/prisma";
 import {
   hasStoredOpenAICredentials,
@@ -137,7 +139,10 @@ import {
   previewPipedriveLeadsAction,
   pullPipedriveContactsAction,
 } from "@/lib/actions/integrations";
-import { backgroundJobStaleCutoff } from "@/lib/maintenance/background-jobs";
+import {
+  backgroundJobStaleCutoff,
+  isBackgroundJobSchemaPending,
+} from "@/lib/maintenance/background-jobs";
 
 type ProviderSyncLog = {
   id: string;
@@ -319,7 +324,7 @@ export default async function IntegrationSettingsPage({
 
   if (provider === gmailProvider) {
     const authRuntime = await getId30AuthRuntimeConfig();
-    const [mailboxes, users, readiness] = await Promise.all([
+    const [mailboxes, users, readiness, syncOperations] = await Promise.all([
       prisma.emailMailbox.findMany({
         where: { provider: gmailProvider },
         orderBy: [{ status: "asc" }, { emailAddress: "asc" }],
@@ -353,6 +358,31 @@ export default async function IntegrationSettingsPage({
       authRuntime
         ? fetchMarketingAuthBrokerProviderReadiness()
         : Promise.resolve(null),
+      prisma.backgroundJobRun
+        .findMany({
+          where: { jobName: gmailSyncJobName },
+          orderBy: { startedAt: "desc" },
+          take: 8,
+          select: {
+            durationMs: true,
+            errorMessage: true,
+            id: true,
+            message: true,
+            recordsRead: true,
+            recordsWritten: true,
+            startedAt: true,
+            status: true,
+            summary: true,
+            trigger: true,
+          },
+        })
+        .then((runs) => ({ available: true as const, runs }))
+        .catch((error: unknown) => {
+          if (!isBackgroundJobSchemaPending(error)) {
+            console.error("Gmail sync operation history could not be loaded.", error);
+          }
+          return { available: false as const, runs: [] };
+        }),
     ]);
     const gmailReadiness =
       readiness?.ok
@@ -392,6 +422,16 @@ export default async function IntegrationSettingsPage({
               name: user.name,
               canUsePersonalMailbox: canOwnPersonalGmailMailbox(user),
             }))}
+          />
+        </div>
+        <div className="mt-6">
+          <GmailSyncOperationsPanel
+            available={syncOperations.available}
+            runs={syncOperations.runs}
+            scheduleEnabled={booleanEnv(process.env.GMAIL_SYNC_CRON_ENABLED)}
+            secretConfigured={Boolean(
+              process.env.GMAIL_SYNC_SECRET || process.env.CRON_SECRET,
+            )}
           />
         </div>
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">

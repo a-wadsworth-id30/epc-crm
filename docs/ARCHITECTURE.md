@@ -393,6 +393,13 @@ The defaults process two mailboxes with up to 15 messages each inside a
 `GMAIL_SYNC_MAX_RESULTS` provide bounded operational tuning without a code
 deploy; repeated runs drain remaining pages.
 
+Scheduled batches and admin-triggered manual syncs write a privacy-safe
+`BackgroundJobRun` record under `gmail-mailbox-sync`. The summary contains only
+aggregate mailbox, message, CRM-write, failure, deferred and continuation-page
+counts; it does not store mailbox addresses or message content. Gmail settings
+uses these records to show scheduler readiness, latest throughput, backlog and
+recent outcomes without re-reading provider data.
+
 Inbox users can manually assign or move a Gmail conversation to an accessible
 sale. The action moves every imported message and sales communication in the
 thread, updates archived attachment ownership, and writes the selected sale to
