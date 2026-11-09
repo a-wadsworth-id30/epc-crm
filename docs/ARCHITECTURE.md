@@ -550,7 +550,9 @@ Main files:
 - `/api/integrations/gmail/connect`
 - `/api/integrations/gmail/push`
 - `/api/maintenance/gmail-sync`
+- `/api/maintenance/gmail-watch`
 - `netlify/functions/sync-gmail-mailboxes.mjs`
+- `netlify/functions/renew-gmail-watches.mjs`
 - `/settings/integrations/gmail`
 
 iD30 Auth can notify the CRM of Gmail history changes through the dedicated
@@ -574,6 +576,18 @@ history. Processed and ignored receipt metadata is deleted after 14 days by the
 scheduled route. The callback does not perform the provider sync inline,
 keeping Pub/Sub acknowledgement fast and leaving the existing retry, lease and
 operation-history controls in charge of message import.
+
+Gmail watches are registered and renewed separately from message sync.
+`netlify/functions/renew-gmail-watches.mjs` calls the protected
+`/api/maintenance/gmail-watch` route hourly when `GMAIL_PUSH_ENABLED=true`.
+Missing watches and watches within 48 hours of expiry are renewed through the
+signed Auth broker; the Auth-owned Pub/Sub topic cannot be overridden by CRM.
+Expiry, retry and bounded safe-error fields live on `EmailMailbox`, allowing
+due watches to be queried without scanning JSON metadata. Failures back off
+from one to six hours and do not disable the five-minute polling fallback.
+Gmail settings shows whether each mailbox is push-active, awaiting renewal or
+using polling only. Successful and failed renewals write privacy-safe audit
+events without mailbox addresses, Gmail history IDs or credentials.
 
 Admin mailbox configuration saves compare a normalized before/after snapshot
 for purpose, owner, sync/send flags and authorised user IDs. Real changes write

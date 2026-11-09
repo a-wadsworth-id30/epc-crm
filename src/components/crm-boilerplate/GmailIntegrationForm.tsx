@@ -20,6 +20,9 @@ type GmailMailboxRow = {
   id: string;
   displayName: string | null;
   emailAddress: string;
+  gmailWatchExpiresAt: string | null;
+  gmailWatchLastError: string | null;
+  gmailWatchRetryAt: string | null;
   lastError: string | null;
   lastSyncAt: string | null;
   ownerUserId: string | null;
@@ -64,6 +67,7 @@ export default function GmailIntegrationForm({
   authConfigured,
   healthNow,
   mailboxes,
+  pushEnabled,
   providerReady,
   providerMessage,
   users,
@@ -71,6 +75,7 @@ export default function GmailIntegrationForm({
   authConfigured: boolean;
   healthNow: string;
   mailboxes: GmailMailboxRow[];
+  pushEnabled: boolean;
   providerReady: boolean;
   providerMessage: string;
   users: UserOption[];
@@ -158,6 +163,7 @@ export default function GmailIntegrationForm({
               authConfigured={authConfigured}
               healthNow={healthNow}
               mailbox={mailbox}
+              pushEnabled={pushEnabled}
               providerReady={providerReady}
               users={users}
             />
@@ -181,12 +187,14 @@ function MailboxCard({
   authConfigured,
   healthNow,
   mailbox,
+  pushEnabled,
   providerReady,
   users,
 }: {
   authConfigured: boolean;
   healthNow: string;
   mailbox: GmailMailboxRow;
+  pushEnabled: boolean;
   providerReady: boolean;
   users: UserOption[];
 }) {
@@ -247,7 +255,7 @@ function MailboxCard({
             </a>
           ) : null}
         </div>
-        <dl className="mt-3 grid gap-2 border-t border-current/15 pt-3 text-xs sm:grid-cols-4">
+        <dl className="mt-3 grid gap-2 border-t border-current/15 pt-3 text-xs sm:grid-cols-5">
           <div>
             <dt className="font-medium opacity-70">Last successful sync</dt>
             <dd className="mt-0.5 font-semibold">
@@ -278,7 +286,30 @@ function MailboxCard({
                 : "Normal schedule"}
             </dd>
           </div>
+          <div>
+            <dt className="font-medium opacity-70">Gmail push</dt>
+            <dd className="mt-0.5 font-semibold">
+              {!connected
+                ? "Unavailable"
+                : !pushEnabled
+                ? "Polling fallback"
+                : mailbox.gmailWatchExpiresAt &&
+                    new Date(mailbox.gmailWatchExpiresAt).getTime() >
+                      new Date(healthNow).getTime()
+                  ? `Active until ${formatMailboxSyncTime(mailbox.gmailWatchExpiresAt)}`
+                  : mailbox.gmailWatchRetryAt &&
+                      new Date(mailbox.gmailWatchRetryAt).getTime() >
+                        new Date(healthNow).getTime()
+                    ? `Retry ${formatMailboxSyncTime(mailbox.gmailWatchRetryAt)}`
+                    : "Awaiting renewal"}
+            </dd>
+          </div>
         </dl>
+        {pushEnabled && mailbox.gmailWatchLastError ? (
+          <p className="mt-2 border-t border-current/15 pt-2 text-xs">
+            Push renewal: {mailbox.gmailWatchLastError}
+          </p>
+        ) : null}
       </div>
 
       <form action={saveAction} className="grid gap-4 md:grid-cols-2">

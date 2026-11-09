@@ -1262,6 +1262,11 @@ model EmailMailbox {
   lastError        String?
   syncLeaseId      String?
   syncLeaseUntil   DateTime?
+  gmailWatchExpiresAt    DateTime?
+  gmailWatchFailureCount Int                  @default(0)
+  gmailWatchLastError    String?
+  gmailWatchRenewedAt    DateTime?
+  gmailWatchRetryAt      DateTime?
   metadata         Json?
   messages         EmailMessage[]
   threadLinks      EmailThreadLink[]
@@ -1275,6 +1280,7 @@ model EmailMailbox {
   @@index([ownerUserId])
   @@index([purpose])
   @@index([syncLeaseUntil])
+  @@index([status, syncEnabled, gmailWatchExpiresAt])
 }
 
 model GmailPushReceipt {

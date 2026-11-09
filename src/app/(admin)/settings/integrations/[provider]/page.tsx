@@ -333,6 +333,9 @@ export default async function IntegrationSettingsPage({
           id: true,
           displayName: true,
           emailAddress: true,
+          gmailWatchExpiresAt: true,
+          gmailWatchLastError: true,
+          gmailWatchRetryAt: true,
           lastError: true,
           lastSyncAt: true,
           metadata: true,
@@ -411,11 +414,16 @@ export default async function IntegrationSettingsPage({
           <GmailIntegrationForm
             authConfigured={Boolean(authRuntime)}
             healthNow={new Date().toISOString()}
+            pushEnabled={booleanEnv(process.env.GMAIL_PUSH_ENABLED)}
             mailboxes={mailboxes.map(({ metadata, ...mailbox }) => ({
               ...mailbox,
               automaticRetryAt:
                 gmailSyncRetryState(metadata).retryAfter?.toISOString() ?? null,
               lastSyncAt: mailbox.lastSyncAt?.toISOString() ?? null,
+              gmailWatchExpiresAt:
+                mailbox.gmailWatchExpiresAt?.toISOString() ?? null,
+              gmailWatchRetryAt:
+                mailbox.gmailWatchRetryAt?.toISOString() ?? null,
               sendUserIds: mailbox.userAccess.map((access) => access.userId),
             }))}
             providerMessage={providerMessage}

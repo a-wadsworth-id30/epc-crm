@@ -138,6 +138,11 @@ Optional:
   `2` and cannot exceed `3`.
 - `GMAIL_SYNC_MAX_RESULTS`: optional per-mailbox Gmail message cap; defaults to
   `15` and cannot exceed `25`.
+- `GMAIL_PUSH_ENABLED`: set to `true` only after the Auth Gmail Pub/Sub topic,
+  authenticated subscription and CRM push receiver are live. It enables the
+  hourly Gmail watch registration/renewal function.
+- `GMAIL_WATCH_RENEWAL_LIMIT`: optional watch-renewal batch cap; defaults to
+  `10` and cannot exceed `25`.
 - `OPERATIONAL_RETENTION_SECRET`: shared secret for
   `/api/maintenance/retention`; `CRON_SECRET` can be used instead when a single
   maintenance secret is preferred.
@@ -325,6 +330,15 @@ action. Each scheduled invocation prioritises pending continuation pages, then
 the least recently synced mailbox. Defaults are two mailboxes, 15 messages per
 mailbox and a 20-second route budget. The function logs only compact counts and
 does not include mailbox addresses or message content.
+
+`netlify/functions/renew-gmail-watches.mjs` runs hourly at minute 17 but remains
+inactive until `GMAIL_PUSH_ENABLED=true`. It calls the protected
+`/api/maintenance/gmail-watch` route with the existing Gmail/cron secret. The
+route registers missing watches and renews watches within 48 hours of expiry,
+stores only operational expiry/retry state, and uses one-to-six-hour backoff
+after failures. Keep the flag disabled until the corresponding iD30 Auth
+Pub/Sub environment and Google subscription are ready; five-minute Gmail
+polling continues independently.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.
