@@ -348,3 +348,46 @@ export async function id30AuthBrokerRequest({
     body: responseBody,
   };
 }
+
+export async function id30AuthBrokerBinaryRequest({
+  body,
+  connectionId,
+  method,
+  pathname,
+}: {
+  body: unknown;
+  connectionId: string;
+  method: AuthBrokerRequestMethod;
+  pathname: string;
+}) {
+  const runtime = await getId30AuthRuntimeConfig();
+  if (!runtime) {
+    return { ok: false as const, status: 503, message: "iD30 Auth broker is not configured." };
+  }
+  const serializedBody = JSON.stringify(body);
+  const brokerResponse = await fetchId30AuthWithResilience({
+    method,
+    requestInit: () => ({
+      headers: signedHeaders({
+        body: serializedBody,
+        connectionId,
+        method,
+        pathname,
+        runtime,
+      }),
+      body: serializedBody,
+      cache: "no-store",
+    }),
+    url: new URL(pathname, runtime.baseUrl),
+  });
+  if (!brokerResponse.ok) return brokerResponse;
+  if (!brokerResponse.response.ok) {
+    const errorBody = (await brokerResponse.response.json().catch(() => ({}))) as Record<string, unknown>;
+    return {
+      ok: false as const,
+      status: brokerResponse.response.status,
+      message: stringValue(errorBody.message) ?? `iD30 Auth request failed with HTTP ${brokerResponse.response.status}.`,
+    };
+  }
+  return { ok: true as const, status: brokerResponse.response.status, response: brokerResponse.response };
+}

@@ -8,7 +8,7 @@ import {
 } from "@/lib/email/attachment-display";
 import {
   archiveGmailAttachmentById,
-  fetchGmailAttachmentBytes,
+  fetchGmailAttachmentResponse,
   gmailMessageIdFromMetadata,
 } from "@/lib/email/gmail-attachment-storage";
 import { prisma } from "@/lib/prisma";
@@ -160,19 +160,25 @@ export async function GET(
   }
 
   try {
-    const bytes = await fetchGmailAttachmentBytes({
+    const providerResponse = await fetchGmailAttachmentResponse({
       authConnectionId: mailbox.authConnectionId,
       gmailMessageId,
       providerAttachmentId,
     });
-    if (bytes.byteLength > maxProviderDownloadBytes) {
+    const providerLength = Number(
+      providerResponse.headers.get("content-length"),
+    );
+    if (
+      Number.isFinite(providerLength) &&
+      providerLength > maxProviderDownloadBytes
+    ) {
       return NextResponse.json(
         { message: "This attachment is too large to retrieve through the CRM." },
         { status: 413 },
       );
     }
 
-    return new Response(new Uint8Array(bytes), {
+    return new Response(providerResponse.body, {
       headers: {
         "Cache-Control": download
           ? "private, no-store"
@@ -181,7 +187,9 @@ export async function GET(
           attachment.fileName,
           download,
         ),
-        "Content-Length": String(bytes.byteLength),
+        ...(Number.isFinite(providerLength)
+          ? { "Content-Length": String(providerLength) }
+          : {}),
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "Content-Type": contentType,
         "X-Content-Type-Options": "nosniff",

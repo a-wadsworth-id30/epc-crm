@@ -1,7 +1,6 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import { z } from "zod";
 import {
   attachmentChecksum,
   gmailSharedImageEntityType,
@@ -11,18 +10,9 @@ import {
   gmailUserSavedTag,
   isImageAttachment,
 } from "@/lib/email/attachment-deduplication";
-import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
+import { id30AuthBrokerBinaryRequest } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
 import { getR2Config, headR2Object, putR2Object } from "@/lib/storage/r2";
-
-const attachmentResponseSchema = z.object({
-  ok: z.literal(true),
-  provider: z.literal("gmail"),
-  result: z.object({
-    data: z.string().min(1).nullable(),
-    size: z.number().int().nonnegative().nullable(),
-  }),
-});
 
 type GmailAttachmentSource = {
   authConnectionId: string;
@@ -66,11 +56,28 @@ export async function fetchGmailAttachmentBytes({
   GmailAttachmentSource,
   "authConnectionId" | "gmailMessageId" | "providerAttachmentId"
 >) {
+  const response = await fetchGmailAttachmentResponse({
+    authConnectionId,
+    gmailMessageId,
+    providerAttachmentId,
+  });
+  return Buffer.from(await response.arrayBuffer());
+}
+
+export async function fetchGmailAttachmentResponse({
+  authConnectionId,
+  gmailMessageId,
+  providerAttachmentId,
+}: Pick<
+  GmailAttachmentSource,
+  "authConnectionId" | "gmailMessageId" | "providerAttachmentId"
+>) {
   const pathname = `/api/crm/connections/${encodeURIComponent(authConnectionId)}/gmail/attachment`;
-  const response = await id30AuthBrokerRequest({
+  const response = await id30AuthBrokerBinaryRequest({
     body: {
       attachmentId: providerAttachmentId,
       messageId: gmailMessageId,
+      responseEncoding: "binary",
     },
     connectionId: authConnectionId,
     method: "POST",
@@ -79,12 +86,7 @@ export async function fetchGmailAttachmentBytes({
 
   if (!response.ok) throw new Error(response.message);
 
-  const parsed = attachmentResponseSchema.safeParse(response.body);
-  if (!parsed.success || !parsed.data.result.data) {
-    throw new Error("Gmail attachment response was incomplete.");
-  }
-
-  return Buffer.from(parsed.data.result.data, "base64url");
+  return response.response;
 }
 
 async function attachmentBytes(source: GmailAttachmentSource) {

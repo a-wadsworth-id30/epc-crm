@@ -134,6 +134,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   attachment ID is retained during sync to avoid data loss.
   Deliberate saves carry uploader ownership plus a `gmail-user-saved` marker so
   guarded legacy-R2 cleanup cannot remove them.
+- On-demand Gmail preview/download uses Auth's binary response and streams it
+  through the authorised CRM route. Legacy Auth JSON/base64 remains compatible,
+  while deliberate **Save to CRM** still buffers bytes for hashing and R2 upload.
 - CRM Gmail sends carry a stable per-attempt operation ID to iD30 Auth. One
   transient broker 503 is retried with the same operation and RFC `Message-ID`;
   Auth returns the stored Gmail result or blocks an unresolved attempt instead
