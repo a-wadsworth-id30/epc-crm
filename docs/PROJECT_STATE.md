@@ -1289,9 +1289,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   settings also consumes iD30 Auth's privacy-safe push diagnostics and shows a
   cross-system activation checklist for Auth Pub/Sub, the CRM feature flag, the
   protected renewal secret and eligible connected mailboxes. Polling remains
-  active until every activation prerequisite is ready. The defaults
-  process two mailboxes with up to 15 messages each inside a 20-second route
-  budget; bounded environment overrides can tune those caps. Transient
+  active until every activation prerequisite is ready. A separate 15-minute
+  connection reconciliation job reads each
+  Auth-owned Gmail connection through the signed broker, automatically reflects
+  reconnect-required, disconnected and recovered states in CRM, and preserves
+  the mailbox's existing sync/send preferences. Transient Auth availability
+  errors are recorded separately and do not change a working mailbox status.
+  The sync defaults process two mailboxes with up to 15 messages each inside a
+  20-second route budget; bounded environment overrides can tune those caps. Transient
   failures now receive exponential scheduled retry delays from 5 minutes up to
   1 hour, preventing one failing connected mailbox from consuming every batch;
   manual admin sync remains an immediate override and successful sync clears

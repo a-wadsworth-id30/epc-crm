@@ -610,6 +610,14 @@ deferred counts only. Gmail settings presents that separate renewal history
 alongside sync operations so admins can distinguish push-watch health from
 normal message polling.
 
+CRM also reconciles every Gmail mailbox against Auth's connection record every
+15 minutes through the signed read-only broker endpoint. The least recently
+checked mailboxes run first. Confirmed Auth transitions update the CRM mailbox
+status and write a compact audit event, while transient broker failures are
+stored separately and never disconnect a working mailbox. A mailbox that was
+marked `NEEDS_REAUTH` automatically returns to `CONNECTED` after Auth confirms
+a successful reconnect; sync/send preferences are not changed by reconciliation.
+
 Admin mailbox configuration saves compare a normalized before/after snapshot
 for purpose, owner, sync/send flags and authorised user IDs. Real changes write
 `gmail.mailbox.settings_updated` in the same database transaction; no-op saves
