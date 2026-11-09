@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
+import { BackgroundJobRunStatus } from "@prisma/client";
+import {
+  gmailSyncJobName,
+  gmailSyncJobType,
+  summarizeGmailSyncOperation,
+} from "@/lib/integrations/gmail-sync-operations";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
 import { prioritizeGmailSyncMailboxes } from "@/lib/integrations/gmail-sync-scheduling";
+import {
+  completeBackgroundJobRun,
+  failBackgroundJobRun,
+  startBackgroundJobRun,
+} from "@/lib/maintenance/background-jobs";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -79,54 +90,82 @@ export async function POST(request: Request) {
     45_000,
     5_000,
   );
-  const candidates = await prisma.emailMailbox.findMany({
-    where: { status: "CONNECTED", syncEnabled: true },
-    orderBy: [{ lastSyncAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
-    select: {
-      createdAt: true,
-      emailAddress: true,
-      id: true,
-      lastHistoryId: true,
-      lastSyncAt: true,
-      metadata: true,
-    },
-    take: 50,
+  const jobRun = await startBackgroundJobRun({
+    jobName: gmailSyncJobName,
+    jobType: gmailSyncJobType,
+    metadata: { mailboxLimit, maxResults, timeBudgetMs },
+    trigger: "scheduled",
   });
-  const mailboxes = prioritizeGmailSyncMailboxes(candidates).slice(0, mailboxLimit);
-  const startedAt = Date.now();
-  const results = [];
-  for (const mailbox of mailboxes) {
-    if (results.length && Date.now() - startedAt >= timeBudgetMs) break;
+  try {
+    const candidates = await prisma.emailMailbox.findMany({
+      where: { status: "CONNECTED", syncEnabled: true },
+      orderBy: [{ lastSyncAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+      select: {
+        createdAt: true,
+        emailAddress: true,
+        id: true,
+        lastHistoryId: true,
+        lastSyncAt: true,
+        metadata: true,
+      },
+      take: 50,
+    });
+    const mailboxes = prioritizeGmailSyncMailboxes(candidates).slice(0, mailboxLimit);
+    const startedAt = Date.now();
+    const results = [];
+    for (const mailbox of mailboxes) {
+      if (results.length && Date.now() - startedAt >= timeBudgetMs) break;
 
-    try {
-      results.push({
-        emailAddress: mailbox.emailAddress,
-        ok: true,
-        result: await syncGmailMailbox(mailbox.id, { maxResults }),
-      });
-    } catch (error) {
-      results.push({
-        emailAddress: mailbox.emailAddress,
-        ok: false,
-        message: error instanceof Error ? error.message : "Gmail sync failed.",
-      });
+      try {
+        results.push({
+          emailAddress: mailbox.emailAddress,
+          ok: true,
+          result: await syncGmailMailbox(mailbox.id, { maxResults }),
+        });
+      } catch (error) {
+        results.push({
+          emailAddress: mailbox.emailAddress,
+          ok: false,
+          message: error instanceof Error ? error.message : "Gmail sync failed.",
+        });
+      }
     }
-  }
 
-  const failed = results.filter((result) => !result.ok).length;
-  const deferred = mailboxes.length - results.length;
-  const backlogPending = results.filter(
-    (result) => result.ok && result.result?.hasMore,
-  ).length;
-  return NextResponse.json(
-    {
-      backlogPending,
-      deferred,
-      failed,
-      ok: failed === 0,
-      processed: results.length,
-      results,
-    },
-    { status: failed === results.length && results.length ? 502 : 200 },
-  );
+    const deferred = mailboxes.length - results.length;
+    const summary = summarizeGmailSyncOperation(results, deferred);
+    const status =
+      summary.processed > 0 && summary.failed === summary.processed
+        ? BackgroundJobRunStatus.ERROR
+        : summary.failed || summary.deferred || summary.backlogPending
+          ? BackgroundJobRunStatus.WARNING
+          : BackgroundJobRunStatus.SUCCESS;
+    await completeBackgroundJobRun(jobRun, {
+      message: `Processed ${summary.processed} mailbox${summary.processed === 1 ? "" : "es"}; ${summary.failed} failed; ${summary.backlogPending} continuation page${summary.backlogPending === 1 ? "" : "s"} remain.`,
+      recordsRead: summary.messagesRead,
+      recordsWritten: summary.recordsWritten,
+      status,
+      summary,
+    });
+
+    return NextResponse.json(
+      {
+        backlogPending: summary.backlogPending,
+        deferred: summary.deferred,
+        failed: summary.failed,
+        ok: summary.failed === 0,
+        processed: summary.processed,
+        results,
+      },
+      {
+        status:
+          summary.failed === summary.processed && summary.processed ? 502 : 200,
+      },
+    );
+  } catch (error) {
+    await failBackgroundJobRun(jobRun, {
+      error,
+      message: "Scheduled Gmail sync failed before the batch completed.",
+    });
+    throw error;
+  }
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { BackgroundJobRunStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
@@ -11,6 +12,16 @@ import {
   isLegacyGmailMailboxPurpose,
 } from "@/lib/integrations/gmail-mailbox-purpose";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
+import {
+  gmailSyncJobName,
+  gmailSyncJobType,
+  summarizeGmailSyncOperation,
+} from "@/lib/integrations/gmail-sync-operations";
+import {
+  completeBackgroundJobRun,
+  failBackgroundJobRun,
+  startBackgroundJobRun,
+} from "@/lib/maintenance/background-jobs";
 import { prisma } from "@/lib/prisma";
 
 type GmailMailboxActionState = {
@@ -194,12 +205,31 @@ export async function syncGmailMailboxAction(
   _previous: GmailMailboxActionState,
   formData: FormData,
 ): Promise<GmailMailboxActionState> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const parsed = mailboxIdSchema.safeParse(formData.get("mailboxId"));
   if (!parsed.success) return actionResult(false, "Gmail mailbox was not found.");
 
+  const jobRun = await startBackgroundJobRun({
+    actorId: user.id,
+    jobName: gmailSyncJobName,
+    jobType: gmailSyncJobType,
+    trigger: "manual",
+  });
   try {
     const result = await syncGmailMailbox(parsed.data);
+    const summary = summarizeGmailSyncOperation([{ ok: true, result }], 0);
+    await completeBackgroundJobRun(jobRun, {
+      message: result.hasMore
+        ? "Manual Gmail sync completed; more history remains for the next sync."
+        : "Manual Gmail sync completed.",
+      recordsRead: summary.messagesRead,
+      recordsWritten: summary.recordsWritten,
+      status:
+        result.hasMore || result.failedAttachments
+          ? BackgroundJobRunStatus.WARNING
+          : BackgroundJobRunStatus.SUCCESS,
+      summary,
+    });
     revalidatePath("/inbox");
     revalidatePath("/sales");
     revalidatePath("/settings/integrations/gmail");
@@ -208,6 +238,10 @@ export async function syncGmailMailboxAction(
       `Read ${result.read} message${result.read === 1 ? "" : "s"}; created ${result.created}, updated ${result.updated}${result.archivedAttachments ? `, retained ${result.archivedAttachments} inline attachment${result.archivedAttachments === 1 ? "" : "s"}` : ""}${result.hasMore ? ". More history remains for the next sync" : ""}.`,
     );
   } catch (error) {
+    await failBackgroundJobRun(jobRun, {
+      error,
+      message: "Manual Gmail mailbox sync failed.",
+    });
     revalidatePath("/settings/integrations/gmail");
     return actionResult(
       false,
