@@ -338,7 +338,10 @@ route registers missing watches and renews watches within 48 hours of expiry,
 stores only operational expiry/retry state, and uses one-to-six-hour backoff
 after failures. Keep the flag disabled until the corresponding iD30 Auth
 Pub/Sub environment and Google subscription are ready; five-minute Gmail
-polling continues independently.
+polling continues independently. Each enabled renewal invocation records a
+privacy-safe `gmail-watch-renewal` background job with aggregate counts. The
+Gmail integration settings page shows recent renewal status and duration
+without recording mailbox identities, Gmail history IDs or message content.
 
 The repository also includes
 `netlify/functions/process-conversion-uploads.mjs`, scheduled every 30 minutes.

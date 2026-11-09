@@ -587,7 +587,12 @@ due watches to be queried without scanning JSON metadata. Failures back off
 from one to six hours and do not disable the five-minute polling fallback.
 Gmail settings shows whether each mailbox is push-active, awaiting renewal or
 using polling only. Successful and failed renewals write privacy-safe audit
-events without mailbox addresses, Gmail history IDs or credentials.
+events without mailbox addresses, Gmail history IDs or credentials. Each
+hourly renewal batch also writes one `BackgroundJobRun` under
+`gmail-watch-renewal`, containing aggregate processed, renewed, failed and
+deferred counts only. Gmail settings presents that separate renewal history
+alongside sync operations so admins can distinguish push-watch health from
+normal message polling.
 
 Admin mailbox configuration saves compare a normalized before/after snapshot
 for purpose, owner, sync/send flags and authorised user IDs. Real changes write
