@@ -379,7 +379,10 @@ attached to the wrong sale. CRM-originated Gmail sends create the thread link
 immediately, allowing replies to return to the correct sale. Gmail sync stores
 attachment metadata in `EmailAttachment` but leaves retrievable attachment
 bytes in Gmail. Authenticated Preview and Download requests proxy the selected
-file through iD30 Auth without creating an R2 object. **Save to CRM** explicitly
+file through iD30 Auth without creating an R2 object. These on-demand responses
+use Auth's binary mode and pass the response body through to the browser,
+removing the JSON/base64 copy and second full attachment buffer in CRM.
+**Save to CRM** explicitly
 archives a selected attachment through `FileAsset`; MIME parts supplied only as
 inline data and without a later-retrievable Gmail attachment ID are retained
 during sync because otherwise their bytes would be lost. Saved Gmail image
