@@ -7,6 +7,7 @@ import {
   getId30AuthRuntimeConfig,
   id30AuthIdentifierSchema,
 } from "@/lib/integrations/id30-auth";
+import { fetchId30AuthWithResilience } from "@/lib/integrations/id30-auth-fetch";
 
 const completionStatuses = [
   "connected",
@@ -295,18 +296,31 @@ export async function id30AuthBrokerRequest({
   }
 
   const serializedBody = body === undefined ? undefined : JSON.stringify(body);
-  const response = await fetch(new URL(pathname, runtime.baseUrl), {
+  const brokerResponse = await fetchId30AuthWithResilience({
     method,
-    headers: signedHeaders({
+    requestInit: () => ({
+      headers: signedHeaders({
+        body: serializedBody,
+        connectionId,
+        method,
+        pathname,
+        runtime,
+      }),
       body: serializedBody,
-      connectionId,
-      method,
-      pathname,
-      runtime,
+      cache: "no-store",
     }),
-    body: serializedBody,
-    cache: "no-store",
+    url: new URL(pathname, runtime.baseUrl),
   });
+
+  if (!brokerResponse.ok) {
+    return {
+      ok: false as const,
+      status: brokerResponse.status,
+      message: brokerResponse.message,
+    };
+  }
+
+  const { response } = brokerResponse;
   const responseBody = (await response.json().catch(() => ({}))) as Record<
     string,
     unknown

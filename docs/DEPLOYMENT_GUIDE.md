@@ -203,6 +203,14 @@ Optional:
   `ID30_AUTH_WORKSPACE_ID`: identify the Auth broker and workspace expected in
   signed MCP requests. These IDs are not secrets, but they must match the Auth
   client registration used by `mcp.id30.com`.
+- `ID30_AUTH_REQUEST_TIMEOUT_MS`: optional CRM-to-Auth request timeout, default
+  `8000`, bounded between `1000` and `30000` milliseconds.
+- `ID30_AUTH_GET_MAX_ATTEMPTS`: optional maximum attempts for safe signed GET
+  requests, default `2`, bounded between `1` and `3`. Mutating requests are not
+  retried automatically.
+- `ID30_AUTH_CIRCUIT_FAILURE_THRESHOLD` and `ID30_AUTH_CIRCUIT_OPEN_MS`:
+  optional process-local circuit-breaker tuning, defaulting to five transient
+  failures and a 30-second open window.
 
 If `MIGRATE_DATABASE_URL` is not set and `DATABASE_URL` points at the Neon
 pooler host, the build still attempts migrations but prints a warning. Prefer

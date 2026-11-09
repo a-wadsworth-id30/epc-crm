@@ -117,6 +117,10 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `EmailMailbox`, `EmailMailboxAccess` and `EmailThreadLink`: Auth-backed Gmail
   mailboxes, per-user send access and durable Gmail-thread-to-sale routing.
   Google OAuth tokens remain in iD30 Auth.
+- CRM-to-Auth HTTP calls use one bounded resilience layer. Requests time out,
+  safe read-only GETs retry with a fresh signed request ID, mutating requests
+  never retry automatically, and repeated transient failures open a short
+  process-local circuit so a slow Auth dependency cannot exhaust CRM workers.
 - `EmailAttachment`: provider attachment metadata with an optional R2-backed
   `FileAsset` archive link so imported Gmail files remain available after the
   provider is disconnected.
