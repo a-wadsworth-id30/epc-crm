@@ -15,6 +15,7 @@ import {
   getId30AuthRuntimeConfig,
   id30AuthIdentifierSchema,
 } from "@/lib/integrations/id30-auth";
+import { fetchId30AuthWithResilience } from "@/lib/integrations/id30-auth-fetch";
 import {
   marketingIntegrationProviders,
   marketingProviderSelectorOptionsSchema,
@@ -723,6 +724,43 @@ function authBrokerSignedHeaders({
   };
 }
 
+async function resilientAuthBrokerRequest({
+  authBroker,
+  body,
+  connectionId,
+  method,
+  pathname,
+}: {
+  authBroker: ResolvedId30AuthRuntimeConfig;
+  body?: string;
+  connectionId: string;
+  method: "DELETE" | "GET" | "POST";
+  pathname: string;
+}) {
+  return fetchId30AuthWithResilience({
+    method,
+    requestInit: () => {
+      const issuedAt = new Date();
+      const expiresAt = new Date(issuedAt.getTime() + 10 * 60_000);
+      return {
+        body,
+        cache: "no-store",
+        headers: authBrokerSignedHeaders({
+          authBroker,
+          body,
+          connectionId,
+          contentType: body === undefined ? undefined : "application/json",
+          expiresAt: expiresAt.toISOString(),
+          issuedAt: issuedAt.toISOString(),
+          method,
+          pathname,
+        }),
+      };
+    },
+    url: new URL(pathname, authBroker.baseUrl),
+  });
+}
+
 function signaturesMatch(expected: string, actual: string) {
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(actual);
@@ -796,23 +834,18 @@ async function marketingAuthBrokerConnectionRequest({
     };
   }
 
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + 10 * 60_000);
-  const issuedAtIso = issuedAt.toISOString();
-  const expiresAtIso = expiresAt.toISOString();
-  const url = new URL(pathname, authBroker.baseUrl);
-  const response = await fetch(url, {
+  const brokerResponse = await resilientAuthBrokerRequest({
+    authBroker,
+    connectionId,
     method,
-    headers: authBrokerSignedHeaders({
-      authBroker,
-      connectionId,
-      expiresAt: expiresAtIso,
-      issuedAt: issuedAtIso,
-      method,
-      pathname,
-    }),
-    cache: "no-store",
+    pathname,
   });
+
+  if (!brokerResponse.ok) {
+    return brokerResponse;
+  }
+
+  const { response } = brokerResponse;
   const body = (await response.json().catch(() => ({}))) as Record<
     string,
     unknown
@@ -895,22 +928,18 @@ export async function fetchMarketingAuthBrokerProviderReadiness(): Promise<
   }
 
   const pathname = "/api/crm/providers";
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + 10 * 60_000);
-  const issuedAtIso = issuedAt.toISOString();
-  const expiresAtIso = expiresAt.toISOString();
-  const response = await fetch(new URL(pathname, authBroker.baseUrl), {
+  const brokerResponse = await resilientAuthBrokerRequest({
+    authBroker,
+    connectionId: "__providers__",
     method: "GET",
-    headers: authBrokerSignedHeaders({
-      authBroker,
-      connectionId: "__providers__",
-      expiresAt: expiresAtIso,
-      issuedAt: issuedAtIso,
-      method: "GET",
-      pathname,
-    }),
-    cache: "no-store",
+    pathname,
   });
+
+  if (!brokerResponse.ok) {
+    return brokerResponse;
+  }
+
+  const { response } = brokerResponse;
   const body = (await response.json().catch(() => ({}))) as Record<
     string,
     unknown
@@ -970,22 +999,18 @@ export async function fetchMarketingAuthBrokerProviderDiagnostics({
 
   const pathname = `/api/crm/providers/${encodeURIComponent(provider)}/diagnostics`;
   const signatureScope = `__provider_diagnostics__:${provider}`;
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + 10 * 60_000);
-  const issuedAtIso = issuedAt.toISOString();
-  const expiresAtIso = expiresAt.toISOString();
-  const response = await fetch(new URL(pathname, authBroker.baseUrl), {
+  const brokerResponse = await resilientAuthBrokerRequest({
+    authBroker,
+    connectionId: signatureScope,
     method: "GET",
-    headers: authBrokerSignedHeaders({
-      authBroker,
-      connectionId: signatureScope,
-      expiresAt: expiresAtIso,
-      issuedAt: issuedAtIso,
-      method: "GET",
-      pathname,
-    }),
-    cache: "no-store",
+    pathname,
   });
+
+  if (!brokerResponse.ok) {
+    return brokerResponse;
+  }
+
+  const { response } = brokerResponse;
   const body = (await response.json().catch(() => ({}))) as Record<
     string,
     unknown
@@ -1034,26 +1059,20 @@ async function marketingAuthBrokerConversionUploadRequest({
   }
 
   const pathname = `/api/crm/connections/${encodeURIComponent(connectionId)}/conversion-uploads/${action}`;
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + 10 * 60_000);
-  const issuedAtIso = issuedAt.toISOString();
-  const expiresAtIso = expiresAt.toISOString();
   const requestBody = JSON.stringify(payload);
-  const response = await fetch(new URL(pathname, authBroker.baseUrl), {
-    method: "POST",
-    headers: authBrokerSignedHeaders({
-      authBroker,
-      body: requestBody,
-      connectionId,
-      contentType: "application/json",
-      expiresAt: expiresAtIso,
-      issuedAt: issuedAtIso,
-      method: "POST",
-      pathname,
-    }),
+  const brokerResponse = await resilientAuthBrokerRequest({
+    authBroker,
     body: requestBody,
-    cache: "no-store",
+    connectionId,
+    method: "POST",
+    pathname,
   });
+
+  if (!brokerResponse.ok) {
+    return brokerResponse;
+  }
+
+  const { response } = brokerResponse;
   const body = (await response.json().catch(() => ({}))) as Record<
     string,
     unknown
@@ -1128,26 +1147,20 @@ export async function fetchMarketingAuthBrokerKlaviyoReporting({
   }
 
   const pathname = `/api/crm/connections/${encodeURIComponent(connectionId)}/reporting/klaviyo`;
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + 10 * 60_000);
-  const issuedAtIso = issuedAt.toISOString();
-  const expiresAtIso = expiresAt.toISOString();
   const requestBody = JSON.stringify({ config });
-  const response = await fetch(new URL(pathname, authBroker.baseUrl), {
-    method: "POST",
-    headers: authBrokerSignedHeaders({
-      authBroker,
-      body: requestBody,
-      connectionId,
-      contentType: "application/json",
-      expiresAt: expiresAtIso,
-      issuedAt: issuedAtIso,
-      method: "POST",
-      pathname,
-    }),
+  const brokerResponse = await resilientAuthBrokerRequest({
+    authBroker,
     body: requestBody,
-    cache: "no-store",
+    connectionId,
+    method: "POST",
+    pathname,
   });
+
+  if (!brokerResponse.ok) {
+    return brokerResponse;
+  }
+
+  const { response } = brokerResponse;
   const body = (await response.json().catch(() => ({}))) as Record<
     string,
     unknown

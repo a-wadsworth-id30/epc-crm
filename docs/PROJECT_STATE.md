@@ -1430,7 +1430,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   provider requests. Signed Auth JSON requests include
   `x-id30-content-sha256`, every signed Auth broker API call includes
   `x-id30-crm-request-id`, and the HMAC payload binds that request id plus the
-  exact request body digest before Auth parses it. Auth-connected Meta, Google
+  exact request body digest before Auth parses it. CRM bounds Auth broker calls
+  with a timeout, retries only safe GET requests with a new signed request ID,
+  and opens a short process-local circuit after repeated transient failures;
+  POST and DELETE operations are never automatically replayed. Auth-connected Meta, Google
   Ads, Bing Ads and LinkedIn Ads live conversion sends use the signed Auth send API so
   provider credentials stay centralised; manually configured fallback
   connections still use the existing local encrypted credential path. iD30 Auth

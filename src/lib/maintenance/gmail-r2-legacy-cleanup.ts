@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { attachmentChecksum } from "@/lib/email/attachment-deduplication";
+import { fetchId30AuthWithResilience } from "@/lib/integrations/id30-auth-fetch";
 import {
   assessGmailLegacyFileCleanup,
   gmailMessageIdFromCleanupMetadata,
@@ -272,17 +273,26 @@ async function fetchProviderAttachment({
     attachmentId: providerAttachmentId,
     messageId: gmailMessageId,
   });
-  const response = await fetch(new URL(pathname, runtime.baseUrl), {
-    body,
-    cache: "no-store",
-    headers: signedAuthHeaders({
-      body,
-      connectionId: authConnectionId,
-      pathname,
-      runtime,
-    }),
+  const brokerResponse = await fetchId30AuthWithResilience({
     method: "POST",
+    requestInit: () => ({
+      body,
+      cache: "no-store",
+      headers: signedAuthHeaders({
+        body,
+        connectionId: authConnectionId,
+        pathname,
+        runtime,
+      }),
+    }),
+    url: new URL(pathname, runtime.baseUrl),
   });
+
+  if (!brokerResponse.ok) {
+    throw new Error("Gmail attachment verification could not reach iD30 Auth.");
+  }
+
+  const { response } = brokerResponse;
   const responseBody = jsonObject(await response.json().catch(() => null));
   const result = jsonObject(responseBody?.result);
   const encodedData = result?.data;
