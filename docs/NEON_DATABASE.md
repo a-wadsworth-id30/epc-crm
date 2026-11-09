@@ -150,6 +150,13 @@ credentials. Pending receipts are marked processed only after the associated
 mailbox sync has drained all pages, and processed/ignored rows are deleted after
 14 days by the scheduled Gmail sync route.
 
+The migration `20261109121500_gmail_watch_renewal` adds structured Gmail watch
+expiry, last-renewal, retry, bounded-error and failure-count fields to
+`EmailMailbox`. The fields let the hourly renewal route query due watches
+without scanning mailbox JSON metadata. Existing mailboxes start with no watch
+expiry and remain on the five-minute polling fallback until Gmail push is
+explicitly enabled and a watch is successfully registered.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

@@ -1271,7 +1271,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   marks receipts that pre-date the sync processed when every continuation page
   has drained. Notifications arriving during a sync remain pending for the next
   pass. The five-minute scheduled poll remains the fallback, while
-  processed/ignored receipt metadata is retained for 14 days. The defaults
+  processed/ignored receipt metadata is retained for 14 days. A separate
+  hourly Netlify function registers missing Gmail watches and renews watches
+  within 48 hours of expiry when `GMAIL_PUSH_ENABLED=true`. Renewal uses the
+  signed Auth broker, stores structured expiry/retry state on the mailbox and
+  backs failures off from one to six hours without disabling polling. Gmail
+  settings shows push-active, retry and polling-only state. The defaults
   process two mailboxes with up to 15 messages each inside a 20-second route
   budget; bounded environment overrides can tune those caps. Transient
   failures now receive exponential scheduled retry delays from 5 minutes up to
