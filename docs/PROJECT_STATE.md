@@ -1280,7 +1280,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   batches now record aggregate processed, renewed, failed and deferred counts
   in `BackgroundJobRun` under `gmail-watch-renewal`; the Gmail settings page
   displays this history separately from message-sync operations without
-  exposing mailbox identities, Gmail history IDs or message content. The defaults
+  exposing mailbox identities, Gmail history IDs or message content. Gmail
+  settings also consumes iD30 Auth's privacy-safe push diagnostics and shows a
+  cross-system activation checklist for Auth Pub/Sub, the CRM feature flag, the
+  protected renewal secret and eligible connected mailboxes. Polling remains
+  active until every activation prerequisite is ready. The defaults
   process two mailboxes with up to 15 messages each inside a 20-second route
   budget; bounded environment overrides can tune those caps. Transient
   failures now receive exponential scheduled retry delays from 5 minutes up to

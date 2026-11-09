@@ -177,6 +177,11 @@ export type MarketingAuthBrokerProviderDiagnosticsResult =
         connectedAt?: string | null;
         updatedAt?: string | null;
       } | null;
+      gmailPush: {
+        invalidEnv: string[];
+        missingEnv: string[];
+        ready: boolean;
+      } | null;
       checks: Array<{
         createdAt?: string | null;
         detail: string;
@@ -322,6 +327,14 @@ const authBrokerProviderDiagnosticsResponseSchema = z.object({
     })
     .passthrough()
     .nullable(),
+  gmailPush: z
+    .object({
+      invalidEnv: z.array(z.string().trim().min(1)).default([]),
+      missingEnv: z.array(z.string().trim().min(1)).default([]),
+      ready: z.boolean(),
+    })
+    .nullable()
+    .default(null),
   checks: z.array(
     z
       .object({
@@ -917,11 +930,11 @@ export async function fetchMarketingAuthBrokerProviderReadiness(): Promise<
 export async function fetchMarketingAuthBrokerProviderDiagnostics({
   provider,
 }: {
-  provider: MarketingIntegrationProviderSlug;
+  provider: MarketingIntegrationProviderSlug | "gmail";
 }): Promise<MarketingAuthBrokerProviderDiagnosticsResult> {
   const oauthProvider = findMarketingOAuthProvider(provider);
 
-  if (!oauthProvider?.authBroker) {
+  if (provider !== "gmail" && !oauthProvider?.authBroker) {
     return {
       ok: false,
       status: 400,

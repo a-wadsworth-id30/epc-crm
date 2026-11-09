@@ -38,18 +38,37 @@ function metric(
 
 export default function GmailWatchOperationsPanel({
   available,
+  authPushMessage,
+  authPushReady,
+  eligibleMailboxCount,
   pushEnabled,
   runs,
   secretConfigured,
 }: {
   available: boolean;
+  authPushMessage: string;
+  authPushReady: boolean;
+  eligibleMailboxCount: number;
   pushEnabled: boolean;
   runs: GmailWatchRun[];
   secretConfigured: boolean;
 }) {
   const latest = runs[0];
   const latestSummary = operationSummary(latest);
-  const schedulerReady = pushEnabled && secretConfigured;
+  const schedulerReady =
+    authPushReady &&
+    pushEnabled &&
+    secretConfigured &&
+    eligibleMailboxCount > 0;
+  const blocker = !authPushReady
+    ? authPushMessage
+    : !pushEnabled
+      ? "Gmail push renewal is intentionally disabled. Existing scheduled polling continues independently."
+      : !secretConfigured
+        ? "The renewal secret is missing. Configure GMAIL_SYNC_SECRET or CRON_SECRET before enabling the hourly job."
+        : eligibleMailboxCount === 0
+          ? "Reconnect and enable sync for at least one Gmail mailbox before activating push delivery."
+          : null;
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -73,11 +92,40 @@ export default function GmailWatchOperationsPanel({
         </span>
       </div>
 
-      {!pushEnabled || !secretConfigured ? (
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ReadinessCheck
+          detail={authPushMessage}
+          label="Auth Pub/Sub"
+          ready={authPushReady}
+        />
+        <ReadinessCheck
+          detail={
+            pushEnabled
+              ? "GMAIL_PUSH_ENABLED is active."
+              : "Feature flag remains safely disabled."
+          }
+          label="CRM push flag"
+          ready={pushEnabled}
+        />
+        <ReadinessCheck
+          detail={
+            secretConfigured
+              ? "Protected renewal route is configured."
+              : "Add GMAIL_SYNC_SECRET or CRON_SECRET."
+          }
+          label="Renewal secret"
+          ready={secretConfigured}
+        />
+        <ReadinessCheck
+          detail={`${eligibleMailboxCount} connected, sync-enabled mailbox${eligibleMailboxCount === 1 ? "" : "es"}.`}
+          label="Eligible mailboxes"
+          ready={eligibleMailboxCount > 0}
+        />
+      </div>
+
+      {blocker ? (
         <div className="mt-4 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-800 dark:border-warning-900/50 dark:bg-warning-500/10 dark:text-warning-200">
-          {!pushEnabled
-            ? "Gmail push renewal is intentionally disabled. Existing scheduled polling continues independently."
-            : "The renewal secret is missing. Configure GMAIL_SYNC_SECRET or CRON_SECRET before enabling the hourly job."}
+          {blocker}
         </div>
       ) : null}
 
@@ -174,6 +222,38 @@ export default function GmailWatchOperationsPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function ReadinessCheck({
+  detail,
+  label,
+  ready,
+}: {
+  detail: string;
+  label: string;
+  ready: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
+          {label}
+        </p>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+            ready
+              ? "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-300"
+              : "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300"
+          }`}
+        >
+          {ready ? "Ready" : "Action needed"}
+        </span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
+        {detail}
+      </p>
+    </div>
   );
 }
 
