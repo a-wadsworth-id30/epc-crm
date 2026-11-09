@@ -3,7 +3,14 @@ import { describe, it } from "node:test";
 import {
   gmailMailboxHasContinuation,
   prioritizeGmailSyncMailboxes,
+  scheduledGmailSyncCandidates,
 } from "../src/lib/integrations/gmail-sync-scheduling";
+import {
+  clearGmailSyncRetryMetadata,
+  gmailSyncFailureMetadata,
+  gmailSyncRetryDelayMs,
+  gmailSyncRetryState,
+} from "../src/lib/integrations/gmail-sync-retry-policy";
 
 describe("Gmail sync scheduling", () => {
   it("detects the correct continuation token for initial and history sync", () => {
@@ -56,5 +63,50 @@ describe("Gmail sync scheduling", () => {
       rows.map((row) => row.id),
       ["backlog-old", "backlog-new", "regular-old"],
     );
+  });
+
+  it("backs off repeated failures with a one-hour cap", () => {
+    assert.equal(gmailSyncRetryDelayMs(1), 5 * 60 * 1_000);
+    assert.equal(gmailSyncRetryDelayMs(2), 10 * 60 * 1_000);
+    assert.equal(gmailSyncRetryDelayMs(20), 60 * 60 * 1_000);
+  });
+
+  it("defers cooling-down mailboxes without blocking healthy candidates", () => {
+    const now = new Date("2026-11-09T10:00:00.000Z");
+    const result = scheduledGmailSyncCandidates(
+      [
+        {
+          id: "failed",
+          lastHistoryId: "history-1",
+          lastSyncAt: null,
+          metadata: { gmailSyncRetryAfter: "2026-11-09T10:05:00.000Z" },
+        },
+        {
+          id: "ready",
+          lastHistoryId: "history-2",
+          lastSyncAt: new Date("2026-11-09T09:55:00.000Z"),
+          metadata: {},
+        },
+      ],
+      now,
+    );
+
+    assert.equal(result.coolingDown, 1);
+    assert.deepEqual(result.eligible.map((mailbox) => mailbox.id), ["ready"]);
+  });
+
+  it("increments retry metadata and clears it after a successful sync", () => {
+    const now = new Date("2026-11-09T10:00:00.000Z");
+    const firstFailure = gmailSyncFailureMetadata({ existing: true }, now);
+    const secondFailure = gmailSyncFailureMetadata(firstFailure, now);
+
+    assert.deepEqual(gmailSyncRetryState(secondFailure, now), {
+      coolingDown: true,
+      failureCount: 2,
+      retryAfter: new Date("2026-11-09T10:10:00.000Z"),
+    });
+    assert.deepEqual(clearGmailSyncRetryMetadata(secondFailure), {
+      existing: true,
+    });
   });
 });

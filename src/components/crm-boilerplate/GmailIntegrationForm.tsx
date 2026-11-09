@@ -16,6 +16,7 @@ import {
 } from "@/lib/integrations/gmail-mailbox-health";
 
 type GmailMailboxRow = {
+  automaticRetryAt: string | null;
   id: string;
   displayName: string | null;
   emailAddress: string;
@@ -246,7 +247,7 @@ function MailboxCard({
             </a>
           ) : null}
         </div>
-        <dl className="mt-3 grid gap-2 border-t border-current/15 pt-3 text-xs sm:grid-cols-3">
+        <dl className="mt-3 grid gap-2 border-t border-current/15 pt-3 text-xs sm:grid-cols-4">
           <div>
             <dt className="font-medium opacity-70">Last successful sync</dt>
             <dd className="mt-0.5 font-semibold">
@@ -265,6 +266,16 @@ function MailboxCard({
             <dt className="font-medium opacity-70">CRM sending</dt>
             <dd className="mt-0.5 font-semibold">
               {mailbox.sendEnabled && connected ? "Enabled" : "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium opacity-70">Automatic retry</dt>
+            <dd className="mt-0.5 font-semibold">
+              {mailbox.automaticRetryAt &&
+              new Date(mailbox.automaticRetryAt).getTime() >
+                new Date(healthNow).getTime()
+                ? formatMailboxSyncTime(mailbox.automaticRetryAt)
+                : "Normal schedule"}
             </dd>
           </div>
         </dl>

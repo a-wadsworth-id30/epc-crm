@@ -393,6 +393,15 @@ The defaults process two mailboxes with up to 15 messages each inside a
 `GMAIL_SYNC_MAX_RESULTS` provide bounded operational tuning without a code
 deploy; repeated runs drain remaining pages.
 
+Transient mailbox failures use metadata-backed exponential retry delays of 5,
+10, 20, 40 and at most 60 minutes. A cooling-down mailbox is skipped by the
+scheduled batch so it cannot repeatedly consume a limited sync slot, while
+other connected mailboxes continue normally. The admin **Sync Gmail now**
+action deliberately bypasses the delay. A successful sync clears the retry
+state, and Gmail settings shows the next automatic retry time when one is
+pending. This uses the existing `EmailMailbox.metadata` JSON and requires no
+schema migration.
+
 Scheduled batches and admin-triggered manual syncs write a privacy-safe
 `BackgroundJobRun` record under `gmail-mailbox-sync`. The summary contains only
 aggregate mailbox, message, CRM-write, failure, deferred and continuation-page

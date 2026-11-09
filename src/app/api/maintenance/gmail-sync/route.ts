@@ -6,7 +6,8 @@ import {
   summarizeGmailSyncOperation,
 } from "@/lib/integrations/gmail-sync-operations";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
-import { prioritizeGmailSyncMailboxes } from "@/lib/integrations/gmail-sync-scheduling";
+import { recordGmailSyncFailure } from "@/lib/integrations/gmail-sync-retry";
+import { scheduledGmailSyncCandidates } from "@/lib/integrations/gmail-sync-scheduling";
 import {
   completeBackgroundJobRun,
   failBackgroundJobRun,
@@ -110,7 +111,8 @@ export async function POST(request: Request) {
       },
       take: 50,
     });
-    const mailboxes = prioritizeGmailSyncMailboxes(candidates).slice(0, mailboxLimit);
+    const scheduledCandidates = scheduledGmailSyncCandidates(candidates);
+    const mailboxes = scheduledCandidates.eligible.slice(0, mailboxLimit);
     const startedAt = Date.now();
     const results = [];
     for (const mailbox of mailboxes) {
@@ -123,6 +125,7 @@ export async function POST(request: Request) {
           result: await syncGmailMailbox(mailbox.id, { maxResults }),
         });
       } catch (error) {
+        await recordGmailSyncFailure(mailbox.id, error);
         results.push({
           emailAddress: mailbox.emailAddress,
           ok: false,
@@ -131,7 +134,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const deferred = mailboxes.length - results.length;
+    const deferred =
+      mailboxes.length - results.length + scheduledCandidates.coolingDown;
     const summary = summarizeGmailSyncOperation(results, deferred);
     const status =
       summary.processed > 0 && summary.failed === summary.processed
