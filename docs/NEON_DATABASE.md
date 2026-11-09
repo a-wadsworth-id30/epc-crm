@@ -136,6 +136,12 @@ fields to `EmailMessage`. Existing rows default to Open. These fields do not
 replace `EmailMessageUserState`: read/unread remains personal, while assignment
 and Open/In progress/Waiting/Resolved are shared operational state.
 
+The migration `20261109104500_gmail_sync_lease` adds an optional lease token
+and expiry to `EmailMailbox`. Gmail sync acquires these fields atomically so
+manual and scheduled serverless invocations cannot process the same mailbox
+at the same time. The lease is cleared after the run and expires after five
+minutes if an invocation terminates unexpectedly.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

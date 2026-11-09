@@ -22,6 +22,7 @@ import {
 } from "@/lib/integrations/gmail-contact-matching";
 import { gmailProviderMessageId as gmailMessageKey } from "@/lib/integrations/gmail-message-identity";
 import { clearGmailSyncRetryMetadata } from "@/lib/integrations/gmail-sync-retry-policy";
+import { withGmailSyncLease } from "@/lib/integrations/gmail-sync-lease";
 import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
@@ -543,7 +544,7 @@ async function archiveMessageAttachments({
   return { archived, failed };
 }
 
-export async function syncGmailMailbox(
+async function syncGmailMailboxWithoutLease(
   mailboxId: string,
   options: { maxResults?: number } = {},
 ) {
@@ -677,4 +678,13 @@ export async function syncGmailMailbox(
     read: parsed.data.result.messages.length,
     updated,
   };
+}
+
+export async function syncGmailMailbox(
+  mailboxId: string,
+  options: { maxResults?: number } = {},
+) {
+  return withGmailSyncLease(mailboxId, () =>
+    syncGmailMailboxWithoutLease(mailboxId, options),
+  );
 }

@@ -1269,7 +1269,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   failures now receive exponential scheduled retry delays from 5 minutes up to
   1 hour, preventing one failing connected mailbox from consuming every batch;
   manual admin sync remains an immediate override and successful sync clears
-  the delay. Scheduled and
+  the delay. An atomic, five-minute database lease prevents scheduled and
+  manual requests from syncing the same mailbox concurrently; overlap is
+  deferred without recording a provider failure, and other mailboxes remain
+  eligible. Scheduled and
   manual runs now record privacy-safe aggregate results in `BackgroundJobRun`,
   and Gmail settings displays scheduler readiness, recent throughput, failures
   and continuation backlog without storing mailbox identities or message

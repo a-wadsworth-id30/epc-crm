@@ -6,6 +6,7 @@ import {
   summarizeGmailSyncOperation,
 } from "@/lib/integrations/gmail-sync-operations";
 import { syncGmailMailbox } from "@/lib/integrations/gmail-sync";
+import { isGmailSyncAlreadyRunningError } from "@/lib/integrations/gmail-sync-lease";
 import { recordGmailSyncFailure } from "@/lib/integrations/gmail-sync-retry";
 import { scheduledGmailSyncCandidates } from "@/lib/integrations/gmail-sync-scheduling";
 import {
@@ -108,6 +109,7 @@ export async function POST(request: Request) {
         lastHistoryId: true,
         lastSyncAt: true,
         metadata: true,
+        syncLeaseUntil: true,
       },
       take: 50,
     });
@@ -125,6 +127,7 @@ export async function POST(request: Request) {
           result: await syncGmailMailbox(mailbox.id, { maxResults }),
         });
       } catch (error) {
+        if (isGmailSyncAlreadyRunningError(error)) continue;
         await recordGmailSyncFailure(mailbox.id, error);
         results.push({
           emailAddress: mailbox.emailAddress,
@@ -135,7 +138,9 @@ export async function POST(request: Request) {
     }
 
     const deferred =
-      mailboxes.length - results.length + scheduledCandidates.coolingDown;
+      mailboxes.length - results.length +
+      scheduledCandidates.coolingDown +
+      scheduledCandidates.leased;
     const summary = summarizeGmailSyncOperation(results, deferred);
     const status =
       summary.processed > 0 && summary.failed === summary.processed

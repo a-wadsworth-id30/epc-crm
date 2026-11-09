@@ -1254,6 +1254,8 @@ model EmailMailbox {
   lastSyncAt       DateTime?
   lastFullSyncAt   DateTime?
   lastError        String?
+  syncLeaseId      String?
+  syncLeaseUntil   DateTime?
   metadata         Json?
   messages         EmailMessage[]
   threadLinks      EmailThreadLink[]
@@ -1265,6 +1267,7 @@ model EmailMailbox {
   @@index([status, syncEnabled])
   @@index([ownerUserId])
   @@index([purpose])
+  @@index([syncLeaseUntil])
 }
 
 model EmailMailboxAccess {

@@ -1,10 +1,12 @@
 import { gmailSyncRetryState } from "@/lib/integrations/gmail-sync-retry-policy";
+import { gmailSyncLeaseIsActive } from "@/lib/integrations/gmail-sync-lease-policy";
 
 type GmailSyncMailboxCandidate = {
   id: string;
   lastHistoryId: string | null;
   lastSyncAt: Date | null;
   metadata: unknown;
+  syncLeaseUntil?: Date | null;
 };
 
 function metadataObject(value: unknown) {
@@ -45,12 +47,23 @@ export function scheduledGmailSyncCandidates<
   T extends GmailSyncMailboxCandidate,
 >(mailboxes: T[], now = new Date()) {
   const prioritized = prioritizeGmailSyncMailboxes(mailboxes);
-  const eligible = prioritized.filter(
-    (mailbox) => !gmailSyncRetryState(mailbox.metadata, now).coolingDown,
-  );
+  let coolingDown = 0;
+  let leased = 0;
+  const eligible = prioritized.filter((mailbox) => {
+    if (gmailSyncRetryState(mailbox.metadata, now).coolingDown) {
+      coolingDown += 1;
+      return false;
+    }
+    if (gmailSyncLeaseIsActive(mailbox.syncLeaseUntil, now)) {
+      leased += 1;
+      return false;
+    }
+    return true;
+  });
 
   return {
-    coolingDown: prioritized.length - eligible.length,
+    coolingDown,
     eligible,
+    leased,
   };
 }
