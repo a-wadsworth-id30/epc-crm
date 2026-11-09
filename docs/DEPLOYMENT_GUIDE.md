@@ -207,6 +207,8 @@ Optional:
   `ID30_AUTH_PREVIOUS_SHARED_SECRET_EXPIRES_AT`: optional, temporary values for
   environment-based key rotation. The expiry must be a future ISO timestamp;
   remove both values after the overlap window.
+- `ID30_AUTH_CANARY_SECRET`: optional dedicated secret for the scheduled
+  cross-system canary; `CRON_SECRET` is used as the existing fallback.
 - `ID30_AUTH_REQUEST_TIMEOUT_MS`: optional CRM-to-Auth request timeout, default
   `8000`, bounded between `1000` and `30000` milliseconds.
 - `ID30_AUTH_GET_MAX_ATTEMPTS`: optional maximum attempts for safe signed GET

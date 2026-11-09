@@ -144,6 +144,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   requests use the current key, while completion and Gmail push callbacks
   accept either key only during the overlap. Environment-only setup requires
   an explicit previous-secret expiry.
+- A signed ten-minute cross-system canary checks CRM → Auth → CRM without
+  calling Gmail or another provider. Existing background-job health records
+  success, failure and round-trip latency and surfaces repeated failures through
+  the current operational alerts.
 - Shared Gmail unread state is tracked per CRM user. Marking as read or replying to a
   message clears that user's Inbox badge and header alert without clearing the
   same message for other authorised mailbox users. Existing shared archive and
