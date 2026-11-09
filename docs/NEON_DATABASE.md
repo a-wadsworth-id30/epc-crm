@@ -142,6 +142,14 @@ manual and scheduled serverless invocations cannot process the same mailbox
 at the same time. The lease is cleared after the run and expires after five
 minutes if an invocation terminates unexpectedly.
 
+The migration `20261109113000_gmail_push_receipts` adds the
+`GmailPushReceiptStatus` enum and `GmailPushReceipt` table. It stores opaque
+Gmail history and Pub/Sub delivery identifiers for idempotent push scheduling;
+it does not store email addresses, message bodies, attachment metadata or
+credentials. Pending receipts are marked processed only after the associated
+mailbox sync has drained all pages, and processed/ignored rows are deleted after
+14 days by the scheduled Gmail sync route.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

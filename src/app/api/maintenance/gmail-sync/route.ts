@@ -18,6 +18,18 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+const processedPushReceiptRetentionMs = 14 * 24 * 60 * 60 * 1_000;
+
+const scheduledMailboxSelect = {
+  createdAt: true,
+  emailAddress: true,
+  id: true,
+  lastHistoryId: true,
+  lastSyncAt: true,
+  metadata: true,
+  syncLeaseUntil: true,
+} as const;
+
 function cronSecret() {
   return process.env.GMAIL_SYNC_SECRET || process.env.CRON_SECRET || "";
 }
@@ -99,20 +111,49 @@ export async function POST(request: Request) {
     trigger: "scheduled",
   });
   try {
-    const candidates = await prisma.emailMailbox.findMany({
-      where: { status: "CONNECTED", syncEnabled: true },
-      orderBy: [{ lastSyncAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
-      select: {
-        createdAt: true,
-        emailAddress: true,
-        id: true,
-        lastHistoryId: true,
-        lastSyncAt: true,
-        metadata: true,
-        syncLeaseUntil: true,
-      },
-      take: 50,
-    });
+    const [pendingPushMailboxes, regularMailboxes] = await Promise.all([
+      prisma.emailMailbox.findMany({
+        where: {
+          pushReceipts: { some: { status: "PENDING" } },
+          status: "CONNECTED",
+          syncEnabled: true,
+        },
+        orderBy: [
+          { lastSyncAt: { sort: "asc", nulls: "first" } },
+          { createdAt: "asc" },
+        ],
+        select: scheduledMailboxSelect,
+        take: 50,
+      }),
+      prisma.emailMailbox.findMany({
+        where: {
+          pushReceipts: { none: { status: "PENDING" } },
+          status: "CONNECTED",
+          syncEnabled: true,
+        },
+        orderBy: [
+          { lastSyncAt: { sort: "asc", nulls: "first" } },
+          { createdAt: "asc" },
+        ],
+        select: scheduledMailboxSelect,
+        take: 50,
+      }),
+      prisma.gmailPushReceipt.deleteMany({
+        where: {
+          processedAt: {
+            lt: new Date(Date.now() - processedPushReceiptRetentionMs),
+          },
+          status: { in: ["PROCESSED", "IGNORED"] },
+        },
+      }),
+    ]);
+    const candidates = [
+      ...pendingPushMailboxes.map((mailbox) => ({
+        ...mailbox,
+        pushPending: true,
+      })),
+      ...regularMailboxes,
+    ];
     const scheduledCandidates = scheduledGmailSyncCandidates(candidates);
     const mailboxes = scheduledCandidates.eligible.slice(0, mailboxLimit);
     const startedAt = Date.now();

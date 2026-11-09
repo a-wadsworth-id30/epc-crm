@@ -1263,7 +1263,15 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Netlify Scheduled Function calls the protected `/api/maintenance/gmail-sync`
   route every 5 minutes when `GMAIL_SYNC_CRON_ENABLED=true`, using
   `GMAIL_SYNC_SECRET` or `CRON_SECRET`. Scheduled runs prioritise pending Gmail
-  continuation pages, then the least recently synced mailbox. The defaults
+  continuation pages, then mailboxes with a verified Gmail Pub/Sub history
+  notification, then the least recently synced mailbox. iD30 Auth delivers
+  privacy-safe events to `/api/integrations/gmail/push` using the existing
+  shared-secret trust boundary. The CRM verifies the signature, tenant and
+  short expiry, deduplicates Pub/Sub message IDs in `GmailPushReceipt`, and only
+  marks receipts that pre-date the sync processed when every continuation page
+  has drained. Notifications arriving during a sync remain pending for the next
+  pass. The five-minute scheduled poll remains the fallback, while
+  processed/ignored receipt metadata is retained for 14 days. The defaults
   process two mailboxes with up to 15 messages each inside a 20-second route
   budget; bounded environment overrides can tune those caps. Transient
   failures now receive exponential scheduled retry delays from 5 minutes up to

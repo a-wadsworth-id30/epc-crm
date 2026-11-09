@@ -544,11 +544,36 @@ Main files:
 - `src/lib/integrations/gmail.ts`
 - `src/lib/integrations/gmail-send.ts`
 - `src/lib/integrations/gmail-sync.ts`
+- `src/lib/integrations/gmail-push-contract.ts`
+- `src/lib/integrations/gmail-push-receiver.ts`
 - `src/components/crm-boilerplate/GmailIntegrationForm.tsx`
 - `/api/integrations/gmail/connect`
+- `/api/integrations/gmail/push`
 - `/api/maintenance/gmail-sync`
 - `netlify/functions/sync-gmail-mailboxes.mjs`
 - `/settings/integrations/gmail`
+
+iD30 Auth can notify the CRM of Gmail history changes through the dedicated
+`/api/integrations/gmail/push` callback. Auth sends a short-lived HMAC-signed
+event containing only opaque connection/history identifiers and Pub/Sub
+delivery metadata; email addresses, credentials and message content are not
+included. The CRM verifies the signature, exact client/workspace binding and a
+maximum ten-minute validity window before resolving the opaque Auth connection
+to a mailbox. Pub/Sub message IDs are unique in `GmailPushReceipt`, making
+redelivery idempotent. Unknown mailbox events return a retryable response;
+events for deliberately disconnected or disabled mailboxes are recorded as
+ignored so Pub/Sub does not retry them indefinitely.
+
+Accepted receipts mark the mailbox as push-pending. The existing protected
+scheduled Gmail sync prioritises continuation pages first, then push-pending
+mailboxes, and retains least-recently-synced polling as a fallback. A receipt is
+only marked processed after the mailbox has drained all continuation pages, so
+a bounded sync cannot acknowledge unfinished history. Receipts arriving after
+a sync began remain pending for the next pass, avoiding a race with newer Gmail
+history. Processed and ignored receipt metadata is deleted after 14 days by the
+scheduled route. The callback does not perform the provider sync inline,
+keeping Pub/Sub acknowledgement fast and leaving the existing retry, lease and
+operation-history controls in charge of message import.
 
 Admin mailbox configuration saves compare a normalized before/after snapshot
 for purpose, owner, sync/send flags and authorised user IDs. Real changes write

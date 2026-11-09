@@ -577,6 +577,7 @@ async function syncGmailMailboxWithoutLease(
     typeof metadata.historySyncPageToken === "string"
       ? metadata.historySyncPageToken
       : null;
+  const syncStartedAt = new Date();
   const pathname = `/api/crm/connections/${encodeURIComponent(mailbox.authConnectionId)}/gmail/sync`;
   let response = await id30AuthBrokerRequest({
     body: {
@@ -648,22 +649,39 @@ async function syncGmailMailboxWithoutLease(
     initialSyncPageToken: mailbox.lastHistoryId ? null : nextPageToken,
     historySyncPageToken: mailbox.lastHistoryId ? nextPageToken : null,
   };
-  await prisma.emailMailbox.update({
-    where: { id: mailbox.id },
-    data: {
-      emailAddress: parsed.data.result.emailAddress?.toLowerCase() ?? mailbox.emailAddress,
-      lastError: failedAttachments
-        ? `${failedAttachments} inline Gmail attachment${failedAttachments === 1 ? "" : "s"} could not be retained.`
-        : null,
-      lastFullSyncAt: !mailbox.lastHistoryId && !nextPageToken ? new Date() : undefined,
-      lastHistoryId: nextPageToken
-        ? mailbox.lastHistoryId
-        : parsed.data.result.historyId ?? mailbox.lastHistoryId,
-      lastSyncAt: new Date(),
-      metadata: jsonValue(nextMetadata),
-      status: "CONNECTED",
-    },
-  });
+  const syncedAt = new Date();
+  await prisma.$transaction([
+    prisma.emailMailbox.update({
+      where: { id: mailbox.id },
+      data: {
+        emailAddress:
+          parsed.data.result.emailAddress?.toLowerCase() ?? mailbox.emailAddress,
+        lastError: failedAttachments
+          ? `${failedAttachments} inline Gmail attachment${failedAttachments === 1 ? "" : "s"} could not be retained.`
+          : null,
+        lastFullSyncAt:
+          !mailbox.lastHistoryId && !nextPageToken ? syncedAt : undefined,
+        lastHistoryId: nextPageToken
+          ? mailbox.lastHistoryId
+          : parsed.data.result.historyId ?? mailbox.lastHistoryId,
+        lastSyncAt: syncedAt,
+        metadata: jsonValue(nextMetadata),
+        status: "CONNECTED",
+      },
+    }),
+    ...(nextPageToken
+      ? []
+      : [
+          prisma.gmailPushReceipt.updateMany({
+            where: {
+              mailboxId: mailbox.id,
+              receivedAt: { lte: syncStartedAt },
+              status: "PENDING",
+            },
+            data: { processedAt: syncedAt, status: "PROCESSED" },
+          }),
+        ]),
+  ]);
   revalidateHeaderNotifications();
   if (createdInbound > 0) {
     realtimeTopicsToBump.add(realtimeTopics.notifications);

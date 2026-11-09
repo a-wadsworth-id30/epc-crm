@@ -65,6 +65,35 @@ describe("Gmail sync scheduling", () => {
     );
   });
 
+  it("prioritizes a push notification ahead of routine mailbox polling", () => {
+    const rows = prioritizeGmailSyncMailboxes([
+      {
+        id: "routine-old",
+        lastHistoryId: "history-1",
+        lastSyncAt: new Date("2026-11-06T09:00:00.000Z"),
+        metadata: {},
+      },
+      {
+        id: "push-new",
+        lastHistoryId: "history-2",
+        lastSyncAt: new Date("2026-11-06T11:00:00.000Z"),
+        metadata: {},
+        pushPending: true,
+      },
+      {
+        id: "continuation",
+        lastHistoryId: "history-3",
+        lastSyncAt: new Date("2026-11-06T12:00:00.000Z"),
+        metadata: { historySyncPageToken: "page-2" },
+      },
+    ]);
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["continuation", "push-new", "routine-old"],
+    );
+  });
+
   it("backs off repeated failures with a one-hour cap", () => {
     assert.equal(gmailSyncRetryDelayMs(1), 5 * 60 * 1_000);
     assert.equal(gmailSyncRetryDelayMs(2), 10 * 60 * 1_000);
