@@ -1276,7 +1276,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   within 48 hours of expiry when `GMAIL_PUSH_ENABLED=true`. Renewal uses the
   signed Auth broker, stores structured expiry/retry state on the mailbox and
   backs failures off from one to six hours without disabling polling. Gmail
-  settings shows push-active, retry and polling-only state. The defaults
+  settings shows push-active, retry and polling-only state. Enabled renewal
+  batches now record aggregate processed, renewed, failed and deferred counts
+  in `BackgroundJobRun` under `gmail-watch-renewal`; the Gmail settings page
+  displays this history separately from message-sync operations without
+  exposing mailbox identities, Gmail history IDs or message content. The defaults
   process two mailboxes with up to 15 messages each inside a 20-second route
   budget; bounded environment overrides can tune those caps. Transient
   failures now receive exponential scheduled retry delays from 5 minutes up to

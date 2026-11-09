@@ -6,6 +6,7 @@ import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import GmailIntegrationForm from "@/components/crm-boilerplate/GmailIntegrationForm";
 import GmailR2CleanupReport from "@/components/crm-boilerplate/GmailR2CleanupReport";
 import GmailSyncOperationsPanel from "@/components/crm-boilerplate/GmailSyncOperationsPanel";
+import GmailWatchOperationsPanel from "@/components/crm-boilerplate/GmailWatchOperationsPanel";
 import {
   BingAdsIntegrationForm,
   CloudflareR2SettingsForm,
@@ -95,6 +96,7 @@ import {
 import { gmailProvider } from "@/lib/integrations/gmail";
 import { gmailSyncJobName } from "@/lib/integrations/gmail-sync-operations";
 import { gmailSyncRetryState } from "@/lib/integrations/gmail-sync-retry-policy";
+import { gmailWatchJobName } from "@/lib/integrations/gmail-watch-operations";
 import { prisma } from "@/lib/prisma";
 import {
   hasStoredOpenAICredentials,
@@ -325,7 +327,7 @@ export default async function IntegrationSettingsPage({
 
   if (provider === gmailProvider) {
     const authRuntime = await getId30AuthRuntimeConfig();
-    const [mailboxes, users, readiness, syncOperations] = await Promise.all([
+    const [mailboxes, users, readiness, syncOperations, watchOperations] = await Promise.all([
       prisma.emailMailbox.findMany({
         where: { provider: gmailProvider },
         orderBy: [{ status: "asc" }, { emailAddress: "asc" }],
@@ -388,12 +390,38 @@ export default async function IntegrationSettingsPage({
           }
           return { available: false as const, runs: [] };
         }),
+      prisma.backgroundJobRun
+        .findMany({
+          where: { jobName: gmailWatchJobName },
+          orderBy: { startedAt: "desc" },
+          take: 8,
+          select: {
+            durationMs: true,
+            errorMessage: true,
+            id: true,
+            message: true,
+            recordsRead: true,
+            recordsWritten: true,
+            startedAt: true,
+            status: true,
+            summary: true,
+            trigger: true,
+          },
+        })
+        .then((runs) => ({ available: true as const, runs }))
+        .catch((error: unknown) => {
+          if (!isBackgroundJobSchemaPending(error)) {
+            console.error("Gmail watch operation history could not be loaded.", error);
+          }
+          return { available: false as const, runs: [] };
+        }),
     ]);
     const gmailReadiness =
       readiness?.ok
         ? readiness.providers.find((item) => item.slug === gmailProvider)
         : null;
     const providerReady = Boolean(gmailReadiness?.ready);
+    const pushEnabled = booleanEnv(process.env.GMAIL_PUSH_ENABLED);
     const providerMessage = !authRuntime
       ? "Connect iD30 Auth before adding Gmail mailboxes."
       : providerReady
@@ -414,7 +442,7 @@ export default async function IntegrationSettingsPage({
           <GmailIntegrationForm
             authConfigured={Boolean(authRuntime)}
             healthNow={new Date().toISOString()}
-            pushEnabled={booleanEnv(process.env.GMAIL_PUSH_ENABLED)}
+            pushEnabled={pushEnabled}
             mailboxes={mailboxes.map(({ metadata, ...mailbox }) => ({
               ...mailbox,
               automaticRetryAt:
@@ -441,6 +469,16 @@ export default async function IntegrationSettingsPage({
             available={syncOperations.available}
             runs={syncOperations.runs}
             scheduleEnabled={booleanEnv(process.env.GMAIL_SYNC_CRON_ENABLED)}
+            secretConfigured={Boolean(
+              process.env.GMAIL_SYNC_SECRET || process.env.CRON_SECRET,
+            )}
+          />
+        </div>
+        <div className="mt-6">
+          <GmailWatchOperationsPanel
+            available={watchOperations.available}
+            pushEnabled={pushEnabled}
+            runs={watchOperations.runs}
             secretConfigured={Boolean(
               process.env.GMAIL_SYNC_SECRET || process.env.CRON_SECRET,
             )}
