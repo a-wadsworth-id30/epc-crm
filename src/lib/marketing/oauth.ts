@@ -154,6 +154,12 @@ export type MarketingAuthBrokerProviderDiagnosticsResult =
   | {
       ok: true;
       checkedAt: string;
+      contract: {
+        capabilities: string[];
+        minimumCompatibleVersion: number;
+        name: string;
+        version: number;
+      } | null;
       provider: {
         callbackUrl?: string;
         missingEnv: string[];
@@ -299,6 +305,16 @@ const authBrokerProviderReadinessResponseSchema = z.object({
 const authBrokerProviderDiagnosticsResponseSchema = z.object({
   ok: z.literal(true),
   checkedAt: z.string().datetime(),
+  contract: z
+    .object({
+      capabilities: z.array(z.string().trim().min(1)).default([]),
+      minimumCompatibleVersion: z.number().int().positive(),
+      name: z.string().trim().min(1),
+      version: z.number().int().positive(),
+    })
+    .nullable()
+    .optional()
+    .default(null),
   provider: z
     .object({
       callbackUrl: z.string().url().optional(),

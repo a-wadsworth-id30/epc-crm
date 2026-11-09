@@ -62,6 +62,10 @@ import {
   publicId30AuthConfig,
 } from "@/lib/integrations/id30-auth";
 import {
+  id30AuthContractCompatibility,
+  requiredGmailPushCapabilities,
+} from "@/lib/integrations/id30-auth-contract";
+import {
   hasId30AuthEnvironmentConfig,
   hasOpenAIEnvironmentConfig,
   systemIntegrationDefinition,
@@ -442,6 +446,10 @@ export default async function IntegrationSettingsPage({
     const authPushReadiness = authDiagnostics?.ok
       ? authDiagnostics.gmailPush
       : null;
+    const authContract = id30AuthContractCompatibility(
+      authDiagnostics?.ok ? authDiagnostics.contract : null,
+      requiredGmailPushCapabilities,
+    );
     const authPushReady = Boolean(authPushReadiness?.ready);
     const authPushMessage = !authRuntime
       ? "Connect iD30 Auth before configuring Gmail push delivery."
@@ -517,6 +525,8 @@ export default async function IntegrationSettingsPage({
         <div className="mt-6">
           <GmailWatchOperationsPanel
             available={watchOperations.available}
+            authContractMessage={authContract.message}
+            authContractReady={authContract.compatible}
             authPushMessage={authPushMessage}
             authPushReady={authPushReady}
             eligibleMailboxCount={eligibleMailboxCount}

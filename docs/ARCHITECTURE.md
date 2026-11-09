@@ -566,6 +566,12 @@ redelivery idempotent. Unknown mailbox events return a retryable response;
 events for deliberately disconnected or disabled mailboxes are recorded as
 ignored so Pub/Sub does not retry them indefinitely.
 
+Signed provider diagnostics also carry the versioned `id30-auth-crm` contract
+descriptor and additive capability names. CRM validates the supported contract
+version and Gmail push/watch capabilities before presenting push delivery as
+activation-ready. A missing or incompatible descriptor leaves polling
+available and prevents operators from treating push as ready.
+
 Accepted receipts mark the mailbox as push-pending. The existing protected
 scheduled Gmail sync prioritises continuation pages first, then push-pending
 mailboxes, and retains least-recently-synced polling as a fallback. A receipt is

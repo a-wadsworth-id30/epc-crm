@@ -38,6 +38,8 @@ function metric(
 
 export default function GmailWatchOperationsPanel({
   available,
+  authContractMessage,
+  authContractReady,
   authPushMessage,
   authPushReady,
   eligibleMailboxCount,
@@ -46,6 +48,8 @@ export default function GmailWatchOperationsPanel({
   secretConfigured,
 }: {
   available: boolean;
+  authContractMessage: string;
+  authContractReady: boolean;
   authPushMessage: string;
   authPushReady: boolean;
   eligibleMailboxCount: number;
@@ -56,19 +60,22 @@ export default function GmailWatchOperationsPanel({
   const latest = runs[0];
   const latestSummary = operationSummary(latest);
   const schedulerReady =
+    authContractReady &&
     authPushReady &&
     pushEnabled &&
     secretConfigured &&
     eligibleMailboxCount > 0;
-  const blocker = !authPushReady
-    ? authPushMessage
-    : !pushEnabled
-      ? "Gmail push renewal is intentionally disabled. Existing scheduled polling continues independently."
-      : !secretConfigured
-        ? "The renewal secret is missing. Configure GMAIL_SYNC_SECRET or CRON_SECRET before enabling the hourly job."
-        : eligibleMailboxCount === 0
-          ? "Reconnect and enable sync for at least one Gmail mailbox before activating push delivery."
-          : null;
+  const blocker = !authContractReady
+    ? authContractMessage
+    : !authPushReady
+      ? authPushMessage
+      : !pushEnabled
+        ? "Gmail push renewal is intentionally disabled. Existing scheduled polling continues independently."
+        : !secretConfigured
+          ? "The renewal secret is missing. Configure GMAIL_SYNC_SECRET or CRON_SECRET before enabling the hourly job."
+          : eligibleMailboxCount === 0
+            ? "Reconnect and enable sync for at least one Gmail mailbox before activating push delivery."
+            : null;
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -92,7 +99,12 @@ export default function GmailWatchOperationsPanel({
         </span>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <ReadinessCheck
+          detail={authContractMessage}
+          label="Auth contract"
+          ready={authContractReady}
+        />
         <ReadinessCheck
           detail={authPushMessage}
           label="Auth Pub/Sub"
