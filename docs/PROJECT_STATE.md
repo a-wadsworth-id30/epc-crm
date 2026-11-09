@@ -134,6 +134,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   attachment ID is retained during sync to avoid data loss.
   Deliberate saves carry uploader ownership plus a `gmail-user-saved` marker so
   guarded legacy-R2 cleanup cannot remove them.
+- CRM Gmail sends carry a stable per-attempt operation ID to iD30 Auth. One
+  transient broker 503 is retried with the same operation and RFC `Message-ID`;
+  Auth returns the stored Gmail result or blocks an unresolved attempt instead
+  of sending a duplicate. Success and failure metadata retain the operation ID
+  for support tracing.
 - Shared Gmail unread state is tracked per CRM user. Marking as read or replying to a
   message clears that user's Inbox badge and header alert without clearing the
   same message for other authorised mailbox users. Existing shared archive and

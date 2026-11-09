@@ -4,8 +4,16 @@ import {
   gmailProviderMessageId,
   reconciledGmailSendMetadata,
 } from "../src/lib/integrations/gmail-message-identity";
+import { gmailSendIdentity } from "../src/lib/integrations/gmail-send-operation";
 
 describe("Gmail send reconciliation", () => {
+  it("uses one stable operation identity for broker retries", () => {
+    assert.deepEqual(gmailSendIdentity("example.test", "attempt-1"), {
+      internetMessageId: "<attempt-1@example.test>",
+      operationId: "gmail-send:attempt-1",
+    });
+  });
+
   it("uses the same stable provider identity for send and later sync", () => {
     assert.equal(
       gmailProviderMessageId("mailbox-1", "gmail-message-1"),
@@ -26,6 +34,7 @@ describe("Gmail send reconciliation", () => {
         gmailMessageId: "gmail-message-1",
         gmailThreadId: "gmail-thread-1",
         mailboxId: "mailbox-1",
+        operationId: "gmail-send:attempt-1",
         source: "inbox-gmail-reply",
       }),
       {
@@ -37,6 +46,7 @@ describe("Gmail send reconciliation", () => {
         gmailThreadId: "gmail-thread-1",
         mailboxId: "mailbox-1",
         messageId: "gmail:mailbox-1:gmail-message-1",
+        operationId: "gmail-send:attempt-1",
         provider: "gmail",
         sendState: "accepted",
         source: "inbox-gmail-reply",

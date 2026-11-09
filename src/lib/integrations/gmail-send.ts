@@ -4,6 +4,10 @@ import crypto from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
 import { id30AuthBrokerRequest } from "@/lib/integrations/id30-auth-oauth";
 import { gmailProviderMessageId } from "@/lib/integrations/gmail-message-identity";
+import {
+  GmailSendError,
+  gmailSendIdentity,
+} from "@/lib/integrations/gmail-send-operation";
 import { gmailMultipartAlternative } from "@/lib/email/gmail-mime";
 import { prisma } from "@/lib/prisma";
 
@@ -128,7 +132,8 @@ export async function sendGmailEmail({
         orderBy: { updatedAt: "desc" },
         select: { providerThreadId: true },
       });
-  const messageId = `<${crypto.randomUUID()}@${domainForAddress(mailbox.emailAddress)}>`;
+  const identity = gmailSendIdentity(domainForAddress(mailbox.emailAddress));
+  const messageId = identity.internetMessageId;
   const from = mailbox.displayName
     ? `${encodeHeader(mailbox.displayName)} <${mailbox.emailAddress}>`
     : mailbox.emailAddress;
@@ -151,20 +156,36 @@ export async function sendGmailEmail({
     ...gmailMultipartAlternative({ boundary, html: htmlBody, text: body }),
   ].join("\r\n");
   const pathname = `/api/crm/connections/${encodeURIComponent(mailbox.authConnectionId)}/gmail/send`;
-  const response = await id30AuthBrokerRequest({
-    body: {
-      raw: base64Url(raw),
-      threadId: requestedThreadId ?? threadLink?.providerThreadId ?? null,
-    },
+  const requestBody = {
+    operationId: identity.operationId,
+    raw: base64Url(raw),
+    threadId: requestedThreadId ?? threadLink?.providerThreadId ?? null,
+  };
+  let response = await id30AuthBrokerRequest({
+    body: requestBody,
     connectionId: mailbox.authConnectionId,
     method: "POST",
     pathname,
   });
-  if (!response.ok) throw new Error(response.message);
+  if (!response.ok && response.status === 503) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    response = await id30AuthBrokerRequest({
+      body: requestBody,
+      connectionId: mailbox.authConnectionId,
+      method: "POST",
+      pathname,
+    });
+  }
+  if (!response.ok) {
+    throw new GmailSendError(response.message, identity);
+  }
 
   const result = response.body.result;
   if (!result || typeof result !== "object" || Array.isArray(result)) {
-    throw new Error("iD30 Auth Gmail send response was incomplete.");
+    throw new GmailSendError(
+      "iD30 Auth Gmail send response was incomplete.",
+      identity,
+    );
   }
   const resultRecord = result as Record<string, unknown>;
   const providerMessageId =
@@ -176,7 +197,10 @@ export async function sendGmailEmail({
       ? resultRecord.threadId.trim()
       : null;
   if (!providerMessageId || !providerThreadId) {
-    throw new Error("Gmail did not return a message and thread ID.");
+    throw new GmailSendError(
+      "Gmail did not return a message and thread ID.",
+      identity,
+    );
   }
 
   return {
@@ -185,6 +209,7 @@ export async function sendGmailEmail({
     internetMessageId: messageId,
     mailboxId: mailbox.id,
     messageId: gmailProviderMessageId(mailbox.id, providerMessageId),
+    operationId: identity.operationId,
     providerMessageId,
     providerThreadId,
   };
