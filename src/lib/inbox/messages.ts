@@ -3,6 +3,7 @@ import {
   emailAttachmentDisplaySelect,
   serializeEmailAttachments,
 } from "@/lib/email/attachment-display";
+import { emailDeliveryStatus } from "@/lib/email/delivery-status";
 import {
   completeEmailPlainText,
   emailPlainTextViews,
@@ -136,6 +137,11 @@ export function serializeInboxMessageSummary(
         ? (message.mailbox?.owner?.avatarUrl ?? null)
         : null,
     contact: message.contact,
+    deliveryStatus: emailDeliveryStatus({
+      direction: message.direction,
+      metadata: message.metadata,
+      provider: message.provider,
+    }),
     direction: message.direction,
     fromAddress,
     fromName,

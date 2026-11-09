@@ -415,6 +415,13 @@ sync won the race. Provider sync metadata is merged with the CRM send metadata;
 the reconciliation path writes `gmail.send.reconciled` without storing message
 body content in the audit log. This prevents a successfully accepted Gmail send
 from surfacing as failed solely because its sent copy was imported first.
+CRM-originated sends record **Accepted by Gmail**, not delivered, because the
+Gmail send API confirms provider acceptance but does not provide final-recipient
+delivery status. Provider-rejected attempts are retained as outbound Inbox and
+conversation entries with `sendState: failed`, a bounded error reason and a
+`gmail.send.failed` audit event. The attempted body is available to the linked
+lead but is never written to the audit log. Later Gmail sync preserves CRM send
+state and acceptance timestamps while refreshing provider labels and headers.
 The existing per-user mailbox send permissions and sale access checks apply.
 If an older Gmail record has a sender name but no machine-readable address, the
 composer requires the user to enter and review a valid recipient instead of

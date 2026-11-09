@@ -1,4 +1,5 @@
 import type { EmailAttachmentDisplay } from "@/lib/email/attachment-display";
+import type { EmailDeliveryStatus } from "@/lib/email/delivery-status";
 
 export const saleConversationFilters = [
   { value: "ALL", label: "All" },
@@ -26,6 +27,7 @@ export type SaleConversationItem = {
   body: string | null;
   emailHtmlBody?: string | null;
   emailAttachments?: EmailAttachmentDisplay[];
+  emailDeliveryStatus?: EmailDeliveryStatus | null;
   emailIdentity?: string | null;
   emailProvider?: string | null;
   focusCommunicationId?: string | null;

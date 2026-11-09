@@ -1,4 +1,5 @@
 import type { EmailAttachmentDisplay } from "@/lib/email/attachment-display";
+import type { EmailDeliveryStatus } from "@/lib/email/delivery-status";
 
 export type InboxContactSummary = {
   firstName: string;
@@ -27,6 +28,7 @@ export type InboxMessageSummary = {
   avatarUrl: string | null;
   id: string;
   contact: InboxContactSummary | null;
+  deliveryStatus: EmailDeliveryStatus | null;
   direction: string;
   fromAddress: string | null;
   fromName: string | null;
