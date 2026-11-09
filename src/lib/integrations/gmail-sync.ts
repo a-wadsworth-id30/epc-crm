@@ -664,8 +664,8 @@ async function syncGmailMailboxWithoutLease(
       status: "CONNECTED",
     },
   });
+  revalidateHeaderNotifications();
   if (createdInbound > 0) {
-    revalidateHeaderNotifications();
     realtimeTopicsToBump.add(realtimeTopics.notifications);
   }
   await bumpRealtimeTopics([...realtimeTopicsToBump]);

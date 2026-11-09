@@ -14,6 +14,7 @@ import {
   formatBackgroundJobName,
   readBackgroundJobHealthSummary,
 } from "@/lib/maintenance/background-jobs";
+import { gmailMailboxHealthNotification } from "@/lib/integrations/gmail-mailbox-notification";
 import { prisma } from "@/lib/prisma";
 import { parseSalesDefaults } from "@/lib/sales/defaults";
 import { getCrmSettings } from "@/lib/settings";
@@ -156,6 +157,7 @@ async function loadGeneratedHeaderNotificationsUncached(
     recentFiles,
     recentAccountRemovalRequests,
     recentInboundEmails,
+    gmailMailboxes,
   ] = await Promise.all([
     prisma.integrationConnection.findUnique({
       where: { provider: twilioProvider },
@@ -282,6 +284,17 @@ async function loadGeneratedHeaderNotificationsUncached(
       },
       take: 5,
     }),
+    currentUser?.role === "ADMIN"
+      ? prisma.emailMailbox.findMany({
+          where: { provider: "gmail" },
+          select: {
+            lastError: true,
+            lastSyncAt: true,
+            status: true,
+            syncEnabled: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
   const backgroundJobHealth =
     currentUser?.role === "ADMIN"
@@ -297,6 +310,21 @@ async function loadGeneratedHeaderNotificationsUncached(
     twilio.data.webhookBaseUrl,
   );
   const notifications: GeneratedHeaderNotification[] = [];
+  const gmailHealthNotification = gmailMailboxHealthNotification(
+    gmailMailboxes,
+    now,
+  );
+
+  if (gmailHealthNotification) {
+    notifications.push({
+      id: "gmail-mailboxes-attention",
+      category: "System",
+      detail: gmailHealthNotification.detail,
+      href: "/settings/integrations/gmail",
+      severity: gmailHealthNotification.severity,
+      title: gmailHealthNotification.title,
+    });
+  }
 
   for (const email of recentInboundEmails) {
     const sender =

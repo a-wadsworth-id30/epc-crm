@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { Id30AuthBrokerCompletionPayload } from "@/lib/integrations/id30-auth-oauth";
 import { prisma } from "@/lib/prisma";
 import { defaultGmailMailboxPurpose } from "@/lib/integrations/gmail-mailbox-purpose";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 
 export const gmailProvider = "gmail";
 
@@ -156,6 +157,7 @@ export async function saveGmailAuthBrokerCompletion(
   }
 
   await refreshGmailIntegrationSummary();
+  revalidateHeaderNotifications();
 
   revalidatePath("/settings/integrations");
   revalidatePath("/settings/integrations/gmail");

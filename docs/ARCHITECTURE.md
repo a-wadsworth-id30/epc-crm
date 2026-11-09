@@ -402,6 +402,13 @@ state, and Gmail settings shows the next automatic retry time when one is
 pending. This uses the existing `EmailMailbox.metadata` JSON and requires no
 schema migration.
 
+Admin header notifications derive a privacy-safe Gmail health alert from the
+same mailbox health policy used by Gmail settings. Reconnect, disconnected and
+connection-error states are critical; delayed syncs and retained sync warnings
+are warnings. The alert reports only aggregate counts, links to Gmail settings
+and is invalidated after OAuth completion, mailbox configuration changes,
+sync failures and successful syncs.
+
 Every Gmail sync acquires an atomic per-mailbox database lease before calling
 the provider. Scheduled and manual invocations therefore cannot import the
 same mailbox concurrently, while unrelated mailboxes continue normally. An
