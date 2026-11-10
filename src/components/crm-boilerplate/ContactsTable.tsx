@@ -21,6 +21,7 @@ import {
   type CrmDataTableSortDirection,
 } from "@/components/crm-boilerplate/data-table";
 import EmptyState from "@/components/crm-boilerplate/EmptyState";
+import ContactProfileCompleteness from "@/components/crm-boilerplate/ContactProfileCompleteness";
 import { PhoneIcon } from "@/components/crm-boilerplate/SoftphoneIcons";
 import type {
   ContactEmailMethod,
@@ -34,6 +35,7 @@ import type {
   ContactCustomFieldDefinition,
   ContactCustomFieldFormValue,
 } from "@/lib/contacts/custom-fields";
+import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
 import { triggerSoftphoneDial } from "@/lib/telephony/softphone-dial";
 
 type CompanyOption = {
@@ -273,7 +275,9 @@ export default function ContactsTable({
       enableHiding: false,
       sortable: true,
       sortValue: contactName,
-      cell: (contact) => <ContactNameCell contact={contact} />,
+      cell: (contact) => (
+        <ContactNameCell contact={contact} customFields={customFields} />
+      ),
     },
     {
       id: "company",
@@ -553,8 +557,19 @@ function AddressSubline({ address }: { address: string }) {
   );
 }
 
-function ContactNameCell({ contact }: { contact: ContactRow }) {
+function ContactNameCell({
+  contact,
+  customFields,
+}: {
+  contact: ContactRow;
+  customFields: ContactCustomFieldDefinition[];
+}) {
   const address = contactAddress(contact);
+  const completeness = contactProfileCompleteness({
+    contactTypeId: contact.contactTypeId ?? contact.contactType?.id ?? null,
+    definitions: customFields,
+    values: contact.customFieldValues,
+  });
 
   return (
     <div className="min-w-0">
@@ -564,6 +579,7 @@ function ContactNameCell({ contact }: { contact: ContactRow }) {
       >
         {contactName(contact)}
       </Link>
+      <ContactProfileCompleteness value={completeness} variant="compact" />
       <AddressSubline address={address} />
     </div>
   );

@@ -55,6 +55,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   them against the selected active type, and values use typed database columns.
   Archiving a field preserves its values, and changing a populated field's data
   type is blocked.
+- Profile completeness is derived from the active `REQUIRED` and
+  `COMPLETENESS` fields for a contact's current person type. The People list
+  shows a compact percentage and the contact profile shows progress plus the
+  missing field labels. Optional fields are excluded, unconfigured types show
+  no artificial 0% score, and completeness-only fields do not block saving.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo
