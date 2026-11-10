@@ -58,10 +58,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   for sign-in, two-factor and password-reset attempt limits across app
   instances.
 - `Company`: account/company record.
-- `Contact`: customer/person record, including a first-class category
-  (`Consumer`, `Trade`, `Installer` or `Company`), one primary email, one
+- `Contact`: customer/person record, including a configurable `ContactType`,
+  one primary email, one
   primary phone and optional manual postal address fields for address line 1,
   address line 2, city, county, postcode and country.
+  The legacy `ContactCategory` remains populated during the staged migration of
+  filters, imports and forms. `ContactType.systemKey` provides a stable mapping
+  for Consumer, Trade, Installer and Company while allowing future custom types.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level

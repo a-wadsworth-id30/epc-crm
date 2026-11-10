@@ -573,6 +573,8 @@ model Contact {
   firstName             String
   lastName              String
   category              ContactCategory              @default(CONSUMER)
+  contactTypeId         String?
+  contactType           ContactType?                 @relation(fields: [contactTypeId], references: [id], onDelete: SetNull)
   email                 String?
   phone                 String?
   phoneNormalized       String?
@@ -611,11 +613,32 @@ model Contact {
   @@index([updatedAt])
   @@index([createdAt])
   @@index([category, updatedAt])
+  @@index([contactTypeId, updatedAt])
   @@index([lastName, firstName])
   @@index([leadSource, createdAt])
   @@index([phoneNormalized])
   @@index([companyId, updatedAt])
   @@index([createdByUserId, updatedAt])
+}
+
+model ContactType {
+  id           String           @id @default(cuid())
+  name         String
+  pluralName   String
+  slug         String           @unique
+  description  String?
+  systemKey    ContactCategory? @unique
+  colourKey    String           @default("gray")
+  iconKey      String           @default("user")
+  displayOrder Int              @default(0)
+  isDefault    Boolean          @default(false)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  contacts     Contact[]
+
+  @@index([isActive, displayOrder])
+  @@index([isDefault, isActive])
 }
 
 model CustomerRelationshipProfile {
