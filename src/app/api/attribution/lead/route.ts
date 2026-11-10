@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
+import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
 import {
@@ -228,6 +229,7 @@ export async function POST(request: Request) {
       })
     : await prisma.contact.create({
         data: {
+          ...systemContactTypeAssignment(),
           firstName,
           lastName,
           email: leadEmail,

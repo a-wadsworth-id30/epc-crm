@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
+import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   companyIdAccessWhere,
   companyWhereWithAccess,
@@ -742,6 +743,7 @@ export async function createSaleAction(
         });
         const contact = await tx.contact.create({
           data: {
+            ...systemContactTypeAssignment(),
             companyId: companyData.companyId,
             companyName: companyData.companyName,
             createdByUserId: user.id,

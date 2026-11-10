@@ -45,8 +45,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   types cannot be archived accidentally, and changes are written to AuditLog.
 - People list tabs, counts, badges, filters and create/edit forms read active
   database-backed person types. New and edited contacts store both the selected
-  `contactTypeId` and a compatible legacy category for integrations that have
-  not yet migrated; older null relations fall back to their legacy category.
+  `contactTypeId` and a compatible legacy category. Sales inline-create,
+  company contacts, website attribution, inbound phone leads, Pipedrive and
+  Spruce assign the Consumer system type at creation, and a data migration
+  repairs any null links left by those paths. Older null relations still fall
+  back safely to their legacy category.
 - Settings > Person Types supports ordered type-specific field definitions for
   short/long text, numbers, dates, yes/no values, single/multi selects, email,
   phone, URL and address data. Definitions have stable keys and can be optional,

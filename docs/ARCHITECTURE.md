@@ -72,6 +72,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   rows. Contact writes derive the legacy category from the selected system key;
   custom types use the Consumer compatibility bucket until downstream imports
   and reports complete their staged migration.
+  Sales inline-create, company contact creation, website attribution, inbound
+  phone leads, Pipedrive and Spruce also connect new contacts to the Consumer
+  system type while retaining the matching legacy category. A data-only
+  backfill repairs any null type links created by those paths after the original
+  person-type migration.
   `ContactTypeField` stores stable, ordered field definitions for each person
   type. `ContactCustomFieldValue` stores one typed value per contact/field using
   text, decimal, boolean, date or JSON-array columns. Contact actions reload the
