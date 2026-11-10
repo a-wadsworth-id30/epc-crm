@@ -101,6 +101,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   definitions and duplicate state, and imports create new contacts only. No
   existing contact is overwritten. The audit event stores counts and type IDs,
   not CSV contents or personal values.
+- Reports and Sidekick can group and filter contacts by person type, profile
+  completeness and required-document compliance. The approved Contacts and
+  clients dataset reuses the same completeness and requirement rules as the
+  contact profile, counts only valid non-expired typed files for compliance and
+  preserves the existing contact access scope for non-admin users.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo
@@ -1995,7 +2000,8 @@ Tracking`; their detailed tabs live inside those pages. Marketing's left menu
   launch checklists use the approved Setup readiness dataset backed by the
   shared `loadSetupReadiness` checklist used by Dashboard and Settings > Setup.
   Contact and client prompts about open opportunities, recent activity, stale
-  contact, paid-ad origins and submitted-form origins use the approved Contacts
+  contact, paid-ad origins, submitted-form origins, person types, profile
+  completeness and document compliance use the approved Contacts
   and clients dataset backed by contacts plus linked CRM activity. The dataset
   uses grouped form-attribution counts and the latest form sample per contact so
   reports do not load every form attribution row for each selected contact.
