@@ -210,6 +210,51 @@ describe("Sidekick deterministic report planner", () => {
     assert.equal(plan.metrics[0], "unlinkedContacts");
   });
 
+  it("plans profile completeness by person type", async () => {
+    const { reportPlanFromPrompt } = await loadPlanner();
+    const plan = reportPlanFromPrompt(
+      "Show profile completeness by person type.",
+    );
+
+    assert.equal(plan.dataset, "contacts_clients");
+    assert.deepEqual(plan.dimensions, ["personType", "profileCompleteness"]);
+    assert.equal(plan.metrics[0], "profileIncompleteContacts");
+    assert.equal(plan.dateRange.preset, "all");
+  });
+
+  it("filters incomplete contact profiles", async () => {
+    const { reportPlanFromPrompt } = await loadPlanner();
+    const plan = reportPlanFromPrompt("Which contacts have incomplete profiles?");
+
+    assert.equal(plan.dataset, "contacts_clients");
+    assert.deepEqual(plan.filters, [
+      {
+        field: "profileCompleteness",
+        operator: "equals",
+        value: "Incomplete",
+      },
+    ]);
+    assert.equal(plan.metrics[0], "profileIncompleteContacts");
+  });
+
+  it("plans installer document compliance", async () => {
+    const { reportPlanFromPrompt } = await loadPlanner();
+    const plan = reportPlanFromPrompt(
+      "Show installers missing required documents.",
+    );
+
+    assert.equal(plan.dataset, "contacts_clients");
+    assert.deepEqual(plan.dimensions, ["personType", "documentCompliance"]);
+    assert.deepEqual(plan.filters, [
+      {
+        field: "documentCompliance",
+        operator: "equals",
+        value: "Missing required documents",
+      },
+    ]);
+    assert.equal(plan.metrics[0], "contactsMissingRequiredDocuments");
+  });
+
   it("explains empty marketing attribution reports", async () => {
     const { reportEmptyStateMessage, reportPlanFromPrompt } =
       await loadPlanner();

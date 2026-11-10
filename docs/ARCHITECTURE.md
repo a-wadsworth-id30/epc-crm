@@ -1074,7 +1074,11 @@ Settings > Setup so Sidekick reports the same outstanding readiness items.
 Contact and client activity is represented by the `contacts_clients` dataset,
 which aggregates `Contact` records with linked opportunities, latest
 communications, calls, tasks, grouped form counts and the latest
-form-attribution sample per contact.
+form-attribution sample per contact. The same dataset resolves database-backed
+person types, derives profile completeness from active type fields and derives
+document compliance from valid typed contact files. Expired files do not
+satisfy a required-document report. These values are available as approved
+dimensions, filters and metrics to both Reports and Sidekick.
 User security posture is represented by the `users_security` dataset, which
 aggregates `User`, `Session` and `PasswordResetToken` status without selecting
 password hashes, token hashes, 2FA secrets or raw session tokens.

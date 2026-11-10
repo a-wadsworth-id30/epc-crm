@@ -309,8 +309,8 @@ export function isExplicitReportIntent(message: string) {
       lower,
     );
   const asksForContactsClients =
-    /\b(contacts?|clients?|customers?|companies?)\b/.test(lower) &&
-    /\b(which|what|show|list|most|least|top|bottom|open opportunities?|open leads?|activity|recent|inactive|contacted|paid ads?|submitted forms?|form submissions?|no open leads?|without open)\b/.test(
+    /\b(contacts?|clients?|customers?|companies?|people|person types?|contact types?|installers?|trades?|consumers?)\b/.test(lower) &&
+    /\b(which|what|show|list|most|least|top|bottom|open opportunities?|open leads?|activity|recent|inactive|contacted|paid ads?|submitted forms?|form submissions?|no open leads?|without open|profile completeness|complete profiles?|incomplete profiles?|document compliance|missing required documents?|missing documents?|compliant)\b/.test(
       lower,
     );
   const asksForUsersSecurity =
@@ -390,7 +390,7 @@ export function isExplicitReportIntent(message: string) {
 export function isCrmQuestionIntent(message: string) {
   const lower = message.toLowerCase();
   return (
-    /\b(crm|sales?|leads?|opportunities|deals?|pipeline|revenue|contacts?|clients?|companies|customers?|users?|accounts?|admins?|2fa|two[- ]?factor|mfa|setup links?|invites?|storage|files?|uploads?|assets?|media|documents?|products?|services?|calls?|phone|telephony|queues?|wait time|recordings?|transcripts?|tasks?|follow[- ]?ups?|sources?|attribution|campaigns?|forms?|form fields?|submitted fields?|submissions?|emails?|sms|communications?|timeline|stale|activity|usage|dashboard|reports?|discovery|questions?|answers?|budgets?|timeframes?|timescales?|platforms?|requirements?|lifecycle|contacted rate|contact rate|response time|first response|lost reasons?|time[- ]?to[- ]?close|stage changes?|stage transitions?|setup|readiness|handover|go[- ]?live|launch|checklist)\b/.test(
+    /\b(crm|sales?|leads?|opportunities|deals?|pipeline|revenue|contacts?|clients?|companies|customers?|people|person types?|contact types?|installers?|trades?|consumers?|profile completeness|document compliance|users?|accounts?|admins?|2fa|two[- ]?factor|mfa|setup links?|invites?|storage|files?|uploads?|assets?|media|documents?|products?|services?|calls?|phone|telephony|queues?|wait time|recordings?|transcripts?|tasks?|follow[- ]?ups?|sources?|attribution|campaigns?|forms?|form fields?|submitted fields?|submissions?|emails?|sms|communications?|timeline|stale|activity|usage|dashboard|reports?|discovery|questions?|answers?|budgets?|timeframes?|timescales?|platforms?|requirements?|lifecycle|contacted rate|contact rate|response time|first response|lost reasons?|time[- ]?to[- ]?close|stage changes?|stage transitions?|setup|readiness|handover|go[- ]?live|launch|checklist)\b/.test(
       lower,
     ) ||
     /\b(find|search|show|list|summari[sz]e)\b/.test(lower)

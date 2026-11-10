@@ -5,6 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
 import { loadSetupReadiness } from "@/lib/setup/readiness";
 import { parseWorkspaceDefaults } from "@/lib/workspace-defaults";
+import {
+  normalizeContactCustomFieldOptions,
+  serializeContactCustomFieldValue,
+} from "@/lib/contacts/custom-fields";
+import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
+import {
+  contactDocumentRequirementStatuses,
+  parseContactDocumentUploadType,
+} from "@/lib/contacts/document-requirements";
 import type {
   ReportColumn,
   ReportDatasetSchema,
@@ -915,6 +924,11 @@ export const reportDatasets: ReportDatasetSchema[] = [
     metrics: [
       { id: "contactCount", label: "Contacts", type: "number" },
       { id: "companyCount", label: "Companies", type: "number" },
+      { id: "profileCompleteContacts", label: "Complete profiles", type: "number" },
+      { id: "profileIncompleteContacts", label: "Incomplete profiles", type: "number" },
+      { id: "documentCompliantContacts", label: "Document compliant", type: "number" },
+      { id: "contactsMissingRequiredDocuments", label: "Missing required documents", type: "number" },
+      { id: "missingRequiredDocumentCount", label: "Required documents missing", type: "number" },
       { id: "opportunities", label: "Opportunities", type: "number" },
       { id: "openOpportunities", label: "Open opportunities", type: "number" },
       { id: "wonOpportunities", label: "Won opportunities", type: "number" },
@@ -930,6 +944,9 @@ export const reportDatasets: ReportDatasetSchema[] = [
     ],
     dimensions: [
       { id: "contact", label: "Contact", type: "text" },
+      { id: "personType", label: "Person type", type: "text" },
+      { id: "profileCompleteness", label: "Profile completeness", type: "text" },
+      { id: "documentCompliance", label: "Document compliance", type: "text" },
       { id: "company", label: "Company", type: "text" },
       { id: "owner", label: "Owner", type: "text" },
       { id: "source", label: "Lead source", type: "text" },
@@ -944,6 +961,9 @@ export const reportDatasets: ReportDatasetSchema[] = [
     ],
     filters: [
       { id: "contact", label: "Contact" },
+      { id: "personType", label: "Person type" },
+      { id: "profileCompleteness", label: "Profile completeness" },
+      { id: "documentCompliance", label: "Document compliance" },
       { id: "company", label: "Company" },
       { id: "owner", label: "Owner" },
       { id: "source", label: "Lead source" },
@@ -2971,7 +2991,8 @@ async function contactClientRows(
       : { opportunities: { some: { ownerId: user.id } } }),
     ...(range ? { createdAt: { gte: range.from, lte: range.to } } : {}),
   };
-  const contacts = await prisma.contact.findMany({
+  const [contacts, contactTypes] = await Promise.all([
+    prisma.contact.findMany({
     where,
     orderBy: { updatedAt: "desc" },
     take: maxRows,
@@ -2986,7 +3007,19 @@ async function contactClientRows(
       company: { select: { name: true } },
       companyId: true,
       companyName: true,
+      category: true,
+      contactTypeId: true,
       createdAt: true,
+      customFieldValues: {
+        select: {
+          booleanValue: true,
+          dateValue: true,
+          fieldId: true,
+          jsonValue: true,
+          numberValue: true,
+          textValue: true,
+        },
+      },
       firstName: true,
       id: true,
       lastName: true,
@@ -3012,9 +3045,52 @@ async function contactClientRows(
       },
       updatedAt: true,
     },
-  });
+    }),
+    prisma.contactType.findMany({
+      where: { isActive: true },
+      select: {
+        documentRequirements: {
+          where: { isActive: true },
+          orderBy: { displayOrder: "asc" },
+          select: {
+            contactTypeId: true,
+            description: true,
+            displayOrder: true,
+            id: true,
+            isActive: true,
+            isRequired: true,
+            label: true,
+            uploadType: true,
+          },
+        },
+        fields: {
+          where: { isActive: true },
+          orderBy: { displayOrder: "asc" },
+          select: {
+            contactTypeId: true,
+            displayOrder: true,
+            externalEditable: true,
+            fieldType: true,
+            helpText: true,
+            id: true,
+            isActive: true,
+            isSearchable: true,
+            key: true,
+            label: true,
+            options: true,
+            placeholder: true,
+            requirementMode: true,
+            showInTable: true,
+          },
+        },
+        id: true,
+        name: true,
+        systemKey: true,
+      },
+    }),
+  ]);
   const contactIds = contacts.map((contact) => contact.id);
-  const [formCounts, latestFormRecords] = contactIds.length
+  const [formCounts, latestFormRecords, contactDocuments] = contactIds.length
     ? await Promise.all([
         prisma.attributionRecord.groupBy({
           by: ["contactId"],
@@ -3032,8 +3108,23 @@ async function contactClientRows(
             metadata: true,
           },
         }),
+        prisma.fileAsset.findMany({
+          where: {
+            entityId: { in: contactIds },
+            entityType: "Contact",
+            OR: [
+              { documentExpiresAt: null },
+              { documentExpiresAt: { gte: new Date() } },
+            ],
+          },
+          select: {
+            documentUploadType: true,
+            entityId: true,
+            id: true,
+          },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
   const formCountsByContact = new Map(
     formCounts
       .filter((record) => record.contactId)
@@ -3049,6 +3140,23 @@ async function contactClientRows(
     latestFormByContact.set(record.contactId, record);
   }
 
+  const contactTypeById = new Map(contactTypes.map((type) => [type.id, type]));
+  const contactTypeByCategory = new Map(
+    contactTypes.flatMap((type) =>
+      type.systemKey ? [[type.systemKey, type] as const] : [],
+    ),
+  );
+  const documentsByContact = new Map<
+    string,
+    Array<{ documentUploadType: string | null; id: string }>
+  >();
+  for (const document of contactDocuments) {
+    if (!document.entityId) continue;
+    const documents = documentsByContact.get(document.entityId) ?? [];
+    documents.push(document);
+    documentsByContact.set(document.entityId, documents);
+  }
+
   const now = new Date();
   const groups = new Map<
     string,
@@ -3061,6 +3169,10 @@ async function contactClientRows(
         contactStatus: string;
         formSubmissionCount: number;
         isPaid: boolean;
+        isDocumentCompliant: boolean;
+        isProfileComplete: boolean;
+        isProfileConfigured: boolean;
+        missingRequiredDocumentCount: number;
         openOpportunityCount: number;
         opportunityCount: number;
         recentActivityCount: number;
@@ -3070,6 +3182,49 @@ async function contactClientRows(
   >();
 
   for (const contact of contacts) {
+    const contactType = contact.contactTypeId
+      ? contactTypeById.get(contact.contactTypeId)
+      : contactTypeByCategory.get(contact.category);
+    const customFieldValues = Object.fromEntries(
+      contact.customFieldValues.map((value) => [
+        value.fieldId,
+        serializeContactCustomFieldValue(value),
+      ]),
+    );
+    const profileCompleteness = contactProfileCompleteness({
+      contactTypeId: contactType?.id ?? null,
+      definitions: (contactType?.fields ?? []).map((field) => ({
+        ...field,
+        options: normalizeContactCustomFieldOptions(field.options),
+      })),
+      values: customFieldValues,
+    });
+    const documentRequirements = (contactType?.documentRequirements ?? [])
+      .flatMap((requirement) => {
+        const uploadType = parseContactDocumentUploadType(requirement.uploadType);
+        return uploadType ? [{ ...requirement, uploadType }] : [];
+      });
+    const documentStatuses = contactDocumentRequirementStatuses({
+      contactTypeId: contactType?.id ?? null,
+      documents: documentsByContact.get(contact.id) ?? [],
+      requirements: documentRequirements,
+    });
+    const requiredDocumentStatuses = documentStatuses.filter(
+      (requirement) => requirement.isRequired,
+    );
+    const missingRequiredDocumentCount = requiredDocumentStatuses.filter(
+      (requirement) => !requirement.satisfied,
+    ).length;
+    const documentCompliance = requiredDocumentStatuses.length === 0
+      ? "No requirements"
+      : missingRequiredDocumentCount === 0
+        ? "Complete"
+        : "Missing required documents";
+    const profileCompletenessStatus = !profileCompleteness.isConfigured
+      ? "Not configured"
+      : profileCompleteness.isComplete
+        ? "Complete"
+        : "Incomplete";
     const formSubmissionCount = formCountsByContact.get(contact.id) ?? 0;
     const latestForm = latestFormByContact.get(contact.id) ?? null;
     const openOpportunities = contact.opportunities.filter(
@@ -3141,6 +3296,7 @@ async function contactClientRows(
         "Unnamed contact",
       ),
       contactStatus,
+      documentCompliance,
       day: dayKey(contact.createdAt, timezone),
       formStatus: formSubmissionCount
         ? "Submitted form"
@@ -3151,6 +3307,8 @@ async function contactClientRows(
         : "No open opportunity",
       owner,
       paidStatus,
+      personType: contactType?.name ?? "Unassigned",
+      profileCompleteness: profileCompletenessStatus,
       source: normaliseSource(source),
       week: weekKey(contact.createdAt, timezone),
     };
@@ -3173,6 +3331,10 @@ async function contactClientRows(
       contactStatus,
       formSubmissionCount,
       isPaid: paidStatus === "Paid ads",
+      isDocumentCompliant: documentCompliance === "Complete",
+      isProfileComplete: profileCompleteness.isComplete,
+      isProfileConfigured: profileCompleteness.isConfigured,
+      missingRequiredDocumentCount,
       openOpportunityCount: openOpportunities.length,
       opportunityCount: contact.opportunities.length,
       recentActivityCount: activityStatus === "Active last 30 days" ? 1 : 0,
@@ -3189,6 +3351,22 @@ async function contactClientRows(
 
     row.contactCount = group.items.length;
     row.companyCount = new Set(group.items.map((item) => item.companyKey)).size;
+    row.profileCompleteContacts = group.items.filter(
+      (item) => item.isProfileComplete,
+    ).length;
+    row.profileIncompleteContacts = group.items.filter(
+      (item) => item.isProfileConfigured && !item.isProfileComplete,
+    ).length;
+    row.documentCompliantContacts = group.items.filter(
+      (item) => item.isDocumentCompliant,
+    ).length;
+    row.contactsMissingRequiredDocuments = group.items.filter(
+      (item) => item.missingRequiredDocumentCount > 0,
+    ).length;
+    row.missingRequiredDocumentCount = group.items.reduce(
+      (total, item) => total + item.missingRequiredDocumentCount,
+      0,
+    );
     row.opportunities = group.items.reduce(
       (total, item) => total + item.opportunityCount,
       0,
@@ -3680,8 +3858,8 @@ export function reportPlanFromPrompt(message: string): ReportPlan {
       lower,
     );
   const asksForContactsClients =
-    /\b(contacts?|clients?|customers?|companies?)\b/.test(lower) &&
-    /\b(which|what|show|list|report|chart|breakdown|most|least|top|bottom|open opportunities?|open leads?|activity|recent|inactive|contacted|paid ads?|submitted forms?|form submissions?|no open leads?|without open)\b/.test(
+    /\b(contacts?|clients?|customers?|companies?|people|person types?|contact types?|installers?|trades?|consumers?)\b/.test(lower) &&
+    /\b(which|what|show|list|report|chart|breakdown|most|least|top|bottom|open opportunities?|open leads?|activity|recent|inactive|contacted|paid ads?|submitted forms?|form submissions?|no open leads?|without open|profile completeness|complete profiles?|incomplete profiles?|document compliance|missing required documents?|missing documents?|compliant)\b/.test(
       lower,
     );
   const asksForUsersSecurity =
@@ -3890,6 +4068,26 @@ export function reportPlanFromPrompt(message: string): ReportPlan {
   }
 
   if (dataset === "contacts_clients") {
+    const asksForPersonType =
+      /\b(person types?|contact types?|installers?|trades?|consumers?)\b/.test(
+        lower,
+      );
+    const asksForProfileCompleteness =
+      /\b(profile completeness|complete profiles?|incomplete profiles?|missing profile (?:fields?|information)|profile fields?)\b/.test(
+        lower,
+      );
+    const asksForIncompleteProfiles =
+      asksForProfileCompleteness &&
+      /\b(incomplete|missing|not complete|needs? completing)\b/.test(lower);
+    const asksForDocumentCompliance =
+      /\b(document compliance|document compliant|compliant documents?|required documents?|missing documents?|documents? missing)\b/.test(
+        lower,
+      );
+    const asksForMissingDocuments =
+      asksForDocumentCompliance &&
+      /\b(missing|without|not compliant|non[- ]compliant|outstanding)\b/.test(
+        lower,
+      );
     const asksForCompanies =
       /\b(clients?|customers?|companies?)\b/.test(lower) &&
       !/\bcontacts?\b/.test(lower);
@@ -3910,8 +4108,18 @@ export function reportPlanFromPrompt(message: string): ReportPlan {
     const asksForPaidOrigin = /\b(paid ads?|paid|google ads|meta|facebook|linkedin|bing)\b/.test(
       lower,
     );
-    const contactDimensions = asksForNoRecentContact
-      ? ["contact"]
+    const contactDimensions = asksForProfileCompleteness
+      ? asksForPersonType
+        ? ["personType", "profileCompleteness"]
+        : ["profileCompleteness"]
+      : asksForDocumentCompliance
+        ? asksForPersonType
+          ? ["personType", "documentCompliance"]
+          : ["documentCompliance"]
+        : asksForPersonType
+          ? ["personType"]
+          : asksForNoRecentContact
+            ? ["contact"]
       : asksForOpenOpportunity || asksForNoOpenOpportunity || asksForFormOrigin
         ? ["contact"]
         : asksForPaidOrigin
@@ -3972,12 +4180,34 @@ export function reportPlanFromPrompt(message: string): ReportPlan {
         value: "Paid ads",
       });
     }
+    if (asksForIncompleteProfiles) {
+      contactFilters.push({
+        field: "profileCompleteness",
+        operator: "equals",
+        value: "Incomplete",
+      });
+    }
+    if (asksForMissingDocuments) {
+      contactFilters.push({
+        field: "documentCompliance",
+        operator: "equals",
+        value: "Missing required documents",
+      });
+    }
 
     const isTimeContactReport = ["month", "week", "day"].includes(
       contactDimensions[0],
     );
-    const contactMetrics = asksForNoRecentContact
-      ? ["noRecentContact", "avgDaysSinceLastContact", "openOpportunities"]
+    const contactMetrics = asksForProfileCompleteness
+      ? ["profileIncompleteContacts", "profileCompleteContacts", "contactCount"]
+      : asksForDocumentCompliance
+        ? [
+            "contactsMissingRequiredDocuments",
+            "missingRequiredDocumentCount",
+            "documentCompliantContacts",
+          ]
+        : asksForNoRecentContact
+          ? ["noRecentContact", "avgDaysSinceLastContact", "openOpportunities"]
       : asksForFormOrigin
         ? ["formSubmissions", "contactCount", "openOpportunities"]
         : asksForPaidOrigin
@@ -4002,6 +4232,10 @@ export function reportPlanFromPrompt(message: string): ReportPlan {
       limit: 12,
       title: asksForNoRecentContact
         ? "Contacts needing contact"
+        : asksForProfileCompleteness
+          ? "Contact profile completeness"
+          : asksForDocumentCompliance
+            ? "Contact document compliance"
         : asksForOpenOpportunity
           ? "Contacts with open opportunities"
           : asksForFormOrigin
