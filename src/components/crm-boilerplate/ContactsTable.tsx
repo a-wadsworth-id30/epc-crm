@@ -30,6 +30,10 @@ import {
   type ContactCategoryValue,
 } from "@/lib/contacts/categories";
 import type { ContactTypeOption } from "@/lib/contacts/contact-types";
+import type {
+  ContactCustomFieldDefinition,
+  ContactCustomFieldFormValue,
+} from "@/lib/contacts/custom-fields";
 import { triggerSoftphoneDial } from "@/lib/telephony/softphone-dial";
 
 type CompanyOption = {
@@ -48,6 +52,7 @@ type ContactRow = {
   category: ContactCategoryValue;
   contactTypeId: string | null;
   contactType: ContactTypeOption | null;
+  customFieldValues: Record<string, ContactCustomFieldFormValue>;
   leadSource: string | null;
   role: string | null;
   addressLine1: string | null;
@@ -158,6 +163,7 @@ export default function ContactsTable({
   activeContactTypeSlug,
   contactTypeCounts,
   contactTypes,
+  customFields,
   contacts,
   companies,
   companiesEnabled,
@@ -174,6 +180,7 @@ export default function ContactsTable({
   activeContactTypeSlug: string;
   contactTypeCounts: Record<string, number>;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   contacts: ContactRow[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
@@ -396,6 +403,7 @@ export default function ContactsTable({
             companies={companies}
             companiesEnabled={companiesEnabled}
             contactTypes={contactTypes}
+            customFields={customFields}
             contact={contact}
             addressLookupEnabled={addressLookupEnabled}
           />
@@ -699,6 +707,7 @@ function ContactActions({
   companies,
   companiesEnabled,
   contactTypes,
+  customFields,
   contact,
 }: {
   addressLookupEnabled: boolean;
@@ -706,6 +715,7 @@ function ContactActions({
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   contact: ContactRow;
 }) {
   return (
@@ -714,6 +724,7 @@ function ContactActions({
         companies={companies}
         companiesEnabled={companiesEnabled}
         contactTypes={contactTypes}
+        customFields={customFields}
         availableTags={availableTags}
         addressLookupEnabled={addressLookupEnabled}
         contact={contact}

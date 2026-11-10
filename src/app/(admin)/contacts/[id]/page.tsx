@@ -36,6 +36,10 @@ import {
   defaultContactCategory,
 } from "@/lib/contacts/categories";
 import {
+  normalizeContactCustomFieldOptions,
+  serializeContactCustomFieldValue,
+} from "@/lib/contacts/custom-fields";
+import {
   customerRelationshipStatusOption,
   defaultCustomerRelationshipStatus,
   type CustomerRelationshipStatusValue,
@@ -118,6 +122,14 @@ function formatMoney(valueCents: number, currency: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(valueCents / 100);
+}
+
+function formatCustomFieldValue(
+  value: ReturnType<typeof serializeContactCustomFieldValue>,
+) {
+  if (Array.isArray(value)) return value.join(", ") || "Not set";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return value || "Not set";
 }
 
 function formatEnumLabel(value: string) {
@@ -338,6 +350,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     companies,
     availableTags,
     contactTypes,
+    customFields,
     mergeCandidateContacts,
     addressLookupEnabled,
     contactDocuments,
@@ -386,6 +399,16 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             pluralName: true,
             slug: true,
             systemKey: true,
+          },
+        },
+        customFieldValues: {
+          select: {
+            booleanValue: true,
+            dateValue: true,
+            fieldId: true,
+            jsonValue: true,
+            numberValue: true,
+            textValue: true,
           },
         },
         leadSource: true,
@@ -496,6 +519,26 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         pluralName: true,
         slug: true,
         systemKey: true,
+      },
+    }),
+    prisma.contactTypeField.findMany({
+      where: { isActive: true },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: {
+        contactTypeId: true,
+        displayOrder: true,
+        externalEditable: true,
+        fieldType: true,
+        helpText: true,
+        id: true,
+        isActive: true,
+        isSearchable: true,
+        key: true,
+        label: true,
+        options: true,
+        placeholder: true,
+        requirementMode: true,
+        showInTable: true,
       },
     }),
     prisma.contact.findMany({
@@ -776,6 +819,12 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     postcode: contact.postcode,
     role: contact.role,
     tags: contactTags,
+    customFieldValues: Object.fromEntries(
+      contact.customFieldValues.map((value) => [
+        value.fieldId,
+        serializeContactCustomFieldValue(value),
+      ]),
+    ),
   };
   const mergeCandidates = mergeCandidateContacts.map((candidate) => {
     const candidateEmail =
@@ -962,6 +1011,19 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     contact.category ?? defaultContactCategory,
   );
   const contactTypeLabel = contact.contactType?.name ?? categoryOption.label;
+  const resolvedContactTypeId =
+    contact.contactTypeId ??
+    contactTypes.find((type) => type.systemKey === contact.category)?.id ??
+    null;
+  const customFieldValueMap = new Map(
+    contact.customFieldValues.map((value) => [
+      value.fieldId,
+      serializeContactCustomFieldValue(value),
+    ]),
+  );
+  const contactCustomFields = customFields.filter(
+    (field) => field.contactTypeId === resolvedContactTypeId,
+  );
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const relationshipStatus = (contact.relationshipProfile?.status ??
     defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
@@ -1110,6 +1172,23 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             )}
           </dd>
         </div>
+        {contactCustomFields.length ? (
+          <div className="border-t border-gray-100 pt-4 md:col-span-2 dark:border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+              {contactTypeLabel} details
+            </h3>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              {contactCustomFields.map((field) => (
+                <div key={field.id}>
+                  <dt className="text-gray-500 dark:text-gray-400">{field.label}</dt>
+                  <dd className="mt-1 whitespace-pre-wrap font-medium text-gray-800 dark:text-white/90">
+                    {formatCustomFieldValue(customFieldValueMap.get(field.id) ?? null)}
+                  </dd>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </dl>
     </div>
   );
@@ -1230,6 +1309,10 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               companies={companies}
               companiesEnabled={settings.companiesEnabled}
               contactTypes={contactTypes}
+              customFields={customFields.map((field) => ({
+                ...field,
+                options: normalizeContactCustomFieldOptions(field.options),
+              }))}
               contact={editableContact}
               addressLookupEnabled={addressLookupEnabled}
               triggerLabel="Edit"

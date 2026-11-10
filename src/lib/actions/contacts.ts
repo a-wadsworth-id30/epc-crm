@@ -19,6 +19,12 @@ import {
   type ContactCategoryValue,
 } from "@/lib/contacts/categories";
 import {
+  normalizeContactCustomFieldOptions,
+  parseContactCustomFieldSubmission,
+  type ContactCustomFieldDefinition,
+  type ContactCustomFieldWrite,
+} from "@/lib/contacts/custom-fields";
+import {
   customerRelationshipStatusValues,
   defaultCustomerRelationshipStatus,
 } from "@/lib/customer-relationship";
@@ -408,12 +414,58 @@ async function resolveSubmittedContactType(
           id: contactTypeId,
           OR: [{ isActive: true }, ...(allowInactiveId === contactTypeId ? [{ id: allowInactiveId }] : [])],
         },
-        select: { id: true, systemKey: true },
+        select: {
+          fields: {
+            where: { isActive: true },
+            orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+            select: {
+              contactTypeId: true,
+              displayOrder: true,
+              externalEditable: true,
+              fieldType: true,
+              helpText: true,
+              id: true,
+              isActive: true,
+              isSearchable: true,
+              key: true,
+              label: true,
+              options: true,
+              placeholder: true,
+              requirementMode: true,
+              showInTable: true,
+            },
+          },
+          id: true,
+          systemKey: true,
+        },
       })
     : await tx.contactType.findFirst({
         where: { isActive: true },
         orderBy: [{ isDefault: "desc" }, { displayOrder: "asc" }, { name: "asc" }],
-        select: { id: true, systemKey: true },
+        select: {
+          fields: {
+            where: { isActive: true },
+            orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+            select: {
+              contactTypeId: true,
+              displayOrder: true,
+              externalEditable: true,
+              fieldType: true,
+              helpText: true,
+              id: true,
+              isActive: true,
+              isSearchable: true,
+              key: true,
+              label: true,
+              options: true,
+              placeholder: true,
+              requirementMode: true,
+              showInTable: true,
+            },
+          },
+          id: true,
+          systemKey: true,
+        },
       });
 
   if (!selected) {
@@ -423,7 +475,49 @@ async function resolveSubmittedContactType(
   return {
     category: selected.systemKey ?? defaultContactCategory,
     contactTypeId: selected.id,
+    customFields: selected.fields.map((field) => ({
+      ...field,
+      options: normalizeContactCustomFieldOptions(field.options),
+    })) satisfies ContactCustomFieldDefinition[],
   };
+}
+
+function hasContactCustomFieldValue(value: ContactCustomFieldWrite) {
+  return (
+    value.booleanValue !== null ||
+    value.dateValue !== null ||
+    value.numberValue !== null ||
+    value.textValue !== null ||
+    (Array.isArray(value.jsonValue) && value.jsonValue.length > 0)
+  );
+}
+
+async function replaceContactCustomFieldValues(
+  tx: Prisma.TransactionClient,
+  contactId: string,
+  values: ContactCustomFieldWrite[],
+) {
+  for (const value of values) {
+    if (!hasContactCustomFieldValue(value)) {
+      await tx.contactCustomFieldValue.deleteMany({
+        where: { contactId, fieldId: value.fieldId },
+      });
+      continue;
+    }
+
+    const data = {
+      booleanValue: value.booleanValue,
+      dateValue: value.dateValue,
+      jsonValue: value.jsonValue,
+      numberValue: value.numberValue,
+      textValue: value.textValue,
+    };
+    await tx.contactCustomFieldValue.upsert({
+      where: { contactId_fieldId: { contactId, fieldId: value.fieldId } },
+      create: { ...data, contactId, fieldId: value.fieldId },
+      update: data,
+    });
+  }
 }
 
 async function replaceContactTags(
@@ -551,6 +645,13 @@ export async function createContactAction(
         tx,
         parsed.data.contactTypeId,
       );
+      const customFields = parseContactCustomFieldSubmission(
+        contactType.customFields,
+        formData,
+      );
+      if (!customFields.ok) {
+        throw new ContactActionError(customFields.message);
+      }
       const companyData = await resolveCompanyData(
         parsed.data.companyId,
         parsed.data.companyName,
@@ -591,6 +692,11 @@ export async function createContactAction(
         contact.id,
         parsedAdditionalEmails.items,
         parsedAdditionalPhones.items,
+      );
+      await replaceContactCustomFieldValues(
+        tx,
+        contact.id,
+        customFields.values,
       );
     });
   } catch (error) {
@@ -670,6 +776,13 @@ export async function updateContactAction(
         parsed.data.contactTypeId,
         contact.contactTypeId,
       );
+      const customFields = parseContactCustomFieldSubmission(
+        contactType.customFields,
+        formData,
+      );
+      if (!customFields.ok) {
+        throw new ContactActionError(customFields.message);
+      }
       const companyData = await resolveCompanyData(
         parsed.data.companyId,
         parsed.data.companyName,
@@ -708,6 +821,11 @@ export async function updateContactAction(
         contactId,
         parsedAdditionalEmails.items,
         parsedAdditionalPhones.items,
+      );
+      await replaceContactCustomFieldValues(
+        tx,
+        contactId,
+        customFields.values,
       );
     });
   } catch (error) {

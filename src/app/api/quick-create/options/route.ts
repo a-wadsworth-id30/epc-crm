@@ -5,6 +5,7 @@ import {
   contactWhereWithAccess,
 } from "@/lib/crm-resource-access";
 import { defaultContactCategory } from "@/lib/contacts/categories";
+import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { isGeoapifyAddressLookupEnabled } from "@/lib/integrations/geoapify";
 import { prisma } from "@/lib/prisma";
 import {
@@ -31,7 +32,7 @@ export async function GET() {
   ]);
   const currentUser = auth.user;
   const salesDefaults = parseSalesDefaults(settings.salesDefaults);
-  const [companies, contacts, contactTags, contactTypes, salesOwners, salesStages] =
+  const [companies, contacts, contactTags, contactTypes, customFields, salesOwners, salesStages] =
     await Promise.all([
       settings.companiesEnabled
         ? prisma.company.findMany({
@@ -82,6 +83,26 @@ export async function GET() {
           systemKey: true,
         },
       }),
+      prisma.contactTypeField.findMany({
+        where: { isActive: true, contactType: { isActive: true } },
+        orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+        select: {
+          contactTypeId: true,
+          displayOrder: true,
+          externalEditable: true,
+          fieldType: true,
+          helpText: true,
+          id: true,
+          isActive: true,
+          isSearchable: true,
+          key: true,
+          label: true,
+          options: true,
+          placeholder: true,
+          requirementMode: true,
+          showInTable: true,
+        },
+      }),
       prisma.user.findMany({
         where: { status: "ACTIVE" },
         orderBy: { name: "asc" },
@@ -110,6 +131,10 @@ export async function GET() {
     })),
     contactTags,
     contactTypes,
+    customFields: customFields.map((field) => ({
+      ...field,
+      options: normalizeContactCustomFieldOptions(field.options),
+    })),
     sales: {
       defaultOwnerId: resolveSalesDefaultOwnerId({
         fallbackUserId: currentUser.id,

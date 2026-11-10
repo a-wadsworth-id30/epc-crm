@@ -8,6 +8,10 @@ import type {
 } from "@/lib/contact-methods";
 import type { ContactCategoryValue } from "@/lib/contacts/categories";
 import type { ContactTypeOption } from "@/lib/contacts/contact-types";
+import type {
+  ContactCustomFieldDefinition,
+  ContactCustomFieldFormValue,
+} from "@/lib/contacts/custom-fields";
 
 type CompanyOption = {
   id: string;
@@ -25,6 +29,7 @@ type ContactRow = {
   category: ContactCategoryValue;
   contactTypeId: string | null;
   contactType: ContactTypeOption | null;
+  customFieldValues: Record<string, ContactCustomFieldFormValue>;
   leadSource: string | null;
   role: string | null;
   addressLine1: string | null;
@@ -51,6 +56,7 @@ type ContactsTableProps = {
   availableTags: ContactTagOption[];
   contactTypeCounts: Record<string, number>;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contacts: ContactRow[];

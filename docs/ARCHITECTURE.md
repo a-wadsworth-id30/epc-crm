@@ -72,6 +72,14 @@ Core Prisma models are in `prisma/schema.prisma`.
   rows. Contact writes derive the legacy category from the selected system key;
   custom types use the Consumer compatibility bucket until downstream imports
   and reports complete their staged migration.
+  `ContactTypeField` stores stable, ordered field definitions for each person
+  type. `ContactCustomFieldValue` stores one typed value per contact/field using
+  text, decimal, boolean, date or JSON-array columns. Contact actions reload the
+  definitions server-side from the submitted contact type, reject unknown
+  select values and enforce only `REQUIRED` fields. `COMPLETENESS` fields can be
+  saved empty for the separate profile-quality workflow. Changing a contact's
+  type retains values belonging to the previous type so switching back does not
+  destroy data.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level

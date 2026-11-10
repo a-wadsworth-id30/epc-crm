@@ -12,6 +12,7 @@ import ContactForm, {
 } from "@/components/crm-boilerplate/ContactForm";
 import type { ContactTagOption } from "@/components/crm-boilerplate/ContactTagInput";
 import type { ContactTypeOption } from "@/lib/contacts/contact-types";
+import type { ContactCustomFieldDefinition } from "@/lib/contacts/custom-fields";
 import {
   contactCategoryOption,
   type ContactCategoryValue,
@@ -33,6 +34,7 @@ export type ContactCreateModalProps = {
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   availableTags: ContactTagOption[];
   hideTrigger?: boolean;
 };
@@ -44,6 +46,7 @@ export type ContactEditModalProps = {
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   availableTags: ContactTagOption[];
   triggerLabel?: string;
 };
@@ -89,6 +92,7 @@ export function ContactCreateModal({
   companies,
   companiesEnabled,
   contactTypes,
+  customFields,
   availableTags,
   hideTrigger = false,
 }: ContactCreateModalProps) {
@@ -125,6 +129,7 @@ export function ContactCreateModal({
             companies={companies}
             companiesEnabled={companiesEnabled}
             contactTypes={contactTypes}
+            customFields={customFields}
             availableTags={availableTags}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
@@ -142,6 +147,7 @@ export function ContactEditModal({
   companies,
   companiesEnabled,
   contactTypes,
+  customFields,
   availableTags,
   triggerLabel,
 }: ContactEditModalProps) {
@@ -193,6 +199,7 @@ export function ContactEditModal({
             companies={companies}
             companiesEnabled={companiesEnabled}
             contactTypes={contactTypes}
+            customFields={customFields}
             availableTags={availableTags}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
