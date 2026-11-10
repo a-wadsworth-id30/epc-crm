@@ -65,7 +65,7 @@ const LoadedCompanyDeleteModal = dynamic<CompanyDeleteModalProps>(
   },
 );
 
-export function DeferredCompanyCreateModal(props: CompanyCreateModalProps = {}) {
+export function DeferredCompanyCreateModal(props: CompanyCreateModalProps) {
   return (
     <DeferredActionLoader
       renderTrigger={(open) => (

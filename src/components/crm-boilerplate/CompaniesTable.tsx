@@ -14,6 +14,11 @@ import {
 } from "@/components/crm-boilerplate/data-table";
 import EmptyState from "@/components/crm-boilerplate/EmptyState";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
+import type {
+  CompanyCustomFieldDefinition,
+  CompanyCustomFieldFormValue,
+} from "@/lib/companies/custom-fields";
+import type { CompanyTypeOption } from "@/lib/companies/company-types";
 
 export type CompanySortKey =
   | "contacts"
@@ -27,6 +32,8 @@ export type CompanySortDirection = "asc" | "desc";
 
 export type CompanyRow = {
   id: string;
+  companyTypeId: string | null;
+  customFieldValues: Record<string, CompanyCustomFieldFormValue>;
   name: string;
   domain: string | null;
   status: string;
@@ -52,6 +59,8 @@ export type CompaniesTableProps = {
   addressLookupEnabled: boolean;
   allCompanyCount: number;
   companies: CompanyRow[];
+  companyTypes: CompanyTypeOption[];
+  customFields: CompanyCustomFieldDefinition[];
   page: number;
   pageSize: number;
   query: string;
@@ -64,6 +73,8 @@ export default function CompaniesTable({
   addressLookupEnabled,
   allCompanyCount,
   companies,
+  companyTypes,
+  customFields,
   page,
   pageSize,
   query,
@@ -232,6 +243,8 @@ export default function CompaniesTable({
           <DeferredCompanyEditModal
             addressLookupEnabled={addressLookupEnabled}
             company={company}
+            companyTypes={companyTypes}
+            customFields={customFields}
           />
           <DeferredCompanyDeleteModal
             companyId={company.id}

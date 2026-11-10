@@ -17,9 +17,15 @@ import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { ChevronLeftIcon } from "@/icons";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import {
+  canEditCompanyField,
+  visibleCompanyFields,
+} from "@/lib/companies/field-access";
+import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
+import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
 } from "@/lib/contact-methods";
+import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import {
   companyIdAccessWhere,
   contactAccessWhere,
@@ -106,6 +112,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   const opportunityAccessWhere = salesOpportunityAccessWhere(user);
   const [
     company,
+    companyTypes,
+    companyCustomFields,
     settings,
     companyDocuments,
     companyUploadRequests,
@@ -121,6 +129,17 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         addressLine1: true,
         addressLine2: true,
         city: true,
+        companyTypeId: true,
+        customFieldValues: {
+          select: {
+            booleanValue: true,
+            dateValue: true,
+            fieldId: true,
+            jsonValue: true,
+            numberValue: true,
+            textValue: true,
+          },
+        },
         contacts: {
           orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
           where:
@@ -184,6 +203,44 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         },
       },
     }),
+    prisma.companyType.findMany({
+      where: { isActive: true },
+      orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      select: {
+        colourKey: true,
+        description: true,
+        iconKey: true,
+        id: true,
+        isActive: true,
+        isDefault: true,
+        name: true,
+        pluralName: true,
+        slug: true,
+        systemKey: true,
+      },
+    }),
+    prisma.companyTypeField.findMany({
+      where: { isActive: true, companyType: { isActive: true } },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: {
+        companyTypeId: true,
+        displayOrder: true,
+        editRoleTemplates: true,
+        externalEditable: true,
+        fieldType: true,
+        helpText: true,
+        id: true,
+        isActive: true,
+        isSearchable: true,
+        key: true,
+        label: true,
+        options: true,
+        placeholder: true,
+        requirementMode: true,
+        showInTable: true,
+        viewRoleTemplates: true,
+      },
+    }),
     getCrmSettings(),
     prisma.fileAsset.findMany({
       where: { entityId: id, entityType: "Company" },
@@ -233,6 +290,18 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   if (!company) {
     notFound();
   }
+
+  const normalizedCompanyCustomFields = visibleCompanyFields(
+    companyCustomFields,
+    user,
+  ).map((field) => ({
+    ...field,
+    isReadOnly: !canEditCompanyField(field, user),
+    options: normalizeContactCustomFieldOptions(field.options),
+  }));
+  const visibleCompanyCustomFieldIds = new Set(
+    normalizedCompanyCustomFields.map((field) => field.id),
+  );
 
   const documentLibrary = parseDocumentLibrarySettings(
     settings.documentLibrary,
@@ -303,6 +372,15 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     county: company.county,
     domain: company.domain,
     id: company.id,
+    companyTypeId: company.companyTypeId,
+    customFieldValues: Object.fromEntries(
+      company.customFieldValues
+        .filter((value) => visibleCompanyCustomFieldIds.has(value.fieldId))
+        .map((value) => [
+          value.fieldId,
+          serializeCompanyCustomFieldValue(value),
+        ]),
+    ),
     name: company.name,
     owner: company.owner,
     postcode: company.postcode,
@@ -526,6 +604,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
             <DeferredCompanyEditModal
               addressLookupEnabled={addressLookupEnabled}
               company={editableCompany}
+              companyTypes={companyTypes}
+              customFields={normalizedCompanyCustomFields}
             />
             {user.role === "ADMIN" ? (
               <DeferredCompanyDeleteModal

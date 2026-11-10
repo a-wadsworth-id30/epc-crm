@@ -53,8 +53,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   and safely archive organisation types, choose the active default and define
   type-specific structured fields. Definitions use stable keys, typed storage,
   optional/completeness/required modes, table/search flags, external-edit
-  permission and role-template view/edit restrictions. Company create/edit
-  forms will consume these definitions in the dedicated forms task.
+  permission and role-template view/edit restrictions. Every Company
+  create/edit entry point, including global quick create, now selects an active
+  Company Type and renders its configured fields. Server actions reload the
+  definitions, enforce role-template edit access and validate/save typed values
+  transactionally. Hidden restricted values are never sent to the browser, and
+  changing type preserves values belonging to the previous type.
 - A Company can now link an existing accessible Person, explicitly move a
   Person from another Company, or unlink them without deleting the Person.
   Stale assignments cannot be overwritten, all relationship changes are

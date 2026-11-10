@@ -77,9 +77,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   including requirement mode, table/search flags, external-edit permission and
   optional role-template view/edit restrictions. `CompanyCustomFieldValue`
   stores one typed value per company and field using text, decimal, boolean,
-  date or JSON-array columns. Configuration and typed storage are introduced
-  before the company forms consume them so integration compatibility is kept
-  explicit during the staged rollout.
+  date or JSON-array columns. Company create/edit forms receive only definitions
+  and values the current role may view. Mutations do not trust those client
+  definitions: they reload the selected active type and its fields inside the
+  transaction, filter to fields the role may edit, validate typed submissions
+  and then upsert or remove values. Type changes update only the selected type's
+  fields, retaining previous-type values for auditability and possible reversal.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

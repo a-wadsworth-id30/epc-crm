@@ -1,10 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
 import { companyContactLinkDecision } from "@/lib/companies/contact-relationships";
+import {
+  parseCompanyCustomFieldSubmission,
+  replaceCompanyCustomFieldValues,
+  type CompanyCustomFieldDefinition,
+} from "@/lib/companies/custom-fields";
+import { editableCompanyFields } from "@/lib/companies/field-access";
+import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   companyIdAccessWhere,
@@ -39,6 +46,11 @@ const companyContactUnlinkSchema = z.object({
 
 const companySchema = z.object({
   id: z.string().trim().optional(),
+  companyTypeId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || null),
   name: z.string().trim().min(1, "Company name is required."),
   domain: z
     .string()
@@ -134,6 +146,7 @@ function parseCompany(formData: FormData) {
     addressLine1: value("addressLine1"),
     addressLine2: value("addressLine2"),
     city: value("city"),
+    companyTypeId: value("companyTypeId"),
     county: value("county"),
     country: value("country"),
     domain: value("domain"),
@@ -143,6 +156,63 @@ function parseCompany(formData: FormData) {
     postcode: value("postcode"),
     status: value("status"),
   });
+}
+
+class CompanyActionError extends Error {}
+
+async function resolveSubmittedCompanyType(
+  tx: Prisma.TransactionClient,
+  requestedCompanyTypeId: string | null,
+  user: Awaited<ReturnType<typeof requireUser>>,
+  currentCompanyTypeId?: string | null,
+) {
+  const companyType = await tx.companyType.findFirst({
+    where: requestedCompanyTypeId
+      ? {
+          id: requestedCompanyTypeId,
+          OR: [
+            { isActive: true },
+            ...(requestedCompanyTypeId === currentCompanyTypeId
+              ? [{ id: currentCompanyTypeId ?? "" }]
+              : []),
+          ],
+        }
+      : { isActive: true, isDefault: true },
+    select: {
+      id: true,
+      fields: {
+        where: { isActive: true },
+        orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+        select: {
+          companyTypeId: true,
+          displayOrder: true,
+          editRoleTemplates: true,
+          externalEditable: true,
+          fieldType: true,
+          helpText: true,
+          id: true,
+          isActive: true,
+          isSearchable: true,
+          key: true,
+          label: true,
+          options: true,
+          placeholder: true,
+          requirementMode: true,
+          showInTable: true,
+          viewRoleTemplates: true,
+        },
+      },
+    },
+  });
+  if (!companyType) throw new CompanyActionError("Choose an active company type.");
+  const customFields: CompanyCustomFieldDefinition[] = editableCompanyFields(
+    companyType.fields,
+    user,
+  ).map((field) => ({
+    ...field,
+    options: normalizeContactCustomFieldOptions(field.options),
+  }));
+  return { companyTypeId: companyType.id, customFields };
 }
 
 function stringArray(formData: FormData, key: string) {
@@ -376,59 +446,79 @@ export async function createCompanyAction(
     return { ok: false, message: parsedContacts.message };
   }
 
-  await prisma.$transaction(async (tx) => {
-    const company = await tx.company.create({
-      data: {
-        ...defaultCompanyTypeAssignment(),
-        addressLine1: parsed.data.addressLine1,
-        addressLine2: parsed.data.addressLine2,
-        city: parsed.data.city,
-        county: parsed.data.county,
-        country: parsed.data.country,
-        createdByUserId: user.id,
-        domain: parsed.data.domain,
-        name: parsed.data.name,
-        owner: parsed.data.owner,
-        postcode: parsed.data.postcode,
-        status: parsed.data.status,
-      },
-      select: { id: true, name: true },
-    });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const companyType = await resolveSubmittedCompanyType(
+        tx,
+        parsed.data.companyTypeId,
+        user,
+      );
+      const customFields = parseCompanyCustomFieldSubmission(
+        companyType.customFields,
+        formData,
+      );
+      if (!customFields.ok) throw new CompanyActionError(customFields.message);
 
-    if (!parsedContacts.contacts.length) {
-      return;
+      const company = await tx.company.create({
+        data: {
+          addressLine1: parsed.data.addressLine1,
+          addressLine2: parsed.data.addressLine2,
+          city: parsed.data.city,
+          companyTypeId: companyType.companyTypeId,
+          county: parsed.data.county,
+          country: parsed.data.country,
+          createdByUserId: user.id,
+          domain: parsed.data.domain,
+          name: parsed.data.name,
+          owner: parsed.data.owner,
+          postcode: parsed.data.postcode,
+          status: parsed.data.status,
+        },
+        select: { id: true, name: true },
+      });
+      await replaceCompanyCustomFieldValues(
+        tx,
+        company.id,
+        customFields.values,
+      );
+
+      if (!parsedContacts.contacts.length) return;
+      const createdContacts = await Promise.all(
+        parsedContacts.contacts.map((contact) =>
+          tx.contact.create({
+            data: {
+              ...systemContactTypeAssignment(),
+              companyId: company.id,
+              companyName: company.name,
+              createdByUserId: user.id,
+              email: contact.email,
+              firstName: contact.firstName,
+              lastName: contact.lastName,
+              leadSource: contact.leadSource,
+              phone: contact.phone,
+              phoneNormalized: normalizedContactPhone(contact.phone),
+              role: contact.role,
+            },
+            select: { id: true },
+          }),
+        ),
+      );
+      await tx.auditLog.createMany({
+        data: createdContacts.map((contact) => ({
+          action: "company_contact.linked",
+          actorId: user.id,
+          entity: "Contact",
+          entityId: contact.id,
+          metadata: { companyId: company.id },
+        })),
+      });
+    });
+  } catch (error) {
+    if (error instanceof CompanyActionError) {
+      return { ok: false, message: error.message };
     }
-
-    const createdContacts = await Promise.all(
-      parsedContacts.contacts.map((contact) =>
-        tx.contact.create({
-          data: {
-            ...systemContactTypeAssignment(),
-            companyId: company.id,
-            companyName: company.name,
-            createdByUserId: user.id,
-            email: contact.email,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            leadSource: contact.leadSource,
-            phone: contact.phone,
-            phoneNormalized: normalizedContactPhone(contact.phone),
-            role: contact.role,
-          },
-          select: { id: true },
-        }),
-      ),
-    );
-    await tx.auditLog.createMany({
-      data: createdContacts.map((contact) => ({
-        action: "company_contact.linked",
-        actorId: user.id,
-        entity: "Contact",
-        entityId: contact.id,
-        metadata: { companyId: company.id },
-      })),
-    });
-  });
+    throw error;
+  }
 
   revalidateCompanyPaths();
   return {
@@ -459,34 +549,59 @@ export async function updateCompanyAction(
 
   const company = await prisma.company.findFirst({
     where: companyIdAccessWhere(parsed.data.id, user),
-    select: { id: true },
+    select: { companyTypeId: true, id: true },
   });
 
   if (!company) {
     return { ok: false, message: "Company not found." };
   }
 
-  await prisma.$transaction([
-    prisma.company.update({
-      where: { id: company.id },
-      data: {
-        addressLine1: parsed.data.addressLine1,
-        addressLine2: parsed.data.addressLine2,
-        city: parsed.data.city,
-        county: parsed.data.county,
-        country: parsed.data.country,
-        domain: parsed.data.domain,
-        name: parsed.data.name,
-        owner: parsed.data.owner,
-        postcode: parsed.data.postcode,
-        status: parsed.data.status,
-      },
-    }),
-    prisma.contact.updateMany({
-      where: { companyId: company.id },
-      data: { companyName: parsed.data.name },
-    }),
-  ]);
+  try {
+    await prisma.$transaction(async (tx) => {
+      const companyType = await resolveSubmittedCompanyType(
+        tx,
+        parsed.data.companyTypeId,
+        user,
+        company.companyTypeId,
+      );
+      const customFields = parseCompanyCustomFieldSubmission(
+        companyType.customFields,
+        formData,
+      );
+      if (!customFields.ok) throw new CompanyActionError(customFields.message);
+
+      await tx.company.update({
+        where: { id: company.id },
+        data: {
+          addressLine1: parsed.data.addressLine1,
+          addressLine2: parsed.data.addressLine2,
+          city: parsed.data.city,
+          companyTypeId: companyType.companyTypeId,
+          county: parsed.data.county,
+          country: parsed.data.country,
+          domain: parsed.data.domain,
+          name: parsed.data.name,
+          owner: parsed.data.owner,
+          postcode: parsed.data.postcode,
+          status: parsed.data.status,
+        },
+      });
+      await tx.contact.updateMany({
+        where: { companyId: company.id },
+        data: { companyName: parsed.data.name },
+      });
+      await replaceCompanyCustomFieldValues(
+        tx,
+        company.id,
+        customFields.values,
+      );
+    });
+  } catch (error) {
+    if (error instanceof CompanyActionError) {
+      return { ok: false, message: error.message };
+    }
+    throw error;
+  }
 
   revalidateCompanyPaths();
   return { ok: true, message: "Company updated." };

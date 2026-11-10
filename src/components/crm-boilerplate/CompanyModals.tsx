@@ -10,10 +10,14 @@ import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import { EditIcon, PlusIcon, TrashBinIcon } from "@/icons";
 import { deleteCompanyAction } from "@/lib/actions/companies";
+import type { CompanyCustomFieldDefinition } from "@/lib/companies/custom-fields";
+import type { CompanyTypeOption } from "@/lib/companies/company-types";
 
 export type CompanyCreateModalProps = {
   addressLookupEnabled?: boolean;
   autoOpen?: boolean;
+  companyTypes: CompanyTypeOption[];
+  customFields: CompanyCustomFieldDefinition[];
   hideTrigger?: boolean;
 };
 
@@ -21,6 +25,8 @@ export type CompanyEditModalProps = {
   addressLookupEnabled?: boolean;
   autoOpen?: boolean;
   company: CompanyFormValues;
+  companyTypes: CompanyTypeOption[];
+  customFields: CompanyCustomFieldDefinition[];
 };
 
 export type CompanyDeleteModalProps = {
@@ -38,8 +44,10 @@ export type CompanyDeleteModalProps = {
 export function CompanyCreateModal({
   addressLookupEnabled = false,
   autoOpen,
+  companyTypes,
+  customFields,
   hideTrigger = false,
-}: CompanyCreateModalProps = {}) {
+}: CompanyCreateModalProps) {
   const modal = useModal();
   const { openModal } = modal;
 
@@ -70,6 +78,8 @@ export function CompanyCreateModal({
           </p>
           <CompanyForm
             mode="create"
+            companyTypes={companyTypes}
+            customFields={customFields}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
           />
@@ -83,6 +93,8 @@ export function CompanyEditModal({
   addressLookupEnabled = false,
   autoOpen,
   company,
+  companyTypes,
+  customFields,
 }: CompanyEditModalProps) {
   const modal = useModal();
   const { openModal } = modal;
@@ -118,6 +130,8 @@ export function CompanyEditModal({
           <CompanyForm
             mode="edit"
             company={company}
+            companyTypes={companyTypes}
+            customFields={customFields}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
           />

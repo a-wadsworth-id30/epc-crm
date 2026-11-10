@@ -18,6 +18,12 @@ import {
   singleParam,
 } from "@/lib/navigation/pagination";
 import { requireUser } from "@/lib/auth";
+import {
+  canEditCompanyField,
+  visibleCompanyFields,
+} from "@/lib/companies/field-access";
+import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
+import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { companyWhereWithAccess } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
@@ -46,6 +52,7 @@ const companySortKeys = [
 
 const companyListSelect = {
   id: true,
+  companyTypeId: true,
   name: true,
   domain: true,
   status: true,
@@ -57,6 +64,16 @@ const companyListSelect = {
   postcode: true,
   country: true,
   updatedAt: true,
+  customFieldValues: {
+    select: {
+      booleanValue: true,
+      dateValue: true,
+      fieldId: true,
+      jsonValue: true,
+      numberValue: true,
+      textValue: true,
+    },
+  },
   _count: {
     select: {
       contacts: true,
@@ -98,6 +115,57 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const settings = await getCrmSettings();
+  const [companyTypes, companyCustomFields] = await Promise.all([
+    prisma.companyType.findMany({
+      where: { isActive: true },
+      orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      select: {
+        colourKey: true,
+        description: true,
+        iconKey: true,
+        id: true,
+        isActive: true,
+        isDefault: true,
+        name: true,
+        pluralName: true,
+        slug: true,
+        systemKey: true,
+      },
+    }),
+    prisma.companyTypeField.findMany({
+      where: { isActive: true, companyType: { isActive: true } },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: {
+        companyTypeId: true,
+        displayOrder: true,
+        editRoleTemplates: true,
+        externalEditable: true,
+        fieldType: true,
+        helpText: true,
+        id: true,
+        isActive: true,
+        isSearchable: true,
+        key: true,
+        label: true,
+        options: true,
+        placeholder: true,
+        requirementMode: true,
+        showInTable: true,
+        viewRoleTemplates: true,
+      },
+    }),
+  ]);
+  const normalizedCompanyCustomFields = visibleCompanyFields(
+    companyCustomFields,
+    user,
+  ).map((field) => ({
+    ...field,
+    isReadOnly: !canEditCompanyField(field, user),
+    options: normalizeContactCustomFieldOptions(field.options),
+  }));
+  const visibleCompanyCustomFieldIds = new Set(
+    normalizedCompanyCustomFields.map((field) => field.id),
+  );
   const interfaceDefaults = parseInterfaceDefaults(settings.interfaceDefaults);
   const requestedPage = parsePositiveInteger(params.page, 1);
   const pageSize = parsePageSize({
@@ -146,6 +214,15 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   });
   const companyRows: CompanyRow[] = companies.map((company) => ({
     id: company.id,
+    companyTypeId: company.companyTypeId,
+    customFieldValues: Object.fromEntries(
+      company.customFieldValues
+        .filter((value) => visibleCompanyCustomFieldIds.has(value.fieldId))
+        .map((value) => [
+          value.fieldId,
+          serializeCompanyCustomFieldValue(value),
+        ]),
+    ),
     counts: {
       contacts: company._count.contacts,
       notes: company._count.notes,
@@ -172,6 +249,8 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
         actions={
           <DeferredCompanyCreateModal
             addressLookupEnabled={addressLookupEnabled}
+            companyTypes={companyTypes}
+            customFields={normalizedCompanyCustomFields}
           />
         }
       />
@@ -179,6 +258,8 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
         addressLookupEnabled={addressLookupEnabled}
         allCompanyCount={allCompanyCount}
         companies={companyRows}
+        companyTypes={companyTypes}
+        customFields={normalizedCompanyCustomFields}
         page={currentPage}
         pageSize={pageSize}
         query={query}

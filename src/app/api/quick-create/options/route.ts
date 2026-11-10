@@ -9,6 +9,7 @@ import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields
 import { isGeoapifyAddressLookupEnabled } from "@/lib/integrations/geoapify";
 import { prisma } from "@/lib/prisma";
 import { editableContactFields } from "@/lib/contacts/field-access";
+import { editableCompanyFields } from "@/lib/companies/field-access";
 import {
   parseSalesDefaults,
   resolveSalesDefaultOwnerId,
@@ -33,7 +34,7 @@ export async function GET() {
   ]);
   const currentUser = auth.user;
   const salesDefaults = parseSalesDefaults(settings.salesDefaults);
-  const [companies, contacts, contactTags, contactTypes, customFields, salesOwners, salesStages] =
+  const [companies, contacts, contactTags, contactTypes, customFields, companyTypes, companyCustomFields, salesOwners, salesStages] =
     await Promise.all([
       settings.companiesEnabled
         ? prisma.company.findMany({
@@ -106,6 +107,44 @@ export async function GET() {
           editRoleTemplates: true,
         },
       }),
+      prisma.companyType.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        select: {
+          colourKey: true,
+          description: true,
+          iconKey: true,
+          id: true,
+          isActive: true,
+          isDefault: true,
+          name: true,
+          pluralName: true,
+          slug: true,
+          systemKey: true,
+        },
+      }),
+      prisma.companyTypeField.findMany({
+        where: { isActive: true, companyType: { isActive: true } },
+        orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+        select: {
+          companyTypeId: true,
+          displayOrder: true,
+          editRoleTemplates: true,
+          externalEditable: true,
+          fieldType: true,
+          helpText: true,
+          id: true,
+          isActive: true,
+          isSearchable: true,
+          key: true,
+          label: true,
+          options: true,
+          placeholder: true,
+          requirementMode: true,
+          showInTable: true,
+          viewRoleTemplates: true,
+        },
+      }),
       prisma.user.findMany({
         where: { status: "ACTIVE" },
         orderBy: { name: "asc" },
@@ -134,6 +173,11 @@ export async function GET() {
     })),
     contactTags,
     contactTypes,
+    companyTypes,
+    companyCustomFields: editableCompanyFields(companyCustomFields, currentUser).map((field) => ({
+      ...field,
+      options: normalizeContactCustomFieldOptions(field.options),
+    })),
     customFields: editableContactFields(customFields, currentUser).map((field) => ({
       ...field,
       options: normalizeContactCustomFieldOptions(field.options),

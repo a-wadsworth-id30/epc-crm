@@ -8,6 +8,8 @@ import type { CompanyCreateModalProps } from "@/components/crm-boilerplate/Compa
 import type { ContactCreateModalProps } from "@/components/crm-boilerplate/ContactModals";
 import type { ContactTypeOption } from "@/lib/contacts/contact-types";
 import type { ContactCustomFieldDefinition } from "@/lib/contacts/custom-fields";
+import type { CompanyCustomFieldDefinition } from "@/lib/companies/custom-fields";
+import type { CompanyTypeOption } from "@/lib/companies/company-types";
 import {
   DollarLineIcon,
   PlusIcon,
@@ -25,6 +27,8 @@ type QuickCreateOptions = {
   addressLookupEnabled: boolean;
   companies: Array<{ id: string; name: string }>;
   companiesEnabled: boolean;
+  companyTypes: CompanyTypeOption[];
+  companyCustomFields: CompanyCustomFieldDefinition[];
   contacts: Array<{
     companyId: string | null;
     companyName: string | null;
@@ -271,6 +275,8 @@ export default function QuickCreateMenu({
           key={`organisation-${modalKey}`}
           addressLookupEnabled={options.addressLookupEnabled}
           autoOpen
+          companyTypes={options.companyTypes}
+          customFields={options.companyCustomFields}
           hideTrigger
         />
       ) : null}

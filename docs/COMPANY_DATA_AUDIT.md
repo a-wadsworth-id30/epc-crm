@@ -181,3 +181,18 @@ legacy `Contact.companyId` and `companyName` fields remain the compatibility
 contract for integrations; a many-to-many relationship table is deliberately
 deferred until a real multi-company affiliation requirement is confirmed.
 
+## Task 5 configurable forms
+
+All Company creation and editing routes now use the data-backed Company Type
+configuration, including Companies, Company detail and global quick create.
+The selected type controls which structured fields are displayed. Required
+fields block saving, completeness fields remain advisory, and values retain
+their configured text, decimal, date, boolean or multi-select representation.
+
+The server reloads the active type and field definitions within the write
+transaction, applies role-template edit restrictions and ignores fields the
+current user cannot edit. Pages omit hidden definitions and values before
+serialising props. View-only values are displayed but preserved rather than
+submitted. Switching a Company to another type retains values from its former
+type so a later reversal does not destroy existing organisational data.
+

@@ -9,6 +9,7 @@ import {
 } from "react";
 import AddressLookupControl from "@/components/crm-boilerplate/AddressLookupControl";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
+import CompanyCustomFieldsForm from "@/components/crm-boilerplate/CompanyCustomFieldsForm";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
@@ -19,9 +20,16 @@ import {
   type CompanyActionState,
 } from "@/lib/actions/companies";
 import { leadSourceOptions } from "@/lib/sales/lead-sources";
+import type { CompanyTypeOption } from "@/lib/companies/company-types";
+import type {
+  CompanyCustomFieldDefinition,
+  CompanyCustomFieldFormValue,
+} from "@/lib/companies/custom-fields";
 
 export type CompanyFormValues = {
   id?: string;
+  companyTypeId?: string | null;
+  customFieldValues?: Record<string, CompanyCustomFieldFormValue>;
   name?: string;
   domain?: string | null;
   status?: string | null;
@@ -43,11 +51,15 @@ type ContactDraft = {
 
 export default function CompanyForm({
   company,
+  companyTypes,
+  customFields,
   mode,
   addressLookupEnabled = false,
   onSuccess,
 }: {
   company?: CompanyFormValues;
+  companyTypes: CompanyTypeOption[];
+  customFields: CompanyCustomFieldDefinition[];
   mode: "create" | "edit";
   addressLookupEnabled?: boolean;
   onSuccess?: () => void;
@@ -55,6 +67,17 @@ export default function CompanyForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [contactDrafts, setContactDrafts] = useState<ContactDraft[]>([]);
+  const defaultCompanyTypeId =
+    company?.companyTypeId ??
+    companyTypes.find((type) => type.isDefault && type.isActive)?.id ??
+    companyTypes.find((type) => type.isActive)?.id ??
+    "";
+  const [selectedCompanyTypeId, setSelectedCompanyTypeId] = useState(
+    defaultCompanyTypeId,
+  );
+  const selectedCompanyType = companyTypes.find(
+    (type) => type.id === selectedCompanyTypeId,
+  );
   const contactDraftCounter = useRef(0);
   const { showToast } = useToast();
   const action = mode === "create" ? createCompanyAction : updateCompanyAction;
@@ -138,6 +161,29 @@ export default function CompanyForm({
             defaultValue={company?.name ?? ""}
             required
           />
+        </div>
+        <div className="md:col-span-2">
+          <Label htmlFor={`${mode}-company-type`}>Company type</Label>
+          <select
+            id={`${mode}-company-type`}
+            name="companyTypeId"
+            value={selectedCompanyTypeId}
+            onChange={(event) => {
+              setSelectedCompanyTypeId(event.target.value);
+              setIsDirty(true);
+            }}
+            className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            required
+          >
+            {companyTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}{type.isActive ? "" : " (archived)"}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
+            {selectedCompanyType?.description ?? "Choose how this organisation should be classified."}
+          </p>
         </div>
         <div>
           <Label htmlFor={`${mode}-company-domain`}>Domain</Label>
@@ -232,6 +278,11 @@ export default function CompanyForm({
           />
         </div>
       </div>
+      <CompanyCustomFieldsForm
+        companyTypeId={selectedCompanyTypeId}
+        definitions={customFields}
+        values={company?.customFieldValues}
+      />
       {mode === "create" ? (
         <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-gray-800">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
