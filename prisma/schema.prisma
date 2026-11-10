@@ -697,6 +697,8 @@ model ContactTypeField {
   showInTable     Boolean                     @default(false)
   isSearchable    Boolean                     @default(false)
   externalEditable Boolean                    @default(false)
+  viewRoleTemplates String[]                  @default([])
+  editRoleTemplates String[]                  @default([])
   createdAt       DateTime                    @default(now())
   updatedAt       DateTime                    @updatedAt
   values          ContactCustomFieldValue[]

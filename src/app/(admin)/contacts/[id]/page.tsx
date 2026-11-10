@@ -41,6 +41,7 @@ import {
   normalizeContactCustomFieldOptions,
   serializeContactCustomFieldValue,
 } from "@/lib/contacts/custom-fields";
+import { canEditContactField, resolvedContactFieldRoleTemplate, visibleContactFields } from "@/lib/contacts/field-access";
 import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
 import {
   contactDocumentRequirementStatuses,
@@ -410,6 +411,17 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
           },
         },
         customFieldValues: {
+          where:
+            user.role === "ADMIN"
+              ? undefined
+              : {
+                  field: {
+                    OR: [
+                      { viewRoleTemplates: { isEmpty: true } },
+                      { viewRoleTemplates: { has: resolvedContactFieldRoleTemplate(user) } },
+                    ],
+                  },
+                },
           select: {
             booleanValue: true,
             dateValue: true,
@@ -547,6 +559,8 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         placeholder: true,
         requirementMode: true,
         showInTable: true,
+        viewRoleTemplates: true,
+        editRoleTemplates: true,
       },
     }),
     prisma.contactTypeDocumentRequirement.findMany({
@@ -1048,12 +1062,13 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     contactTypes.find((type) => type.systemKey === contact.category)?.id ??
     null;
   const customFieldValueMap = new Map(Object.entries(serializedCustomFieldValues));
-  const contactCustomFields = customFields.filter(
+  const visibleCustomFields = visibleContactFields(customFields, user);
+  const contactCustomFields = visibleCustomFields.filter(
     (field) => field.contactTypeId === resolvedContactTypeId,
   );
   const profileCompleteness = contactProfileCompleteness({
     contactTypeId: resolvedContactTypeId,
-    definitions: customFields.map((field) => ({
+    definitions: visibleCustomFields.map((field) => ({
       ...field,
       options: normalizeContactCustomFieldOptions(field.options),
     })),
@@ -1366,8 +1381,9 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               companies={companies}
               companiesEnabled={settings.companiesEnabled}
               contactTypes={contactTypes}
-              customFields={customFields.map((field) => ({
+              customFields={visibleCustomFields.map((field) => ({
                 ...field,
+                isReadOnly: !canEditContactField(field, user),
                 options: normalizeContactCustomFieldOptions(field.options),
               }))}
               contact={editableContact}

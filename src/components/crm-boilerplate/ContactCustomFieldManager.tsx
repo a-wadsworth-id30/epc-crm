@@ -9,6 +9,7 @@ import {
   updateContactTypeFieldAction,
   type ContactTypeFieldActionState,
 } from "@/lib/actions/contact-type-fields";
+import { userRoleTemplates } from "@/lib/users/role-templates";
 
 type PersonType = { id: string; name: string; isActive: boolean };
 
@@ -29,6 +30,8 @@ export type ContactCustomFieldManagerItem = {
   isSearchable: boolean;
   externalEditable: boolean;
   valueCount: number;
+  viewRoleTemplates: string[];
+  editRoleTemplates: string[];
 };
 
 const initialState: ContactTypeFieldActionState = { ok: false, message: "", savedAt: null };
@@ -174,7 +177,36 @@ function FieldEditor({
         <Check name="isSearchable" label="Include in search" checked={field?.isSearchable} />
         <Check name="externalEditable" label="External upload forms may edit" checked={field?.externalEditable} />
       </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <RoleChecks
+          name="viewRoleTemplates"
+          label="Roles that can view"
+          selected={field?.viewRoleTemplates}
+        />
+        <RoleChecks
+          name="editRoleTemplates"
+          label="Roles that can edit"
+          selected={field?.editRoleTemplates}
+        />
+      </div>
     </div>
+  );
+}
+
+function RoleChecks({ name, label, selected = [] }: { name: string; label: string; selected?: string[] }) {
+  return (
+    <fieldset className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+      <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{label}</legend>
+      <p className="mb-2 text-xs text-gray-500">Leave all unchecked to allow every role. Administrators always have access.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {userRoleTemplates.filter((role) => role.baseRole === "USER").map((role) => (
+          <label key={role.key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input type="checkbox" name={name} value={role.key} defaultChecked={selected.includes(role.key)} className="h-4 w-4 rounded border-gray-300 text-brand-500" />
+            {role.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

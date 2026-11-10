@@ -24,6 +24,7 @@ import {
   type ContactCustomFieldDefinition,
   type ContactCustomFieldWrite,
 } from "@/lib/contacts/custom-fields";
+import { editableContactFields } from "@/lib/contacts/field-access";
 import {
   customerRelationshipStatusValues,
   defaultCustomerRelationshipStatus,
@@ -406,6 +407,7 @@ async function resolveCompanyData(
 async function resolveSubmittedContactType(
   tx: Prisma.TransactionClient,
   contactTypeId: string | null,
+  user: { role: "ADMIN" | "USER"; roleTemplate?: string | null },
   allowInactiveId?: string | null,
 ) {
   const selected = contactTypeId
@@ -433,6 +435,8 @@ async function resolveSubmittedContactType(
               placeholder: true,
               requirementMode: true,
               showInTable: true,
+              viewRoleTemplates: true,
+              editRoleTemplates: true,
             },
           },
           id: true,
@@ -461,6 +465,8 @@ async function resolveSubmittedContactType(
               placeholder: true,
               requirementMode: true,
               showInTable: true,
+              viewRoleTemplates: true,
+              editRoleTemplates: true,
             },
           },
           id: true,
@@ -475,7 +481,7 @@ async function resolveSubmittedContactType(
   return {
     category: selected.systemKey ?? defaultContactCategory,
     contactTypeId: selected.id,
-    customFields: selected.fields.map((field) => ({
+    customFields: editableContactFields(selected.fields, user).map((field) => ({
       ...field,
       options: normalizeContactCustomFieldOptions(field.options),
     })) satisfies ContactCustomFieldDefinition[],
@@ -644,6 +650,7 @@ export async function createContactAction(
       const contactType = await resolveSubmittedContactType(
         tx,
         parsed.data.contactTypeId,
+        user,
       );
       const customFields = parseContactCustomFieldSubmission(
         contactType.customFields,
@@ -774,6 +781,7 @@ export async function updateContactAction(
       const contactType = await resolveSubmittedContactType(
         tx,
         parsed.data.contactTypeId,
+        user,
         contact.contactTypeId,
       );
       const customFields = parseContactCustomFieldSubmission(

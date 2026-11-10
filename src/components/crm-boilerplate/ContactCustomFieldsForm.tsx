@@ -56,6 +56,7 @@ function CustomField({
   const id = `contact-custom-field-${definition.id}`;
   const name = `customField:${definition.id}`;
   const required = definition.requirementMode === "REQUIRED";
+  const disabled = definition.isReadOnly === true;
   const isWide = definition.fieldType === "LONG_TEXT" || definition.fieldType === "ADDRESS";
   const stringValue = typeof value === "string" ? value : "";
   const selectedValues = Array.isArray(value) ? value : [];
@@ -81,6 +82,7 @@ function CustomField({
           defaultValue={stringValue}
           placeholder={definition.placeholder ?? undefined}
           required={required}
+          disabled={disabled}
           maxLength={10_000}
           className={textareaClassName}
         />
@@ -90,6 +92,7 @@ function CustomField({
           name={name}
           defaultValue={stringValue}
           required={required}
+          disabled={disabled}
           className={inputClassName}
         >
           <option value="">Select an option</option>
@@ -103,6 +106,7 @@ function CustomField({
           name={name}
           defaultValue={selectedValues}
           required={required}
+          disabled={disabled}
           multiple
           className={`${inputClassName} min-h-28 py-2`}
         >
@@ -116,6 +120,7 @@ function CustomField({
           name={name}
           defaultValue={typeof value === "boolean" ? String(value) : ""}
           required={required}
+          disabled={disabled}
           className={inputClassName}
         >
           <option value="">Select an option</option>
@@ -130,6 +135,7 @@ function CustomField({
           defaultValue={stringValue}
           placeholder={definition.placeholder ?? undefined}
           required={required}
+          disabled={disabled}
           maxLength={definition.fieldType === "EMAIL" ? 320 : 500}
           step={definition.fieldType === "NUMBER" ? "any" : undefined}
           className={inputClassName}
@@ -140,6 +146,7 @@ function CustomField({
           {hint}
         </p>
       ) : null}
+      {disabled ? <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">You have view-only access to this field.</p> : null}
     </div>
   );
 }

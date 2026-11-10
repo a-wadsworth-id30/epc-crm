@@ -178,6 +178,12 @@ repairs contacts created by legacy integration paths after the original person
 type migration. It assigns the stable system type matching each contact's
 legacy category and does not change contact details or custom-field values.
 
+The migration `20261110200000_contact_field_role_permissions` adds view and
+edit role-template allow-list arrays to `ContactTypeField`. Both default to an
+empty array, which preserves access for existing fields until an administrator
+chooses restrictions in Settings > Person Types. It does not modify contact
+values or user roles.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

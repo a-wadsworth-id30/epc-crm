@@ -14,6 +14,7 @@ import {
   parseContactCustomFieldOptions,
 } from "@/lib/contacts/custom-fields";
 import { prisma } from "@/lib/prisma";
+import { userRoleTemplateSchema } from "@/lib/users/role-templates";
 
 export type ContactTypeFieldActionState = {
   ok: boolean;
@@ -34,6 +35,8 @@ const fieldSchema = z.object({
   showInTable: z.boolean(),
   isSearchable: z.boolean(),
   externalEditable: z.boolean(),
+  viewRoleTemplates: z.array(userRoleTemplateSchema),
+  editRoleTemplates: z.array(userRoleTemplateSchema),
 });
 
 const toggleSchema = z.object({
@@ -64,6 +67,8 @@ function parseField(formData: FormData) {
     showInTable: formData.get("showInTable") === "on",
     isSearchable: formData.get("isSearchable") === "on",
     externalEditable: formData.get("externalEditable") === "on",
+    viewRoleTemplates: formData.getAll("viewRoleTemplates"),
+    editRoleTemplates: formData.getAll("editRoleTemplates"),
   });
 }
 
@@ -78,6 +83,10 @@ function fieldData(
   return {
     displayOrder: data.displayOrder,
     externalEditable: data.externalEditable,
+    viewRoleTemplates: data.viewRoleTemplates,
+    editRoleTemplates: data.editRoleTemplates.filter((role) =>
+      data.viewRoleTemplates.length === 0 || data.viewRoleTemplates.includes(role),
+    ),
     fieldType: data.fieldType,
     helpText: data.helpText,
     isSearchable: data.isSearchable,

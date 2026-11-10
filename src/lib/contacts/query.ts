@@ -5,7 +5,7 @@ function contains(term: string) {
   return { contains: term, mode: "insensitive" as const };
 }
 
-function customFieldValueWhere(term: string) {
+function customFieldValueWhere(term: string, allowedFieldIds?: string[]) {
   const valueFilters: Prisma.ContactCustomFieldValueWhereInput[] = [
     { textValue: contains(term) },
     { jsonValue: { array_contains: [term] } },
@@ -32,13 +32,18 @@ function customFieldValueWhere(term: string) {
   }
 
   return {
-    field: { isActive: true, isSearchable: true },
+    field: {
+      isActive: true,
+      isSearchable: true,
+      ...(allowedFieldIds ? { id: { in: allowedFieldIds } } : {}),
+    },
     OR: valueFilters,
   } satisfies Prisma.ContactCustomFieldValueWhereInput;
 }
 
 export function contactSearchWhere(
   query: string,
+  allowedCustomFieldIds?: string[],
 ): Prisma.ContactWhereInput | undefined {
   const terms = query
     .split(/\s+/)
@@ -87,7 +92,9 @@ export function contactSearchWhere(
           { contactType: { name: contains(term) } },
           { contactType: { pluralName: contains(term) } },
           { tagAssignments: { some: { tag: { name: contains(term) } } } },
-          { customFieldValues: { some: customFieldValueWhere(term) } },
+          ...(allowedCustomFieldIds?.length === 0
+            ? []
+            : [{ customFieldValues: { some: customFieldValueWhere(term, allowedCustomFieldIds) } }]),
           ...(matchingCategories.length
             ? [{ category: { in: matchingCategories } }]
             : []),
