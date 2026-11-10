@@ -79,6 +79,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   The server rejects internal-only or arbitrary types and reloads current
   person-type labels/instructions rather than trusting browser copy. Contacts
   with no missing safe requirements start with nothing selected.
+- Record documents can carry an optional expiry date and a controlled reminder
+  window. Internal uploads can capture both values immediately; file metadata
+  editing can add, change or clear them later. The CRM stores a derived reminder
+  timestamp for indexed queries, shows valid/expiring/expired status on document
+  cards and generates warning notifications only for users who can access the
+  linked contact. Expiry metadata changes are included in the document audit
+  event without exposing file contents.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

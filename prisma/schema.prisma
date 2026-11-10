@@ -1962,6 +1962,9 @@ model FileAsset {
   entityId                     String?
   documentFolder               String?
   documentUploadType           String?
+  documentExpiresAt            DateTime?
+  documentExpiryReminderAt     DateTime?
+  documentExpiryReminderDays   Int?
   notes                        String?
   tags                         String[]                    @default([])
   visibility                   FileAssetVisibility         @default(PRIVATE)
@@ -1978,6 +1981,8 @@ model FileAsset {
 
   @@index([entityType, entityId])
   @@index([entityType, entityId, documentFolder])
+  @@index([entityType, documentExpiryReminderAt])
+  @@index([documentExpiresAt])
   @@index([documentUploadType, createdAt])
   @@index([originalName, createdAt])
   @@index([mimeType, createdAt])

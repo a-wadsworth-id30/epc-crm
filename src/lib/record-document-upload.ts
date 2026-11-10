@@ -67,6 +67,9 @@ export async function resolveRecordDocumentUploadDestination({
 }
 
 export async function uploadRecordDocumentFile({
+  documentExpiresAt,
+  documentExpiryReminderAt,
+  documentExpiryReminderDays,
   entityId,
   entityType,
   file,
@@ -76,6 +79,9 @@ export async function uploadRecordDocumentFile({
   uploadedById,
   uploadType,
 }: {
+  documentExpiresAt?: Date | null;
+  documentExpiryReminderAt?: Date | null;
+  documentExpiryReminderDays?: number | null;
   entityId: string;
   entityType: RecordDocumentEntityType;
   file: File;
@@ -93,6 +99,9 @@ export async function uploadRecordDocumentFile({
   });
 
   const fileAsset = await uploadMediaFile({
+    documentExpiresAt,
+    documentExpiryReminderAt,
+    documentExpiryReminderDays,
     documentFolder: destination.folder.slug,
     documentUploadType: uploadType ?? null,
     entityId,

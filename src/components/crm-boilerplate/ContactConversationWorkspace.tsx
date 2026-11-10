@@ -450,6 +450,20 @@ export default function ContactConversationWorkspace({
   const [emailSubject, setEmailSubject] = useState(() =>
     subjectForResult(null),
   );
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+
+    if (
+      requestedTab === "conversation" ||
+      requestedTab === "profile" ||
+      requestedTab === "relationship" ||
+      requestedTab === "leads" ||
+      requestedTab === "documents"
+    ) {
+      setActiveTab(requestedTab);
+    }
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);

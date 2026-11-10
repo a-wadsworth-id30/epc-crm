@@ -187,6 +187,9 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       take: 120,
       select: {
         createdAt: true,
+        documentExpiresAt: true,
+        documentExpiryReminderAt: true,
+        documentExpiryReminderDays: true,
         documentFolder: true,
         documentUploadType: true,
         id: true,
@@ -236,6 +239,10 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   };
   const recordDocuments = companyDocuments.map((document) => ({
     createdAt: document.createdAt.toISOString(),
+    documentExpiresAt: document.documentExpiresAt?.toISOString() ?? null,
+    documentExpiryReminderAt:
+      document.documentExpiryReminderAt?.toISOString() ?? null,
+    documentExpiryReminderDays: document.documentExpiryReminderDays,
     documentFolder: document.documentFolder,
     documentUploadType: document.documentUploadType,
     id: document.id,

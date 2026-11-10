@@ -19,6 +19,12 @@ import {
   normaliseFileAssetNotes,
   parseFileAssetTags,
 } from "@/lib/storage/file-metadata";
+import {
+  documentExpiryReminderAt,
+  documentExpiryReminderDayOptions,
+  parseDocumentExpiryDate,
+} from "@/lib/documents/expiry";
+import { revalidateHeaderNotifications } from "@/lib/notifications";
 
 export type RecordDocumentActionState = {
   ok: boolean;
@@ -32,7 +38,33 @@ function optionalFormString(schema: z.ZodString) {
   );
 }
 
+const documentExpiryDateSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => parseDocumentExpiryDate(value) !== undefined,
+    "Enter a valid document expiry date.",
+  )
+  .transform((value) => parseDocumentExpiryDate(value) ?? null);
+
+const documentExpiryReminderDaysSchema = z.preprocess(
+  (value) => (value === null || value === "" ? null : value),
+  z
+    .coerce.number()
+    .int()
+    .refine(
+      (value) =>
+        documentExpiryReminderDayOptions.includes(
+          value as (typeof documentExpiryReminderDayOptions)[number],
+        ),
+      "Choose a supported reminder window.",
+    )
+    .nullable(),
+);
+
 const uploadRecordDocumentSchema = z.object({
+  documentExpiresAt: documentExpiryDateSchema,
+  documentExpiryReminderDays: documentExpiryReminderDaysSchema,
   entityId: z.string().trim().min(1),
   entityType: z.enum(["Contact", "Company", "SalesOpportunity"]),
   folderSlug: optionalFormString(z.string().trim().max(80)).transform(
@@ -47,6 +79,8 @@ const uploadRecordDocumentSchema = z.object({
 });
 
 const updateRecordDocumentMetadataSchema = z.object({
+  documentExpiresAt: documentExpiryDateSchema,
+  documentExpiryReminderDays: documentExpiryReminderDaysSchema,
   fileId: z.string().trim().min(1),
   entityId: z.string().trim().min(1),
   entityType: z.enum(["Contact", "Company", "SalesOpportunity"]),
@@ -124,6 +158,8 @@ export async function uploadRecordDocumentAction(
   const user = await requireUser();
   const files = uploadFilesFromFormData(formData);
   const parsed = uploadRecordDocumentSchema.safeParse({
+    documentExpiresAt: formData.get("documentExpiresAt") ?? "",
+    documentExpiryReminderDays: formData.get("documentExpiryReminderDays"),
     documentType: formData.get("documentType"),
     entityId: formData.get("entityId"),
     entityType: formData.get("entityType"),
@@ -161,6 +197,13 @@ export async function uploadRecordDocumentAction(
 
   const notes = normaliseFileAssetNotes(formData.get("notes"));
   const tags = parseFileAssetTags(formData.get("tagsText"));
+  const reminderDays = parsed.data.documentExpiresAt
+    ? parsed.data.documentExpiryReminderDays
+    : null;
+  const reminderAt = documentExpiryReminderAt(
+    parsed.data.documentExpiresAt,
+    reminderDays,
+  );
   let uploadedCount = 0;
   const folders = new Set<string>();
   const failures: string[] = [];
@@ -168,6 +211,9 @@ export async function uploadRecordDocumentAction(
   for (const file of files) {
     try {
       const upload = await uploadRecordDocumentFile({
+        documentExpiresAt: parsed.data.documentExpiresAt,
+        documentExpiryReminderAt: reminderAt,
+        documentExpiryReminderDays: reminderDays,
         entityId: parsed.data.entityId,
         entityType: parsed.data.entityType,
         file,
@@ -190,6 +236,7 @@ export async function uploadRecordDocumentAction(
   }
 
   if (uploadedCount) {
+    revalidateHeaderNotifications();
     revalidatePath(
       recordDocumentPath(parsed.data.entityType, parsed.data.entityId),
     );
@@ -218,6 +265,8 @@ export async function updateRecordDocumentMetadataAction(
 ): Promise<RecordDocumentActionState> {
   const user = await requireUser();
   const parsed = updateRecordDocumentMetadataSchema.safeParse({
+    documentExpiresAt: formData.get("documentExpiresAt") ?? "",
+    documentExpiryReminderDays: formData.get("documentExpiryReminderDays"),
     documentType: formData.get("documentType"),
     entityId: formData.get("entityId"),
     entityType: formData.get("entityType"),
@@ -249,7 +298,12 @@ export async function updateRecordDocumentMetadataAction(
       entityType: parsed.data.entityType,
       id: parsed.data.fileId,
     },
-    select: { documentUploadType: true, id: true },
+    select: {
+      documentExpiresAt: true,
+      documentExpiryReminderDays: true,
+      documentUploadType: true,
+      id: true,
+    },
   });
 
   if (!file) {
@@ -257,10 +311,21 @@ export async function updateRecordDocumentMetadataAction(
   }
 
   try {
+    const reminderDays = parsed.data.documentExpiresAt
+      ? parsed.data.documentExpiryReminderDays
+      : null;
+    const reminderAt = documentExpiryReminderAt(
+      parsed.data.documentExpiresAt,
+      reminderDays,
+    );
+
     await prisma.$transaction([
       prisma.fileAsset.update({
         where: { id: file.id },
         data: {
+          documentExpiresAt: parsed.data.documentExpiresAt,
+          documentExpiryReminderAt: reminderAt,
+          documentExpiryReminderDays: reminderDays,
           documentUploadType: parsed.data.documentType,
           notes: parsed.data.notes,
           tags: parsed.data.tagsText,
@@ -275,6 +340,10 @@ export async function updateRecordDocumentMetadataAction(
           metadata: {
             documentTypeAfter: parsed.data.documentType,
             documentTypeBefore: file.documentUploadType,
+            expiresAtAfter: parsed.data.documentExpiresAt?.toISOString() ?? null,
+            expiresAtBefore: file.documentExpiresAt?.toISOString() ?? null,
+            reminderDaysAfter: reminderDays,
+            reminderDaysBefore: file.documentExpiryReminderDays,
             parentEntityId: parsed.data.entityId,
             parentEntityType: parsed.data.entityType,
           },
@@ -286,6 +355,7 @@ export async function updateRecordDocumentMetadataAction(
       recordDocumentPath(parsed.data.entityType, parsed.data.entityId),
     );
     revalidatePath("/storage");
+    revalidateHeaderNotifications();
     return {
       ok: true,
       message: "Document details saved.",
