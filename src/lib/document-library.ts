@@ -34,6 +34,41 @@ export const defaultDocumentLibraryFolders = [
 
 export const documentUploadTypeDefinitions = [
   {
+    key: "identity_document",
+    label: "Identity document",
+    folderSlug: "property-documents",
+    customerFacing: true,
+    description: "Passport or another approved identity document.",
+  },
+  {
+    key: "driving_licence",
+    label: "Driving licence",
+    folderSlug: "property-documents",
+    customerFacing: true,
+    description: "A current driving licence used for identity or installer checks.",
+  },
+  {
+    key: "accreditation_certificate",
+    label: "Accreditation certificate",
+    folderSlug: "warranties-and-certificates",
+    customerFacing: true,
+    description: "Trade, installer or scheme accreditation evidence.",
+  },
+  {
+    key: "insurance_certificate",
+    label: "Insurance certificate",
+    folderSlug: "warranties-and-certificates",
+    customerFacing: true,
+    description: "Public liability, professional indemnity or other insurance evidence.",
+  },
+  {
+    key: "company_registration",
+    label: "Company registration document",
+    folderSlug: "property-documents",
+    customerFacing: true,
+    description: "Companies House or equivalent organisation registration evidence.",
+  },
+  {
     key: "survey",
     label: "Survey",
     folderSlug: "surveys-and-site-photos",

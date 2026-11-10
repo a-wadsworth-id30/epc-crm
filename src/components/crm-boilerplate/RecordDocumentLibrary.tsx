@@ -82,6 +82,7 @@ import { isDocuSignSignableMimeType } from "@/lib/docusign/signable-documents";
 export type RecordDocumentFile = {
   createdAt: string;
   documentFolder: string | null;
+  documentUploadType?: string | null;
   id: string;
   mimeType: string;
   name: string;

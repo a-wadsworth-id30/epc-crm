@@ -85,6 +85,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   values, treats boolean `false` and numeric zero as present, ignores optional
   or archived definitions and returns no score when a type has no configured
   profile requirements.
+  `ContactTypeDocumentRequirement` defines ordered required/optional controlled
+  document types for a person type. `src/lib/contacts/document-requirements.ts`
+  matches them only to `FileAsset.documentUploadType` on the contact record;
+  labels and filenames are not trusted as compliance evidence. Admin mutations
+  are audited and the upload type is immutable after creation so historical
+  matching semantics cannot change when a visible label is edited.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level

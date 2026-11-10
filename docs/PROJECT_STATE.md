@@ -60,6 +60,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   shows a compact percentage and the contact profile shows progress plus the
   missing field labels. Optional fields are excluded, unconfigured types show
   no artificial 0% score, and completeness-only fields do not block saving.
+- Settings > Person Types supports ordered required or optional document
+  checklists. Each requirement uses the controlled document catalogue and is
+  completed only by a private contact `FileAsset` carrying the matching
+  `documentUploadType`; arbitrary filenames and untyped legacy files do not
+  satisfy compliance checks. Contact document panels show received/missing
+  status and a required-document total. The catalogue includes identity,
+  driving-licence, accreditation, insurance and company-registration evidence.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo
