@@ -50,6 +50,17 @@ const updateRecordDocumentMetadataSchema = z.object({
   fileId: z.string().trim().min(1),
   entityId: z.string().trim().min(1),
   entityType: z.enum(["Contact", "Company", "SalesOpportunity"]),
+  documentType: z
+    .preprocess(
+      (value) => (value === null ? "" : value),
+      z.string().refine(
+        (value) => value === "" || isDocumentUploadType(value),
+        "Choose a supported document type.",
+      ),
+    )
+    .transform((value) =>
+      value ? (value as DocumentUploadType) : null,
+    ),
   notes: optionalFormString(
     z.string().max(2000, "Notes must be 2000 characters or fewer."),
   ).transform((value) => normaliseFileAssetNotes(value)),
@@ -207,6 +218,7 @@ export async function updateRecordDocumentMetadataAction(
 ): Promise<RecordDocumentActionState> {
   const user = await requireUser();
   const parsed = updateRecordDocumentMetadataSchema.safeParse({
+    documentType: formData.get("documentType"),
     entityId: formData.get("entityId"),
     entityType: formData.get("entityType"),
     fileId: formData.get("fileId"),
@@ -237,7 +249,7 @@ export async function updateRecordDocumentMetadataAction(
       entityType: parsed.data.entityType,
       id: parsed.data.fileId,
     },
-    select: { id: true },
+    select: { documentUploadType: true, id: true },
   });
 
   if (!file) {
@@ -245,13 +257,30 @@ export async function updateRecordDocumentMetadataAction(
   }
 
   try {
-    await prisma.fileAsset.update({
-      where: { id: file.id },
-      data: {
-        notes: parsed.data.notes,
-        tags: parsed.data.tagsText,
-      },
-    });
+    await prisma.$transaction([
+      prisma.fileAsset.update({
+        where: { id: file.id },
+        data: {
+          documentUploadType: parsed.data.documentType,
+          notes: parsed.data.notes,
+          tags: parsed.data.tagsText,
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          action: "record_document.metadata_updated",
+          actorId: user.id,
+          entity: "FileAsset",
+          entityId: file.id,
+          metadata: {
+            documentTypeAfter: parsed.data.documentType,
+            documentTypeBefore: file.documentUploadType,
+            parentEntityId: parsed.data.entityId,
+            parentEntityType: parsed.data.entityType,
+          },
+        },
+      }),
+    ]);
 
     revalidatePath(
       recordDocumentPath(parsed.data.entityType, parsed.data.entityId),

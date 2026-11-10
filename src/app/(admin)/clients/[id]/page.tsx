@@ -188,6 +188,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       select: {
         createdAt: true,
         documentFolder: true,
+        documentUploadType: true,
         id: true,
         mimeType: true,
         notes: true,
@@ -236,6 +237,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   const recordDocuments = companyDocuments.map((document) => ({
     createdAt: document.createdAt.toISOString(),
     documentFolder: document.documentFolder,
+    documentUploadType: document.documentUploadType,
     id: document.id,
     mimeType: document.mimeType,
     name: document.originalName,

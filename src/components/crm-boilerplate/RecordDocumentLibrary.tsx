@@ -82,7 +82,7 @@ import { isDocuSignSignableMimeType } from "@/lib/docusign/signable-documents";
 export type RecordDocumentFile = {
   createdAt: string;
   documentFolder: string | null;
-  documentUploadType?: string | null;
+  documentUploadType: string | null;
   id: string;
   mimeType: string;
   name: string;
@@ -174,6 +174,12 @@ export type RecordSignatureRequest = {
 };
 
 export type RecordDocumentLibraryProps = {
+  documentRequirements?: Array<{
+    isRequired: boolean;
+    label: string;
+    satisfied: boolean;
+    uploadType: string;
+  }>;
   documentPortals?: RecordCustomerDocumentPortal[];
   documentShares?: RecordCustomerDocumentShare[];
   documents: RecordDocumentFile[];
@@ -718,16 +724,24 @@ function SignatureRequestForm({
 function AutoFileUploadForm({
   entityId,
   entityType,
+  documentRequirements = [],
   uploadPolicy,
 }: {
   entityId: string;
   entityType: RecordDocumentLibraryProps["entityType"];
+  documentRequirements?: RecordDocumentLibraryProps["documentRequirements"];
   uploadPolicy: RecordDocumentUploadPolicy;
 }) {
+  const missingRequiredType = documentRequirements.find(
+    (requirement) => requirement.isRequired && !requirement.satisfied,
+  )?.uploadType;
+  const firstRequirementType = documentRequirements[0]?.uploadType;
   const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
   const [resetSignal, setResetSignal] = useState(0);
   const [documentType, setDocumentType] = useState<string>(
-    documentUploadTypeDefinitions[0].key,
+    missingRequiredType ??
+      firstRequirementType ??
+      documentUploadTypeDefinitions[0].key,
   );
   const { showToast } = useToast();
   const [state, formAction, isPending] = useActionState(
@@ -771,6 +785,20 @@ function AutoFileUploadForm({
           {documentUploadTypeDefinitions.map((definition) => (
             <option key={definition.key} value={definition.key}>
               {definition.label}
+              {documentRequirements.some(
+                (requirement) =>
+                  requirement.uploadType === definition.key &&
+                  requirement.isRequired &&
+                  !requirement.satisfied,
+              )
+                ? " — required, missing"
+                : documentRequirements.some(
+                      (requirement) =>
+                        requirement.uploadType === definition.key &&
+                        requirement.satisfied,
+                    )
+                  ? " — received"
+                  : ""}
             </option>
           ))}
         </select>
@@ -2156,12 +2184,29 @@ function DocumentMetadataForm({
     <details className="rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-950/50">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
         <Pencil className="h-3.5 w-3.5" />
-        Notes and tags
+        Type, notes and tags
       </summary>
       <form action={formAction} className="mt-3 space-y-3">
         <input type="hidden" name="fileId" value={file.id} />
         <input type="hidden" name="entityId" value={entityId} />
         <input type="hidden" name="entityType" value={entityType} />
+        <label className="block">
+          <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+            Document type
+          </span>
+          <select
+            name="documentType"
+            defaultValue={file.documentUploadType ?? ""}
+            className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="">Unclassified</option>
+            {documentUploadTypeDefinitions.map((definition) => (
+              <option key={definition.key} value={definition.key}>
+                {definition.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block">
           <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
             Notes
@@ -2230,6 +2275,9 @@ function DocumentList({
         );
         const latestRequest = latestSignatureRequest(fileSignatureRequests);
         const documentRole = signatureDocumentRole(file, signatureRequests);
+        const controlledType = documentUploadTypeDefinitions.find(
+          (definition) => definition.key === file.documentUploadType,
+        );
 
         return (
           <div
@@ -2279,8 +2327,13 @@ function DocumentList({
                 <Download className="h-4 w-4" />
               </a>
             </div>
-            {documentRole || latestRequest ? (
+            {controlledType || documentRole || latestRequest ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
+                {controlledType ? (
+                  <span className="inline-flex h-6 items-center rounded-full bg-brand-50 px-2 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/20 dark:text-brand-300 dark:ring-brand-900/40">
+                    {controlledType.label}
+                  </span>
+                ) : null}
                 {documentRole ? (
                   <span className="inline-flex h-6 items-center rounded-full bg-success-50 px-2 text-xs font-semibold text-success-700 ring-1 ring-success-200 dark:bg-success-900/20 dark:text-success-300 dark:ring-success-900/40">
                     {documentRole}
@@ -2534,6 +2587,7 @@ type DocumentLibraryTab =
 
 export default function RecordDocumentLibrary({
   documentPortals = [],
+  documentRequirements = [],
   documentShares = [],
   documents,
   entityId,
@@ -2945,6 +2999,7 @@ export default function RecordDocumentLibrary({
             <AutoFileUploadForm
               entityId={entityId}
               entityType={entityType}
+              documentRequirements={documentRequirements}
               uploadPolicy={uploadPolicy}
             />
           </div>
