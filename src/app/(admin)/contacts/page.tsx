@@ -17,7 +17,6 @@ import {
   normalizeContactPhoneMethods,
 } from "@/lib/contact-methods";
 import {
-  contactCategoryOptions,
   defaultContactCategory,
   isContactCategoryValue,
 } from "@/lib/contacts/categories";
@@ -33,6 +32,7 @@ import {
 } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
+import { contactSearchWhere } from "@/lib/contacts/query";
 
 type ContactsPageProps = {
   searchParams?: Promise<{
@@ -75,73 +75,10 @@ function parseSortDirection(
   return singleParam(value) === "desc" ? "desc" : "asc";
 }
 
-function contains(term: string) {
-  return { contains: term, mode: "insensitive" as const };
-}
-
 function hasContactWhere(
   value: Prisma.ContactWhereInput | undefined,
 ): value is Prisma.ContactWhereInput {
   return Boolean(value && Object.keys(value).length > 0);
-}
-
-function contactWhere(query: string): Prisma.ContactWhereInput | undefined {
-  const terms = query
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter(Boolean);
-
-  if (!terms.length) {
-    return undefined;
-  }
-
-  return {
-    AND: terms.map((term) => {
-      const normalizedTerm = term.toLowerCase();
-      const matchingCategories = contactCategoryOptions
-        .filter(
-          (option) =>
-            option.value.toLowerCase().includes(normalizedTerm) ||
-            option.label.toLowerCase().includes(normalizedTerm) ||
-            option.pluralLabel.toLowerCase().includes(normalizedTerm),
-        )
-        .map((option) => option.value);
-
-      return {
-        OR: [
-          { firstName: contains(term) },
-          { lastName: contains(term) },
-          { email: contains(term) },
-          { phone: contains(term) },
-          { additionalEmails: { some: { email: contains(term) } } },
-          { additionalPhones: { some: { phone: contains(term) } } },
-          { additionalPhones: { some: { phoneNormalized: contains(term) } } },
-          { leadSource: contains(term) },
-          { role: contains(term) },
-          { addressLine1: contains(term) },
-          { addressLine2: contains(term) },
-          { city: contains(term) },
-          { county: contains(term) },
-          { postcode: contains(term) },
-          { country: contains(term) },
-          { companyName: contains(term) },
-          { company: { name: contains(term) } },
-          { company: { addressLine1: contains(term) } },
-          { company: { addressLine2: contains(term) } },
-          { company: { city: contains(term) } },
-          { company: { county: contains(term) } },
-          { company: { postcode: contains(term) } },
-          { company: { country: contains(term) } },
-          { contactType: { name: contains(term) } },
-          { contactType: { pluralName: contains(term) } },
-          { tagAssignments: { some: { tag: { name: contains(term) } } } },
-          ...(matchingCategories.length
-            ? [{ category: { in: matchingCategories } }]
-            : []),
-        ],
-      };
-    }),
-  };
 }
 
 function contactOrderBy(
@@ -233,7 +170,7 @@ export default async function ContactsPage({
     options: contactPageSizes,
     value: params.pageSize,
   });
-  const searchWhere = contactWhere(query);
+  const searchWhere = contactSearchWhere(query);
   const contactTypeWhere: Prisma.ContactWhereInput | undefined =
     activeContactType
       ? {
