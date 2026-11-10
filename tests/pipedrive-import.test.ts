@@ -117,6 +117,15 @@ async function findCompanyByName(args: unknown) {
   );
 }
 
+async function findCompaniesByName(args: unknown) {
+  const name = (args as { where?: { name?: { equals?: string } } }).where?.name
+    ?.equals;
+  if (!name) return [];
+  return companyRows
+    .filter((row) => row.name.toLowerCase() === name.toLowerCase())
+    .slice(0, 2);
+}
+
 async function findContactById(args: unknown) {
   const id = (args as { where?: { id?: string } }).where?.id;
   return contactRows.find((row) => row.id === id) ?? null;
@@ -468,6 +477,7 @@ before(async () => {
         company: {
           create: recordCrmWriteFor("company.create"),
           findFirst: async () => null,
+          findMany: findCompaniesByName,
           findUnique: async () => null,
         },
         contact: {
@@ -581,6 +591,7 @@ before(async () => {
           },
           company: {
             findFirst: findCompanyByName,
+            findMany: findCompaniesByName,
             findUnique: findCompanyById,
           },
           contact: {
@@ -1309,6 +1320,47 @@ describe("Pipedrive lead import mapping", () => {
       pipedriveImport.pipedriveImportablePreviewLeadIdsFromMetadata(null),
       [],
     );
+  });
+
+  it("does not preview an arbitrary company match when names are ambiguous", async () => {
+    companyRows = [
+      { id: "company-one", name: "Preview Homes" },
+      { id: "company-two", name: "PREVIEW HOMES" },
+    ];
+
+    const result = await pipedriveImport.previewPipedriveLeadPage({
+      client: {
+        defaultLeadSource: "Pipedrive",
+        getOrganization: async (id) => ({ id, name: "Preview Homes" }),
+        getPerson: async (id) => ({
+          email: [{ primary: true, value: "unique@example.com" }],
+          first_name: "Unique",
+          id,
+          last_name: "Person",
+        }),
+        listLeads: async () => ({
+          data: [
+            {
+              id: "lead-ambiguous-company",
+              organization_id: 321,
+              person_id: { id: 654 },
+              title: "Ambiguous company",
+            },
+          ],
+          pagination: {
+            limit: 50,
+            moreItemsInCollection: false,
+            nextStart: null,
+            start: 0,
+          },
+          relatedObjects: null,
+        }),
+      },
+    });
+
+    assert.equal(result.previews[0]?.matchedCompanyId, null);
+    assert.equal(result.previews[0]?.matchedCompanyName, null);
+    assert.equal(crmWriteCalls, 0);
   });
 
   it("marks already linked Pipedrive leads as existing in preview", async () => {

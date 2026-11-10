@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
+import { uniqueCompanyMatchByName } from "@/lib/companies/integration-matching";
 import {
   mergeContactEmailMethods,
   mergeContactPhoneMethods,
@@ -376,18 +377,29 @@ async function resolveCompanyData(
   }
 
   if (companyName) {
-    const existingCompany = await tx.company.findFirst({
+    const companyNameMatches = await tx.company.findMany({
       where: companyWhereWithAccess(user, {
         name: { equals: companyName, mode: "insensitive" },
       }),
+      orderBy: { id: "asc" },
+      take: 2,
       select: { id: true, name: true },
     });
+    const existingCompany = uniqueCompanyMatchByName(
+      companyNameMatches,
+      companyName,
+    );
 
     if (existingCompany) {
       return {
         companyId: existingCompany.id,
         companyName: existingCompany.name,
       };
+    }
+    if (companyNameMatches.length > 1) {
+      throw new ContactActionError(
+        "More than one company has this name. Select the exact company instead of creating another one.",
+      );
     }
 
     const company = await tx.company.create({

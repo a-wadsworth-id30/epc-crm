@@ -125,7 +125,10 @@ export default function ContactImportModal({
               <code className="mx-1 rounded bg-white px-1 py-0.5 dark:bg-gray-900">
                 custom:field_key
               </code>
-              and multi-select values use a vertical bar.
+              and multi-select values use a vertical bar. A company name links
+              only when exactly one existing Company matches; otherwise the
+              name is retained without guessing. Import Companies first when
+              preparing related People and Company files.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {contactTypes.map((type) => (

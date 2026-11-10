@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
+import { uniqueCompanyMatchByName } from "@/lib/companies/integration-matching";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   companyIdAccessWhere,
@@ -421,15 +422,26 @@ async function resolveInlineSaleContactCompany({
     return { companyId: null, companyName: null };
   }
 
-  const existingCompany = await tx.company.findFirst({
+  const companyNameMatches = await tx.company.findMany({
     where: companyWhereWithAccess(user, {
       name: { equals: companyName, mode: "insensitive" },
     }),
+    orderBy: { id: "asc" },
+    take: 2,
     select: { id: true, name: true },
   });
+  const existingCompany = uniqueCompanyMatchByName(
+    companyNameMatches,
+    companyName,
+  );
 
   if (existingCompany) {
     return { companyId: existingCompany.id, companyName: existingCompany.name };
+  }
+  if (companyNameMatches.length > 1) {
+    throw new SalesActionError(
+      "More than one organisation has this name. Select the exact organisation instead of creating another one.",
+    );
   }
 
   const company = await tx.company.create({

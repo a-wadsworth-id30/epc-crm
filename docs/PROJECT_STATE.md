@@ -92,6 +92,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   used only when a row has no domain. Confirmed imports revalidate active
   configuration and duplicates before writing, and audit metadata contains
   counts/type IDs rather than CSV data.
+- Company integration matching is ambiguity-safe. Pipedrive external
+  organisation IDs remain authoritative; name-only fallback is accepted only
+  when exactly one CRM Company matches. Manual Person/Sales creation asks the
+  user to select the exact Company when names collide. Website attribution and
+  People CSV imports link an organisation only on a unique match and otherwise
+  preserve the legacy cached name without guessing. People imports report this
+  outcome in preview and audit only aggregate link counts.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

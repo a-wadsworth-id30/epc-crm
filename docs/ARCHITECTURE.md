@@ -110,6 +110,15 @@ Core Prisma models are in `prisma/schema.prisma`.
   reuse the typed Company-field validator, and create records only after the
   final action reloads active definitions and repeats duplicate checks.
   Existing Companies are never updated from CSV.
+- `src/lib/companies/integration-matching.ts` owns normalised name fallback for
+  cross-module Company matching. A provider external record link or explicit
+  Company ID remains authoritative. Name-only matching returns a Company only
+  when the normalised name has one candidate; duplicate names are treated as
+  ambiguous. Pipedrive therefore creates and externally links a distinct
+  Company rather than attaching to an arbitrary duplicate. Website attribution
+  and People CSV import retain `Contact.companyName` but leave `companyId`
+  unset when a name is missing or ambiguous. Manual People/Sales workflows
+  return a selection error for ambiguity instead of silently linking.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

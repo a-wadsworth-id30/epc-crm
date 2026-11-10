@@ -243,3 +243,18 @@ is preferred for matching; exact normalised name is the fallback only when the
 row has no domain. Imports are intentionally create-only and never overwrite an
 existing Company.
 
+## Task 10 integration compatibility
+
+Company matching now follows one compatibility rule across manual People/Sales
+creation, People CSV imports, website attribution and Pipedrive. Explicit CRM
+Company IDs and Pipedrive external organisation links remain authoritative.
+Name fallback is allowed only when exactly one normalised Company name matches.
+
+When duplicate names exist, manual workflows ask the user to select the exact
+Company, People imports and attribution retain the legacy cached name without
+inventing a link, and Pipedrive creates a distinct `Other` Company tied to the
+provider organisation ID. This preserves the existing `Contact.companyName`
+compatibility contract while stopping arbitrary `findFirst` links. People CSV
+preview explains whether a Company will be linked, and import audit metadata
+records aggregate linked/unlinked counts without storing customer values.
+

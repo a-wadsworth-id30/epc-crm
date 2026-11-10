@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
+import { uniqueCompanyMatchByName } from "@/lib/companies/integration-matching";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
@@ -202,6 +203,7 @@ export async function POST(request: Request) {
         where: { OR: contactMatches },
         select: {
           id: true,
+          company: { select: { name: true } },
           companyId: true,
           companyName: true,
           email: true,
@@ -210,6 +212,17 @@ export async function POST(request: Request) {
           leadSource: true,
         },
       })
+    : null;
+  const matchingCompanies = data.companyName
+    ? await prisma.company.findMany({
+        where: { name: { equals: data.companyName, mode: "insensitive" } },
+        orderBy: { id: "asc" },
+        take: 2,
+        select: { id: true, name: true },
+      })
+    : [];
+  const matchedCompany = data.companyName
+    ? uniqueCompanyMatchByName(matchingCompanies, data.companyName)
     : null;
 
   const contact = existingContact
@@ -222,7 +235,12 @@ export async function POST(request: Request) {
           phone: existingContact.phone ?? phone,
           phoneNormalized: existingContact.phoneNormalized ?? phone,
           leadSource: existingContact.leadSource ?? contactLeadSource,
-          companyName: data.companyName || existingContact.companyName,
+          companyId: existingContact.companyId ?? matchedCompany?.id ?? null,
+          companyName:
+            existingContact.company?.name ??
+            matchedCompany?.name ??
+            data.companyName ??
+            existingContact.companyName,
           attribution: { ...attributionMetadata, ...sourceMetadata },
         },
         select: { id: true, companyId: true },
@@ -236,7 +254,8 @@ export async function POST(request: Request) {
           phone,
           phoneNormalized: phone,
           leadSource: contactLeadSource,
-          companyName: data.companyName || null,
+          companyId: matchedCompany?.id ?? null,
+          companyName: matchedCompany?.name ?? data.companyName ?? null,
           attribution: { ...attributionMetadata, ...sourceMetadata },
         },
         select: { id: true, companyId: true },

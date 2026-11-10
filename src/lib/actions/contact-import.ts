@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import {
+  normalizeCompanyMatchName,
+  uniqueCompanyMatchesByName,
+} from "@/lib/companies/integration-matching";
+import {
   contactImportMaxFileBytes,
   contactImportMaxRows,
   parseContactImportCsv,
@@ -169,6 +173,13 @@ export async function previewContactImportAction(
     const phone = normalizedContactPhone(candidate.phone);
     return phone ? [phone] : [];
   });
+  const companyNames = Array.from(
+    new Set(
+      parsed.candidates.flatMap((candidate) =>
+        candidate.companyName ? [candidate.companyName] : [],
+      ),
+    ),
+  );
   const existing =
     emails.length || phones.length
       ? await prisma.contact.findMany({
@@ -183,6 +194,13 @@ export async function previewContactImportAction(
           select: { email: true, phoneNormalized: true },
         })
       : [];
+  const companyMatches = companyNames.length
+    ? await prisma.company.findMany({
+        where: { name: { in: companyNames, mode: "insensitive" } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const companyByName = uniqueCompanyMatchesByName(companyMatches);
   const existingIdentities = new Set(
     existing.flatMap((contact) => [
       ...(contact.email ? [`email:${contact.email.toLowerCase()}`] : []),
@@ -197,7 +215,14 @@ export async function previewContactImportAction(
       email: candidate.email,
       firstName: candidate.firstName,
       lastName: candidate.lastName,
-      message: exists ? "A matching person already exists." : "Ready to import.",
+      message: exists
+        ? "A matching person already exists."
+        : candidate.companyName &&
+            companyByName.has(normalizeCompanyMatchName(candidate.companyName))
+          ? "Ready to import and link to an existing company."
+          : candidate.companyName
+            ? "Ready to import. The company name will be retained but not linked because it is missing or ambiguous."
+            : "Ready to import.",
       personType: candidate.contactTypeName,
       rowNumber: candidate.rowNumber,
       status: exists ? ("SKIP" as const) : ("CREATE" as const),
@@ -314,15 +339,44 @@ export async function importContactsAction(
     return { ok: false, message: "No people were created. Matching records already exist." };
   }
 
+  const companyNames = Array.from(
+    new Set(
+      rowsToCreate.flatMap(({ candidate }) =>
+        candidate.companyName ? [candidate.companyName] : [],
+      ),
+    ),
+  );
+  const companyMatches = companyNames.length
+    ? await prisma.company.findMany({
+        where: { name: { in: companyNames, mode: "insensitive" } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const companyByName = uniqueCompanyMatchesByName(companyMatches);
+  const linkedCompanyCount = rowsToCreate.filter(({ candidate }) =>
+    candidate.companyName
+      ? companyByName.has(normalizeCompanyMatchName(candidate.companyName))
+      : false,
+  ).length;
+  const legacyCompanyNameCount = rowsToCreate.filter(({ candidate }) =>
+    candidate.companyName
+      ? !companyByName.has(normalizeCompanyMatchName(candidate.companyName))
+      : false,
+  ).length;
+
   await prisma.$transaction(async (tx) => {
     for (const { candidate, customValues, type } of rowsToCreate) {
+      const matchedCompany = candidate.companyName
+        ? companyByName.get(normalizeCompanyMatchName(candidate.companyName))
+        : null;
       const contact = await tx.contact.create({
         data: {
           addressLine1: candidate.addressLine1,
           addressLine2: candidate.addressLine2,
           category: type.systemKey ?? "CONSUMER",
           city: candidate.city,
-          companyName: candidate.companyName,
+          companyId: matchedCompany?.id ?? null,
+          companyName: matchedCompany?.name ?? candidate.companyName,
           contactTypeId: type.id,
           country: candidate.country,
           county: candidate.county,
@@ -368,6 +422,8 @@ export async function importContactsAction(
         entity: "Contact",
         metadata: {
           createdCount: rowsToCreate.length,
+          legacyCompanyNameCount,
+          linkedCompanyCount,
           skippedCount: validated.length - rowsToCreate.length,
           typeCounts: Object.fromEntries(
             types.map((type) => [
@@ -381,6 +437,7 @@ export async function importContactsAction(
   });
 
   revalidatePath("/contacts");
+  if (linkedCompanyCount) revalidatePath("/clients");
   return {
     createdCount: rowsToCreate.length,
     message: `${rowsToCreate.length} person${rowsToCreate.length === 1 ? "" : "s"} imported. ${validated.length - rowsToCreate.length} skipped because a matching person now exists.`,

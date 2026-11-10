@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
+import { uniqueCompanyMatchByName } from "@/lib/companies/integration-matching";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import {
@@ -5137,12 +5138,18 @@ async function previewMatchedCompany(
     }
   }
 
-  const existingCompany = await prisma.company.findFirst({
+  const companyNameMatches = await prisma.company.findMany({
     where: {
       name: { equals: mapping.company.name, mode: "insensitive" },
     },
+    orderBy: { id: "asc" },
+    take: 2,
     select: { id: true, name: true },
   });
+  const existingCompany = uniqueCompanyMatchByName(
+    companyNameMatches,
+    mapping.company.name,
+  );
 
   return existingCompany
     ? { id: existingCompany.id, name: existingCompany.name }
@@ -5260,12 +5267,18 @@ async function resolvePipedriveCompany(
     };
   }
 
-  const existingCompany = await tx.company.findFirst({
+  const companyNameMatches = await tx.company.findMany({
     where: {
       name: { equals: mapping.company.name, mode: "insensitive" },
     },
+    orderBy: { id: "asc" },
+    take: 2,
     select: { id: true, name: true },
   });
+  const existingCompany = uniqueCompanyMatchByName(
+    companyNameMatches,
+    mapping.company.name,
+  );
   const company =
     existingCompany ??
     (await tx.company.create({
