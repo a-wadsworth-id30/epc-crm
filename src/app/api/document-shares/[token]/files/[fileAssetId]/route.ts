@@ -117,6 +117,8 @@ export async function GET(
   return NextResponse.redirect(downloadUrl, {
     headers: {
       "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
