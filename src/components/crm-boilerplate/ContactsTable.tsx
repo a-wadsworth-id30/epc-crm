@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
   Building2,
+  Download,
   UserRound,
   Wrench,
   type LucideIcon,
@@ -205,6 +206,12 @@ export default function ContactsTable({
   const activeContactType = contactTypes.find(
     (contactType) => contactType.slug === activeContactTypeSlug,
   );
+  const exportParams = new URLSearchParams();
+  if (query) exportParams.set("q", query);
+  if (activeContactTypeSlug !== "all") {
+    exportParams.set("type", activeContactTypeSlug);
+  }
+  const exportHref = `/api/contacts/export${exportParams.size ? `?${exportParams}` : ""}`;
 
   const updateParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -367,6 +374,16 @@ export default function ContactsTable({
             : `All People (${totalCount})`
         }
         searchPlaceholder="Search people..."
+        toolbarActions={
+          <a
+            href={exportHref}
+            title="Export the current search and person type filter, up to 5,000 people"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </a>
+        }
         query={localQuery}
         onQueryChange={setLocalQuery}
         sort={{ columnId: sortKey, direction: sortDirection }}

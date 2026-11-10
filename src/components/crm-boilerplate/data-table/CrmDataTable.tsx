@@ -87,6 +87,7 @@ export type CrmDataTableProps<TData> = {
   columns: CrmDataTableColumn<TData>[];
   getRowId: (row: TData) => string;
   title?: ReactNode;
+  toolbarActions?: ReactNode;
   description?: ReactNode;
   emptyState?: ReactNode;
   searchPlaceholder?: string;
@@ -242,6 +243,7 @@ export default function CrmDataTable<TData>({
   columns,
   getRowId,
   title,
+  toolbarActions,
   description,
   emptyState,
   searchPlaceholder = "Search...",
@@ -616,6 +618,7 @@ export default function CrmDataTable<TData>({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {toolbarActions}
           {enableColumnSelection ? (
             <div ref={columnMenuRef} className="relative">
               <button

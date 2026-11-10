@@ -102,6 +102,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   separate scheduled-job table. Record cards derive valid/due/expired state
   from those values. Header notifications batch-load matching contact records
   through the normal contact access filter before exposing a document alert.
+  `src/lib/contacts/query.ts` owns People search semantics for both the list and
+  `/api/contacts/export`. Only active custom fields with `isSearchable=true`
+  participate in custom-value matching. CSV export reapplies
+  `contactWhereWithAccess`, includes typed custom fields, prevents spreadsheet
+  formula execution and audits only filter/count metadata.
   Secure customer upload requests reuse the same contact requirement status.
   The browser suggests only missing required types whose controlled catalogue
   entry is `customerFacing`; creation remains an explicit staff action. The

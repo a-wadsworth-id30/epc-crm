@@ -86,6 +86,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   cards and generates warning notifications only for users who can access the
   linked contact. Expiry metadata changes are included in the document audit
   event without exposing file contents.
+- People search includes values from active custom fields explicitly marked as
+  searchable, including text/select, number, date and yes/no values. The shared
+  query builder is reused by the permission-scoped People CSV export, so the
+  current search and person-type filter produce the same result set as the UI.
+  Exports include typed custom fields, are capped at 5,000 rows, neutralise
+  spreadsheet formulas, send no-store headers and write a metadata-only audit
+  event without copying contact data into `AuditLog`.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo
