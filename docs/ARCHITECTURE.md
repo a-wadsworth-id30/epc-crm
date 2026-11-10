@@ -66,7 +66,15 @@ Core Prisma models are in `prisma/schema.prisma`.
   cover Customer, Installer Company, Trade Partner, Supplier, Subcontractor and
   Other, while the visible name, description and presentation can evolve.
   Existing Companies are initially assigned to Other rather than inferred from
-  incomplete imported data.
+  incomplete imported data. Admins manage types in Settings > Company Types;
+  populated or default types cannot be archived.
+- `CompanyTypeField` stores stable, ordered field definitions per company type,
+  including requirement mode, table/search flags, external-edit permission and
+  optional role-template view/edit restrictions. `CompanyCustomFieldValue`
+  stores one typed value per company and field using text, decimal, boolean,
+  date or JSON-array columns. Configuration and typed storage are introduced
+  before the company forms consume them so integration compatibility is kept
+  explicit during the staged rollout.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

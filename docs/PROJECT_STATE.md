@@ -49,6 +49,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Subcontractor and Other have stable system identities; existing Companies are
   conservatively backfilled to Other. The visible Company Person Type is named
   Company Contact while retaining its compatibility key and slug.
+- Settings > Company Types lets admins create, rename, order, style, reactivate
+  and safely archive organisation types, choose the active default and define
+  type-specific structured fields. Definitions use stable keys, typed storage,
+  optional/completeness/required modes, table/search flags, external-edit
+  permission and role-template view/edit restrictions. Company create/edit
+  forms will consume these definitions in the dedicated forms task.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

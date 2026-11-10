@@ -196,6 +196,12 @@ Prospect status. It also changes the visible Company Person Type label to
 Company Contact while preserving its stable `COMPANY` key and `company` slug.
 Existing person/company links and cached company names are unchanged.
 
+The migration `20261110233000_company_custom_fields` adds ordered field
+definitions for Company Types and typed values for Companies. It does not
+backfill or modify company data. Definitions and values remain empty until an
+administrator configures fields in Settings > Company Types and the staged
+company form work begins saving them.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run
