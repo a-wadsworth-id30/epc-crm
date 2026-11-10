@@ -23,7 +23,9 @@ import {
   documentExpiryReminderAt,
   documentExpiryReminderDayOptions,
   parseDocumentExpiryDate,
+  parseDocumentIssueDate,
 } from "@/lib/documents/expiry";
+import { documentRenewalTaskData } from "@/lib/documents/renewal-task";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 
 export type RecordDocumentActionState = {
@@ -47,6 +49,15 @@ const documentExpiryDateSchema = z
   )
   .transform((value) => parseDocumentExpiryDate(value) ?? null);
 
+const documentIssueDateSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => parseDocumentIssueDate(value) !== undefined,
+    "Enter a valid document issue date.",
+  )
+  .transform((value) => parseDocumentIssueDate(value) ?? null);
+
 const documentExpiryReminderDaysSchema = z.preprocess(
   (value) => (value === null || value === "" ? null : value),
   z
@@ -63,6 +74,8 @@ const documentExpiryReminderDaysSchema = z.preprocess(
 );
 
 const uploadRecordDocumentSchema = z.object({
+  createRenewalTask: z.boolean(),
+  documentIssuedAt: documentIssueDateSchema,
   documentExpiresAt: documentExpiryDateSchema,
   documentExpiryReminderDays: documentExpiryReminderDaysSchema,
   entityId: z.string().trim().min(1),
@@ -79,6 +92,8 @@ const uploadRecordDocumentSchema = z.object({
 });
 
 const updateRecordDocumentMetadataSchema = z.object({
+  createRenewalTask: z.boolean(),
+  documentIssuedAt: documentIssueDateSchema,
   documentExpiresAt: documentExpiryDateSchema,
   documentExpiryReminderDays: documentExpiryReminderDaysSchema,
   fileId: z.string().trim().min(1),
@@ -158,6 +173,8 @@ export async function uploadRecordDocumentAction(
   const user = await requireUser();
   const files = uploadFilesFromFormData(formData);
   const parsed = uploadRecordDocumentSchema.safeParse({
+    createRenewalTask: formData.get("createRenewalTask") === "on",
+    documentIssuedAt: formData.get("documentIssuedAt") ?? "",
     documentExpiresAt: formData.get("documentExpiresAt") ?? "",
     documentExpiryReminderDays: formData.get("documentExpiryReminderDays"),
     documentType: formData.get("documentType"),
@@ -183,6 +200,18 @@ export async function uploadRecordDocumentAction(
 
   if (!parsed.data.folderSlug && !parsed.data.documentType) {
     return { ok: false, message: "Choose a document type." };
+  }
+
+  if (
+    parsed.data.documentIssuedAt &&
+    parsed.data.documentExpiresAt &&
+    parsed.data.documentIssuedAt > parsed.data.documentExpiresAt
+  ) {
+    return { ok: false, message: "The issue date must be on or before the expiry date." };
+  }
+
+  if (parsed.data.createRenewalTask && !parsed.data.documentExpiresAt) {
+    return { ok: false, message: "Add an expiry date before creating a renewal task." };
   }
 
   const record = await canAccessRecordDocumentEntity({
@@ -212,6 +241,7 @@ export async function uploadRecordDocumentAction(
     try {
       const upload = await uploadRecordDocumentFile({
         documentExpiresAt: parsed.data.documentExpiresAt,
+        documentIssuedAt: parsed.data.documentIssuedAt,
         documentExpiryReminderAt: reminderAt,
         documentExpiryReminderDays: reminderDays,
         entityId: parsed.data.entityId,
@@ -223,6 +253,24 @@ export async function uploadRecordDocumentAction(
         uploadedById: user.id,
         uploadType: parsed.data.documentType,
       });
+
+      if (parsed.data.createRenewalTask && parsed.data.documentExpiresAt) {
+        const task = await prisma.task.create({
+          data: documentRenewalTaskData({
+            creatorId: user.id,
+            dueDate: reminderAt ?? parsed.data.documentExpiresAt,
+            entityId: parsed.data.entityId,
+            entityType: parsed.data.entityType,
+            fileAssetId: upload.fileAsset.id,
+            fileName: upload.fileAsset.originalName,
+          }),
+          select: { id: true },
+        });
+        await prisma.fileAsset.update({
+          where: { id: upload.fileAsset.id },
+          data: { documentRenewalTaskId: task.id },
+        });
+      }
 
       uploadedCount += 1;
       folders.add(upload.folderName);
@@ -241,6 +289,7 @@ export async function uploadRecordDocumentAction(
       recordDocumentPath(parsed.data.entityType, parsed.data.entityId),
     );
     revalidatePath("/storage");
+    if (parsed.data.createRenewalTask) revalidatePath("/tasks");
   }
 
   if (failures.length) {
@@ -265,6 +314,8 @@ export async function updateRecordDocumentMetadataAction(
 ): Promise<RecordDocumentActionState> {
   const user = await requireUser();
   const parsed = updateRecordDocumentMetadataSchema.safeParse({
+    createRenewalTask: formData.get("createRenewalTask") === "on",
+    documentIssuedAt: formData.get("documentIssuedAt") ?? "",
     documentExpiresAt: formData.get("documentExpiresAt") ?? "",
     documentExpiryReminderDays: formData.get("documentExpiryReminderDays"),
     documentType: formData.get("documentType"),
@@ -280,6 +331,18 @@ export async function updateRecordDocumentMetadataAction(
       ok: false,
       message: parsed.error.issues[0]?.message ?? "Check the document details.",
     };
+  }
+
+  if (
+    parsed.data.documentIssuedAt &&
+    parsed.data.documentExpiresAt &&
+    parsed.data.documentIssuedAt > parsed.data.documentExpiresAt
+  ) {
+    return { ok: false, message: "The issue date must be on or before the expiry date." };
+  }
+
+  if (parsed.data.createRenewalTask && !parsed.data.documentExpiresAt) {
+    return { ok: false, message: "Add an expiry date before creating a renewal task." };
   }
 
   const record = await canAccessRecordDocumentEntity({
@@ -300,9 +363,13 @@ export async function updateRecordDocumentMetadataAction(
     },
     select: {
       documentExpiresAt: true,
+      documentIssuedAt: true,
       documentExpiryReminderDays: true,
+      documentRenewalTaskId: true,
+      documentRenewalTask: { select: { status: true } },
       documentUploadType: true,
       id: true,
+      originalName: true,
     },
   });
 
@@ -319,19 +386,44 @@ export async function updateRecordDocumentMetadataAction(
       reminderDays,
     );
 
-    await prisma.$transaction([
-      prisma.fileAsset.update({
+    await prisma.$transaction(async (tx) => {
+      let renewalTaskId = file.documentRenewalTaskId;
+      if (parsed.data.createRenewalTask && parsed.data.documentExpiresAt) {
+        const taskData = documentRenewalTaskData({
+          creatorId: user.id,
+          dueDate: reminderAt ?? parsed.data.documentExpiresAt,
+          entityId: parsed.data.entityId,
+          entityType: parsed.data.entityType,
+          fileAssetId: file.id,
+          fileName: file.originalName,
+        });
+        if (renewalTaskId && file.documentRenewalTask?.status !== "DONE") {
+          await tx.task.update({ where: { id: renewalTaskId }, data: taskData });
+        } else {
+          const task = await tx.task.create({ data: taskData, select: { id: true } });
+          renewalTaskId = task.id;
+        }
+      } else if (renewalTaskId && file.documentRenewalTask?.status !== "DONE") {
+        await tx.task.update({ where: { id: renewalTaskId }, data: { status: "DONE" } });
+        renewalTaskId = null;
+      } else if (!parsed.data.createRenewalTask) {
+        renewalTaskId = null;
+      }
+
+      await tx.fileAsset.update({
         where: { id: file.id },
         data: {
+          documentIssuedAt: parsed.data.documentIssuedAt,
           documentExpiresAt: parsed.data.documentExpiresAt,
           documentExpiryReminderAt: reminderAt,
           documentExpiryReminderDays: reminderDays,
           documentUploadType: parsed.data.documentType,
+          documentRenewalTaskId: renewalTaskId,
           notes: parsed.data.notes,
           tags: parsed.data.tagsText,
         },
-      }),
-      prisma.auditLog.create({
+      });
+      await tx.auditLog.create({
         data: {
           action: "record_document.metadata_updated",
           actorId: user.id,
@@ -340,21 +432,26 @@ export async function updateRecordDocumentMetadataAction(
           metadata: {
             documentTypeAfter: parsed.data.documentType,
             documentTypeBefore: file.documentUploadType,
+            issuedAtAfter: parsed.data.documentIssuedAt?.toISOString() ?? null,
+            issuedAtBefore: file.documentIssuedAt?.toISOString() ?? null,
             expiresAtAfter: parsed.data.documentExpiresAt?.toISOString() ?? null,
             expiresAtBefore: file.documentExpiresAt?.toISOString() ?? null,
             reminderDaysAfter: reminderDays,
             reminderDaysBefore: file.documentExpiryReminderDays,
+            renewalTaskAfter: renewalTaskId,
+            renewalTaskBefore: file.documentRenewalTaskId,
             parentEntityId: parsed.data.entityId,
             parentEntityType: parsed.data.entityType,
           },
         },
-      }),
-    ]);
+      });
+    });
 
     revalidatePath(
       recordDocumentPath(parsed.data.entityType, parsed.data.entityId),
     );
     revalidatePath("/storage");
+    revalidatePath("/tasks");
     revalidateHeaderNotifications();
     return {
       ok: true,

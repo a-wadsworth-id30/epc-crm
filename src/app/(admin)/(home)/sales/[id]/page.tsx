@@ -2221,9 +2221,11 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   const recordDocuments = opportunityDocuments.map((document) => ({
     createdAt: document.createdAt.toISOString(),
     documentExpiresAt: document.documentExpiresAt?.toISOString() ?? null,
+    documentIssuedAt: document.documentIssuedAt?.toISOString() ?? null,
     documentExpiryReminderAt:
       document.documentExpiryReminderAt?.toISOString() ?? null,
     documentExpiryReminderDays: document.documentExpiryReminderDays,
+    documentRenewalTaskId: document.documentRenewalTaskId,
     documentFolder: document.documentFolder,
     documentUploadType: document.documentUploadType,
     id: document.id,

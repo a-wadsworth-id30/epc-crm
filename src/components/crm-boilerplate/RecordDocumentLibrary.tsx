@@ -89,8 +89,10 @@ import {
 export type RecordDocumentFile = {
   createdAt: string;
   documentExpiresAt: string | null;
+  documentIssuedAt: string | null;
   documentExpiryReminderAt: string | null;
   documentExpiryReminderDays: number | null;
+  documentRenewalTaskId: string | null;
   documentFolder: string | null;
   documentUploadType: string | null;
   id: string;
@@ -789,6 +791,7 @@ function AutoFileUploadForm({
       documentUploadTypeDefinitions[0].key,
   );
   const [documentExpiresAt, setDocumentExpiresAt] = useState("");
+  const [createRenewalTask, setCreateRenewalTask] = useState(false);
   const { showToast } = useToast();
   const [state, formAction, isPending] = useActionState(
     uploadRecordDocumentAction,
@@ -807,6 +810,7 @@ function AutoFileUploadForm({
     queueMicrotask(() => {
       setSelectedFileNames([]);
       setDocumentExpiresAt("");
+      setCreateRenewalTask(false);
       setResetSignal((value) => value + 1);
     });
   }, [showToast, state.message, state.ok]);
@@ -814,7 +818,7 @@ function AutoFileUploadForm({
   return (
     <form
       action={formAction}
-      className="grid gap-3 rounded-xl border border-brand-100 bg-brand-50/40 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] dark:border-brand-900/40 dark:bg-brand-900/10"
+    className="grid gap-3 rounded-xl border border-brand-100 bg-brand-50/40 p-3 md:grid-cols-3 dark:border-brand-900/40 dark:bg-brand-900/10"
     >
       <input type="hidden" name="entityId" value={entityId} />
       <input type="hidden" name="entityType" value={entityType} />
@@ -851,6 +855,10 @@ function AutoFileUploadForm({
         </select>
       </label>
       <label className="block">
+        <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">Issue date</span>
+        <input type="date" name="documentIssuedAt" disabled={!uploadPolicy.isConfigured || isPending} className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" />
+      </label>
+      <label className="block">
         <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
           Expiry date
         </span>
@@ -862,6 +870,10 @@ function AutoFileUploadForm({
           disabled={!uploadPolicy.isConfigured || isPending}
           className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
         />
+      </label>
+      <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 md:col-span-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <input type="checkbox" name="createRenewalTask" checked={createRenewalTask} onChange={(event) => setCreateRenewalTask(event.target.checked)} disabled={!documentExpiresAt || !uploadPolicy.isConfigured || isPending} className="h-4 w-4 rounded border-gray-300 text-brand-500" />
+        Create a task for me when the renewal reminder is due
       </label>
       <label className="block">
         <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
@@ -2278,6 +2290,7 @@ function DocumentMetadataForm({
       ? documentExpiryInputValue(new Date(file.documentExpiresAt))
       : "",
   );
+  const [createRenewalTask, setCreateRenewalTask] = useState(Boolean(file.documentRenewalTaskId));
   const [state, formAction, isPending] = useActionState(
     updateRecordDocumentMetadataAction,
     {
@@ -2319,7 +2332,11 @@ function DocumentMetadataForm({
             ))}
           </select>
         </label>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">Issue date</span>
+            <input type="date" name="documentIssuedAt" defaultValue={file.documentIssuedAt ? documentExpiryInputValue(new Date(file.documentIssuedAt)) : ""} className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" />
+          </label>
           <label className="block">
             <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
               Expiry date
@@ -2350,6 +2367,10 @@ function DocumentMetadataForm({
             </select>
           </label>
         </div>
+        <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">
+          <input type="checkbox" name="createRenewalTask" checked={createRenewalTask} onChange={(event) => setCreateRenewalTask(event.target.checked)} disabled={!documentExpiresAt} className="h-4 w-4 rounded border-gray-300 text-brand-500" />
+          Keep an assigned renewal task for this document
+        </label>
         <label className="block">
           <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
             Notes
@@ -2471,7 +2492,7 @@ function DocumentList({
                 <Download className="h-4 w-4" />
               </a>
             </div>
-            {controlledType || documentRole || latestRequest || expiry ? (
+            {controlledType || documentRole || latestRequest || expiry || file.documentIssuedAt || file.documentRenewalTaskId ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {controlledType ? (
                   <span className="inline-flex h-6 items-center rounded-full bg-brand-50 px-2 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/20 dark:text-brand-300 dark:ring-brand-900/40">
@@ -2496,6 +2517,16 @@ function DocumentList({
                   >
                     <CalendarClock className="h-3.5 w-3.5" />
                     {expiry.label}
+                  </span>
+                ) : null}
+                {file.documentIssuedAt ? (
+                  <span className="inline-flex h-6 items-center rounded-full bg-gray-50 px-2 text-xs font-semibold text-gray-600 ring-1 ring-gray-200 dark:bg-white/[0.04] dark:text-gray-300 dark:ring-gray-800">
+                    Issued {formatDate(file.documentIssuedAt)}
+                  </span>
+                ) : null}
+                {file.documentRenewalTaskId ? (
+                  <span className="inline-flex h-6 items-center rounded-full bg-brand-50 px-2 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/20 dark:text-brand-300 dark:ring-brand-900/40">
+                    Renewal task active
                   </span>
                 ) : null}
               </div>

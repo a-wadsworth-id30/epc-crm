@@ -184,6 +184,11 @@ empty array, which preserves access for existing fields until an administrator
 chooses restrictions in Settings > Person Types. It does not modify contact
 values or user roles.
 
+The migration `20261110220000_contact_document_renewal_tasks` adds an optional
+document issue date and a nullable unique link from `FileAsset` to an existing
+CRM `Task`. Existing files are unchanged. Renewal tasks are not backfilled or
+created by the migration; users opt in while uploading or editing a document.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

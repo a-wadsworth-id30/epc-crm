@@ -22,6 +22,21 @@ export function parseDocumentExpiryDate(value: unknown) {
   return expiresAt;
 }
 
+export function parseDocumentIssueDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (!dateInputPattern.test(normalized)) return undefined;
+  const issuedAt = new Date(`${normalized}T00:00:00.000Z`);
+  if (
+    Number.isNaN(issuedAt.getTime()) ||
+    issuedAt.toISOString().slice(0, 10) !== normalized
+  ) {
+    return undefined;
+  }
+  return issuedAt;
+}
+
 export function documentExpiryReminderAt(
   expiresAt: Date | null,
   reminderDays: number | null,
