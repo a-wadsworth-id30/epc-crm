@@ -85,6 +85,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   saved empty for the separate profile-quality workflow. Changing a contact's
   type retains values belonging to the previous type so switching back does not
   destroy data.
+  `src/lib/contacts/table-columns.ts` converts `showInTable` field definitions
+  into stable People table column IDs and validates URL-backed column
+  preferences against the currently available person-type fields. Custom
+  columns display typed values but remain non-sortable until a database-backed
+  custom-field sort is explicitly implemented.
   `src/lib/contacts/profile-completeness.ts` is the shared pure calculator used
   by both the People list and contact profile. It evaluates serialised typed
   values, treats boolean `false` and numeric zero as present, ignores optional

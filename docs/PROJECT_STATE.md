@@ -63,6 +63,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   shows a compact percentage and the contact profile shows progress plus the
   missing field labels. Optional fields are excluded, unconfigured types show
   no artificial 0% score, and completeness-only fields do not block saving.
+- Custom fields marked `showInTable` are available as typed People table
+  columns. The selected person-type view limits these columns to that type,
+  while All People can show configured columns from every active type. Stable
+  field IDs keep column selections safe when visible labels change.
 - Settings > Person Types supports ordered required or optional document
   checklists. Each requirement uses the controlled document catalogue and is
   completed only by a private contact `FileAsset` carrying the matching
