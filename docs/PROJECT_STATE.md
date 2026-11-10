@@ -40,6 +40,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Company are seeded as stable system types and existing contacts are backfilled
   through `Contact.contactTypeId`. The legacy category remains available while
   the settings, forms, filters and integrations are migrated in staged releases.
+- Company improvement work starts from the aggregate-only audit in
+  `docs/COMPANY_DATA_AUDIT.md`. People remain valid without a Company, Company
+  records remain the organisation source of truth and the existing optional
+  `Contact.companyId` link is retained for the first delivery stage.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

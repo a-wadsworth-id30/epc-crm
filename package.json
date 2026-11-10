@@ -21,6 +21,7 @@
     "maintenance:gmail-image-dedupe:apply": "tsx scripts/maintenance/cleanup-gmail-duplicate-images.ts --apply",
     "maintenance:gmail-r2-cleanup": "tsx scripts/maintenance/cleanup-gmail-legacy-r2-attachments.ts",
     "maintenance:gmail-r2-cleanup:apply": "tsx scripts/maintenance/cleanup-gmail-legacy-r2-attachments.ts --apply",
+    "maintenance:company-data-audit": "tsx scripts/audit-company-data.ts",
     "db:studio": "prisma studio",
     "build": "next build",
     "build:profile": "npm run build && npm run perf:bundle",
