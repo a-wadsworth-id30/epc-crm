@@ -36,6 +36,15 @@ enum ContactCategory {
   COMPANY
 }
 
+enum CompanyTypeSystemKey {
+  CUSTOMER
+  INSTALLER_COMPANY
+  TRADE_PARTNER
+  SUPPLIER
+  SUBCONTRACTOR
+  OTHER
+}
+
 enum ContactCustomFieldType {
   SHORT_TEXT
   LONG_TEXT
@@ -565,6 +574,8 @@ model PasswordResetToken {
 model Company {
   id              String             @id @default(cuid())
   name            String
+  companyTypeId   String?
+  companyType     CompanyType?       @relation(fields: [companyTypeId], references: [id], onDelete: SetNull)
   domain          String?
   status          String             @default("Prospect")
   owner           String?
@@ -585,7 +596,28 @@ model Company {
 
   @@index([updatedAt])
   @@index([name])
+  @@index([companyTypeId, updatedAt])
   @@index([createdByUserId, updatedAt])
+}
+
+model CompanyType {
+  id           String               @id @default(cuid())
+  name         String
+  pluralName   String
+  slug         String               @unique
+  description  String?
+  systemKey    CompanyTypeSystemKey? @unique
+  colourKey    String               @default("gray")
+  iconKey      String               @default("building")
+  displayOrder Int                  @default(0)
+  isDefault    Boolean              @default(false)
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  companies    Company[]
+
+  @@index([isActive, displayOrder])
+  @@index([isDefault, isActive])
 }
 
 model Contact {

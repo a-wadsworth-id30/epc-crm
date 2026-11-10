@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
+import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import {
@@ -5269,6 +5270,7 @@ async function resolvePipedriveCompany(
     existingCompany ??
     (await tx.company.create({
       data: {
+        ...defaultCompanyTypeAssignment(),
         addressLine1: mapping.company.addressLine1,
         name: mapping.company.name,
         status: "Prospect",

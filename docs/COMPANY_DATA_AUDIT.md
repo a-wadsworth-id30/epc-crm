@@ -152,9 +152,10 @@ Netlify CLI. The deeper aggregate query therefore remains pending until David
 or another authorised operator supplies a temporary read-only Neon connection
 or runs the command in an approved environment.
 
-## Task 2 entry criteria
+## Task 2 foundation
 
-Task 2 can proceed without production writes because its migration is additive:
+The additive Company Type foundation is implemented through
+`20261110230000_company_type_foundation`:
 
 - add `CompanyType` and nullable `Company.companyTypeId`;
 - seed the initial types;

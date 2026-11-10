@@ -44,6 +44,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   `docs/COMPANY_DATA_AUDIT.md`. People remain valid without a Company, Company
   records remain the organisation source of truth and the existing optional
   `Contact.companyId` link is retained for the first delivery stage.
+- Company Types are data-backed independently from Person Types and Company
+  lifecycle status. Customer, Installer Company, Trade Partner, Supplier,
+  Subcontractor and Other have stable system identities; existing Companies are
+  conservatively backfilled to Other. The visible Company Person Type is named
+  Company Contact while retaining its compatibility key and slug.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

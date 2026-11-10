@@ -57,7 +57,16 @@ Core Prisma models are in `prisma/schema.prisma`.
 - `AuthRateLimitBucket`: database-backed authentication throttle bucket used
   for sign-in, two-factor and password-reset attempt limits across app
   instances.
-- `Company`: account/company record.
+- `Company`: organisation record. A Company can exist without People, and a
+  Person can exist without a Company. `companyTypeId` classifies the
+  organisation independently from its Prospect/Active/Inactive lifecycle
+  status. Existing `Contact.companyId` and cached `companyName` remain the
+  optional primary organisation link during the staged relationship migration.
+- `CompanyType`: data-backed organisation classification. Stable system keys
+  cover Customer, Installer Company, Trade Partner, Supplier, Subcontractor and
+  Other, while the visible name, description and presentation can evolve.
+  Existing Companies are initially assigned to Other rather than inferred from
+  incomplete imported data.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

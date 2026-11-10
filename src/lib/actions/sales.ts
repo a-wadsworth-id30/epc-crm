@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
+import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   companyIdAccessWhere,
@@ -433,6 +434,7 @@ async function resolveInlineSaleContactCompany({
 
   const company = await tx.company.create({
     data: {
+      ...defaultCompanyTypeAssignment(),
       createdByUserId: user.id,
       name: companyName,
       status: "Prospect",

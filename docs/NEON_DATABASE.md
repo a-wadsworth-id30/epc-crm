@@ -189,6 +189,13 @@ document issue date and a nullable unique link from `FileAsset` to an existing
 CRM `Task`. Existing files are unchanged. Renewal tasks are not backfilled or
 created by the migration; users opt in while uploading or editing a document.
 
+The migration `20261110230000_company_type_foundation` adds data-backed Company
+Types separately from Person Types and Company lifecycle status. It assigns
+existing Companies to the neutral Other type rather than guessing from names or
+Prospect status. It also changes the visible Company Person Type label to
+Company Contact while preserving its stable `COMPANY` key and `company` slug.
+Existing person/company links and cached company names are unchanged.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

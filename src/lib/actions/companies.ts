@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth";
+import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import { companyIdAccessWhere } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
@@ -216,6 +217,7 @@ export async function createCompanyAction(
   await prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
       data: {
+        ...defaultCompanyTypeAssignment(),
         addressLine1: parsed.data.addressLine1,
         addressLine2: parsed.data.addressLine2,
         city: parsed.data.city,

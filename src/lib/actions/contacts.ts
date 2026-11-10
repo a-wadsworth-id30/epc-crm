@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
+import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
 import {
   mergeContactEmailMethods,
   mergeContactPhoneMethods,
@@ -391,6 +392,7 @@ async function resolveCompanyData(
 
     const company = await tx.company.create({
       data: {
+        ...defaultCompanyTypeAssignment(),
         createdByUserId: user.id,
         name: companyName,
         status: "Prospect",
