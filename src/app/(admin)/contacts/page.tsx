@@ -362,7 +362,7 @@ export default async function ContactsPage({
     <>
       <PageHeader
         title="People"
-        description="Manage consumers, trade contacts, installers and company-type people."
+        description="Manage consumers, trade contacts, installers and other individual contacts."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {user.role === "ADMIN" ? (

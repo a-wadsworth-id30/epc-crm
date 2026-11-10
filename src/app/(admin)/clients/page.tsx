@@ -312,6 +312,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     <>
       <PageHeader
         title="Companies"
+        description="Manage customers, installer companies, trade partners, suppliers and other organisations."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {user.role === "ADMIN" ? (
