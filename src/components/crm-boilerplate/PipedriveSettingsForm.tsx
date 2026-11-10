@@ -12,12 +12,23 @@ const defaultPipedriveLeadSource = "Pipedrive";
 
 export type PipedriveSettings = {
   apiBaseUrl?: string;
+  contactFieldMappings?: Array<{
+    contactFieldId: string;
+    sourceFieldKey: string;
+  }>;
   defaultLeadSource?: string;
+};
+
+export type PipedriveContactFieldOption = {
+  fieldType: string;
+  id: string;
+  label: string;
 };
 
 export default function PipedriveSettingsForm({
   canEdit,
   config,
+  contactFields,
   credentialSource = "missing",
   hasEncryptionKey,
   hasStoredCredentials,
@@ -25,12 +36,16 @@ export default function PipedriveSettingsForm({
 }: {
   canEdit: boolean;
   config: PipedriveSettings;
+  contactFields?: PipedriveContactFieldOption[];
   credentialSource?: "database" | "environment" | "missing" | "placeholder";
   hasEncryptionKey: boolean;
   hasStoredCredentials: boolean;
   onSaved?: (connected: boolean) => void;
 }) {
   const [isDirty, setIsDirty] = useState(false);
+  const [contactFieldMappings, setContactFieldMappings] = useState(
+    config.contactFieldMappings ?? [],
+  );
   const { showToast } = useToast();
   const [state, formAction, isPending] = useActionState(
     updatePipedriveIntegrationAction,
@@ -71,6 +86,11 @@ export default function PipedriveSettingsForm({
       onChangeCapture={() => setIsDirty(true)}
       className="space-y-5"
     >
+      <input
+        type="hidden"
+        name="contactFieldMappings"
+        value={JSON.stringify(contactFieldMappings)}
+      />
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -153,6 +173,131 @@ export default function PipedriveSettingsForm({
           </div>
         </div>
       </div>
+
+      {contactFields ? (
+        <section className="space-y-4 rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+              Pipedrive person field mappings
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+              Map Pipedrive person field keys into active Consumer fields. Imports fill missing CRM values and never overwrite information entered by staff.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {contactFieldMappings.map((mapping, index) => {
+              const targetAvailable = contactFields.some(
+                (field) => field.id === mapping.contactFieldId,
+              );
+
+              return (
+                <div
+                  key={`${mapping.contactFieldId}:${index}`}
+                  className="grid gap-3 rounded-lg bg-gray-50 p-3 dark:bg-white/[0.03] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                >
+                  <div>
+                    <Label htmlFor={`pipedrive-person-field-${index}`}>
+                      Pipedrive field key
+                    </Label>
+                    <Input
+                      id={`pipedrive-person-field-${index}`}
+                      value={mapping.sourceFieldKey}
+                      onChange={(event) => {
+                        const sourceFieldKey = event.target.value;
+                        setContactFieldMappings((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, sourceFieldKey }
+                              : item,
+                          ),
+                        );
+                      }}
+                      placeholder="Pipedrive person field API key"
+                      maxLength={160}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      CRM Consumer field
+                    </span>
+                    <select
+                      value={mapping.contactFieldId}
+                      onChange={(event) => {
+                        const contactFieldId = event.target.value;
+                        setContactFieldMappings((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, contactFieldId }
+                              : item,
+                          ),
+                        );
+                      }}
+                      disabled={!canEdit}
+                      className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                    >
+                      {!targetAvailable ? (
+                        <option value={mapping.contactFieldId}>
+                          Unavailable field ({mapping.contactFieldId})
+                        </option>
+                      ) : null}
+                      {contactFields.map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.label} · {field.fieldType.toLowerCase().replaceAll("_", " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContactFieldMappings((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      );
+                      setIsDirty(true);
+                    }}
+                    disabled={!canEdit}
+                    className="h-11 self-end rounded-lg border border-error-200 px-3 text-sm font-medium text-error-600 hover:bg-error-50 disabled:opacity-60 dark:border-error-900/50 dark:hover:bg-error-500/10"
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const firstUnused = contactFields.find(
+                (field) =>
+                  !contactFieldMappings.some(
+                    (mapping) => mapping.contactFieldId === field.id,
+                  ),
+              );
+              if (!firstUnused) return;
+              setContactFieldMappings((current) => [
+                ...current,
+                { contactFieldId: firstUnused.id, sourceFieldKey: "" },
+              ]);
+              setIsDirty(true);
+            }}
+            disabled={
+              !canEdit ||
+              !contactFields.some(
+                (field) =>
+                  !contactFieldMappings.some(
+                    (mapping) => mapping.contactFieldId === field.id,
+                  ),
+              )
+            }
+            className="h-10 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            Add field mapping
+          </button>
+        </section>
+      ) : null}
 
       <div className="space-y-4">
         <ActionStateMessage state={state.ok ? undefined : state} />

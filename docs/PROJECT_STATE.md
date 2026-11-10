@@ -123,6 +123,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   clients dataset reuses the same completeness and requirement rules as the
   contact profile, counts only valid non-expired typed files for compliance and
   preserves the existing contact access scope for non-admin users.
+- Pipedrive settings let admins map provider person-field API keys to active
+  Consumer custom fields. Mapping configuration is validated against current
+  definitions, duplicate sources/targets are rejected and person imports fill
+  only missing typed CRM values. Invalid provider values are reported as import
+  warnings, and CRM-entered values are never overwritten.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

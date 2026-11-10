@@ -878,7 +878,12 @@ state. Standalone Pipedrive person/contact pulls use
 `netlify/functions/pull-pipedrive-contacts.mjs` scheduled function. Contact
 pulls use a separate `pipedrive.contact_import` background job,
 `lastFullPersonSyncAt` timestamp and `lastFullPersonSyncNextCursor` cursor so
-they cannot move or skip the lead full-pull cursor. Scheduled Pipedrive
+they cannot move or skip the lead full-pull cursor. Pipedrive
+person imports also apply validated `contactFieldMappings` from the stored
+integration config. `pipedrive-contact-field-mapping.ts` converts provider
+person values through the normal typed contact-field validator, and
+`createMany(..., skipDuplicates)` means integration refreshes only fill missing
+values rather than overwriting CRM edits. Scheduled Pipedrive
 functions resolve the first valid HTTPS CRM base URL from app/Netlify URL
 environment variables and emit aggregate-only import logs for operational
 verification without exposing provider payload data. The authenticated

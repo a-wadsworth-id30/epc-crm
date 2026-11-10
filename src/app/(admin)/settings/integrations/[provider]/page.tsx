@@ -819,6 +819,14 @@ export default async function IntegrationSettingsPage({
     const storedConfig = pipedriveStoredConfigSchema.safeParse(
       integration?.config ?? {},
     );
+    const pipedriveContactFields = await prisma.contactTypeField.findMany({
+      where: {
+        contactType: { isActive: true, systemKey: "CONSUMER" },
+        isActive: true,
+      },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: { fieldType: true, id: true, label: true },
+    });
     const hasStoredPipedriveConfig = hasStoredPipedriveCredentials(
       integration?.config,
     );
@@ -891,6 +899,7 @@ export default async function IntegrationSettingsPage({
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
           <PipedriveSettingsForm
             config={config.success ? config.data : {}}
+            contactFields={pipedriveContactFields}
             credentialSource={pipedriveCredentialSource}
             hasStoredCredentials={hasStoredPipedriveConfig}
             hasEncryptionKey={hasCredentialEncryptionKey()}
