@@ -3,38 +3,10 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { authorizeFileAssetAccess } from "@/lib/storage/authorization";
+import { safeFilePreviewContentType } from "@/lib/storage/preview";
 import { getR2ObjectStream } from "@/lib/storage/r2";
 
 type R2ObjectBody = Awaited<ReturnType<typeof getR2ObjectStream>>["body"];
-
-function previewMimeType({
-  mimeType,
-  name,
-}: {
-  mimeType: string;
-  name: string;
-}) {
-  const normalizedMimeType = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
-  const normalizedName = name.toLowerCase();
-
-  if (
-    normalizedMimeType === "application/pdf" ||
-    normalizedName.endsWith(".pdf")
-  ) {
-    return "application/pdf";
-  }
-
-  if (normalizedMimeType.startsWith("image/")) return normalizedMimeType;
-  if (normalizedMimeType.startsWith("text/")) return normalizedMimeType;
-  if (normalizedMimeType === "application/json") return "application/json";
-  if (normalizedName.endsWith(".json")) return "application/json";
-
-  if (/\.(csv|log|md|txt)$/.test(normalizedName)) {
-    return "text/plain; charset=utf-8";
-  }
-
-  return null;
-}
 
 function safeAsciiFilename(value: string) {
   const fallback = value
@@ -100,7 +72,7 @@ export async function GET(
     return NextResponse.json({ message: "File not found." }, { status: 404 });
   }
 
-  const contentType = previewMimeType({
+  const contentType = safeFilePreviewContentType({
     mimeType: fileAsset.mimeType,
     name: fileAsset.originalName,
   });
@@ -131,9 +103,11 @@ export async function GET(
   });
   const headers = new Headers({
     "Accept-Ranges": "bytes",
-    "Cache-Control": "private, max-age=120",
+    "Cache-Control": "private, no-store",
+    "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
     "Content-Disposition": inlineContentDisposition(fileAsset.originalName),
     "Content-Type": contentType,
+    "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
   });

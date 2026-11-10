@@ -988,6 +988,10 @@ file name, MIME/type, notes and tags. Record document bulk actions are
 record-scoped: the server validates the current user can access the parent CRM
 record, confirms every selected `FileAsset` belongs to that record, then allows
 non-destructive folder moves, tag updates or authenticated ZIP export.
+Authenticated previews use a strict passive-content allow-list: raster images,
+PDF, JSON and selected text formats are supported, while HTML, SVG and other
+active formats remain download-only. Preview responses are no-store, nosniff
+and sandboxed so uploaded content cannot execute in the CRM origin.
 
 Secure customer upload links are served from public `/upload/[token]` pages.
 The proxy allow-lists `/upload`, but the page and upload action validate the
@@ -1021,6 +1025,10 @@ multipart upload paths as standalone upload links, and portal downloads use
 `/api/document-portals/[token]/files/[fileAssetId]`, which validates the portal
 status/expiry plus document-share membership or completed DocuSign output
 membership before issuing a short-lived R2 URL.
+Portal signature downloads require the portal to have a recipient email and
+the completed signature request to include that same recipient. Public token
+download redirects use no-store and no-referrer headers so the opaque portal or
+share token is not forwarded to R2.
 
 ### OpenAI Sidekick
 

@@ -64,3 +64,9 @@ export function customerDocumentPortalStateLabel(state: string) {
 
   return "Open";
 }
+
+export function customerDocumentPortalCanExposeSignatureFiles(
+  recipientEmail: string | null | undefined,
+): recipientEmail is string {
+  return Boolean(recipientEmail?.trim());
+}

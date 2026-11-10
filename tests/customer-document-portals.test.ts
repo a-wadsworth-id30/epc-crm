@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildCustomerDocumentPortalEmailContent } from "../src/lib/customer-document-portal-email-content";
 import {
+  customerDocumentPortalCanExposeSignatureFiles,
   customerDocumentPortalExpiryDate,
   customerDocumentPortalMaxExpiryDays,
   customerDocumentPortalState,
@@ -72,6 +73,15 @@ describe("customer document portals", () => {
         status: "REVOKED",
       }),
       "revoked",
+    );
+  });
+
+  it("requires a recipient identity before exposing signature files", () => {
+    assert.equal(customerDocumentPortalCanExposeSignatureFiles(null), false);
+    assert.equal(customerDocumentPortalCanExposeSignatureFiles("   "), false);
+    assert.equal(
+      customerDocumentPortalCanExposeSignatureFiles("customer@example.com"),
+      true,
     );
   });
 

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import {
+  customerDocumentPortalCanExposeSignatureFiles,
   customerDocumentPortalState,
   customerDocumentPortalTokenHash,
 } from "@/lib/customer-document-portals";
@@ -127,8 +128,18 @@ export async function GET(
     ]);
 
     return NextResponse.redirect(downloadUrl, {
-      headers: { "Cache-Control": "no-store" },
+      headers: {
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
+  }
+
+  const signatureRecipientEmail = portal.recipientEmail?.trim();
+
+  if (!customerDocumentPortalCanExposeSignatureFiles(signatureRecipientEmail)) {
+    return notFoundResponse();
   }
 
   const signatureWhere: Prisma.SignatureRequestWhereInput = {
@@ -141,9 +152,7 @@ export async function GET(
     ],
   };
 
-  if (portal.recipientEmail) {
-    signatureWhere.recipients = { some: { email: portal.recipientEmail } };
-  }
+  signatureWhere.recipients = { some: { email: signatureRecipientEmail } };
 
   const signatureRequest = await prisma.signatureRequest.findFirst({
     where: signatureWhere,
@@ -204,6 +213,10 @@ export async function GET(
   });
 
   return NextResponse.redirect(downloadUrl, {
-    headers: { "Cache-Control": "no-store" },
+    headers: {
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }

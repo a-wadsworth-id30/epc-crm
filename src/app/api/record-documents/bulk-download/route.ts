@@ -123,6 +123,8 @@ export async function POST(request: Request) {
         "Content-Disposition": `attachment; filename="${archiveName(entityType)}"`,
         "Content-Length": String(zip.length),
         "Content-Type": "application/zip",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {

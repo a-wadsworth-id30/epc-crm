@@ -86,6 +86,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   cards and generates warning notifications only for users who can access the
   linked contact. Expiry metadata changes are included in the document audit
   event without exposing file contents.
+- Record document delivery is hardened against active uploaded content and
+  token leakage. Authenticated previews allow only passive raster/PDF/JSON/text
+  formats, force supported text to plain text, block inline HTML/SVG, and send
+  sandbox/no-store/nosniff headers. Public share and portal download redirects
+  do not forward referrers, and portal signature files require a matching
+  recipient email rather than record membership alone.
 - People search includes values from active custom fields explicitly marked as
   searchable, including text/select, number, date and yes/no values. The shared
   query builder is reused by the permission-scoped People CSV export, so the

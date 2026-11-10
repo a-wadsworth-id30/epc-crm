@@ -40,7 +40,12 @@ export async function GET(
 
   return NextResponse.redirect(url, {
     headers: {
-      "Cache-Control": "private, max-age=240",
+      "Cache-Control":
+        fileAsset.visibility === FileAssetVisibility.PRIVATE
+          ? "private, no-store"
+          : "public, max-age=240",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
