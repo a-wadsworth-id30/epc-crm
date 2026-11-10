@@ -16,6 +16,7 @@ import { tagsForCustomerUpload } from "@/lib/customer-upload-documents";
 import { sendCustomerUploadRequestEmail } from "@/lib/customer-upload-request-email";
 import {
   documentUploadTypeDefinition,
+  isCustomerFacingDocumentUploadType,
   isDocumentUploadType,
   type DocumentUploadType,
 } from "@/lib/document-library";
@@ -106,7 +107,7 @@ function selectedDocumentTypes(formData: FormData) {
   const selected: DocumentUploadType[] = [];
 
   formData.getAll("documentTypes").forEach((value) => {
-    if (!isDocumentUploadType(value) || seen.has(value)) return;
+    if (!isCustomerFacingDocumentUploadType(value) || seen.has(value)) return;
     seen.add(value);
     selected.push(value);
   });
@@ -120,21 +121,91 @@ function uploadFilesFromFormData(formData: FormData) {
     .filter((file): file is File => file instanceof File && file.size > 0);
 }
 
-function uploadRequestItemData(types: DocumentUploadType[]) {
+type CustomerUploadRequirementOverride = {
+  description: string | null;
+  label: string;
+};
+
+function uploadRequestItemData(
+  types: DocumentUploadType[],
+  overrides: Map<DocumentUploadType, CustomerUploadRequirementOverride>,
+) {
   return types.map((type) => {
     const definition = documentUploadTypeDefinition(type);
+    const override = overrides.get(type);
 
     return {
-      description: definition?.description ?? null,
-      label: definition?.label ?? type,
+      description: override?.description ?? definition?.description ?? null,
+      label: override?.label ?? definition?.label ?? type,
       required: true,
       uploadType: type,
     };
   });
 }
 
-function uploadRequestDocumentLabels(types: DocumentUploadType[]) {
-  return types.map((type) => documentUploadTypeDefinition(type)?.label ?? type);
+function uploadRequestDocumentLabels(
+  types: DocumentUploadType[],
+  overrides: Map<DocumentUploadType, CustomerUploadRequirementOverride>,
+) {
+  return types.map(
+    (type) =>
+      overrides.get(type)?.label ??
+      documentUploadTypeDefinition(type)?.label ??
+      type,
+  );
+}
+
+async function contactUploadRequirementOverrides({
+  entityId,
+  entityType,
+  types,
+}: {
+  entityId: string;
+  entityType: RecordDocumentEntityType;
+  types: DocumentUploadType[];
+}) {
+  const overrides = new Map<
+    DocumentUploadType,
+    CustomerUploadRequirementOverride
+  >();
+  if (entityType !== "Contact" || !types.length) return overrides;
+
+  const contact = await prisma.contact.findUnique({
+    where: { id: entityId },
+    select: { category: true, contactTypeId: true },
+  });
+  if (!contact) return overrides;
+
+  const contactTypeId =
+    contact.contactTypeId ??
+    (
+      await prisma.contactType.findFirst({
+        where: { systemKey: contact.category },
+        select: { id: true },
+      })
+    )?.id ??
+    null;
+  if (!contactTypeId) return overrides;
+
+  const requirements = await prisma.contactTypeDocumentRequirement.findMany({
+    where: {
+      contactTypeId,
+      isActive: true,
+      uploadType: { in: types },
+    },
+    select: { description: true, label: true, uploadType: true },
+  });
+  const selectedTypes = new Set<DocumentUploadType>(types);
+  requirements.forEach((requirement) => {
+    if (!isDocumentUploadType(requirement.uploadType)) return;
+    if (!selectedTypes.has(requirement.uploadType)) return;
+    overrides.set(requirement.uploadType, {
+      description: requirement.description,
+      label: requirement.label,
+    });
+  });
+
+  return overrides;
 }
 
 function customerUploadEmailFailureReason(error: unknown) {
@@ -213,6 +284,12 @@ export async function createCustomerUploadRequestAction(
     return { ok: false, message: "Record not found." };
   }
 
+  const requirementOverrides = await contactUploadRequirementOverrides({
+    entityId: parsed.data.entityId,
+    entityType,
+    types: documentTypes,
+  });
+
   const token = generateCustomerUploadToken();
   const tokenHash = customerUploadTokenHash(token);
   const expiresAt = customerUploadExpiryDate({
@@ -228,7 +305,9 @@ export async function createCustomerUploadRequestAction(
       entityId: parsed.data.entityId,
       entityType,
       expiresAt,
-      items: { create: uploadRequestItemData(documentTypes) },
+      items: {
+        create: uploadRequestItemData(documentTypes, requirementOverrides),
+      },
       message: parsed.data.message,
       recipientEmail: parsed.data.recipientEmail,
       recipientName: parsed.data.recipientName,
@@ -249,7 +328,10 @@ export async function createCustomerUploadRequestAction(
   if (parsed.data.recipientEmail) {
     try {
       const result = await sendCustomerUploadRequestEmail({
-        documentLabels: uploadRequestDocumentLabels(documentTypes),
+        documentLabels: uploadRequestDocumentLabels(
+          documentTypes,
+          requirementOverrides,
+        ),
         expiresAt,
         message: parsed.data.message,
         recipientEmail: parsed.data.recipientEmail,

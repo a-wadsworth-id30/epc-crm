@@ -276,6 +276,15 @@ export function isDocumentUploadType(
   );
 }
 
+export function isCustomerFacingDocumentUploadType(
+  value: unknown,
+): value is DocumentUploadType {
+  return (
+    isDocumentUploadType(value) &&
+    documentUploadTypeDefinition(value)?.customerFacing === true
+  );
+}
+
 export function documentUploadTypeDefinition(
   type: DocumentUploadType,
 ) {

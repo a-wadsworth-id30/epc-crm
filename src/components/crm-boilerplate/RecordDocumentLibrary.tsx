@@ -78,6 +78,7 @@ import {
   type SignatureRequestActionState,
 } from "@/lib/actions/signature-requests";
 import { isDocuSignSignableMimeType } from "@/lib/docusign/signable-documents";
+import { suggestedContactCustomerUploadTypes } from "@/lib/contacts/document-requirements";
 
 export type RecordDocumentFile = {
   createdAt: string;
@@ -175,6 +176,7 @@ export type RecordSignatureRequest = {
 
 export type RecordDocumentLibraryProps = {
   documentRequirements?: Array<{
+    description: string | null;
     isRequired: boolean;
     label: string;
     satisfied: boolean;
@@ -921,16 +923,28 @@ function RevokeUploadRequestForm({
 }
 
 function CustomerUploadRequestPanel({
+  documentRequirements = [],
   entityId,
   entityType,
   uploadPolicy,
   uploadRequests,
 }: {
+  documentRequirements?: RecordDocumentLibraryProps["documentRequirements"];
   entityId: string;
   entityType: RecordDocumentLibraryProps["entityType"];
   uploadPolicy: RecordDocumentUploadPolicy;
   uploadRequests: RecordCustomerUploadRequest[];
 }) {
+  const customerFacingDefinitions = documentUploadTypeDefinitions.filter(
+    (definition) => definition.customerFacing,
+  );
+  const suggestedTypes = new Set(
+    suggestedContactCustomerUploadTypes(documentRequirements),
+  );
+  const suggestedCount =
+    entityType === "Contact"
+      ? suggestedTypes.size
+      : defaultCustomerDocumentTypeCount;
   const [state, formAction, isPending] = useActionState(
     createCustomerUploadRequestAction,
     initialCustomerUploadRequestState,
@@ -1015,15 +1029,26 @@ function CustomerUploadRequestPanel({
           className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
         >
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-gray-600 dark:text-gray-300">
-            <span>Required documents</span>
+            <span>Documents to request</span>
             <span className="rounded-full bg-gray-50 px-2 py-0.5 text-gray-500 ring-1 ring-gray-200 dark:bg-white/[0.04] dark:text-gray-400 dark:ring-gray-800">
-              {defaultCustomerDocumentTypeCount} default
+              {suggestedCount} suggested
             </span>
           </summary>
+          {entityType === "Contact" ? (
+            <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
+              {suggestedTypes.size
+                ? "Missing required customer-safe documents are preselected. Review the checklist before creating the link."
+                : "No missing required customer-safe documents were preselected. Choose a document only if it is needed."}
+            </p>
+          ) : null}
           <fieldset className="mt-3">
-            <legend className="sr-only">Required documents</legend>
+            <legend className="sr-only">Documents to request</legend>
             <div className="grid gap-2 md:grid-cols-2">
-              {documentUploadTypeDefinitions.map((definition) => (
+              {customerFacingDefinitions.map((definition) => {
+                const requirement = documentRequirements.find(
+                  (item) => item.uploadType === definition.key,
+                );
+                return (
                 <label
                   key={definition.key}
                   className="flex cursor-pointer gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm dark:border-gray-800 dark:bg-gray-950/50"
@@ -1032,19 +1057,24 @@ function CustomerUploadRequestPanel({
                     type="checkbox"
                     name="documentTypes"
                     value={definition.key}
-                    defaultChecked={definition.customerFacing}
+                    defaultChecked={
+                      entityType === "Contact"
+                        ? suggestedTypes.has(definition.key)
+                        : true
+                    }
                     className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-700"
                   />
                   <span>
                     <span className="block font-medium text-gray-800 dark:text-white/90">
-                      {definition.label}
+                      {requirement?.label ?? definition.label}
                     </span>
                     <span className="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">
-                      {definition.description}
+                      {requirement?.description ?? definition.description}
                     </span>
                   </span>
                 </label>
-              ))}
+                );
+              })}
             </div>
           </fieldset>
         </details>
@@ -3008,6 +3038,7 @@ export default function RecordDocumentLibrary({
         {activeTab === "requests" ? (
           <div id="document-library-requests-panel" className="mt-4">
             <CustomerUploadRequestPanel
+              documentRequirements={documentRequirements}
               entityId={entityId}
               entityType={entityType}
               uploadPolicy={uploadPolicy}
