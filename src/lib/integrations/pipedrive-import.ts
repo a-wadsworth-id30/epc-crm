@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
+import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
@@ -30,6 +31,7 @@ import {
   defaultPipedriveLeadSource,
   getPipedriveReadOnlyClient,
   pipedriveProvider,
+  pipedriveStoredConfigSchema,
   type PipedriveDeal,
   type PipedriveFile,
   type PipedriveLead,
@@ -48,6 +50,7 @@ import {
   type PipedrivePerson,
   type PipedriveReadOnlyClient,
 } from "@/lib/integrations/pipedrive";
+import { mappedPipedriveContactFieldWrites } from "@/lib/integrations/pipedrive-contact-field-mapping";
 
 const pipedriveImportSource = "pipedrive-import";
 const pipedriveDealImportDisabledWarning =
@@ -2195,11 +2198,50 @@ export async function importPipedrivePersonRecord({
   const [integration, relatedRecords] = await Promise.all([
     prisma.integrationConnection.findUnique({
       where: { provider: pipedriveProvider },
-      select: { id: true },
+      select: { config: true, id: true },
     }),
     fetchPersonRelatedRecords(client, person),
   ]);
   const integrationId = integration?.id ?? null;
+  const storedConfig = pipedriveStoredConfigSchema.safeParse(
+    integration?.config ?? {},
+  );
+  const contactFieldMappings = storedConfig.success
+    ? storedConfig.data.contactFieldMappings
+    : [];
+  const contactFieldDefinitions = contactFieldMappings.length
+    ? await prisma.contactTypeField.findMany({
+      where: {
+        contactType: { isActive: true, systemKey: "CONSUMER" },
+        isActive: true,
+      },
+      orderBy: [{ displayOrder: "asc" }, { id: "asc" }],
+      select: {
+        contactTypeId: true,
+        displayOrder: true,
+        externalEditable: true,
+        fieldType: true,
+        helpText: true,
+        id: true,
+        isActive: true,
+        isSearchable: true,
+        key: true,
+        label: true,
+        options: true,
+        placeholder: true,
+        requirementMode: true,
+        showInTable: true,
+      },
+      })
+    : [];
+  const mappedFields = mappedPipedriveContactFieldWrites({
+    definitions: contactFieldDefinitions.map((field) => ({
+      ...field,
+      options: normalizeContactCustomFieldOptions(field.options),
+    })),
+    mappings: contactFieldMappings,
+    person,
+  });
   const mapping = mapPipedrivePersonToCrm({
     defaultLeadSource: client.defaultLeadSource,
     organization: relatedRecords.organization,
@@ -2236,6 +2278,21 @@ export async function importPipedrivePersonRecord({
       });
     }
 
+    if (mappedFields.values.length) {
+      await tx.contactCustomFieldValue.createMany({
+        data: mappedFields.values.map((value) => ({
+          booleanValue: value.booleanValue,
+          contactId: contact.id as string,
+          dateValue: value.dateValue,
+          fieldId: value.fieldId,
+          jsonValue: value.jsonValue,
+          numberValue: value.numberValue,
+          textValue: value.textValue,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     return {
       companyId: company.id,
       contactId: contact.id,
@@ -2246,7 +2303,7 @@ export async function importPipedrivePersonRecord({
       externalPersonId: personId,
       name: `${contactMapping.firstName} ${contactMapping.lastName}`.trim(),
       status: contact.created ? "created" : ("linked_existing" as const),
-      warnings: relatedRecords.warnings,
+      warnings: [...relatedRecords.warnings, ...mappedFields.warnings],
     };
   });
 }

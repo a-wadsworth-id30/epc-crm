@@ -513,8 +513,23 @@ export async function updatePipedriveIntegrationAction(
 ): Promise<IntegrationActionState> {
   await requireAdmin();
 
+  let contactFieldMappings: unknown = [];
+  try {
+    contactFieldMappings = JSON.parse(
+      String(formData.get("contactFieldMappings") ?? "[]"),
+    );
+  } catch {
+    return {
+      ok: false,
+      message: "Check the Pipedrive contact field mappings.",
+      savedAt: null,
+      connected: false,
+    };
+  }
+
   const parsed = pipedriveConfigSchema.safeParse({
     apiBaseUrl: formData.get("apiBaseUrl"),
+    contactFieldMappings,
     defaultLeadSource: formData.get("defaultLeadSource"),
   });
 
@@ -526,6 +541,28 @@ export async function updatePipedriveIntegrationAction(
       savedAt: null,
       connected: false,
     };
+  }
+
+  if (parsed.data.contactFieldMappings.length) {
+    const mappedFieldIds = parsed.data.contactFieldMappings.map(
+      (mapping) => mapping.contactFieldId,
+    );
+    const validMappedFields = await prisma.contactTypeField.count({
+      where: {
+        contactType: { isActive: true, systemKey: "CONSUMER" },
+        id: { in: mappedFieldIds },
+        isActive: true,
+      },
+    });
+    if (validMappedFields !== mappedFieldIds.length) {
+      return {
+        ok: false,
+        message:
+          "Choose active Consumer fields for every Pipedrive contact mapping.",
+        savedAt: null,
+        connected: false,
+      };
+    }
   }
 
   const apiToken = String(formData.get("apiToken") ?? "").trim();
@@ -626,6 +663,7 @@ export async function updatePipedriveIntegrationAction(
     metadata: {
       apiBaseUrl: config.apiBaseUrl,
       defaultLeadSource: config.defaultLeadSource,
+      contactFieldMappingCount: config.contactFieldMappings.length,
       fullDealSyncContinuationPreserved: "lastFullDealSyncNextCursor" in config,
       fullDealSyncStatePreserved: "lastFullDealSyncAt" in config,
       fullLeadSyncContinuationPreserved: "lastFullLeadSyncNextStart" in config,

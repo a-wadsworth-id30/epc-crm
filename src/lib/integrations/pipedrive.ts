@@ -32,8 +32,44 @@ const pipedriveLeadSourceSchema = z
   )
   .transform((value) => value || defaultPipedriveLeadSource);
 
+export const pipedriveContactFieldMappingSchema = z.object({
+  contactFieldId: z.string().trim().min(1).max(120),
+  sourceFieldKey: z
+    .string()
+    .trim()
+    .min(1, "Enter the Pipedrive person field key.")
+    .max(160),
+});
+
 export const pipedriveConfigSchema = z.object({
   apiBaseUrl: pipedriveApiBaseUrlSchema,
+  contactFieldMappings: z
+    .array(pipedriveContactFieldMappingSchema)
+    .max(50)
+    .superRefine((mappings, context) => {
+      const sourceKeys = new Set<string>();
+      const targetIds = new Set<string>();
+      mappings.forEach((mapping, index) => {
+        const sourceKey = mapping.sourceFieldKey.toLowerCase();
+        if (sourceKeys.has(sourceKey)) {
+          context.addIssue({
+            code: "custom",
+            message: "Each Pipedrive person field can be mapped only once.",
+            path: [index, "sourceFieldKey"],
+          });
+        }
+        if (targetIds.has(mapping.contactFieldId)) {
+          context.addIssue({
+            code: "custom",
+            message: "Each CRM person field can be mapped only once.",
+            path: [index, "contactFieldId"],
+          });
+        }
+        sourceKeys.add(sourceKey);
+        targetIds.add(mapping.contactFieldId);
+      });
+    })
+    .default([]),
   defaultLeadSource: pipedriveLeadSourceSchema,
 });
 
@@ -396,6 +432,7 @@ export async function getPipedriveRuntimeConfig() {
     apiToken: apiToken ?? process.env.PIPEDRIVE_API_TOKEN?.trim() ?? null,
     defaultLeadSource:
       config?.defaultLeadSource || defaultPipedriveLeadSource,
+    contactFieldMappings: config?.contactFieldMappings ?? [],
     lastContactSyncAt: config?.lastContactSyncAt ?? null,
     lastFullDealSyncAt: config?.lastFullDealSyncAt ?? null,
     lastFullDealSyncNextCursor:
@@ -472,7 +509,10 @@ export class PipedriveReadOnlyClient {
   private readonly timeoutMs: number;
 
   constructor(
-    config: Omit<PipedriveRuntimeConfig, "apiToken"> & { apiToken: string },
+    config: Omit<
+      PipedriveRuntimeConfig,
+      "apiToken" | "contactFieldMappings"
+    > & { apiToken: string },
     options: { timeoutMs?: number } = {},
   ) {
     this.apiBaseUrl = config.apiBaseUrl;
