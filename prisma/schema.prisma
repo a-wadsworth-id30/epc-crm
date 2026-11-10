@@ -658,9 +658,27 @@ model ContactType {
   updatedAt    DateTime         @updatedAt
   contacts     Contact[]
   fields       ContactTypeField[]
+  documentRequirements ContactTypeDocumentRequirement[]
 
   @@index([isActive, displayOrder])
   @@index([isDefault, isActive])
+}
+
+model ContactTypeDocumentRequirement {
+  id            String      @id @default(cuid())
+  contactTypeId String
+  contactType   ContactType @relation(fields: [contactTypeId], references: [id], onDelete: Cascade)
+  uploadType    String
+  label         String
+  description   String?
+  displayOrder  Int         @default(0)
+  isRequired    Boolean     @default(true)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([contactTypeId, uploadType])
+  @@index([contactTypeId, isActive, displayOrder])
 }
 
 model ContactTypeField {

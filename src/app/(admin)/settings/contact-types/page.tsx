@@ -1,12 +1,13 @@
 import ContactTypeManager from "@/components/crm-boilerplate/ContactTypeManager";
 import ContactCustomFieldManager from "@/components/crm-boilerplate/ContactCustomFieldManager";
+import ContactDocumentRequirementManager from "@/components/crm-boilerplate/ContactDocumentRequirementManager";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function ContactTypeSettingsPage() {
   await requireAdmin();
-  const [contactTypes, fields] = await Promise.all([prisma.contactType.findMany({
+  const [contactTypes, fields, documentRequirements] = await Promise.all([prisma.contactType.findMany({
     orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -42,6 +43,19 @@ export default async function ContactTypeSettingsPage() {
       contactType: { select: { name: true } },
       _count: { select: { values: true } },
     },
+  }), prisma.contactTypeDocumentRequirement.findMany({
+    orderBy: [{ contactType: { displayOrder: "asc" } }, { displayOrder: "asc" }, { label: "asc" }],
+    select: {
+      contactTypeId: true,
+      description: true,
+      displayOrder: true,
+      id: true,
+      isActive: true,
+      isRequired: true,
+      label: true,
+      uploadType: true,
+      contactType: { select: { name: true } },
+    },
   })]);
   const nextDisplayOrder =
     contactTypes.reduce(
@@ -72,6 +86,16 @@ export default async function ContactTypeSettingsPage() {
             valueCount: field._count.values,
           }))}
           nextDisplayOrder={fields.reduce((highest, field) => Math.max(highest, field.displayOrder), 0) + 10}
+        />
+      </div>
+      <div className="mt-6">
+        <ContactDocumentRequirementManager
+          contactTypes={contactTypes.map((type) => ({ id: type.id, name: type.name, isActive: type.isActive }))}
+          requirements={documentRequirements.map((requirement) => ({
+            ...requirement,
+            contactTypeName: requirement.contactType.name,
+          }))}
+          nextDisplayOrder={documentRequirements.reduce((highest, requirement) => Math.max(highest, requirement.displayOrder), 0) + 10}
         />
       </div>
     </>

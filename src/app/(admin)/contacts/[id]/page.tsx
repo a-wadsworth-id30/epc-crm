@@ -17,6 +17,7 @@ import {
 } from "@/components/crm-boilerplate/ContactModalLoaders";
 import type { ContactFormValues } from "@/components/crm-boilerplate/ContactForm";
 import ContactProfileCompleteness from "@/components/crm-boilerplate/ContactProfileCompleteness";
+import ContactDocumentRequirements from "@/components/crm-boilerplate/ContactDocumentRequirements";
 import CustomerRelationshipSection from "@/components/crm-boilerplate/CustomerRelationshipSection";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LazyContactConversationWorkspace from "@/components/crm-boilerplate/LazyContactConversationWorkspace";
@@ -41,6 +42,10 @@ import {
   serializeContactCustomFieldValue,
 } from "@/lib/contacts/custom-fields";
 import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
+import {
+  contactDocumentRequirementStatuses,
+  parseContactDocumentUploadType,
+} from "@/lib/contacts/document-requirements";
 import {
   customerRelationshipStatusOption,
   defaultCustomerRelationshipStatus,
@@ -353,6 +358,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     availableTags,
     contactTypes,
     customFields,
+    contactTypeDocumentRequirements,
     mergeCandidateContacts,
     addressLookupEnabled,
     contactDocuments,
@@ -543,6 +549,20 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         showInTable: true,
       },
     }),
+    prisma.contactTypeDocumentRequirement.findMany({
+      where: { isActive: true },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: {
+        contactTypeId: true,
+        description: true,
+        displayOrder: true,
+        id: true,
+        isActive: true,
+        isRequired: true,
+        label: true,
+        uploadType: true,
+      },
+    }),
     prisma.contact.findMany({
       where: mergeCandidateWhere,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -588,6 +608,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       select: {
         createdAt: true,
         documentFolder: true,
+        documentUploadType: true,
         id: true,
         mimeType: true,
         notes: true,
@@ -734,6 +755,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   const recordDocuments = contactDocuments.map((document) => ({
     createdAt: document.createdAt.toISOString(),
     documentFolder: document.documentFolder,
+    documentUploadType: document.documentUploadType,
     id: document.id,
     mimeType: document.mimeType,
     name: document.originalName,
@@ -1030,6 +1052,17 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     })),
     values: serializedCustomFieldValues,
   });
+  const documentRequirementStatuses = contactDocumentRequirementStatuses({
+    contactTypeId: resolvedContactTypeId,
+    documents: contactDocuments.map((document) => ({
+      documentUploadType: document.documentUploadType,
+      id: document.id,
+    })),
+    requirements: contactTypeDocumentRequirements.flatMap((requirement) => {
+      const uploadType = parseContactDocumentUploadType(requirement.uploadType);
+      return uploadType ? [{ ...requirement, uploadType }] : [];
+    }),
+  });
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const relationshipStatus = (contact.relationshipProfile?.status ??
     defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
@@ -1232,6 +1265,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   );
   const contactDocumentsPanel = (
     <div className="p-4 sm:p-5">
+      <ContactDocumentRequirements requirements={documentRequirementStatuses} />
       <RecordDocumentLibrary
         documentPortals={contactDocumentPortals}
         documentShares={contactDocumentShares}

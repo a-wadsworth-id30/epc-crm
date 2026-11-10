@@ -168,6 +168,11 @@ type field definitions and contact field values. It does not backfill customer
 data. Definitions and values remain empty until an admin configures a field in
 Settings > Person Types and a user saves it on a contact.
 
+The migration `20261110140000_contact_document_requirements` adds ordered
+required/optional document definitions for each person type. It does not copy
+or alter R2 files and does not mark existing untyped files as compliant;
+requirements match the existing `FileAsset.documentUploadType` metadata.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run
