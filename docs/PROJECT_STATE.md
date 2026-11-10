@@ -36,6 +36,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 ## What Works
 
 - Authenticated CRM shell with custom database sessions.
+- Contact type foundations are database-backed. Consumer, Trade, Installer and
+  Company are seeded as stable system types and existing contacts are backfilled
+  through `Contact.contactTypeId`. The legacy category remains available while
+  the settings, forms, filters and integrations are migrated in staged releases.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo
