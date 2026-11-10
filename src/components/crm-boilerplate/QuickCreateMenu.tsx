@@ -7,6 +7,7 @@ import type { AddSaleModalProps } from "@/components/crm-boilerplate/AddSaleModa
 import type { CompanyCreateModalProps } from "@/components/crm-boilerplate/CompanyModals";
 import type { ContactCreateModalProps } from "@/components/crm-boilerplate/ContactModals";
 import type { ContactTypeOption } from "@/lib/contacts/contact-types";
+import type { ContactCustomFieldDefinition } from "@/lib/contacts/custom-fields";
 import {
   DollarLineIcon,
   PlusIcon,
@@ -35,6 +36,7 @@ type QuickCreateOptions = {
   }>;
   contactTags: Array<{ id: string; name: string }>;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   sales: {
     defaultOwnerId: string | null;
     defaultStageId: string | null;
@@ -259,6 +261,7 @@ export default function QuickCreateMenu({
           companies={options.companies}
           companiesEnabled={options.companiesEnabled}
           contactTypes={options.contactTypes}
+          customFields={options.customFields}
           hideTrigger
         />
       ) : null}

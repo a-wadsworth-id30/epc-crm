@@ -163,6 +163,11 @@ used to process the least recently checked mailboxes first. These fields contain
 only operational timing/error state; provider tokens and mailbox content remain
 in iD30 Auth and Gmail respectively.
 
+The migration `20261110120000_contact_custom_fields` adds typed, ordered person
+type field definitions and contact field values. It does not backfill customer
+data. Definitions and values remain empty until an admin configures a field in
+Settings > Person Types and a user saves it on a contact.
+
 The migration `20260902094000_enable_pg_stat_statements` enables the
 PostgreSQL `pg_stat_statements` extension for normalized statement statistics.
 It does not change application tables or data. After it is applied, run

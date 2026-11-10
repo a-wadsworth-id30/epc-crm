@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-10-05
+Last updated: 2026-11-10
 
 ## Current Product Shape
 
@@ -47,6 +47,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   database-backed person types. New and edited contacts store both the selected
   `contactTypeId` and a compatible legacy category for integrations that have
   not yet migrated; older null relations fall back to their legacy category.
+- Settings > Person Types supports ordered type-specific field definitions for
+  short/long text, numbers, dates, yes/no values, single/multi selects, email,
+  phone, URL and address data. Definitions have stable keys and can be optional,
+  required for profile completeness or required to save. Every contact
+  create/edit entry point renders the same definitions, server actions validate
+  them against the selected active type, and values use typed database columns.
+  Archiving a field preserves its values, and changing a populated field's data
+  type is blocked.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

@@ -36,6 +36,26 @@ enum ContactCategory {
   COMPANY
 }
 
+enum ContactCustomFieldType {
+  SHORT_TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SINGLE_SELECT
+  MULTI_SELECT
+  EMAIL
+  PHONE
+  URL
+  ADDRESS
+}
+
+enum ContactFieldRequirementMode {
+  OPTIONAL
+  COMPLETENESS
+  REQUIRED
+}
+
 enum CustomerRelationshipStatus {
   PROSPECT
   ACTIVE_CUSTOMER
@@ -601,6 +621,7 @@ model Contact {
   queueEntries          CallQueueEntry[]
   relationshipProfile   CustomerRelationshipProfile?
   tagAssignments        ContactTagAssignment[]
+  customFieldValues     ContactCustomFieldValue[]
   attribution           Json?
   aiGuidance            Json?
   aiGuidanceFingerprint String?
@@ -636,9 +657,54 @@ model ContactType {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   contacts     Contact[]
+  fields       ContactTypeField[]
 
   @@index([isActive, displayOrder])
   @@index([isDefault, isActive])
+}
+
+model ContactTypeField {
+  id              String                      @id @default(cuid())
+  contactTypeId   String
+  contactType     ContactType                 @relation(fields: [contactTypeId], references: [id], onDelete: Cascade)
+  key             String
+  label           String
+  helpText        String?
+  fieldType       ContactCustomFieldType
+  requirementMode ContactFieldRequirementMode @default(OPTIONAL)
+  options         Json?
+  placeholder     String?
+  displayOrder    Int                         @default(0)
+  isActive        Boolean                     @default(true)
+  showInTable     Boolean                     @default(false)
+  isSearchable    Boolean                     @default(false)
+  externalEditable Boolean                    @default(false)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  values          ContactCustomFieldValue[]
+
+  @@unique([contactTypeId, key])
+  @@index([contactTypeId, isActive, displayOrder])
+}
+
+model ContactCustomFieldValue {
+  id           String           @id @default(cuid())
+  contactId    String
+  contact      Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  fieldId      String
+  field        ContactTypeField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  textValue    String?
+  numberValue  Decimal?
+  booleanValue Boolean?
+  dateValue    DateTime?
+  jsonValue    Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([contactId, fieldId])
+  @@index([fieldId, textValue])
+  @@index([fieldId, numberValue])
+  @@index([fieldId, dateValue])
 }
 
 model CustomerRelationshipProfile {

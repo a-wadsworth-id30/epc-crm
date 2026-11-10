@@ -11,6 +11,7 @@ import {
 import AddressLookupControl from "@/components/crm-boilerplate/AddressLookupControl";
 import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage";
 import ContactMethodsEditor from "@/components/crm-boilerplate/ContactMethodsEditor";
+import ContactCustomFieldsForm from "@/components/crm-boilerplate/ContactCustomFieldsForm";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import ContactTagInput, {
@@ -32,6 +33,10 @@ import {
   type ContactCategoryValue,
 } from "@/lib/contacts/categories";
 import type { ContactTypeOption } from "@/lib/contacts/contact-types";
+import type {
+  ContactCustomFieldDefinition,
+  ContactCustomFieldFormValue,
+} from "@/lib/contacts/custom-fields";
 import { leadSourceOptions } from "@/lib/sales/lead-sources";
 
 type CompanyOption = {
@@ -60,6 +65,7 @@ export type ContactFormValues = {
   companyId?: string | null;
   companyName?: string | null;
   tags?: ContactTagOption[];
+  customFieldValues?: Record<string, ContactCustomFieldFormValue>;
 };
 
 const selectClassName =
@@ -71,6 +77,7 @@ export default function ContactForm({
   companies,
   companiesEnabled,
   contactTypes,
+  customFields,
   availableTags,
   addressLookupEnabled = false,
   onSuccess,
@@ -80,6 +87,7 @@ export default function ContactForm({
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contactTypes: ContactTypeOption[];
+  customFields: ContactCustomFieldDefinition[];
   availableTags: ContactTagOption[];
   addressLookupEnabled?: boolean;
   onSuccess?: () => void;
@@ -295,6 +303,11 @@ export default function ContactForm({
         defaultEmails={contact?.additionalEmails}
         defaultPhones={contact?.additionalPhones}
         onDirty={() => setIsDirty(true)}
+      />
+      <ContactCustomFieldsForm
+        contactTypeId={selectedContactTypeId}
+        definitions={customFields}
+        values={contact?.customFieldValues}
       />
       <div className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-gray-800">
         <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">

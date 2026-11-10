@@ -21,6 +21,10 @@ import {
   defaultContactCategory,
   isContactCategoryValue,
 } from "@/lib/contacts/categories";
+import {
+  normalizeContactCustomFieldOptions,
+  serializeContactCustomFieldValue,
+} from "@/lib/contacts/custom-fields";
 import { requireUser } from "@/lib/auth";
 import {
   companyWhereWithAccess,
@@ -260,6 +264,7 @@ export default async function ContactsPage({
     totalCount,
     allContactCount,
     contactTypeRows,
+    customFields,
     companies,
     availableTags,
     addressLookupEnabled,
@@ -270,6 +275,26 @@ export default async function ContactsPage({
       by: ["contactTypeId", "category"],
       where: allContactsWhere,
       _count: { _all: true },
+    }),
+    prisma.contactTypeField.findMany({
+      where: { isActive: true, contactType: { isActive: true } },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: {
+        contactTypeId: true,
+        displayOrder: true,
+        externalEditable: true,
+        fieldType: true,
+        helpText: true,
+        id: true,
+        isActive: true,
+        isSearchable: true,
+        key: true,
+        label: true,
+        options: true,
+        placeholder: true,
+        requirementMode: true,
+        showInTable: true,
+      },
     }),
     settings.companiesEnabled
       ? prisma.company.findMany({
@@ -328,6 +353,16 @@ export default async function ContactsPage({
           systemKey: true,
         },
       },
+      customFieldValues: {
+        select: {
+          booleanValue: true,
+          dateValue: true,
+          fieldId: true,
+          jsonValue: true,
+          numberValue: true,
+          textValue: true,
+        },
+      },
       leadSource: true,
       phone: true,
       postcode: true,
@@ -364,6 +399,10 @@ export default async function ContactsPage({
             companies={companies}
             companiesEnabled={settings.companiesEnabled}
             contactTypes={contactTypes}
+            customFields={customFields.map((field) => ({
+              ...field,
+              options: normalizeContactCustomFieldOptions(field.options),
+            }))}
             availableTags={availableTags}
             addressLookupEnabled={addressLookupEnabled}
           />
@@ -389,6 +428,12 @@ export default async function ContactsPage({
               (contactType) => contactType.systemKey === contact.category,
             ) ??
             null,
+          customFieldValues: Object.fromEntries(
+            contact.customFieldValues.map((value) => [
+              value.fieldId,
+              serializeContactCustomFieldValue(value),
+            ]),
+          ),
           additionalEmails: normalizeContactEmailMethods(
             contact.additionalEmails,
             contact.email,
@@ -420,6 +465,10 @@ export default async function ContactsPage({
         }))}
         activeContactTypeSlug={activeContactType?.slug ?? "all"}
         contactTypes={contactTypes}
+        customFields={customFields.map((field) => ({
+          ...field,
+          options: normalizeContactCustomFieldOptions(field.options),
+        }))}
         contactTypeCounts={Object.fromEntries(
           contactTypes.map((contactType) => [
             contactType.id,
