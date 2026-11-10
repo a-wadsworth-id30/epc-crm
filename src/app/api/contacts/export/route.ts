@@ -12,6 +12,7 @@ import {
 import { contactSearchWhere } from "@/lib/contacts/query";
 import { toCsv } from "@/lib/csv";
 import { prisma } from "@/lib/prisma";
+import { visibleContactFields } from "@/lib/contacts/field-access";
 
 const exportLimit = 5_000;
 
@@ -49,16 +50,26 @@ export async function GET(request: Request) {
     );
   }
 
-  const filterFields = (
-    await prisma.contactTypeField.findMany({
+  const availableFields = await prisma.contactTypeField.findMany({
       where: {
         isActive: true,
         contactType: { isActive: true },
         ...(selectedType ? { contactTypeId: selectedType.id } : {}),
       },
-      select: { fieldType: true, id: true, options: true },
+      select: {
+        contactType: { select: { name: true } },
+        contactTypeId: true,
+        displayOrder: true,
+        editRoleTemplates: true,
+        fieldType: true,
+        id: true,
+        label: true,
+        options: true,
+        viewRoleTemplates: true,
+      },
     })
-  ).map((field) => ({
+  const visibleFields = visibleContactFields(availableFields, user);
+  const filterFields = visibleFields.map((field) => ({
     ...field,
     options: normalizeContactCustomFieldOptions(field.options),
   }));
@@ -72,7 +83,7 @@ export async function GET(request: Request) {
   );
 
   const filters: Prisma.ContactWhereInput[] = [];
-  const searchWhere = contactSearchWhere(query);
+  const searchWhere = contactSearchWhere(query, visibleFields.map((field) => field.id));
 
   if (searchWhere) filters.push(searchWhere);
   if (customFieldFilterWhere) filters.push(customFieldFilterWhere);
@@ -92,22 +103,7 @@ export async function GET(request: Request) {
     filters.length ? { AND: filters } : undefined,
   );
   const [fields, contacts, activeTypes] = await Promise.all([
-    prisma.contactTypeField.findMany({
-      where: {
-        isActive: true,
-        ...(selectedType ? { contactTypeId: selectedType.id } : {}),
-      },
-      orderBy: [
-        { contactType: { displayOrder: "asc" } },
-        { displayOrder: "asc" },
-        { label: "asc" },
-      ],
-      select: {
-        contactType: { select: { name: true } },
-        id: true,
-        label: true,
-      },
-    }),
+    Promise.resolve(visibleFields),
     prisma.contact.findMany({
       where,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],

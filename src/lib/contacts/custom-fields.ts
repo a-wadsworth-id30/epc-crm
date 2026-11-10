@@ -7,18 +7,21 @@ import {
 export type ContactCustomFieldDefinition = {
   contactTypeId: string;
   displayOrder: number;
+  editRoleTemplates?: string[];
   externalEditable: boolean;
   fieldType: ContactCustomFieldType;
   helpText: string | null;
   id: string;
   isActive: boolean;
   isSearchable: boolean;
+  isReadOnly?: boolean;
   key: string;
   label: string;
   options: string[];
   placeholder: string | null;
   requirementMode: ContactFieldRequirementMode;
   showInTable: boolean;
+  viewRoleTemplates?: string[];
 };
 
 export type ContactCustomFieldFormValue = string | string[] | boolean | null;

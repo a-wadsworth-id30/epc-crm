@@ -40,6 +40,8 @@ export default async function ContactTypeSettingsPage() {
       showInTable: true,
       isSearchable: true,
       externalEditable: true,
+      viewRoleTemplates: true,
+      editRoleTemplates: true,
       contactType: { select: { name: true } },
       _count: { select: { values: true } },
     },

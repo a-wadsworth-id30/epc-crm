@@ -38,6 +38,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
 import { contactSearchWhere } from "@/lib/contacts/query";
+import { canEditContactField, visibleContactFields } from "@/lib/contacts/field-access";
 import ContactImportModal from "@/components/crm-boilerplate/ContactImportModal";
 
 type ContactsPageProps = {
@@ -185,10 +186,13 @@ export default async function ContactsPage({
       placeholder: true,
       requirementMode: true,
       showInTable: true,
+      viewRoleTemplates: true,
+      editRoleTemplates: true,
     },
   });
-  const normalizedCustomFields = customFields.map((field) => ({
+  const normalizedCustomFields = visibleContactFields(customFields, user).map((field) => ({
     ...field,
+    isReadOnly: !canEditContactField(field, user),
     options: normalizeContactCustomFieldOptions(field.options),
   }));
   const filterFields = activeContactType
@@ -214,7 +218,7 @@ export default async function ContactsPage({
     options: contactPageSizes,
     value: params.pageSize,
   });
-  const searchWhere = contactSearchWhere(query);
+  const searchWhere = contactSearchWhere(query, normalizedCustomFields.map((field) => field.id));
   const contactTypeWhere: Prisma.ContactWhereInput | undefined =
     activeContactType
       ? {
@@ -318,6 +322,7 @@ export default async function ContactsPage({
         },
       },
       customFieldValues: {
+        where: { fieldId: { in: normalizedCustomFields.map((field) => field.id) } },
         select: {
           booleanValue: true,
           dateValue: true,

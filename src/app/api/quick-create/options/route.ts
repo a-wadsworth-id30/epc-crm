@@ -8,6 +8,7 @@ import { defaultContactCategory } from "@/lib/contacts/categories";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { isGeoapifyAddressLookupEnabled } from "@/lib/integrations/geoapify";
 import { prisma } from "@/lib/prisma";
+import { editableContactFields } from "@/lib/contacts/field-access";
 import {
   parseSalesDefaults,
   resolveSalesDefaultOwnerId,
@@ -101,6 +102,8 @@ export async function GET() {
           placeholder: true,
           requirementMode: true,
           showInTable: true,
+          viewRoleTemplates: true,
+          editRoleTemplates: true,
         },
       }),
       prisma.user.findMany({
@@ -131,7 +134,7 @@ export async function GET() {
     })),
     contactTags,
     contactTypes,
-    customFields: customFields.map((field) => ({
+    customFields: editableContactFields(customFields, currentUser).map((field) => ({
       ...field,
       options: normalizeContactCustomFieldOptions(field.options),
     })),

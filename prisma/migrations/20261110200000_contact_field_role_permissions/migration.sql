@@ -1,0 +1,3 @@
+ALTER TABLE "ContactTypeField"
+ADD COLUMN "viewRoleTemplates" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "editRoleTemplates" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

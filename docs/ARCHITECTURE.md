@@ -85,6 +85,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   saved empty for the separate profile-quality workflow. Changing a contact's
   type retains values belonging to the previous type so switching back does not
   destroy data.
+  `ContactTypeField.viewRoleTemplates` and `editRoleTemplates` store optional
+  role-template allow-lists. Empty arrays mean unrestricted for backward
+  compatibility, while ADMIN users always bypass the restriction to prevent
+  configuration lockout. `src/lib/contacts/field-access.ts` is the shared
+  policy used before rendering, filtering, searching, exporting or accepting
+  writes; server actions reload definitions and discard fields the actor may
+  not edit rather than trusting browser controls.
   `src/lib/contacts/table-columns.ts` converts `showInTable` field definitions
   into stable People table column IDs and validates URL-backed column
   preferences against the currently available person-type fields. Custom
@@ -117,7 +124,8 @@ Core Prisma models are in `prisma/schema.prisma`.
   from those values. Header notifications batch-load matching contact records
   through the normal contact access filter before exposing a document alert.
   `src/lib/contacts/query.ts` owns People search semantics for both the list and
-  `/api/contacts/export`. Only active custom fields with `isSearchable=true`
+  `/api/contacts/export`. Only active, actor-visible custom fields with
+  `isSearchable=true`
   participate in custom-value matching. CSV export reapplies
   `contactWhereWithAccess`, includes typed custom fields, prevents spreadsheet
   formula execution and audits only filter/count metadata.
