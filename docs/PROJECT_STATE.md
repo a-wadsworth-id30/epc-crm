@@ -65,6 +65,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   audited without storing person data in audit metadata, and Person create/edit
   writes use the same audit events. The first release retains one optional
   primary Company per Person; many-to-many affiliations are not inferred.
+- Company detail uses the configured Company Type as first-class workspace
+  context rather than a generic record badge. Its Overview shows authorised
+  type-specific values and a profile-completeness indicator derived from that
+  type's required and completeness fields. Optional fields do not lower the
+  score, unconfigured types do not misleadingly show 0%, and role-restricted
+  definitions and values remain absent from the rendered page.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

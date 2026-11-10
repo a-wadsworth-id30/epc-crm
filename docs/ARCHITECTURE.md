@@ -83,6 +83,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   transaction, filter to fields the role may edit, validate typed submissions
   and then upsert or remove values. Type changes update only the selected type's
   fields, retaining previous-type values for auditability and possible reversal.
+  Company detail consumes the same authorised definitions and typed values for
+  its Overview panel. It reports completeness against non-optional fields on
+  the selected Company Type and never treats an unconfigured type as an
+  incomplete profile.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

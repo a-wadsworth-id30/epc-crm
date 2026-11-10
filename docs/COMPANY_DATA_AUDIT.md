@@ -196,3 +196,13 @@ serialising props. View-only values are displayed but preserved rather than
 submitted. Switching a Company to another type retains values from its former
 type so a later reversal does not destroy existing organisational data.
 
+## Task 6 company detail workspace
+
+The Company workspace now presents the selected Company Type as record context
+and shows the visible type-specific values in Overview. A completeness panel
+tracks only fields configured as required to save or required for completeness;
+optional fields do not reduce the score and types without tracked requirements
+do not display a misleading zero-percent state. The workspace uses the same
+role-filtered definitions and values as the edit form, so restricted company
+data is not exposed through the detail view.
+

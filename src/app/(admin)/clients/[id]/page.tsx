@@ -7,6 +7,7 @@ import {
 } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
+import CompanyProfileCompleteness from "@/components/crm-boilerplate/CompanyProfileCompleteness";
 import {
   CompanyContactLinker,
   CompanyContactUnlinkButton,
@@ -21,6 +22,7 @@ import {
   visibleCompanyFields,
 } from "@/lib/companies/field-access";
 import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
+import { companyProfileCompleteness } from "@/lib/companies/profile-completeness";
 import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
@@ -84,6 +86,14 @@ function formatAddress(company: {
     company.postcode,
     company.country,
   ].filter((line): line is string => Boolean(line));
+}
+
+function formatCustomFieldValue(
+  value: ReturnType<typeof serializeCompanyCustomFieldValue>,
+) {
+  if (Array.isArray(value)) return value.join(", ") || "Not set";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return value || "Not set";
 }
 
 export async function generateMetadata({
@@ -386,12 +396,37 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     postcode: company.postcode,
     status: company.status,
   };
+  const companyType =
+    companyTypes.find((type) => type.id === company.companyTypeId) ?? null;
+  const companyTypeLabel = companyType?.name ?? "Other";
+  const serializedCompanyCustomFieldValues =
+    editableCompany.customFieldValues ?? {};
+  const companyTypeCustomFields = normalizedCompanyCustomFields.filter(
+    (field) => field.companyTypeId === company.companyTypeId,
+  );
+  const companyProfile = companyProfileCompleteness({
+    companyTypeId: company.companyTypeId,
+    definitions: normalizedCompanyCustomFields,
+    values: serializedCompanyCustomFieldValues,
+  });
   const companyDetailPanel = (
     <div className="p-5">
       <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
         Company details
       </h2>
+      <CompanyProfileCompleteness value={companyProfile} />
       <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+        <div>
+          <dt className="text-gray-500 dark:text-gray-400">Company type</dt>
+          <dd className="mt-1">
+            <StatusBadge>{companyTypeLabel}</StatusBadge>
+            {companyType?.description ? (
+              <span className="mt-1.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {companyType.description}
+              </span>
+            ) : null}
+          </dd>
+        </div>
         <div>
           <dt className="text-gray-500 dark:text-gray-400">Status</dt>
           <dd className="mt-1">
@@ -443,6 +478,27 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
             )}
           </dd>
         </div>
+        {companyTypeCustomFields.length ? (
+          <div className="border-t border-gray-100 pt-4 md:col-span-2 dark:border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+              {companyTypeLabel} details
+            </h3>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              {companyTypeCustomFields.map((field) => (
+                <div key={field.id}>
+                  <dt className="text-gray-500 dark:text-gray-400">
+                    {field.label}
+                  </dt>
+                  <dd className="mt-1 whitespace-pre-wrap font-medium break-words text-gray-800 dark:text-white/90">
+                    {formatCustomFieldValue(
+                      serializedCompanyCustomFieldValues[field.id] ?? null,
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </dl>
     </div>
   );
@@ -637,6 +693,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         summary={{
           addressLabel,
           companyName: company.name,
+          companyTypeLabel,
           domain: company.domain,
           owner: company.owner,
           status: company.status,

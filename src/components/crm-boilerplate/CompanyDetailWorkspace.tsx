@@ -34,6 +34,7 @@ type CompanyDetailWorkspaceProps = {
   summary: {
     addressLabel: string;
     companyName: string;
+    companyTypeLabel: string;
     domain: string | null;
     owner: string | null;
     status: string;
@@ -186,8 +187,8 @@ function CompanyWorkspaceSummary({
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                 Company workspace
               </h2>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-900/40">
-                Live
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-100 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-900/40">
+                {summary.companyTypeLabel}
               </span>
             </div>
             <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
