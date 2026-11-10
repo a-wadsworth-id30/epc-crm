@@ -55,6 +55,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   optional/completeness/required modes, table/search flags, external-edit
   permission and role-template view/edit restrictions. Company create/edit
   forms will consume these definitions in the dedicated forms task.
+- A Company can now link an existing accessible Person, explicitly move a
+  Person from another Company, or unlink them without deleting the Person.
+  Stale assignments cannot be overwritten, all relationship changes are
+  audited without storing person data in audit metadata, and Person create/edit
+  writes use the same audit events. The first release retains one optional
+  primary Company per Person; many-to-many affiliations are not inferred.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

@@ -62,6 +62,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   organisation independently from its Prospect/Active/Inactive lifecycle
   status. Existing `Contact.companyId` and cached `companyName` remain the
   optional primary organisation link during the staged relationship migration.
+  Company and Person screens can link, explicitly move or unlink that primary
+  relationship. Server actions enforce access to both records, reject stale
+  reassignment attempts and write privacy-safe AuditLog events. Unlinking never
+  deletes the Person. Multi-company affiliations remain intentionally deferred
+  until a confirmed use case requires a separate relationship model.
 - `CompanyType`: data-backed organisation classification. Stable system keys
   cover Customer, Installer Company, Trade Partner, Supplier, Subcontractor and
   Other, while the visible name, description and presentation can evolve.

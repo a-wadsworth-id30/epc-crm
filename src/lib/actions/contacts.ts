@@ -695,6 +695,18 @@ export async function createContactAction(
       });
       createdContactId = contact.id;
 
+      if (companyData.companyId) {
+        await tx.auditLog.create({
+          data: {
+            action: "company_contact.linked",
+            actorId: user.id,
+            entity: "Contact",
+            entityId: contact.id,
+            metadata: { companyId: companyData.companyId },
+          },
+        });
+      }
+
       await replaceContactTags(tx, contact.id, parsedTags.tagNames);
       await replaceAdditionalContactMethods(
         tx,
@@ -824,6 +836,25 @@ export async function updateContactAction(
           companyName: companyData.companyName,
         },
       });
+
+      if (contact.companyId !== companyData.companyId) {
+        await tx.auditLog.create({
+          data: {
+            action: companyData.companyId
+              ? contact.companyId
+                ? "company_contact.moved"
+                : "company_contact.linked"
+              : "company_contact.unlinked",
+            actorId: user.id,
+            entity: "Contact",
+            entityId: contactId,
+            metadata: {
+              companyId: companyData.companyId,
+              previousCompanyId: contact.companyId,
+            },
+          },
+        });
+      }
 
       await replaceContactTags(tx, contactId, parsedTags.tagNames);
       await replaceAdditionalContactMethods(

@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
+import { companyContactLinkDecision } from "@/lib/companies/contact-relationships";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
-import { companyIdAccessWhere } from "@/lib/crm-resource-access";
+import {
+  companyIdAccessWhere,
+  contactIdAccessWhere,
+} from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
 import { isLeadSourceValue } from "@/lib/sales/lead-sources";
@@ -14,6 +18,24 @@ export type CompanyActionState = {
   ok: boolean;
   message: string;
 };
+
+const companyContactLinkSchema = z.object({
+  companyId: z.string().trim().min(1),
+  contactId: z.string().trim().min(1),
+  expectedCurrentCompanyId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || null),
+  allowMove: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true"),
+});
+
+const companyContactUnlinkSchema = z.object({
+  companyId: z.string().trim().min(1),
+  contactId: z.string().trim().min(1),
+});
 
 const companySchema = z.object({
   id: z.string().trim().optional(),
@@ -195,6 +217,146 @@ function revalidateCompanyPaths() {
   revalidatePath("/sales");
 }
 
+function revalidateCompanyRelationshipPaths(
+  contactId: string,
+  companyIds: Array<string | null>,
+) {
+  revalidateCompanyPaths();
+  revalidatePath(`/contacts/${contactId}`);
+  for (const companyId of new Set(
+    companyIds.filter((value): value is string => Boolean(value)),
+  )) {
+    revalidatePath(`/clients/${companyId}`);
+  }
+}
+
+export async function linkContactToCompanyAction(
+  _: CompanyActionState,
+  formData: FormData,
+): Promise<CompanyActionState> {
+  const user = await requireUser();
+  const parsed = companyContactLinkSchema.safeParse({
+    allowMove: formData.get("allowMove"),
+    companyId: formData.get("companyId"),
+    contactId: formData.get("contactId"),
+    expectedCurrentCompanyId: formData.get("expectedCurrentCompanyId"),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a person to link." };
+  }
+
+  const [company, contact] = await Promise.all([
+    prisma.company.findFirst({
+      where: companyIdAccessWhere(parsed.data.companyId, user),
+      select: { id: true, name: true },
+    }),
+    prisma.contact.findFirst({
+      where: contactIdAccessWhere(parsed.data.contactId, user),
+      select: { companyId: true, id: true },
+    }),
+  ]);
+  if (!company || !contact) {
+    return {
+      ok: false,
+      message: "The company or person is no longer available.",
+    };
+  }
+  const decision = companyContactLinkDecision({
+    allowMove: parsed.data.allowMove,
+    currentCompanyId: contact.companyId,
+    expectedCurrentCompanyId: parsed.data.expectedCurrentCompanyId,
+    targetCompanyId: company.id,
+  });
+  if (!decision.ok) {
+    return { ok: false, message: decision.message };
+  }
+  if (decision.action === "unchanged") {
+    return { ok: true, message: "This person is already linked to the company." };
+  }
+
+  const previousCompanyId = contact.companyId;
+  await prisma.$transaction([
+    prisma.contact.update({
+      where: { id: contact.id },
+      data: { companyId: company.id, companyName: company.name },
+    }),
+    prisma.auditLog.create({
+      data: {
+        action: `company_contact.${decision.action}`,
+        actorId: user.id,
+        entity: "Contact",
+        entityId: contact.id,
+        metadata: { companyId: company.id, previousCompanyId },
+      },
+    }),
+  ]);
+  revalidateCompanyRelationshipPaths(contact.id, [
+    previousCompanyId,
+    company.id,
+  ]);
+  return {
+    ok: true,
+    message: previousCompanyId
+      ? "Person moved to this company."
+      : "Person linked to this company.",
+  };
+}
+
+export async function unlinkContactFromCompanyAction(
+  _: CompanyActionState,
+  formData: FormData,
+): Promise<CompanyActionState> {
+  const user = await requireUser();
+  const parsed = companyContactUnlinkSchema.safeParse({
+    companyId: formData.get("companyId"),
+    contactId: formData.get("contactId"),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a linked person." };
+  }
+
+  const [company, contact] = await Promise.all([
+    prisma.company.findFirst({
+      where: companyIdAccessWhere(parsed.data.companyId, user),
+      select: { id: true },
+    }),
+    prisma.contact.findFirst({
+      where: contactIdAccessWhere(parsed.data.contactId, user),
+      select: { companyId: true, id: true },
+    }),
+  ]);
+  if (!company || !contact) {
+    return {
+      ok: false,
+      message: "The company or person is no longer available.",
+    };
+  }
+  if (contact.companyId !== company.id) {
+    return {
+      ok: false,
+      message: "This person is no longer linked to the company.",
+    };
+  }
+
+  await prisma.$transaction([
+    prisma.contact.update({
+      where: { id: contact.id },
+      data: { companyId: null, companyName: null },
+    }),
+    prisma.auditLog.create({
+      data: {
+        action: "company_contact.unlinked",
+        actorId: user.id,
+        entity: "Contact",
+        entityId: contact.id,
+        metadata: { companyId: company.id },
+      },
+    }),
+  ]);
+  revalidateCompanyRelationshipPaths(contact.id, [company.id]);
+  return { ok: true, message: "Person unlinked. Their CRM record was kept." };
+}
+
 export async function createCompanyAction(
   _: CompanyActionState,
   formData: FormData,
@@ -237,7 +399,7 @@ export async function createCompanyAction(
       return;
     }
 
-    await Promise.all(
+    const createdContacts = await Promise.all(
       parsedContacts.contacts.map((contact) =>
         tx.contact.create({
           data: {
@@ -257,6 +419,15 @@ export async function createCompanyAction(
         }),
       ),
     );
+    await tx.auditLog.createMany({
+      data: createdContacts.map((contact) => ({
+        action: "company_contact.linked",
+        actorId: user.id,
+        entity: "Contact",
+        entityId: contact.id,
+        metadata: { companyId: company.id },
+      })),
+    });
   });
 
   revalidateCompanyPaths();

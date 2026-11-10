@@ -164,3 +164,20 @@ The additive Company Type foundation is implemented through
 - rename only the visible `Company` Person Type labels;
 - add compatibility fallbacks until the production migration is confirmed.
 
+## Task 4 relationship controls
+
+The confirmed first-release relationship remains one optional primary Company
+per Person. The Company detail screen now supports:
+
+- searching accessible People by name, email or telephone;
+- linking an unassigned Person;
+- explicitly moving a Person from another Company;
+- unlinking a Person without deleting their CRM record;
+- concurrency checks that stop a stale screen overwriting a newer assignment;
+- privacy-safe AuditLog events containing record IDs rather than person data.
+
+The Person create/edit flow writes the same relationship audit events. The
+legacy `Contact.companyId` and `companyName` fields remain the compatibility
+contract for integrations; a many-to-many relationship table is deliberately
+deferred until a real multi-company affiliation requirement is confirmed.
+

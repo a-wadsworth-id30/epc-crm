@@ -7,6 +7,10 @@ import {
 } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
+import {
+  CompanyContactLinker,
+  CompanyContactUnlinkButton,
+} from "@/components/crm-boilerplate/CompanyContactRelationships";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
@@ -383,9 +387,12 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
           Contacts
         </h2>
-        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
-          {company.contacts.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <CompanyContactLinker companyId={company.id} />
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
+            {company.contacts.length}
+          </span>
+        </div>
       </div>
       <div className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
         {company.contacts.length ? (
@@ -401,6 +408,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
             const email = contact.email ?? additionalEmails[0]?.email ?? null;
             const phone = contact.phone ?? additionalPhones[0]?.phone ?? null;
 
+            const name = contactName(contact);
+
             return (
               <div
                 key={contact.id}
@@ -411,11 +420,16 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
                     href={`/contacts/${contact.id}`}
                     className="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"
                   >
-                    {contactName(contact)}
+                    {name}
                   </Link>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {contact.role ?? "Role not set"}
                   </p>
+                  <CompanyContactUnlinkButton
+                    companyId={company.id}
+                    contactId={contact.id}
+                    contactName={name}
+                  />
                 </div>
                 <div className="min-w-0 text-sm text-gray-600 sm:text-right dark:text-gray-300">
                   <p>{email ?? "No email"}</p>
