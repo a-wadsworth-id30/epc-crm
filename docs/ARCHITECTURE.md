@@ -97,6 +97,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   or deliberately unclassify a file only with a controlled catalogue value;
   the change is audited with parent record IDs and before/after types, never
   with file contents, notes or tags.
+  `FileAsset.documentExpiresAt`, `documentExpiryReminderDays` and the derived
+  `documentExpiryReminderAt` support indexed compliance reminders without a
+  separate scheduled-job table. Record cards derive valid/due/expired state
+  from those values. Header notifications batch-load matching contact records
+  through the normal contact access filter before exposing a document alert.
   Secure customer upload requests reuse the same contact requirement status.
   The browser suggests only missing required types whose controlled catalogue
   entry is `customerFacing`; creation remains an explicit staff action. The
@@ -218,7 +223,8 @@ Core Prisma models are in `prisma/schema.prisma`.
   access the selected mailbox or linked lead.
 - `FileAsset`: R2-backed media/file metadata, including linked CRM entity,
   optional document-library folder slug, controlled document upload type,
-  uploader, notes and lightweight tags for structured record documents.
+  optional expiry/reminder metadata, uploader, notes and lightweight tags for
+  structured record documents.
 - `CustomerUploadRequest`, `CustomerUploadRequestItem` and
   `CustomerUploadRequestFile`: public customer upload-link records. Requests
   store only token hashes, expiry/status, the target CRM entity and required

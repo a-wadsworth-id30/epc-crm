@@ -3,6 +3,7 @@
 import {
   Archive,
   AlertTriangle,
+  CalendarClock,
   ChevronDown,
   CheckCircle2,
   Download,
@@ -79,9 +80,17 @@ import {
 } from "@/lib/actions/signature-requests";
 import { isDocuSignSignableMimeType } from "@/lib/docusign/signable-documents";
 import { suggestedContactCustomerUploadTypes } from "@/lib/contacts/document-requirements";
+import {
+  documentExpiryInputValue,
+  documentExpiryReminderDayOptions,
+  documentExpiryStatus,
+} from "@/lib/documents/expiry";
 
 export type RecordDocumentFile = {
   createdAt: string;
+  documentExpiresAt: string | null;
+  documentExpiryReminderAt: string | null;
+  documentExpiryReminderDays: number | null;
   documentFolder: string | null;
   documentUploadType: string | null;
   id: string;
@@ -218,6 +227,40 @@ function formatDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function documentExpiryPresentation(file: RecordDocumentFile) {
+  if (!file.documentExpiresAt) return null;
+
+  const expiresAt = new Date(file.documentExpiresAt);
+  const status = documentExpiryStatus({
+    expiresAt,
+    reminderAt: file.documentExpiryReminderAt
+      ? new Date(file.documentExpiryReminderAt)
+      : null,
+  });
+
+  if (status === "expired") {
+    return {
+      className:
+        "bg-error-50 text-error-700 ring-error-200 dark:bg-error-900/20 dark:text-error-300 dark:ring-error-900/40",
+      label: `Expired ${formatDate(file.documentExpiresAt)}`,
+    };
+  }
+
+  if (status === "expiring") {
+    return {
+      className:
+        "bg-warning-50 text-warning-700 ring-warning-200 dark:bg-warning-900/20 dark:text-warning-300 dark:ring-warning-900/40",
+      label: `Expires ${formatDate(file.documentExpiresAt)}`,
+    };
+  }
+
+  return {
+    className:
+      "bg-success-50 text-success-700 ring-success-200 dark:bg-success-900/20 dark:text-success-300 dark:ring-success-900/40",
+    label: `Valid until ${formatDate(file.documentExpiresAt)}`,
+  };
 }
 
 function fileTypeLabel(mimeType: string) {
@@ -745,6 +788,7 @@ function AutoFileUploadForm({
       firstRequirementType ??
       documentUploadTypeDefinitions[0].key,
   );
+  const [documentExpiresAt, setDocumentExpiresAt] = useState("");
   const { showToast } = useToast();
   const [state, formAction, isPending] = useActionState(
     uploadRecordDocumentAction,
@@ -762,6 +806,7 @@ function AutoFileUploadForm({
     showToast(state.message || "Document uploaded.");
     queueMicrotask(() => {
       setSelectedFileNames([]);
+      setDocumentExpiresAt("");
       setResetSignal((value) => value + 1);
     });
   }, [showToast, state.message, state.ok]);
@@ -805,7 +850,39 @@ function AutoFileUploadForm({
           ))}
         </select>
       </label>
-      <div className="md:col-span-2">
+      <label className="block">
+        <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+          Expiry date
+        </span>
+        <input
+          type="date"
+          name="documentExpiresAt"
+          value={documentExpiresAt}
+          onChange={(event) => setDocumentExpiresAt(event.target.value)}
+          disabled={!uploadPolicy.isConfigured || isPending}
+          className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+        />
+      </label>
+      <label className="block">
+        <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+          Remind before
+        </span>
+        <select
+          name="documentExpiryReminderDays"
+          defaultValue="30"
+          disabled={
+            !documentExpiresAt || !uploadPolicy.isConfigured || isPending
+          }
+          className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+        >
+          {documentExpiryReminderDayOptions.map((days) => (
+            <option key={days} value={days}>
+              {days === 0 ? "On expiry date" : `${days} days before`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="md:col-span-3">
         <FileDropzone
           accept={uploadPolicy.allowedMimeTypes}
           disabled={!uploadPolicy.isConfigured || isPending}
@@ -2196,6 +2273,11 @@ function DocumentMetadataForm({
   entityType: RecordDocumentLibraryProps["entityType"];
   file: RecordDocumentFile;
 }) {
+  const [documentExpiresAt, setDocumentExpiresAt] = useState(
+    file.documentExpiresAt
+      ? documentExpiryInputValue(new Date(file.documentExpiresAt))
+      : "",
+  );
   const [state, formAction, isPending] = useActionState(
     updateRecordDocumentMetadataAction,
     {
@@ -2237,6 +2319,37 @@ function DocumentMetadataForm({
             ))}
           </select>
         </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+              Expiry date
+            </span>
+            <input
+              type="date"
+              name="documentExpiresAt"
+              value={documentExpiresAt}
+              onChange={(event) => setDocumentExpiresAt(event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+              Remind before
+            </span>
+            <select
+              name="documentExpiryReminderDays"
+              defaultValue={file.documentExpiryReminderDays ?? 30}
+              disabled={!documentExpiresAt}
+              className="mt-1 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              {documentExpiryReminderDayOptions.map((days) => (
+                <option key={days} value={days}>
+                  {days === 0 ? "On expiry date" : `${days} days before`}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label className="block">
           <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
             Notes
@@ -2308,6 +2421,7 @@ function DocumentList({
         const controlledType = documentUploadTypeDefinitions.find(
           (definition) => definition.key === file.documentUploadType,
         );
+        const expiry = documentExpiryPresentation(file);
 
         return (
           <div
@@ -2357,7 +2471,7 @@ function DocumentList({
                 <Download className="h-4 w-4" />
               </a>
             </div>
-            {controlledType || documentRole || latestRequest ? (
+            {controlledType || documentRole || latestRequest || expiry ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {controlledType ? (
                   <span className="inline-flex h-6 items-center rounded-full bg-brand-50 px-2 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/20 dark:text-brand-300 dark:ring-brand-900/40">
@@ -2374,6 +2488,14 @@ function DocumentList({
                     className={`inline-flex h-6 items-center rounded-full px-2 text-xs font-semibold ring-1 ${signatureStatusClassName(latestRequest.status)}`}
                   >
                     {signatureStatusLabel(latestRequest.status)}
+                  </span>
+                ) : null}
+                {expiry ? (
+                  <span
+                    className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-xs font-semibold ring-1 ${expiry.className}`}
+                  >
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    {expiry.label}
                   </span>
                 ) : null}
               </div>

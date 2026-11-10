@@ -19,6 +19,11 @@ import { prisma } from "@/lib/prisma";
 import { parseSalesDefaults } from "@/lib/sales/defaults";
 import { getCrmSettings } from "@/lib/settings";
 import { emailMessageUnreadWhere } from "@/lib/inbox/read-state";
+import { contactWhereWithAccess } from "@/lib/crm-resource-access";
+import {
+  documentUploadTypeDefinition,
+  isDocumentUploadType,
+} from "@/lib/document-library";
 
 const headerNotificationCacheTag = "header-notifications";
 
@@ -116,6 +121,58 @@ async function loadGeneratedHeaderNotificationsUncached(
     where: { id: currentUserId },
     select: { role: true },
   });
+  const notificationUser = {
+    id: currentUserId,
+    role: currentUser?.role ?? ("USER" as const),
+  };
+  const accessibleContactIdsForExpiry =
+    notificationUser.role === "ADMIN"
+      ? null
+      : (
+          await prisma.contact.findMany({
+            where: contactWhereWithAccess(notificationUser),
+            select: { id: true },
+          })
+        ).map((contact) => contact.id);
+  const dueContactDocuments = await prisma.fileAsset.findMany({
+    where: {
+      documentExpiresAt: { not: null },
+      documentExpiryReminderAt: { lte: now },
+      entityId:
+        accessibleContactIdsForExpiry === null
+          ? { not: null }
+          : { in: accessibleContactIdsForExpiry },
+      entityType: "Contact",
+    },
+    orderBy: [{ documentExpiresAt: "asc" }, { id: "asc" }],
+    select: {
+      documentExpiresAt: true,
+      documentUploadType: true,
+      entityId: true,
+      id: true,
+      originalName: true,
+    },
+    take: 100,
+  });
+  const dueContactIds = Array.from(
+    new Set(
+      dueContactDocuments
+        .map((document) => document.entityId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const accessibleDueContacts = dueContactIds.length
+    ? await prisma.contact.findMany({
+        where: contactWhereWithAccess(
+          notificationUser,
+          { id: { in: dueContactIds } },
+        ),
+        select: { firstName: true, id: true, lastName: true },
+      })
+    : [];
+  const accessibleDueContactById = new Map(
+    accessibleDueContacts.map((contact) => [contact.id, contact]),
+  );
   const recentInboundEmailAccess =
     currentUser?.role === "ADMIN"
       ? {}
@@ -323,6 +380,39 @@ async function loadGeneratedHeaderNotificationsUncached(
       href: "/settings/integrations/gmail",
       severity: gmailHealthNotification.severity,
       title: gmailHealthNotification.title,
+    });
+  }
+
+  const accessibleDueDocuments = dueContactDocuments.filter(
+    (document) =>
+      document.entityId && accessibleDueContactById.has(document.entityId),
+  );
+
+  for (const document of accessibleDueDocuments.slice(0, 5)) {
+    if (!document.entityId || !document.documentExpiresAt) continue;
+
+    const contact = accessibleDueContactById.get(document.entityId);
+    if (!contact) continue;
+
+    const contactName =
+      [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() ||
+      "Contact";
+    const typeLabel = isDocumentUploadType(document.documentUploadType)
+      ? documentUploadTypeDefinition(document.documentUploadType)?.label
+      : null;
+    const documentLabel = typeLabel || document.originalName;
+    const expired = document.documentExpiresAt.getTime() < now.getTime();
+    const expiryDate = new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+    }).format(document.documentExpiresAt);
+
+    notifications.push({
+      id: `contact-document-expiry:${document.id}`,
+      category: "Contacts",
+      detail: `${documentLabel} for ${contactName} ${expired ? "expired" : "expires"} ${expiryDate}.`,
+      href: `/contacts/${document.entityId}?tab=documents`,
+      severity: "warning",
+      title: expired ? "Contact document expired" : "Contact document expiring",
     });
   }
 

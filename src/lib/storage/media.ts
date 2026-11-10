@@ -273,6 +273,9 @@ export function validateMediaObjectHead({
 export async function createStoredMediaFileAsset({
   bucket,
   checksum,
+  documentExpiresAt,
+  documentExpiryReminderAt,
+  documentExpiryReminderDays,
   documentFolder,
   documentUploadType,
   entityId,
@@ -288,6 +291,9 @@ export async function createStoredMediaFileAsset({
 }: {
   bucket: string;
   checksum?: string | null;
+  documentExpiresAt?: Date | null;
+  documentExpiryReminderAt?: Date | null;
+  documentExpiryReminderDays?: number | null;
   documentFolder?: string;
   documentUploadType?: string | null;
   entityType?: string;
@@ -310,6 +316,9 @@ export async function createStoredMediaFileAsset({
       mimeType,
       sizeBytes,
       checksum,
+      documentExpiresAt,
+      documentExpiryReminderAt,
+      documentExpiryReminderDays,
       documentFolder,
       documentUploadType,
       entityType,
@@ -331,6 +340,9 @@ export async function uploadMediaFile({
   file,
   folder,
   documentFolder,
+  documentExpiresAt,
+  documentExpiryReminderAt,
+  documentExpiryReminderDays,
   documentUploadType,
   entityType,
   entityId,
@@ -344,6 +356,9 @@ export async function uploadMediaFile({
   file: File;
   folder: string;
   documentFolder?: string;
+  documentExpiresAt?: Date | null;
+  documentExpiryReminderAt?: Date | null;
+  documentExpiryReminderDays?: number | null;
   documentUploadType?: string | null;
   entityType?: string;
   entityId?: string;
@@ -401,6 +416,9 @@ export async function uploadMediaFile({
   const fileAsset = await createStoredMediaFileAsset({
     bucket: upload.bucketName,
     checksum,
+    documentExpiresAt,
+    documentExpiryReminderAt,
+    documentExpiryReminderDays,
     documentFolder,
     documentUploadType,
     entityId,
