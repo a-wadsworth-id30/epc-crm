@@ -53,6 +53,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Spruce assign the Consumer system type at creation, and a data migration
   repairs any null links left by those paths. Older null relations still fall
   back safely to their legacy category.
+- The People list presents person types once as a compact count-bearing filter
+  row. It scrolls horizontally on narrow screens, retains a clear selected
+  state and avoids duplicating every configurable type as a large summary card.
 - Settings > Person Types supports ordered type-specific field definitions for
   short/long text, numbers, dates, yes/no values, single/multi selects, email,
   phone, URL and address data. Definitions have stable keys and can be optional,

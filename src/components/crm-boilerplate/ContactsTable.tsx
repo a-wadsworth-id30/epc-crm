@@ -3,14 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import {
-  BriefcaseBusiness,
-  Building2,
-  Download,
-  UserRound,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
+import { Download } from "lucide-react";
 import {
   DeferredContactDeleteModal,
   DeferredContactEditModal,
@@ -552,21 +545,6 @@ export default function ContactsTable({
   );
 }
 
-const iconByKey: Record<string, LucideIcon> = {
-  user: UserRound,
-  briefcase: BriefcaseBusiness,
-  wrench: Wrench,
-  building: Building2,
-};
-
-const cardClassByColour: Record<string, string> = {
-  gray: "border-gray-200 bg-gray-50/40 dark:border-gray-700 dark:bg-white/[0.03]",
-  success: "border-success-200 bg-success-50/40 dark:border-success-800 dark:bg-success-500/10",
-  blue: "border-blue-light-200 bg-blue-light-50 dark:border-blue-light-800 dark:bg-blue-light-500/10",
-  purple: "border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-500/10",
-  orange: "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-500/10",
-};
-
 const countClassByColour: Record<string, string> = {
   gray: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
   success: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-300",
@@ -590,89 +568,57 @@ function ContactTypeOverview({
   contactTypes: ContactTypeOption[];
   onSelect: (contactTypeSlug: string) => void;
 }) {
+  const tabs = [
+    {
+      count: allContactCount,
+      countClassName: countClassByColour.gray,
+      label: "All People",
+      value: "all" as const,
+    },
+    ...contactTypes.map((option) => ({
+      count: contactTypeCounts[option.id] ?? 0,
+      countClassName:
+        countClassByColour[option.colourKey] ?? countClassByColour.gray,
+      label: option.name,
+      value: option.slug,
+    })),
+  ];
+
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-800">
-        {[
-          { label: "All People", value: "all" as const },
-          ...contactTypes.map((option) => ({
-            label: option.name,
-            value: option.slug,
-          })),
-        ].map((tab) => {
-          const selected = activeContactTypeSlug === tab.value;
+    <section aria-label="Filter people by type">
+      <div className="max-w-full overflow-x-auto pb-1 overscroll-x-contain">
+        <div className="flex min-w-max items-center gap-2">
+          {tabs.map((tab) => {
+            const selected = activeContactTypeSlug === tab.value;
 
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => onSelect(tab.value)}
-              className={`border-b-2 px-3 py-2 text-sm font-semibold transition ${
-                selected
-                  ? "border-brand-500 text-brand-600 dark:text-brand-300"
-                  : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
-              }`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {contactTypes.map((option, index) => {
-          const Icon = iconByKey[option.iconKey] ?? UserRound;
-          const count = contactTypeCounts[option.id] ?? 0;
-          const selected = activeContactTypeSlug === option.slug;
-
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onSelect(option.slug)}
-              className={`min-h-44 rounded-lg border bg-white p-4 text-left shadow-theme-xs transition hover:-translate-y-0.5 hover:shadow-theme-sm dark:bg-white/[0.03] ${
-                selected
-                  ? "border-brand-400 ring-2 ring-brand-500/15"
-                  : cardClassByColour[option.colourKey] ?? cardClassByColour.gray
-              }`}
-            >
-              <div className="flex items-start gap-3">
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => onSelect(tab.value)}
+                aria-pressed={selected}
+                className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-theme-xs transition focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none dark:focus-visible:ring-offset-gray-900 ${
+                  selected
+                    ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-white"
+                }`}
+              >
+                <span>{tab.label}</span>
                 <span
-                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${countClassByColour[option.colourKey] ?? countClassByColour.gray}`}
+                  className={`inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    selected
+                      ? "bg-brand-100 text-brand-700 dark:bg-brand-500/25 dark:text-brand-200"
+                      : tab.countClassName
+                  }`}
+                  aria-label={`${tab.count} people`}
                 >
-                  <Icon className="h-5 w-5" />
+                  {tab.count}
                 </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
-                    {index + 1}. {option.name}
-                  </p>
-                  <p className="mt-1 text-sm leading-5 text-gray-800 dark:text-white/90">
-                    {option.description}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-white/10">
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {option.pluralName}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${countClassByColour[option.colourKey] ?? countClassByColour.gray}`}
-                >
-                  {count}
-                </span>
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
-      {activeContactTypeSlug !== "all" ? (
-        <button
-          type="button"
-          onClick={() => onSelect("all")}
-          className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-        >
-          Show all {allContactCount} people
-        </button>
-      ) : null}
     </section>
   );
 }
