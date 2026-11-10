@@ -28,11 +28,10 @@ import type {
   ContactPhoneMethod,
 } from "@/lib/contact-methods";
 import {
-  contactCategoryOption,
-  contactCategoryOptions,
   defaultContactCategory,
   type ContactCategoryValue,
 } from "@/lib/contacts/categories";
+import type { ContactTypeOption } from "@/lib/contacts/contact-types";
 import { leadSourceOptions } from "@/lib/sales/lead-sources";
 
 type CompanyOption = {
@@ -43,6 +42,7 @@ type CompanyOption = {
 export type ContactFormValues = {
   id?: string;
   category?: ContactCategoryValue | null;
+  contactTypeId?: string | null;
   firstName?: string;
   lastName?: string;
   email?: string | null;
@@ -70,6 +70,7 @@ export default function ContactForm({
   contact,
   companies,
   companiesEnabled,
+  contactTypes,
   availableTags,
   addressLookupEnabled = false,
   onSuccess,
@@ -78,6 +79,7 @@ export default function ContactForm({
   contact?: ContactFormValues;
   companies: CompanyOption[];
   companiesEnabled: boolean;
+  contactTypes: ContactTypeOption[];
   availableTags: ContactTagOption[];
   addressLookupEnabled?: boolean;
   onSuccess?: () => void;
@@ -87,8 +89,23 @@ export default function ContactForm({
   const [isDirty, setIsDirty] = useState(false);
   const [tagResetSignal, setTagResetSignal] = useState(0);
   const [methodResetSignal, setMethodResetSignal] = useState(0);
-  const [selectedCategory, setSelectedCategory] =
-    useState<ContactCategoryValue>(contact?.category ?? defaultContactCategory);
+  const defaultType =
+    contactTypes.find((option) => option.isDefault && option.isActive) ??
+    contactTypes.find((option) => option.isActive) ??
+    contactTypes[0];
+  const defaultTypeId = defaultType?.id ?? "";
+  const initialType =
+    contactTypes.find((option) => option.id === contact?.contactTypeId) ??
+    contactTypes.find(
+      (option) => option.systemKey === (contact?.category ?? defaultContactCategory),
+    ) ??
+    defaultType;
+  const [selectedContactTypeId, setSelectedContactTypeId] = useState(
+    initialType?.id ?? "",
+  );
+  const selectedContactType = contactTypes.find(
+    (option) => option.id === selectedContactTypeId,
+  );
   const { showToast } = useToast();
   const action = mode === "create" ? createContactAction : updateContactAction;
   const [state, formAction, isPending] = useActionState<
@@ -128,7 +145,7 @@ export default function ContactForm({
       if (mode === "create") {
         setTagResetSignal((current) => current + 1);
         setMethodResetSignal((current) => current + 1);
-        setSelectedCategory(defaultContactCategory);
+        setSelectedContactTypeId(defaultTypeId);
       }
       setIsDirty(false);
       onSuccess?.();
@@ -137,6 +154,7 @@ export default function ContactForm({
       }
     });
   }, [
+    defaultTypeId,
     mode,
     onSuccess,
     router,
@@ -151,29 +169,28 @@ export default function ContactForm({
       {contact?.id && <input type="hidden" name="id" value={contact.id} />}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <Label htmlFor={`${mode}-contact-category`}>Person type</Label>
+          <Label htmlFor={`${mode}-contact-type`}>Person type</Label>
           <select
-            id={`${mode}-contact-category`}
-            name="category"
-            value={selectedCategory}
-            onChange={(event) =>
-              setSelectedCategory(event.target.value as ContactCategoryValue)
-            }
+            id={`${mode}-contact-type`}
+            name="contactTypeId"
+            value={selectedContactTypeId}
+            onChange={(event) => setSelectedContactTypeId(event.target.value)}
             className={selectClassName}
+            required
           >
-            {contactCategoryOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {contactTypes.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}{option.isActive ? "" : " (archived)"}
               </option>
             ))}
           </select>
           <p className="mt-1.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
-            {contactCategoryOption(selectedCategory).description}
+            {selectedContactType?.description ?? "Choose the primary type for this person."}
           </p>
         </div>
         <div>
           <Label htmlFor={`${mode}-contact-first-name`}>
-            {selectedCategory === "COMPANY"
+            {selectedContactType?.systemKey === "COMPANY"
               ? "Organisation name"
               : "First name"}
           </Label>
@@ -186,7 +203,7 @@ export default function ContactForm({
         </div>
         <div>
           <Label htmlFor={`${mode}-contact-last-name`}>
-            {selectedCategory === "COMPANY"
+            {selectedContactType?.systemKey === "COMPANY"
               ? "Primary contact / descriptor"
               : "Last name"}
           </Label>
@@ -194,7 +211,7 @@ export default function ContactForm({
             id={`${mode}-contact-last-name`}
             name="lastName"
             defaultValue={contact?.lastName ?? ""}
-            required={selectedCategory !== "COMPANY"}
+            required={selectedContactType?.systemKey !== "COMPANY"}
           />
         </div>
         <div>

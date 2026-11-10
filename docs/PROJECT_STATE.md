@@ -43,6 +43,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.
+- People list tabs, counts, badges, filters and create/edit forms read active
+  database-backed person types. New and edited contacts store both the selected
+  `contactTypeId` and a compatible legacy category for integrations that have
+  not yet migrated; older null relations fall back to their legacy category.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

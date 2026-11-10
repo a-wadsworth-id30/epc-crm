@@ -54,6 +54,11 @@ const contactSchema = z
       .enum(contactCategoryValues)
       .optional()
       .default(defaultContactCategory),
+    contactTypeId: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => value || null),
     firstName: z.string().trim().min(1, "First name is required."),
     lastName: z.string().trim().optional().default(""),
     email: z
@@ -204,6 +209,7 @@ function parseContact(formData: FormData) {
   return contactSchema.safeParse({
     id: formString(formData, "id"),
     category: formString(formData, "category"),
+    contactTypeId: formString(formData, "contactTypeId"),
     firstName: formString(formData, "firstName"),
     lastName: formString(formData, "lastName"),
     email: formString(formData, "email"),
@@ -391,6 +397,35 @@ async function resolveCompanyData(
   return { companyId: null, companyName: null };
 }
 
+async function resolveSubmittedContactType(
+  tx: Prisma.TransactionClient,
+  contactTypeId: string | null,
+  allowInactiveId?: string | null,
+) {
+  const selected = contactTypeId
+    ? await tx.contactType.findFirst({
+        where: {
+          id: contactTypeId,
+          OR: [{ isActive: true }, ...(allowInactiveId === contactTypeId ? [{ id: allowInactiveId }] : [])],
+        },
+        select: { id: true, systemKey: true },
+      })
+    : await tx.contactType.findFirst({
+        where: { isActive: true },
+        orderBy: [{ isDefault: "desc" }, { displayOrder: "asc" }, { name: "asc" }],
+        select: { id: true, systemKey: true },
+      });
+
+  if (!selected) {
+    throw new ContactActionError("Choose an active person type.");
+  }
+
+  return {
+    category: selected.systemKey ?? defaultContactCategory,
+    contactTypeId: selected.id,
+  };
+}
+
 async function replaceContactTags(
   tx: Prisma.TransactionClient,
   contactId: string,
@@ -512,6 +547,10 @@ export async function createContactAction(
 
   try {
     await prisma.$transaction(async (tx) => {
+      const contactType = await resolveSubmittedContactType(
+        tx,
+        parsed.data.contactTypeId,
+      );
       const companyData = await resolveCompanyData(
         parsed.data.companyId,
         parsed.data.companyName,
@@ -525,7 +564,8 @@ export async function createContactAction(
         data: {
           firstName: parsed.data.firstName,
           lastName: parsed.data.lastName,
-          category: parsed.data.category,
+          category: contactType.category,
+          contactTypeId: contactType.contactTypeId,
           email: parsed.data.email,
           phone: parsed.data.phone,
           phoneNormalized: normalizedContactPhone(parsed.data.phone),
@@ -592,7 +632,7 @@ export async function updateContactAction(
   const contactId = parsed.data.id;
   const contact = await prisma.contact.findFirst({
     where: contactIdAccessWhere(contactId, user),
-    select: { companyId: true, id: true },
+    select: { companyId: true, contactTypeId: true, id: true },
   });
 
   if (!contact) {
@@ -625,6 +665,11 @@ export async function updateContactAction(
 
   try {
     await prisma.$transaction(async (tx) => {
+      const contactType = await resolveSubmittedContactType(
+        tx,
+        parsed.data.contactTypeId,
+        contact.contactTypeId,
+      );
       const companyData = await resolveCompanyData(
         parsed.data.companyId,
         parsed.data.companyName,
@@ -639,7 +684,8 @@ export async function updateContactAction(
         data: {
           firstName: parsed.data.firstName,
           lastName: parsed.data.lastName,
-          category: parsed.data.category,
+          category: contactType.category,
+          contactTypeId: contactType.contactTypeId,
           email: parsed.data.email,
           phone: parsed.data.phone,
           phoneNormalized: normalizedContactPhone(parsed.data.phone),

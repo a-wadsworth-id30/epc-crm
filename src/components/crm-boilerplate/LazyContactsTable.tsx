@@ -7,6 +7,7 @@ import type {
   ContactPhoneMethod,
 } from "@/lib/contact-methods";
 import type { ContactCategoryValue } from "@/lib/contacts/categories";
+import type { ContactTypeOption } from "@/lib/contacts/contact-types";
 
 type CompanyOption = {
   id: string;
@@ -22,6 +23,8 @@ type ContactRow = {
   additionalEmails: ContactEmailMethod[];
   additionalPhones: ContactPhoneMethod[];
   category: ContactCategoryValue;
+  contactTypeId: string | null;
+  contactType: ContactTypeOption | null;
   leadSource: string | null;
   role: string | null;
   addressLine1: string | null;
@@ -43,10 +46,11 @@ type ContactRow = {
 
 type ContactsTableProps = {
   addressLookupEnabled: boolean;
-  activeCategory: "all" | ContactCategoryValue;
+  activeContactTypeSlug: string;
   allContactCount: number;
   availableTags: ContactTagOption[];
-  categoryCounts: Record<ContactCategoryValue, number>;
+  contactTypeCounts: Record<string, number>;
+  contactTypes: ContactTypeOption[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contacts: ContactRow[];

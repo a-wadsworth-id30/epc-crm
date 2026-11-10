@@ -337,6 +337,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     pipelineStages,
     companies,
     availableTags,
+    contactTypes,
     mergeCandidateContacts,
     addressLookupEnabled,
     contactDocuments,
@@ -372,6 +373,21 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         id: true,
         lastName: true,
         category: true,
+        contactTypeId: true,
+        contactType: {
+          select: {
+            colourKey: true,
+            description: true,
+            iconKey: true,
+            id: true,
+            isActive: true,
+            isDefault: true,
+            name: true,
+            pluralName: true,
+            slug: true,
+            systemKey: true,
+          },
+        },
         leadSource: true,
         phone: true,
         postcode: true,
@@ -466,6 +482,21 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     prisma.contactTag.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
+    }),
+    prisma.contactType.findMany({
+      orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      select: {
+        colourKey: true,
+        description: true,
+        iconKey: true,
+        id: true,
+        isActive: true,
+        isDefault: true,
+        name: true,
+        pluralName: true,
+        slug: true,
+        systemKey: true,
+      },
     }),
     prisma.contact.findMany({
       where: mergeCandidateWhere,
@@ -739,6 +770,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     id: contact.id,
     lastName: contact.lastName,
     category: contact.category ?? defaultContactCategory,
+    contactTypeId: contact.contactTypeId,
     leadSource: contact.leadSource,
     phone: contact.phone,
     postcode: contact.postcode,
@@ -929,6 +961,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   const categoryOption = contactCategoryOption(
     contact.category ?? defaultContactCategory,
   );
+  const contactTypeLabel = contact.contactType?.name ?? categoryOption.label;
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const relationshipStatus = (contact.relationshipProfile?.status ??
     defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
@@ -966,7 +999,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         <div>
           <dt className="text-gray-500 dark:text-gray-400">Category</dt>
           <dd className="mt-1">
-            <StatusBadge>{categoryOption.label}</StatusBadge>
+            <StatusBadge>{contactTypeLabel}</StatusBadge>
           </dd>
         </div>
         <div>
@@ -1166,7 +1199,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               </ContactHeaderDetailRow>
             ) : null}
             <ContactHeaderDetailRow Icon={UserRound}>
-              <p>{categoryOption.label}</p>
+              <p>{contactTypeLabel}</p>
             </ContactHeaderDetailRow>
           </div>
         }
@@ -1196,6 +1229,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               availableTags={availableTags}
               companies={companies}
               companiesEnabled={settings.companiesEnabled}
+              contactTypes={contactTypes}
               contact={editableContact}
               addressLookupEnabled={addressLookupEnabled}
               triggerLabel="Edit"

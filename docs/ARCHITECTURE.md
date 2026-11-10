@@ -68,6 +68,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   Admin-only contact-type mutations preserve the stable slug/system key, enforce
   one active default in a transaction, block unsafe archival and write AuditLog
   events without storing contact data.
+  `/contacts`, contact modals and header quick-create use active `ContactType`
+  rows. Contact writes derive the legacy category from the selected system key;
+  custom types use the Consumer compatibility bucket until downstream imports
+  and reports complete their staged migration.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level

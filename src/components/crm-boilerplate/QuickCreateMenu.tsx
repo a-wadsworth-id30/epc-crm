@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AddSaleModalProps } from "@/components/crm-boilerplate/AddSaleModal";
 import type { CompanyCreateModalProps } from "@/components/crm-boilerplate/CompanyModals";
 import type { ContactCreateModalProps } from "@/components/crm-boilerplate/ContactModals";
+import type { ContactTypeOption } from "@/lib/contacts/contact-types";
 import {
   DollarLineIcon,
   PlusIcon,
@@ -33,6 +34,7 @@ type QuickCreateOptions = {
     phone: string | null;
   }>;
   contactTags: Array<{ id: string; name: string }>;
+  contactTypes: ContactTypeOption[];
   sales: {
     defaultOwnerId: string | null;
     defaultStageId: string | null;
@@ -256,6 +258,7 @@ export default function QuickCreateMenu({
           availableTags={options.contactTags}
           companies={options.companies}
           companiesEnabled={options.companiesEnabled}
+          contactTypes={options.contactTypes}
           hideTrigger
         />
       ) : null}

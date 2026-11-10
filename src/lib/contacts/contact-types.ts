@@ -1,5 +1,18 @@
 import type { ContactCategoryValue } from "@/lib/contacts/categories";
 
+export type ContactTypeOption = {
+  id: string;
+  name: string;
+  pluralName: string;
+  slug: string;
+  description: string | null;
+  systemKey: ContactCategoryValue | null;
+  colourKey: string;
+  iconKey: string;
+  isDefault: boolean;
+  isActive: boolean;
+};
+
 export const systemContactTypeIds = {
   CONSUMER: "contact-type-consumer",
   TRADE: "contact-type-trade",
