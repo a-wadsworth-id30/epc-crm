@@ -37,6 +37,15 @@ import type {
   ContactCustomFieldFormValue,
 } from "@/lib/contacts/custom-fields";
 import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
+import {
+  contactCustomFieldDisplayValue,
+  contactCustomTableColumnId,
+  contactTableColumnIds,
+  contactTableCustomFields,
+  defaultVisibleContactColumnIds,
+  parseVisibleContactColumnIds,
+  serializeVisibleContactColumnIds,
+} from "@/lib/contacts/table-columns";
 import { triggerSoftphoneDial } from "@/lib/telephony/softphone-dial";
 
 type CompanyOption = {
@@ -87,20 +96,6 @@ type SortKey =
 type SortDirection = "asc" | "desc";
 
 const pageSizes = [10, 25, 50, 100];
-const defaultContactColumnIds = [
-  "name",
-  "company",
-  "category",
-  "role",
-  "source",
-  "email",
-  "phone",
-  "tags",
-] as const;
-const contactColumnIds = [...defaultContactColumnIds, "address"] as const;
-type ContactColumnId = (typeof contactColumnIds)[number];
-const contactColumnIdSet = new Set<string>(contactColumnIds);
-const defaultContactColumnIdSet = new Set<string>(defaultContactColumnIds);
 
 function contactName(contact: ContactRow) {
   return `${contact.firstName} ${contact.lastName}`.trim();
@@ -130,35 +125,6 @@ function companyAddress(contact: ContactRow) {
   ]
     .filter(Boolean)
     .join(", ");
-}
-
-function parseVisibleContactColumns(value: string | null) {
-  if (!value) {
-    return [...defaultContactColumnIds];
-  }
-
-  const parsedColumnIds = value
-    .split(",")
-    .map((columnId) => columnId.trim())
-    .filter((columnId): columnId is ContactColumnId =>
-      contactColumnIdSet.has(columnId),
-    );
-  const nextColumnIds = new Set<ContactColumnId>(["name"]);
-
-  parsedColumnIds.forEach((columnId) => nextColumnIds.add(columnId));
-
-  return contactColumnIds.filter((columnId) => nextColumnIds.has(columnId));
-}
-
-function serializeVisibleContactColumns(columnIds: string[]) {
-  const normalizedColumnIds = parseVisibleContactColumns(columnIds.join(","));
-  const isDefault =
-    normalizedColumnIds.length === defaultContactColumnIds.length &&
-    normalizedColumnIds.every((columnId) =>
-      defaultContactColumnIdSet.has(columnId),
-    );
-
-  return isDefault ? null : normalizedColumnIds.join(",");
 }
 
 export default function ContactsTable({
@@ -200,12 +166,20 @@ export default function ContactsTable({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [localQuery, setLocalQuery] = useState(query);
-  const visibleColumnIds = parseVisibleContactColumns(
-    searchParams.get("columns"),
-  );
   const activeContactType = contactTypes.find(
     (contactType) => contactType.slug === activeContactTypeSlug,
   );
+  const tableCustomFields = contactTableCustomFields({
+    activeContactTypeId: activeContactType?.id ?? null,
+    fields: customFields,
+  });
+  const availableColumnIds = contactTableColumnIds(tableCustomFields);
+  const defaultColumnIds = defaultVisibleContactColumnIds(tableCustomFields);
+  const visibleColumnIds = parseVisibleContactColumnIds({
+    availableColumnIds,
+    defaultColumnIds,
+    value: searchParams.get("columns"),
+  });
   const exportParams = new URLSearchParams();
   if (query) exportParams.set("q", query);
   if (activeContactTypeSlug !== "all") {
@@ -255,11 +229,19 @@ export default function ContactsTable({
   }
 
   function updateVisibleColumns(nextColumnIds: string[]) {
-    const serializedColumns = serializeVisibleContactColumns(nextColumnIds);
+    const serializedColumns = serializeVisibleContactColumnIds({
+      availableColumnIds,
+      defaultColumnIds,
+      selectedColumnIds: nextColumnIds,
+    });
     const nextVisibleColumnIds = new Set(
       serializedColumns
-        ? parseVisibleContactColumns(serializedColumns)
-        : defaultContactColumnIds,
+        ? parseVisibleContactColumnIds({
+            availableColumnIds,
+            defaultColumnIds,
+            value: serializedColumns,
+          })
+        : defaultColumnIds,
     );
     const hidesActiveSort =
       sortKey !== "name" && !nextVisibleColumnIds.has(sortKey);
@@ -347,6 +329,34 @@ export default function ContactsTable({
       sortValue: contactAddress,
       cell: (contact) => <ContactAddressCell contact={contact} />,
     },
+    ...tableCustomFields.map(
+      (field): CrmDataTableColumn<ContactRow> => ({
+        id: contactCustomTableColumnId(field.id),
+        header: field.label,
+        visibilityLabel:
+          activeContactType?.id === field.contactTypeId
+            ? field.label
+            : `${contactTypes.find((type) => type.id === field.contactTypeId)?.name ?? "Person"}: ${field.label}`,
+        cell: (contact) => {
+          const displayValue = contactCustomFieldDisplayValue(
+            contact.customFieldValues[field.id],
+          );
+
+          return (
+            <span
+              className={
+                displayValue === "Not set"
+                  ? "text-gray-400"
+                  : "block max-w-72 truncate"
+              }
+              title={displayValue === "Not set" ? undefined : displayValue}
+            >
+              {displayValue}
+            </span>
+          );
+        },
+      }),
+    ),
   ];
 
   return (
