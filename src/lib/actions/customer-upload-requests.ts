@@ -155,7 +155,7 @@ function uploadRequestDocumentLabels(
   );
 }
 
-async function contactUploadRequirementOverrides({
+async function recordUploadRequirementOverrides({
   entityId,
   entityType,
   types,
@@ -168,7 +168,37 @@ async function contactUploadRequirementOverrides({
     DocumentUploadType,
     CustomerUploadRequirementOverride
   >();
-  if (entityType !== "Contact" || !types.length) return overrides;
+  if (!types.length) return overrides;
+
+  const selectedTypes = new Set<DocumentUploadType>(types);
+
+  if (entityType === "Company") {
+    const company = await prisma.company.findUnique({
+      where: { id: entityId },
+      select: { companyTypeId: true },
+    });
+    if (!company?.companyTypeId) return overrides;
+
+    const requirements = await prisma.companyTypeDocumentRequirement.findMany({
+      where: {
+        companyTypeId: company.companyTypeId,
+        isActive: true,
+        uploadType: { in: types },
+      },
+      select: { description: true, label: true, uploadType: true },
+    });
+    requirements.forEach((requirement) => {
+      if (!isDocumentUploadType(requirement.uploadType)) return;
+      if (!selectedTypes.has(requirement.uploadType)) return;
+      overrides.set(requirement.uploadType, {
+        description: requirement.description,
+        label: requirement.label,
+      });
+    });
+    return overrides;
+  }
+
+  if (entityType !== "Contact") return overrides;
 
   const contact = await prisma.contact.findUnique({
     where: { id: entityId },
@@ -195,7 +225,6 @@ async function contactUploadRequirementOverrides({
     },
     select: { description: true, label: true, uploadType: true },
   });
-  const selectedTypes = new Set<DocumentUploadType>(types);
   requirements.forEach((requirement) => {
     if (!isDocumentUploadType(requirement.uploadType)) return;
     if (!selectedTypes.has(requirement.uploadType)) return;
@@ -284,7 +313,7 @@ export async function createCustomerUploadRequestAction(
     return { ok: false, message: "Record not found." };
   }
 
-  const requirementOverrides = await contactUploadRequirementOverrides({
+  const requirementOverrides = await recordUploadRequirementOverrides({
     entityId: parsed.data.entityId,
     entityType,
     types: documentTypes,

@@ -1,4 +1,5 @@
 import CompanyCustomFieldManager from "@/components/crm-boilerplate/CompanyCustomFieldManager";
+import CompanyDocumentRequirementManager from "@/components/crm-boilerplate/CompanyDocumentRequirementManager";
 import CompanyTypeManager from "@/components/crm-boilerplate/CompanyTypeManager";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
 import { requireAdmin } from "@/lib/auth";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 export default async function CompanyTypeSettingsPage() {
   await requireAdmin();
-  const [companyTypes, fields] = await Promise.all([
+  const [companyTypes, fields, documentRequirements] = await Promise.all([
     prisma.companyType.findMany({
       orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
       select: {
@@ -47,6 +48,24 @@ export default async function CompanyTypeSettingsPage() {
         _count: { select: { values: true } },
       },
     }),
+    prisma.companyTypeDocumentRequirement.findMany({
+      orderBy: [
+        { companyType: { displayOrder: "asc" } },
+        { displayOrder: "asc" },
+        { label: "asc" },
+      ],
+      select: {
+        companyTypeId: true,
+        description: true,
+        displayOrder: true,
+        id: true,
+        isActive: true,
+        isRequired: true,
+        label: true,
+        uploadType: true,
+        companyType: { select: { name: true } },
+      },
+    }),
   ]);
 
   return (
@@ -69,6 +88,26 @@ export default async function CompanyTypeSettingsPage() {
             valueCount: field._count.values,
           }))}
           nextDisplayOrder={fields.reduce((highest, field) => Math.max(highest, field.displayOrder), 0) + 10}
+        />
+      </div>
+      <div className="mt-6">
+        <CompanyDocumentRequirementManager
+          companyTypes={companyTypes.map((type) => ({
+            id: type.id,
+            isActive: type.isActive,
+            name: type.name,
+          }))}
+          requirements={documentRequirements.map((requirement) => ({
+            ...requirement,
+            companyTypeName: requirement.companyType.name,
+          }))}
+          nextDisplayOrder={
+            documentRequirements.reduce(
+              (highest, requirement) =>
+                Math.max(highest, requirement.displayOrder),
+              0,
+            ) + 10
+          }
         />
       </div>
     </>

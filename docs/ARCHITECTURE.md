@@ -87,6 +87,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   its Overview panel. It reports completeness against non-optional fields on
   the selected Company Type and never treats an unconfigured type as an
   incomplete profile.
+- `CompanyTypeDocumentRequirement` defines an ordered, active required or
+  optional controlled document type for a Company Type. Company compliance is
+  derived from private `FileAsset` records whose entity is the Company and whose
+  `documentUploadType` matches exactly. The shared record document library keeps
+  R2 access, issue/expiry metadata, renewal tasks and customer upload links in
+  one workflow; Company-specific labels and instructions are resolved again on
+  the server when an upload request is created.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

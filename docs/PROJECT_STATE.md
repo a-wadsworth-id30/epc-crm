@@ -71,6 +71,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   type's required and completeness fields. Optional fields do not lower the
   score, unconfigured types do not misleadingly show 0%, and role-restricted
   definitions and values remain absent from the rendered page.
+- Settings > Company Types also supports ordered required/optional document
+  checklists backed by controlled document types. Company Documents shows live
+  checklist compliance, defaults uploads towards missing required evidence and
+  carries the configured labels/instructions into secure customer upload
+  requests. Existing issue/expiry dates and optional renewal-task creation are
+  reused rather than introducing a second document workflow.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

@@ -602,24 +602,42 @@ model Company {
 }
 
 model CompanyType {
-  id           String                @id @default(cuid())
-  name         String
-  pluralName   String
-  slug         String                @unique
-  description  String?
-  systemKey    CompanyTypeSystemKey? @unique
-  colourKey    String                @default("gray")
-  iconKey      String                @default("building")
-  displayOrder Int                   @default(0)
-  isDefault    Boolean               @default(false)
-  isActive     Boolean               @default(true)
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  companies    Company[]
-  fields       CompanyTypeField[]
+  id                   String                           @id @default(cuid())
+  name                 String
+  pluralName           String
+  slug                 String                           @unique
+  description          String?
+  systemKey            CompanyTypeSystemKey?            @unique
+  colourKey            String                           @default("gray")
+  iconKey              String                           @default("building")
+  displayOrder         Int                              @default(0)
+  isDefault            Boolean                          @default(false)
+  isActive             Boolean                          @default(true)
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+  companies            Company[]
+  fields               CompanyTypeField[]
+  documentRequirements CompanyTypeDocumentRequirement[]
 
   @@index([isActive, displayOrder])
   @@index([isDefault, isActive])
+}
+
+model CompanyTypeDocumentRequirement {
+  id            String      @id @default(cuid())
+  companyTypeId String
+  companyType   CompanyType @relation(fields: [companyTypeId], references: [id], onDelete: Cascade)
+  uploadType    String
+  label         String
+  description   String?
+  displayOrder  Int         @default(0)
+  isRequired    Boolean     @default(true)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([companyTypeId, uploadType])
+  @@index([companyTypeId, isActive, displayOrder])
 }
 
 model CompanyTypeField {

@@ -1033,7 +1033,9 @@ function CustomerUploadRequestPanel({
   const suggestedCount =
     entityType === "Contact"
       ? suggestedTypes.size
-      : defaultCustomerDocumentTypeCount;
+      : entityType === "Company" && documentRequirements.length
+        ? suggestedTypes.size
+        : defaultCustomerDocumentTypeCount;
   const [state, formAction, isPending] = useActionState(
     createCustomerUploadRequestAction,
     initialCustomerUploadRequestState,

@@ -206,3 +206,14 @@ do not display a misleading zero-percent state. The workspace uses the same
 role-filtered definitions and values as the edit form, so restricted company
 data is not exposed through the detail view.
 
+## Task 7 Company document requirements
+
+Admins can define ordered required or optional controlled document types for
+each Company Type in Settings > Company Types. The Company Documents workspace
+matches private record files by their controlled document metadata and displays
+the resulting checklist without relying on filenames. Missing required types
+are prioritised in the existing upload flow and suggested in secure customer
+upload requests, whose server action reloads the configured label and
+instructions. Existing document issue dates, expiry dates and renewal-task
+support remain the single implementation for both People and Companies.
+

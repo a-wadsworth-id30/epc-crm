@@ -7,6 +7,7 @@ import {
 } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
+import CompanyDocumentRequirements from "@/components/crm-boilerplate/CompanyDocumentRequirements";
 import CompanyProfileCompleteness from "@/components/crm-boilerplate/CompanyProfileCompleteness";
 import {
   CompanyContactLinker,
@@ -23,6 +24,10 @@ import {
 } from "@/lib/companies/field-access";
 import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
 import { companyProfileCompleteness } from "@/lib/companies/profile-completeness";
+import {
+  companyDocumentRequirementStatuses,
+  parseCompanyDocumentUploadType,
+} from "@/lib/companies/document-requirements";
 import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
@@ -124,6 +129,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     company,
     companyTypes,
     companyCustomFields,
+    companyTypeDocumentRequirements,
     settings,
     companyDocuments,
     companyUploadRequests,
@@ -249,6 +255,20 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         requirementMode: true,
         showInTable: true,
         viewRoleTemplates: true,
+      },
+    }),
+    prisma.companyTypeDocumentRequirement.findMany({
+      where: { isActive: true },
+      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+      select: {
+        companyTypeId: true,
+        description: true,
+        displayOrder: true,
+        id: true,
+        isActive: true,
+        isRequired: true,
+        label: true,
+        uploadType: true,
       },
     }),
     getCrmSettings(),
@@ -409,6 +429,20 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     definitions: normalizedCompanyCustomFields,
     values: serializedCompanyCustomFieldValues,
   });
+  const companyDocumentStatuses =
+    companyDocumentRequirementStatuses({
+      companyTypeId: company.companyTypeId,
+      documents: companyDocuments.map((document) => ({
+        documentUploadType: document.documentUploadType,
+        id: document.id,
+      })),
+      requirements: companyTypeDocumentRequirements.flatMap((requirement) => {
+        const uploadType = parseCompanyDocumentUploadType(
+          requirement.uploadType,
+        );
+        return uploadType ? [{ ...requirement, uploadType }] : [];
+      }),
+    });
   const companyDetailPanel = (
     <div className="p-5">
       <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
@@ -635,8 +669,20 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   );
   const documentsPanel = (
     <div className="p-4 sm:p-5">
+      <CompanyDocumentRequirements
+        requirements={companyDocumentStatuses}
+      />
       <RecordDocumentLibrary
         documentPortals={companyDocumentPortals}
+        documentRequirements={companyDocumentStatuses.map(
+          ({ description, isRequired, label, satisfied, uploadType }) => ({
+            description,
+            isRequired,
+            label,
+            satisfied,
+            uploadType,
+          }),
+        )}
         documentShares={companyDocumentShares}
         documents={recordDocuments}
         entityId={company.id}
