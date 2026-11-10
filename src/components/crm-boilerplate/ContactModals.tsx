@@ -11,6 +11,7 @@ import ContactForm, {
   type ContactFormValues,
 } from "@/components/crm-boilerplate/ContactForm";
 import type { ContactTagOption } from "@/components/crm-boilerplate/ContactTagInput";
+import type { ContactTypeOption } from "@/lib/contacts/contact-types";
 import {
   contactCategoryOption,
   type ContactCategoryValue,
@@ -31,6 +32,7 @@ export type ContactCreateModalProps = {
   autoOpen?: boolean;
   companies: CompanyOption[];
   companiesEnabled: boolean;
+  contactTypes: ContactTypeOption[];
   availableTags: ContactTagOption[];
   hideTrigger?: boolean;
 };
@@ -41,6 +43,7 @@ export type ContactEditModalProps = {
   contact: ContactFormValues;
   companies: CompanyOption[];
   companiesEnabled: boolean;
+  contactTypes: ContactTypeOption[];
   availableTags: ContactTagOption[];
   triggerLabel?: string;
 };
@@ -85,6 +88,7 @@ export function ContactCreateModal({
   autoOpen,
   companies,
   companiesEnabled,
+  contactTypes,
   availableTags,
   hideTrigger = false,
 }: ContactCreateModalProps) {
@@ -120,6 +124,7 @@ export function ContactCreateModal({
             mode="create"
             companies={companies}
             companiesEnabled={companiesEnabled}
+            contactTypes={contactTypes}
             availableTags={availableTags}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
@@ -136,6 +141,7 @@ export function ContactEditModal({
   contact,
   companies,
   companiesEnabled,
+  contactTypes,
   availableTags,
   triggerLabel,
 }: ContactEditModalProps) {
@@ -186,6 +192,7 @@ export function ContactEditModal({
             contact={contact}
             companies={companies}
             companiesEnabled={companiesEnabled}
+            contactTypes={contactTypes}
             availableTags={availableTags}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}

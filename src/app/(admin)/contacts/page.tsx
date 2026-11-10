@@ -18,10 +18,8 @@ import {
 } from "@/lib/contact-methods";
 import {
   contactCategoryOptions,
-  contactCategoryValues,
   defaultContactCategory,
   isContactCategoryValue,
-  type ContactCategoryValue,
 } from "@/lib/contacts/categories";
 import { requireUser } from "@/lib/auth";
 import {
@@ -41,6 +39,7 @@ type ContactsPageProps = {
     q?: string | string[];
     sort?: string | string[];
     category?: string | string[];
+    type?: string | string[];
   }>;
 };
 
@@ -58,7 +57,6 @@ const contactSortKeys = [
 ] as const;
 type ContactSortKey = (typeof contactSortKeys)[number];
 type SortDirection = "asc" | "desc";
-type ContactCategoryFilter = "all" | ContactCategoryValue;
 
 function parseSortKey(value: string | string[] | undefined): ContactSortKey {
   const parsed = singleParam(value);
@@ -71,13 +69,6 @@ function parseSortDirection(
   value: string | string[] | undefined,
 ): SortDirection {
   return singleParam(value) === "desc" ? "desc" : "asc";
-}
-
-function parseCategoryFilter(
-  value: string | string[] | undefined,
-): ContactCategoryFilter {
-  const parsed = singleParam(value);
-  return isContactCategoryValue(parsed) ? parsed : "all";
 }
 
 function contains(term: string) {
@@ -137,6 +128,8 @@ function contactWhere(query: string): Prisma.ContactWhereInput | undefined {
           { company: { county: contains(term) } },
           { company: { postcode: contains(term) } },
           { company: { country: contains(term) } },
+          { contactType: { name: contains(term) } },
+          { contactType: { pluralName: contains(term) } },
           { tagAssignments: { some: { tag: { name: contains(term) } } } },
           ...(matchingCategories.length
             ? [{ category: { in: matchingCategories } }]
@@ -160,6 +153,7 @@ function contactOrderBy(
       ];
     case "category":
       return [
+        { contactType: { name: direction } },
         { category: direction },
         { lastName: "asc" },
         { firstName: "asc" },
@@ -197,9 +191,34 @@ export default async function ContactsPage({
   const query = (singleParam(params.q) ?? "").trim();
   const sortKey = parseSortKey(params.sort);
   const sortDirection = parseSortDirection(params.direction);
-  const activeCategory = parseCategoryFilter(params.category);
   const requestedPage = parsePositiveInteger(params.page, 1);
   const settings = await getCrmSettings();
+  const contactTypes = await prisma.contactType.findMany({
+    where: { isActive: true },
+    orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+    select: {
+      colourKey: true,
+      description: true,
+      iconKey: true,
+      id: true,
+      isActive: true,
+      isDefault: true,
+      name: true,
+      pluralName: true,
+      slug: true,
+      systemKey: true,
+    },
+  });
+  const requestedType = singleParam(params.type);
+  const legacyCategory = singleParam(params.category);
+  const activeContactType =
+    contactTypes.find((contactType) => contactType.slug === requestedType) ??
+    (isContactCategoryValue(legacyCategory)
+      ? contactTypes.find(
+          (contactType) => contactType.systemKey === legacyCategory,
+        )
+      : null) ??
+    null;
   const interfaceDefaults = parseInterfaceDefaults(settings.interfaceDefaults);
   const pageSize = parsePageSize({
     fallback: resolveInterfacePageSizeFallback(
@@ -211,9 +230,23 @@ export default async function ContactsPage({
     value: params.pageSize,
   });
   const searchWhere = contactWhere(query);
-  const categoryWhere: Prisma.ContactWhereInput | undefined =
-    activeCategory === "all" ? undefined : { category: activeCategory };
-  const whereFilters = [categoryWhere, searchWhere].filter(hasContactWhere);
+  const contactTypeWhere: Prisma.ContactWhereInput | undefined =
+    activeContactType
+      ? {
+          OR: [
+            { contactTypeId: activeContactType.id },
+            ...(activeContactType.systemKey
+              ? [
+                  {
+                    contactTypeId: null,
+                    category: activeContactType.systemKey,
+                  },
+                ]
+              : []),
+          ],
+        }
+      : undefined;
+  const whereFilters = [contactTypeWhere, searchWhere].filter(hasContactWhere);
   const where = contactWhereWithAccess(
     user,
     whereFilters.length ? { AND: whereFilters } : undefined,
@@ -226,7 +259,7 @@ export default async function ContactsPage({
   const [
     totalCount,
     allContactCount,
-    categoryRows,
+    contactTypeRows,
     companies,
     availableTags,
     addressLookupEnabled,
@@ -234,7 +267,7 @@ export default async function ContactsPage({
     prisma.contact.count({ where }),
     prisma.contact.count({ where: allContactsWhere }),
     prisma.contact.groupBy({
-      by: ["category"],
+      by: ["contactTypeId", "category"],
       where: allContactsWhere,
       _count: { _all: true },
     }),
@@ -280,6 +313,21 @@ export default async function ContactsPage({
       id: true,
       lastName: true,
       category: true,
+      contactTypeId: true,
+      contactType: {
+        select: {
+          colourKey: true,
+          description: true,
+          iconKey: true,
+          id: true,
+          isActive: true,
+          isDefault: true,
+          name: true,
+          pluralName: true,
+          slug: true,
+          systemKey: true,
+        },
+      },
       leadSource: true,
       phone: true,
       postcode: true,
@@ -315,6 +363,7 @@ export default async function ContactsPage({
           <DeferredContactCreateModal
             companies={companies}
             companiesEnabled={settings.companiesEnabled}
+            contactTypes={contactTypes}
             availableTags={availableTags}
             addressLookupEnabled={addressLookupEnabled}
           />
@@ -333,6 +382,13 @@ export default async function ContactsPage({
           email: contact.email,
           phone: contact.phone,
           category: contact.category ?? defaultContactCategory,
+          contactTypeId: contact.contactTypeId,
+          contactType:
+            contact.contactType ??
+            contactTypes.find(
+              (contactType) => contactType.systemKey === contact.category,
+            ) ??
+            null,
           additionalEmails: normalizeContactEmailMethods(
             contact.additionalEmails,
             contact.email,
@@ -362,16 +418,21 @@ export default async function ContactsPage({
             name: assignment.tag.name,
           })),
         }))}
-        activeCategory={activeCategory}
-        categoryCounts={
-          Object.fromEntries(
-            contactCategoryValues.map((category) => [
-              category,
-              categoryRows.find((row) => row.category === category)?._count
-                ._all ?? 0,
-            ]),
-          ) as Record<ContactCategoryValue, number>
-        }
+        activeContactTypeSlug={activeContactType?.slug ?? "all"}
+        contactTypes={contactTypes}
+        contactTypeCounts={Object.fromEntries(
+          contactTypes.map((contactType) => [
+            contactType.id,
+            contactTypeRows
+              .filter(
+                (row) =>
+                  row.contactTypeId === contactType.id ||
+                  (!row.contactTypeId &&
+                    row.category === contactType.systemKey),
+              )
+              .reduce((total, row) => total + row._count._all, 0),
+          ]),
+        )}
         page={currentPage}
         pageSize={pageSize}
         query={query}

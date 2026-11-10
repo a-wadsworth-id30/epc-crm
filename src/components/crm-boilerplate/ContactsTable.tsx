@@ -27,11 +27,9 @@ import type {
   ContactPhoneMethod,
 } from "@/lib/contact-methods";
 import {
-  contactCategoryOption,
-  contactCategoryOptions,
-  defaultContactCategory,
   type ContactCategoryValue,
 } from "@/lib/contacts/categories";
+import type { ContactTypeOption } from "@/lib/contacts/contact-types";
 import { triggerSoftphoneDial } from "@/lib/telephony/softphone-dial";
 
 type CompanyOption = {
@@ -48,6 +46,8 @@ type ContactRow = {
   additionalEmails: ContactEmailMethod[];
   additionalPhones: ContactPhoneMethod[];
   category: ContactCategoryValue;
+  contactTypeId: string | null;
+  contactType: ContactTypeOption | null;
   leadSource: string | null;
   role: string | null;
   addressLine1: string | null;
@@ -155,8 +155,9 @@ function serializeVisibleContactColumns(columnIds: string[]) {
 
 export default function ContactsTable({
   addressLookupEnabled,
-  activeCategory,
-  categoryCounts,
+  activeContactTypeSlug,
+  contactTypeCounts,
+  contactTypes,
   contacts,
   companies,
   companiesEnabled,
@@ -170,8 +171,9 @@ export default function ContactsTable({
   totalCount,
 }: {
   addressLookupEnabled: boolean;
-  activeCategory: "all" | ContactCategoryValue;
-  categoryCounts: Record<ContactCategoryValue, number>;
+  activeContactTypeSlug: string;
+  contactTypeCounts: Record<string, number>;
+  contactTypes: ContactTypeOption[];
   contacts: ContactRow[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
@@ -191,8 +193,9 @@ export default function ContactsTable({
   const visibleColumnIds = parseVisibleContactColumns(
     searchParams.get("columns"),
   );
-  const activeCategoryOption =
-    activeCategory === "all" ? null : contactCategoryOption(activeCategory);
+  const activeContactType = contactTypes.find(
+    (contactType) => contactType.slug === activeContactTypeSlug,
+  );
 
   const updateParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -282,7 +285,7 @@ export default function ContactsTable({
       header: "Category",
       sortable: true,
       sortValue: (contact) => contact.category,
-      cell: (contact) => <ContactCategoryBadge category={contact.category} />,
+      cell: (contact) => <ContactTypeBadge contactType={contact.contactType} />,
     },
     {
       id: "role",
@@ -330,14 +333,16 @@ export default function ContactsTable({
 
   return (
     <div className="space-y-5">
-      <ContactCategoryOverview
-        activeCategory={activeCategory}
+      <ContactTypeOverview
+        activeContactTypeSlug={activeContactTypeSlug}
         allContactCount={allContactCount}
-        categoryCounts={categoryCounts}
-        onSelect={(category) =>
+        contactTypeCounts={contactTypeCounts}
+        contactTypes={contactTypes}
+        onSelect={(contactTypeSlug) =>
           updateParams({
-            category: category === "all" ? null : category,
+            category: null,
             page: null,
+            type: contactTypeSlug === "all" ? null : contactTypeSlug,
           })
         }
       />
@@ -346,8 +351,8 @@ export default function ContactsTable({
         columns={columns}
         getRowId={(contact) => contact.id}
         title={
-          activeCategoryOption
-            ? `${activeCategoryOption.pluralLabel} (${totalCount})`
+          activeContactType
+            ? `${activeContactType.pluralName} (${totalCount})`
             : `All People (${totalCount})`
         }
         searchPlaceholder="Search people..."
@@ -390,6 +395,7 @@ export default function ContactsTable({
             availableTags={availableTags}
             companies={companies}
             companiesEnabled={companiesEnabled}
+            contactTypes={contactTypes}
             contact={contact}
             addressLookupEnabled={addressLookupEnabled}
           />
@@ -399,35 +405,55 @@ export default function ContactsTable({
   );
 }
 
-const categoryIconByValue: Record<ContactCategoryValue, LucideIcon> = {
-  CONSUMER: UserRound,
-  TRADE: BriefcaseBusiness,
-  INSTALLER: Wrench,
-  COMPANY: Building2,
+const iconByKey: Record<string, LucideIcon> = {
+  user: UserRound,
+  briefcase: BriefcaseBusiness,
+  wrench: Wrench,
+  building: Building2,
 };
 
-function ContactCategoryOverview({
-  activeCategory,
+const cardClassByColour: Record<string, string> = {
+  gray: "border-gray-200 bg-gray-50/40 dark:border-gray-700 dark:bg-white/[0.03]",
+  success: "border-success-200 bg-success-50/40 dark:border-success-800 dark:bg-success-500/10",
+  blue: "border-blue-light-200 bg-blue-light-50 dark:border-blue-light-800 dark:bg-blue-light-500/10",
+  purple: "border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-500/10",
+  orange: "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-500/10",
+};
+
+const countClassByColour: Record<string, string> = {
+  gray: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
+  success: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-300",
+  blue: "bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-300",
+  purple: "bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
+  orange: "bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
+};
+
+const tableClassByColour = countClassByColour;
+
+function ContactTypeOverview({
+  activeContactTypeSlug,
   allContactCount,
-  categoryCounts,
+  contactTypeCounts,
+  contactTypes,
   onSelect,
 }: {
-  activeCategory: "all" | ContactCategoryValue;
+  activeContactTypeSlug: string;
   allContactCount: number;
-  categoryCounts: Record<ContactCategoryValue, number>;
-  onSelect: (category: "all" | ContactCategoryValue) => void;
+  contactTypeCounts: Record<string, number>;
+  contactTypes: ContactTypeOption[];
+  onSelect: (contactTypeSlug: string) => void;
 }) {
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-800">
         {[
           { label: "All People", value: "all" as const },
-          ...contactCategoryOptions.map((option) => ({
-            label: option.label,
-            value: option.value,
+          ...contactTypes.map((option) => ({
+            label: option.name,
+            value: option.slug,
           })),
         ].map((tab) => {
-          const selected = activeCategory === tab.value;
+          const selected = activeContactTypeSlug === tab.value;
 
           return (
             <button
@@ -446,53 +472,43 @@ function ContactCategoryOverview({
         })}
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {contactCategoryOptions.map((option, index) => {
-          const Icon = categoryIconByValue[option.value];
-          const count = categoryCounts[option.value] ?? 0;
-          const selected = activeCategory === option.value;
+        {contactTypes.map((option, index) => {
+          const Icon = iconByKey[option.iconKey] ?? UserRound;
+          const count = contactTypeCounts[option.id] ?? 0;
+          const selected = activeContactTypeSlug === option.slug;
 
           return (
             <button
-              key={option.value}
+              key={option.id}
               type="button"
-              onClick={() => onSelect(option.value)}
+              onClick={() => onSelect(option.slug)}
               className={`min-h-44 rounded-lg border bg-white p-4 text-left shadow-theme-xs transition hover:-translate-y-0.5 hover:shadow-theme-sm dark:bg-white/[0.03] ${
                 selected
                   ? "border-brand-400 ring-2 ring-brand-500/15"
-                  : option.cardClassName
+                  : cardClassByColour[option.colourKey] ?? cardClassByColour.gray
               }`}
             >
               <div className="flex items-start gap-3">
                 <span
-                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.countClassName}`}
+                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${countClassByColour[option.colourKey] ?? countClassByColour.gray}`}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
-                    {index + 1}. {option.label}
+                    {index + 1}. {option.name}
                   </p>
                   <p className="mt-1 text-sm leading-5 text-gray-800 dark:text-white/90">
                     {option.description}
                   </p>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {option.examples.map((example) => (
-                  <span
-                    key={example}
-                    className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-white/[0.04] dark:text-gray-300 dark:ring-white/10"
-                  >
-                    {example}
-                  </span>
-                ))}
-              </div>
               <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-white/10">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {option.pluralLabel}
+                  {option.pluralName}
                 </span>
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${option.countClassName}`}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${countClassByColour[option.colourKey] ?? countClassByColour.gray}`}
                 >
                   {count}
                 </span>
@@ -501,7 +517,7 @@ function ContactCategoryOverview({
           );
         })}
       </div>
-      {activeCategory !== "all" ? (
+      {activeContactTypeSlug !== "all" ? (
         <button
           type="button"
           onClick={() => onSelect("all")}
@@ -667,18 +683,12 @@ function ContactTags({ contact }: { contact: ContactRow }) {
   );
 }
 
-function ContactCategoryBadge({
-  category,
-}: {
-  category: ContactCategoryValue | null | undefined;
-}) {
-  const option = contactCategoryOption(category ?? defaultContactCategory);
-
+function ContactTypeBadge({ contactType }: { contactType: ContactTypeOption | null }) {
   return (
     <span
-      className={`inline-flex h-6 items-center rounded-full px-2 text-xs font-semibold ${option.tableClassName}`}
+      className={`inline-flex h-6 items-center rounded-full px-2 text-xs font-semibold ${tableClassByColour[contactType?.colourKey ?? "gray"] ?? tableClassByColour.gray}`}
     >
-      {option.label}
+      {contactType?.name ?? "Unassigned"}
     </span>
   );
 }
@@ -688,12 +698,14 @@ function ContactActions({
   availableTags,
   companies,
   companiesEnabled,
+  contactTypes,
   contact,
 }: {
   addressLookupEnabled: boolean;
   availableTags: ContactTagOption[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
+  contactTypes: ContactTypeOption[];
   contact: ContactRow;
 }) {
   return (
@@ -701,6 +713,7 @@ function ContactActions({
       <DeferredContactEditModal
         companies={companies}
         companiesEnabled={companiesEnabled}
+        contactTypes={contactTypes}
         availableTags={availableTags}
         addressLookupEnabled={addressLookupEnabled}
         contact={contact}

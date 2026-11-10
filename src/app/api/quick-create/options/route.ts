@@ -31,7 +31,7 @@ export async function GET() {
   ]);
   const currentUser = auth.user;
   const salesDefaults = parseSalesDefaults(settings.salesDefaults);
-  const [companies, contacts, contactTags, salesOwners, salesStages] =
+  const [companies, contacts, contactTags, contactTypes, salesOwners, salesStages] =
     await Promise.all([
       settings.companiesEnabled
         ? prisma.company.findMany({
@@ -66,6 +66,22 @@ export async function GET() {
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
+      prisma.contactType.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        select: {
+          colourKey: true,
+          description: true,
+          iconKey: true,
+          id: true,
+          isActive: true,
+          isDefault: true,
+          name: true,
+          pluralName: true,
+          slug: true,
+          systemKey: true,
+        },
+      }),
       prisma.user.findMany({
         where: { status: "ACTIVE" },
         orderBy: { name: "asc" },
@@ -93,6 +109,7 @@ export async function GET() {
       phone: contact.phone,
     })),
     contactTags,
+    contactTypes,
     sales: {
       defaultOwnerId: resolveSalesDefaultOwnerId({
         fallbackUserId: currentUser.id,
