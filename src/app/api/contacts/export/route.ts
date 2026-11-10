@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { requireUser } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { contactWhereWithAccess } from "@/lib/crm-resource-access";
 import { serializeContactCustomFieldValue } from "@/lib/contacts/custom-fields";
 import { contactSearchWhere } from "@/lib/contacts/query";
@@ -18,7 +18,13 @@ function displayCustomValue(
 }
 
 export async function GET(request: Request) {
-  const user = await requireUser();
+  const auth = await requireApiUser();
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const user = auth.user;
   const url = new URL(request.url);
   const query = (url.searchParams.get("q") ?? "").trim();
   const typeSlug = (url.searchParams.get("type") ?? "").trim();

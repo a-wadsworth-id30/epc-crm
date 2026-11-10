@@ -90,6 +90,43 @@ const cases: PromptCase[] = [
     },
   },
   {
+    prompt: "Show profile completeness by person type.",
+    plan: {
+      dataset: "contacts_clients",
+      dimensions: ["personType", "profileCompleteness"],
+      metrics: ["profileIncompleteContacts"],
+    },
+  },
+  {
+    prompt: "Which contacts have incomplete profiles?",
+    plan: {
+      dataset: "contacts_clients",
+      filters: [
+        {
+          field: "profileCompleteness",
+          operator: "equals",
+          value: "Incomplete",
+        },
+      ],
+      metrics: ["profileIncompleteContacts"],
+    },
+  },
+  {
+    prompt: "Show installers missing required documents.",
+    plan: {
+      dataset: "contacts_clients",
+      dimensions: ["personType", "documentCompliance"],
+      filters: [
+        {
+          field: "documentCompliance",
+          operator: "equals",
+          value: "Missing required documents",
+        },
+      ],
+      metrics: ["contactsMissingRequiredDocuments"],
+    },
+  },
+  {
     prompt: "Which admins do not have 2FA enabled?",
     plan: {
       dataset: "users_security",
