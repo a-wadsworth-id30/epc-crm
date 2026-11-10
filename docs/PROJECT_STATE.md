@@ -102,6 +102,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   cards and generates warning notifications only for users who can access the
   linked contact. Expiry metadata changes are included in the document audit
   event without exposing file contents.
+- Record documents can also carry an optional issue date. Upload and metadata
+  forms can create a linked renewal task assigned to the current user, due at
+  the configured reminder date (or expiry when no earlier reminder exists).
+  Metadata edits keep active renewal tasks in sync; disabling renewal completes
+  the active auto-created task rather than deleting task history.
 - Record document delivery is hardened against active uploaded content and
   token leakage. Authenticated previews allow only passive raster/PDF/JSON/text
   formats, force supported text to plain text, block inline HTML/SVG, and send

@@ -123,6 +123,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   separate scheduled-job table. Record cards derive valid/due/expired state
   from those values. Header notifications batch-load matching contact records
   through the normal contact access filter before exposing a document alert.
+  `FileAsset.documentIssuedAt` records the document's stated issue date.
+  `documentRenewalTaskId` is an optional one-to-one link to an ordinary CRM
+  `Task`; renewal tasks are created only on explicit user selection, assigned
+  to that user, and due at the reminder timestamp or expiry date. Active linked
+  tasks follow metadata changes, while disabling renewal marks the active task
+  done so task history is retained.
   `src/lib/contacts/query.ts` owns People search semantics for both the list and
   `/api/contacts/export`. Only active, actor-visible custom fields with
   `isSearchable=true`

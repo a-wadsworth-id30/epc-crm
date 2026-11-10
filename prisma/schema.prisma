@@ -1964,9 +1964,12 @@ model FileAsset {
   entityId                     String?
   documentFolder               String?
   documentUploadType           String?
+  documentIssuedAt             DateTime?
   documentExpiresAt            DateTime?
   documentExpiryReminderAt     DateTime?
   documentExpiryReminderDays   Int?
+  documentRenewalTaskId        String?                     @unique
+  documentRenewalTask          Task?                       @relation("DocumentRenewalTask", fields: [documentRenewalTaskId], references: [id], onDelete: SetNull)
   notes                        String?
   tags                         String[]                    @default([])
   visibility                   FileAssetVisibility         @default(PRIVATE)
@@ -1985,6 +1988,7 @@ model FileAsset {
   @@index([entityType, entityId, documentFolder])
   @@index([entityType, documentExpiryReminderAt])
   @@index([documentExpiresAt])
+  @@index([documentIssuedAt])
   @@index([documentUploadType, createdAt])
   @@index([originalName, createdAt])
   @@index([mimeType, createdAt])
@@ -2227,6 +2231,7 @@ model Task {
   contactId   String?
   contact     Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
   metadata    Json?
+  renewalDocument FileAsset? @relation("DocumentRenewalTask")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

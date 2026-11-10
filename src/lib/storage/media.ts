@@ -274,6 +274,7 @@ export async function createStoredMediaFileAsset({
   bucket,
   checksum,
   documentExpiresAt,
+  documentIssuedAt,
   documentExpiryReminderAt,
   documentExpiryReminderDays,
   documentFolder,
@@ -292,6 +293,7 @@ export async function createStoredMediaFileAsset({
   bucket: string;
   checksum?: string | null;
   documentExpiresAt?: Date | null;
+  documentIssuedAt?: Date | null;
   documentExpiryReminderAt?: Date | null;
   documentExpiryReminderDays?: number | null;
   documentFolder?: string;
@@ -317,6 +319,7 @@ export async function createStoredMediaFileAsset({
       sizeBytes,
       checksum,
       documentExpiresAt,
+      documentIssuedAt,
       documentExpiryReminderAt,
       documentExpiryReminderDays,
       documentFolder,
@@ -341,6 +344,7 @@ export async function uploadMediaFile({
   folder,
   documentFolder,
   documentExpiresAt,
+  documentIssuedAt,
   documentExpiryReminderAt,
   documentExpiryReminderDays,
   documentUploadType,
@@ -357,6 +361,7 @@ export async function uploadMediaFile({
   folder: string;
   documentFolder?: string;
   documentExpiresAt?: Date | null;
+  documentIssuedAt?: Date | null;
   documentExpiryReminderAt?: Date | null;
   documentExpiryReminderDays?: number | null;
   documentUploadType?: string | null;
@@ -417,6 +422,7 @@ export async function uploadMediaFile({
     bucket: upload.bucketName,
     checksum,
     documentExpiresAt,
+    documentIssuedAt,
     documentExpiryReminderAt,
     documentExpiryReminderDays,
     documentFolder,

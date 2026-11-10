@@ -622,8 +622,10 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       select: {
         createdAt: true,
         documentExpiresAt: true,
+        documentIssuedAt: true,
         documentExpiryReminderAt: true,
         documentExpiryReminderDays: true,
+        documentRenewalTaskId: true,
         documentFolder: true,
         documentUploadType: true,
         id: true,
@@ -772,9 +774,11 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
   const recordDocuments = contactDocuments.map((document) => ({
     createdAt: document.createdAt.toISOString(),
     documentExpiresAt: document.documentExpiresAt?.toISOString() ?? null,
+    documentIssuedAt: document.documentIssuedAt?.toISOString() ?? null,
     documentExpiryReminderAt:
       document.documentExpiryReminderAt?.toISOString() ?? null,
     documentExpiryReminderDays: document.documentExpiryReminderDays,
+    documentRenewalTaskId: document.documentRenewalTaskId,
     documentFolder: document.documentFolder,
     documentUploadType: document.documentUploadType,
     id: document.id,

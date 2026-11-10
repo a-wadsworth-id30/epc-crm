@@ -5,6 +5,7 @@ import {
   documentExpiryReminderAt,
   documentExpiryStatus,
   parseDocumentExpiryDate,
+  parseDocumentIssueDate,
 } from "../src/lib/documents/expiry";
 
 test("document expiry dates use the end of the selected day", () => {
@@ -16,6 +17,15 @@ test("document expiry dates use the end of the selected day", () => {
   assert.equal(parseDocumentExpiryDate(""), null);
   assert.equal(parseDocumentExpiryDate("not-a-date"), undefined);
   assert.equal(parseDocumentExpiryDate("2026-02-31"), undefined);
+});
+
+test("document issue dates use the start of the selected day", () => {
+  const issuedAt = parseDocumentIssueDate("2026-01-15");
+
+  assert.ok(issuedAt instanceof Date);
+  assert.equal(issuedAt.toISOString(), "2026-01-15T00:00:00.000Z");
+  assert.equal(parseDocumentIssueDate(""), null);
+  assert.equal(parseDocumentIssueDate("2026-02-31"), undefined);
 });
 
 test("document reminder timestamps are derived from the expiry date", () => {
