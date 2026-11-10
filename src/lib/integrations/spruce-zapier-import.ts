@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
+import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   ensureSpruceZapierIntegrationConnection,
   getSpruceZapierRuntimeConfig,
@@ -616,6 +617,7 @@ async function resolveSpruceContact(
 
   const contact = await tx.contact.create({
     data: {
+      ...systemContactTypeAssignment(),
       addressLine1: mapping.address,
       attribution: mapping.attribution,
       email: mapping.contact.email,

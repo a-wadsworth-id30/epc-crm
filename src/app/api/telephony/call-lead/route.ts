@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   normalizeCallableNumber,
   normalizedContactPhone,
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
       contact ??
       (await tx.contact.create({
         data: {
+          ...systemContactTypeAssignment(),
           ...names,
           createdByUserId: authorization.user.id,
           phone,

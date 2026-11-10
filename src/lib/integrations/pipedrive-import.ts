@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
+import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
@@ -5279,6 +5280,7 @@ async function resolvePipedriveContact(
     existingContact ??
     (await tx.contact.create({
       data: {
+        ...systemContactTypeAssignment(),
         companyId: company.id,
         companyName: company.name ?? mapping.contact.companyName,
         email: mapping.contact.email,

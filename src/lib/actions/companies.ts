@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth";
+import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import { companyIdAccessWhere } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
@@ -234,20 +235,26 @@ export async function createCompanyAction(
       return;
     }
 
-    await tx.contact.createMany({
-      data: parsedContacts.contacts.map((contact) => ({
-        companyId: company.id,
-        companyName: company.name,
-        createdByUserId: user.id,
-        email: contact.email,
-        firstName: contact.firstName,
-        lastName: contact.lastName,
-        leadSource: contact.leadSource,
-        phone: contact.phone,
-        phoneNormalized: normalizedContactPhone(contact.phone),
-        role: contact.role,
-      })),
-    });
+    await Promise.all(
+      parsedContacts.contacts.map((contact) =>
+        tx.contact.create({
+          data: {
+            ...systemContactTypeAssignment(),
+            companyId: company.id,
+            companyName: company.name,
+            createdByUserId: user.id,
+            email: contact.email,
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            leadSource: contact.leadSource,
+            phone: contact.phone,
+            phoneNormalized: normalizedContactPhone(contact.phone),
+            role: contact.role,
+          },
+          select: { id: true },
+        }),
+      ),
+    );
   });
 
   revalidateCompanyPaths();
