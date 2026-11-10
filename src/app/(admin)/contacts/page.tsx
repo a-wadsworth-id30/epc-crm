@@ -33,6 +33,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getCrmSettings } from "@/lib/settings";
 import { contactSearchWhere } from "@/lib/contacts/query";
+import ContactImportModal from "@/components/crm-boilerplate/ContactImportModal";
 
 type ContactsPageProps = {
   searchParams?: Promise<{
@@ -332,17 +333,35 @@ export default async function ContactsPage({
         title="People"
         description="Manage consumers, trade contacts, installers and company-type people."
         actions={
-          <DeferredContactCreateModal
-            companies={companies}
-            companiesEnabled={settings.companiesEnabled}
-            contactTypes={contactTypes}
-            customFields={customFields.map((field) => ({
-              ...field,
-              options: normalizeContactCustomFieldOptions(field.options),
-            }))}
-            availableTags={availableTags}
-            addressLookupEnabled={addressLookupEnabled}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {user.role === "ADMIN" ? (
+              <ContactImportModal
+                contactTypes={contactTypes.map((type) => ({
+                  fields: customFields
+                    .filter((field) => field.contactTypeId === type.id)
+                    .map((field) => ({
+                      ...field,
+                      options: normalizeContactCustomFieldOptions(field.options),
+                    })),
+                  id: type.id,
+                  name: type.name,
+                  slug: type.slug,
+                  systemKey: type.systemKey,
+                }))}
+              />
+            ) : null}
+            <DeferredContactCreateModal
+              companies={companies}
+              companiesEnabled={settings.companiesEnabled}
+              contactTypes={contactTypes}
+              customFields={customFields.map((field) => ({
+                ...field,
+                options: normalizeContactCustomFieldOptions(field.options),
+              }))}
+              availableTags={availableTags}
+              addressLookupEnabled={addressLookupEnabled}
+            />
+          </div>
         }
       />
       <ContactsTable

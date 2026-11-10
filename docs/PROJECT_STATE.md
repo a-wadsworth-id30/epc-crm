@@ -93,6 +93,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Exports include typed custom fields, are capped at 5,000 rows, neutralise
   spreadsheet formulas, send no-store headers and write a metadata-only audit
   event without copying contact data into `AuditLog`.
+- Admins can import up to 500 people from a 2 MB CSV using a preview-first
+  People workflow. Templates use stable person-type slugs and
+  `custom:field_key` columns; preview validates lead sources, required typed
+  custom fields, select options and person identities. Existing or repeated
+  email/phone identities are skipped, the final action revalidates active
+  definitions and duplicate state, and imports create new contacts only. No
+  existing contact is overwritten. The audit event stores counts and type IDs,
+  not CSV contents or personal values.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

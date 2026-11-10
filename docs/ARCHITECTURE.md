@@ -107,6 +107,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   participate in custom-value matching. CSV export reapplies
   `contactWhereWithAccess`, includes typed custom fields, prevents spreadsheet
   formula execution and audits only filter/count metadata.
+  `src/lib/contacts/import.ts` and
+  `src/lib/actions/contact-import.ts` provide the admin-only inverse path. CSV
+  rows are parsed and previewed before mutation, person types resolve by stable
+  slug, typed custom fields reuse the normal server validator, and email/phone
+  duplicate checks run again inside the confirmed import action. The importer
+  is create-only and never treats a CSV row as authority to update a contact.
   Secure customer upload requests reuse the same contact requirement status.
   The browser suggests only missing required types whose controlled catalogue
   entry is `customerFacing`; creation remains an explicit staff action. The
