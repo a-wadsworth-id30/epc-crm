@@ -16,6 +16,7 @@ import {
   DeferredContactMergeModal,
 } from "@/components/crm-boilerplate/ContactModalLoaders";
 import type { ContactFormValues } from "@/components/crm-boilerplate/ContactForm";
+import ContactProfileCompleteness from "@/components/crm-boilerplate/ContactProfileCompleteness";
 import CustomerRelationshipSection from "@/components/crm-boilerplate/CustomerRelationshipSection";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import LazyContactConversationWorkspace from "@/components/crm-boilerplate/LazyContactConversationWorkspace";
@@ -39,6 +40,7 @@ import {
   normalizeContactCustomFieldOptions,
   serializeContactCustomFieldValue,
 } from "@/lib/contacts/custom-fields";
+import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
 import {
   customerRelationshipStatusOption,
   defaultCustomerRelationshipStatus,
@@ -798,6 +800,12 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       value: method.phone,
     })),
   ];
+  const serializedCustomFieldValues = Object.fromEntries(
+    contact.customFieldValues.map((value) => [
+      value.fieldId,
+      serializeContactCustomFieldValue(value),
+    ]),
+  );
   const editableContact: ContactFormValues = {
     addressLine1: contact.addressLine1,
     addressLine2: contact.addressLine2,
@@ -819,12 +827,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     postcode: contact.postcode,
     role: contact.role,
     tags: contactTags,
-    customFieldValues: Object.fromEntries(
-      contact.customFieldValues.map((value) => [
-        value.fieldId,
-        serializeContactCustomFieldValue(value),
-      ]),
-    ),
+    customFieldValues: serializedCustomFieldValues,
   };
   const mergeCandidates = mergeCandidateContacts.map((candidate) => {
     const candidateEmail =
@@ -1015,15 +1018,18 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     contact.contactTypeId ??
     contactTypes.find((type) => type.systemKey === contact.category)?.id ??
     null;
-  const customFieldValueMap = new Map(
-    contact.customFieldValues.map((value) => [
-      value.fieldId,
-      serializeContactCustomFieldValue(value),
-    ]),
-  );
+  const customFieldValueMap = new Map(Object.entries(serializedCustomFieldValues));
   const contactCustomFields = customFields.filter(
     (field) => field.contactTypeId === resolvedContactTypeId,
   );
+  const profileCompleteness = contactProfileCompleteness({
+    contactTypeId: resolvedContactTypeId,
+    definitions: customFields.map((field) => ({
+      ...field,
+      options: normalizeContactCustomFieldOptions(field.options),
+    })),
+    values: serializedCustomFieldValues,
+  });
   const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
   const relationshipStatus = (contact.relationshipProfile?.status ??
     defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
@@ -1057,6 +1063,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         </h2>
         <LazyHelpTooltip content="Stores the main email, phone and role details users need before contacting this person." />
       </div>
+      <ContactProfileCompleteness value={profileCompleteness} />
       <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
         <div>
           <dt className="text-gray-500 dark:text-gray-400">Category</dt>

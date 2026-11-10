@@ -80,6 +80,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   saved empty for the separate profile-quality workflow. Changing a contact's
   type retains values belonging to the previous type so switching back does not
   destroy data.
+  `src/lib/contacts/profile-completeness.ts` is the shared pure calculator used
+  by both the People list and contact profile. It evaluates serialised typed
+  values, treats boolean `false` and numeric zero as present, ignores optional
+  or archived definitions and returns no score when a type has no configured
+  profile requirements.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level
