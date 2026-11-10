@@ -67,6 +67,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   columns. The selected person-type view limits these columns to that type,
   while All People can show configured columns from every active type. Stable
   field IDs keep column selections safe when visible labels change.
+- People offers database-backed structured filters for active single-select,
+  multi-select, Yes/No and date custom fields. Filter state is URL-backed,
+  survives pagination, is scoped to the selected person type and is reused by
+  CSV export so exported rows match the filtered People result.
 - Settings > Person Types supports ordered required or optional document
   checklists. Each requirement uses the controlled document catalogue and is
   completed only by a private contact `FileAsset` carrying the matching

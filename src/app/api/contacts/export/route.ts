@@ -1,7 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { requireApiUser } from "@/lib/api-auth";
 import { contactWhereWithAccess } from "@/lib/crm-resource-access";
-import { serializeContactCustomFieldValue } from "@/lib/contacts/custom-fields";
+import {
+  normalizeContactCustomFieldOptions,
+  serializeContactCustomFieldValue,
+} from "@/lib/contacts/custom-fields";
+import {
+  contactCustomFieldFiltersWhere,
+  parseContactCustomFieldFilters,
+} from "@/lib/contacts/filters";
 import { contactSearchWhere } from "@/lib/contacts/query";
 import { toCsv } from "@/lib/csv";
 import { prisma } from "@/lib/prisma";
@@ -42,10 +49,33 @@ export async function GET(request: Request) {
     );
   }
 
+  const filterFields = (
+    await prisma.contactTypeField.findMany({
+      where: {
+        isActive: true,
+        contactType: { isActive: true },
+        ...(selectedType ? { contactTypeId: selectedType.id } : {}),
+      },
+      select: { fieldType: true, id: true, options: true },
+    })
+  ).map((field) => ({
+    ...field,
+    options: normalizeContactCustomFieldOptions(field.options),
+  }));
+  const customFieldFilterValues = parseContactCustomFieldFilters(
+    url.searchParams,
+    filterFields,
+  );
+  const customFieldFilterWhere = contactCustomFieldFiltersWhere(
+    customFieldFilterValues,
+    filterFields,
+  );
+
   const filters: Prisma.ContactWhereInput[] = [];
   const searchWhere = contactSearchWhere(query);
 
   if (searchWhere) filters.push(searchWhere);
+  if (customFieldFilterWhere) filters.push(customFieldFilterWhere);
   if (selectedType) {
     filters.push({
       OR: [
@@ -200,6 +230,7 @@ export async function GET(request: Request) {
       entity: "Contact",
       metadata: {
         exportedCount: contacts.length,
+        customFieldFilterCount: Object.keys(customFieldFilterValues).length,
         limit: exportLimit,
         queryApplied: Boolean(query),
         typeId: selectedType?.id ?? null,

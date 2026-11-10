@@ -19,7 +19,9 @@ import type { ContactTagOption } from "@/components/crm-boilerplate/ContactTagIn
 import {
   CrmDataTable,
   type CrmDataTableColumn,
+  type CrmDataTableFilter,
   type CrmDataTableSortDirection,
+  type FilterValue,
 } from "@/components/crm-boilerplate/data-table";
 import EmptyState from "@/components/crm-boilerplate/EmptyState";
 import ContactProfileCompleteness from "@/components/crm-boilerplate/ContactProfileCompleteness";
@@ -37,6 +39,11 @@ import type {
   ContactCustomFieldFormValue,
 } from "@/lib/contacts/custom-fields";
 import { contactProfileCompleteness } from "@/lib/contacts/profile-completeness";
+import {
+  isStructuredContactFilterField,
+  writeContactCustomFieldFilterParams,
+  type ContactCustomFieldFilterValues,
+} from "@/lib/contacts/filters";
 import {
   contactCustomFieldDisplayValue,
   contactCustomTableColumnId,
@@ -133,6 +140,7 @@ export default function ContactsTable({
   contactTypeCounts,
   contactTypes,
   customFields,
+  customFieldFilterValues,
   contacts,
   companies,
   companiesEnabled,
@@ -150,6 +158,7 @@ export default function ContactsTable({
   contactTypeCounts: Record<string, number>;
   contactTypes: ContactTypeOption[];
   customFields: ContactCustomFieldDefinition[];
+  customFieldFilterValues: ContactCustomFieldFilterValues;
   contacts: ContactRow[];
   companies: CompanyOption[];
   companiesEnabled: boolean;
@@ -180,11 +189,88 @@ export default function ContactsTable({
     defaultColumnIds,
     value: searchParams.get("columns"),
   });
+  const filterableCustomFields = customFields.filter(
+    (field) =>
+      isStructuredContactFilterField(field) &&
+      (!activeContactType || field.contactTypeId === activeContactType.id),
+  );
+  const customFilters: CrmDataTableFilter<ContactRow>[] =
+    filterableCustomFields.map((field) => {
+      const common = {
+        id: field.id,
+        label:
+          activeContactType?.id === field.contactTypeId
+            ? field.label
+            : `${contactTypes.find((type) => type.id === field.contactTypeId)?.name ?? "Person"}: ${field.label}`,
+      };
+
+      if (field.fieldType === "BOOLEAN") {
+        const value = customFieldFilterValues[field.id];
+        return {
+          ...common,
+          getValue: (contact: ContactRow) => {
+            const fieldValue = contact.customFieldValues[field.id];
+            return typeof fieldValue === "boolean" ? fieldValue : null;
+          },
+          defaultValue:
+            value === "true" || value === "false"
+              ? value
+              : "all",
+          type: "boolean" as const,
+        };
+      }
+      if (field.fieldType === "DATE") {
+        const value = customFieldFilterValues[field.id];
+        return {
+          ...common,
+          getValue: (contact: ContactRow) => {
+            const fieldValue = contact.customFieldValues[field.id];
+            return typeof fieldValue === "string" ? fieldValue : null;
+          },
+          defaultValue:
+            value && typeof value === "object" && !Array.isArray(value)
+              ? value
+              : {},
+          type: "date-range" as const,
+        };
+      }
+      const options = field.options.map((option) => ({
+        label: option,
+        value: option,
+      }));
+      if (field.fieldType === "MULTI_SELECT") {
+        const value = customFieldFilterValues[field.id];
+        return {
+          ...common,
+          getValue: (contact: ContactRow) => {
+            const fieldValue = contact.customFieldValues[field.id];
+            return Array.isArray(fieldValue) ? fieldValue : null;
+          },
+          defaultValue: Array.isArray(value) ? value : [],
+          options,
+          type: "multi-select" as const,
+        };
+      }
+      const value = customFieldFilterValues[field.id];
+      return {
+        ...common,
+        getValue: (contact: ContactRow) => {
+          const fieldValue = contact.customFieldValues[field.id];
+          return typeof fieldValue === "string" ? fieldValue : null;
+        },
+        defaultValue: typeof value === "string" ? value : "",
+        options,
+        type: "select" as const,
+      };
+    });
   const exportParams = new URLSearchParams();
   if (query) exportParams.set("q", query);
   if (activeContactTypeSlug !== "all") {
     exportParams.set("type", activeContactTypeSlug);
   }
+  searchParams.forEach((value, key) => {
+    if (key.startsWith("cf.")) exportParams.append(key, value);
+  });
   const exportHref = `/api/contacts/export${exportParams.size ? `?${exportParams}` : ""}`;
 
   const updateParams = useCallback(
@@ -255,6 +341,29 @@ export default function ContactsTable({
     }
 
     updateParams(updates);
+  }
+
+  function updateCustomFilters(values: Record<string, FilterValue>) {
+    const params = new URLSearchParams(searchParams.toString());
+    writeContactCustomFieldFilterParams(
+      params,
+      values as ContactCustomFieldFilterValues,
+    );
+    params.delete("page");
+    router.push(params.toString() ? `${pathname}?${params}` : pathname);
+  }
+
+  function selectContactType(contactTypeSlug: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    writeContactCustomFieldFilterParams(params, {});
+    params.delete("category");
+    params.delete("page");
+    if (contactTypeSlug === "all") {
+      params.delete("type");
+    } else {
+      params.set("type", contactTypeSlug);
+    }
+    router.push(params.toString() ? `${pathname}?${params}` : pathname);
   }
 
   const columns: CrmDataTableColumn<ContactRow>[] = [
@@ -366,13 +475,7 @@ export default function ContactsTable({
         allContactCount={allContactCount}
         contactTypeCounts={contactTypeCounts}
         contactTypes={contactTypes}
-        onSelect={(contactTypeSlug) =>
-          updateParams({
-            category: null,
-            page: null,
-            type: contactTypeSlug === "all" ? null : contactTypeSlug,
-          })
-        }
+        onSelect={selectContactType}
       />
       <CrmDataTable
         data={contacts}
@@ -396,6 +499,11 @@ export default function ContactsTable({
         }
         query={localQuery}
         onQueryChange={setLocalQuery}
+        filters={customFilters}
+        filterValues={customFieldFilterValues}
+        onFilterValuesChange={updateCustomFilters}
+        filterPanelTitle="People filters"
+        filterPanelDescription="Filter structured fields configured for the selected person type."
         sort={{ columnId: sortKey, direction: sortDirection }}
         onSortChange={(nextSort) => {
           const nextKey = nextSort.columnId as SortKey;

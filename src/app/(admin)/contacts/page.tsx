@@ -24,6 +24,11 @@ import {
   normalizeContactCustomFieldOptions,
   serializeContactCustomFieldValue,
 } from "@/lib/contacts/custom-fields";
+import {
+  contactCustomFieldFiltersWhere,
+  parseContactCustomFieldFilters,
+  searchParamsFromRecord,
+} from "@/lib/contacts/filters";
 import { requireUser } from "@/lib/auth";
 import {
   companyWhereWithAccess,
@@ -37,6 +42,7 @@ import ContactImportModal from "@/components/crm-boilerplate/ContactImportModal"
 
 type ContactsPageProps = {
   searchParams?: Promise<{
+    [key: string]: string | string[] | undefined;
     direction?: string | string[];
     columns?: string | string[];
     page?: string | string[];
@@ -161,6 +167,43 @@ export default async function ContactsPage({
         )
       : null) ??
     null;
+  const customFields = await prisma.contactTypeField.findMany({
+    where: { isActive: true, contactType: { isActive: true } },
+    orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+    select: {
+      contactTypeId: true,
+      displayOrder: true,
+      externalEditable: true,
+      fieldType: true,
+      helpText: true,
+      id: true,
+      isActive: true,
+      isSearchable: true,
+      key: true,
+      label: true,
+      options: true,
+      placeholder: true,
+      requirementMode: true,
+      showInTable: true,
+    },
+  });
+  const normalizedCustomFields = customFields.map((field) => ({
+    ...field,
+    options: normalizeContactCustomFieldOptions(field.options),
+  }));
+  const filterFields = activeContactType
+    ? normalizedCustomFields.filter(
+        (field) => field.contactTypeId === activeContactType.id,
+      )
+    : normalizedCustomFields;
+  const customFieldFilterValues = parseContactCustomFieldFilters(
+    searchParamsFromRecord(params),
+    filterFields,
+  );
+  const customFieldFilterWhere = contactCustomFieldFiltersWhere(
+    customFieldFilterValues,
+    filterFields,
+  );
   const interfaceDefaults = parseInterfaceDefaults(settings.interfaceDefaults);
   const pageSize = parsePageSize({
     fallback: resolveInterfacePageSizeFallback(
@@ -188,7 +231,11 @@ export default async function ContactsPage({
           ],
         }
       : undefined;
-  const whereFilters = [contactTypeWhere, searchWhere].filter(hasContactWhere);
+  const whereFilters = [
+    contactTypeWhere,
+    searchWhere,
+    customFieldFilterWhere,
+  ].filter(hasContactWhere);
   const where = contactWhereWithAccess(
     user,
     whereFilters.length ? { AND: whereFilters } : undefined,
@@ -202,7 +249,6 @@ export default async function ContactsPage({
     totalCount,
     allContactCount,
     contactTypeRows,
-    customFields,
     companies,
     availableTags,
     addressLookupEnabled,
@@ -213,26 +259,6 @@ export default async function ContactsPage({
       by: ["contactTypeId", "category"],
       where: allContactsWhere,
       _count: { _all: true },
-    }),
-    prisma.contactTypeField.findMany({
-      where: { isActive: true, contactType: { isActive: true } },
-      orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
-      select: {
-        contactTypeId: true,
-        displayOrder: true,
-        externalEditable: true,
-        fieldType: true,
-        helpText: true,
-        id: true,
-        isActive: true,
-        isSearchable: true,
-        key: true,
-        label: true,
-        options: true,
-        placeholder: true,
-        requirementMode: true,
-        showInTable: true,
-      },
     }),
     settings.companiesEnabled
       ? prisma.company.findMany({
@@ -337,12 +363,9 @@ export default async function ContactsPage({
             {user.role === "ADMIN" ? (
               <ContactImportModal
                 contactTypes={contactTypes.map((type) => ({
-                  fields: customFields
+                  fields: normalizedCustomFields
                     .filter((field) => field.contactTypeId === type.id)
-                    .map((field) => ({
-                      ...field,
-                      options: normalizeContactCustomFieldOptions(field.options),
-                    })),
+                    .map((field) => field),
                   id: type.id,
                   name: type.name,
                   slug: type.slug,
@@ -354,10 +377,7 @@ export default async function ContactsPage({
               companies={companies}
               companiesEnabled={settings.companiesEnabled}
               contactTypes={contactTypes}
-              customFields={customFields.map((field) => ({
-                ...field,
-                options: normalizeContactCustomFieldOptions(field.options),
-              }))}
+              customFields={normalizedCustomFields}
               availableTags={availableTags}
               addressLookupEnabled={addressLookupEnabled}
             />
@@ -421,10 +441,8 @@ export default async function ContactsPage({
         }))}
         activeContactTypeSlug={activeContactType?.slug ?? "all"}
         contactTypes={contactTypes}
-        customFields={customFields.map((field) => ({
-          ...field,
-          options: normalizeContactCustomFieldOptions(field.options),
-        }))}
+        customFields={normalizedCustomFields}
+        customFieldFilterValues={customFieldFilterValues}
         contactTypeCounts={Object.fromEntries(
           contactTypes.map((contactType) => [
             contactType.id,
