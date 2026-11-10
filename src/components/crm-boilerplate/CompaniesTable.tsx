@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -163,6 +164,17 @@ export default function CompaniesTable({
       isStructuredCompanyFilterField(field) &&
       field.companyTypeId === activeCompanyType?.id,
   );
+  const exportParams = new URLSearchParams();
+  if (query) exportParams.set("q", query);
+  if (activeCompanyTypeSlug !== "all") {
+    exportParams.set("type", activeCompanyTypeSlug);
+  }
+  if (statusFilter) exportParams.set("status", statusFilter);
+  if (ownerFilter) exportParams.set("owner", ownerFilter);
+  searchParams.forEach((value, key) => {
+    if (key.startsWith("companyField.")) exportParams.append(key, value);
+  });
+  const exportHref = `/api/companies/export${exportParams.size ? `?${exportParams}` : ""}`;
   const filters: CrmDataTableFilter<CompanyRow>[] = [
     {
       id: "status",
@@ -428,6 +440,16 @@ export default function CompaniesTable({
             : `All Companies (${totalCount})`
         }
         searchPlaceholder="Search companies..."
+        toolbarActions={
+          <a
+            href={exportHref}
+            title="Export the current Company search and filters, up to 5,000 companies"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </a>
+        }
         query={localQuery}
         onQueryChange={setLocalQuery}
         filters={filters}

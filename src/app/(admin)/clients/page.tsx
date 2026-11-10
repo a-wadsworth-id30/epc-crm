@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import CompanyImportModal from "@/components/crm-boilerplate/CompanyImportModal";
 import { DeferredCompanyCreateModal } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type {
   CompanyRow,
@@ -312,11 +313,25 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
       <PageHeader
         title="Companies"
         actions={
-          <DeferredCompanyCreateModal
-            addressLookupEnabled={addressLookupEnabled}
-            companyTypes={companyTypes}
-            customFields={normalizedCompanyCustomFields}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {user.role === "ADMIN" ? (
+              <CompanyImportModal
+                companyTypes={companyTypes.map((type) => ({
+                  fields: normalizedCompanyCustomFields.filter(
+                    (field) => field.companyTypeId === type.id,
+                  ),
+                  id: type.id,
+                  name: type.name,
+                  slug: type.slug,
+                }))}
+              />
+            ) : null}
+            <DeferredCompanyCreateModal
+              addressLookupEnabled={addressLookupEnabled}
+              companyTypes={companyTypes}
+              customFields={normalizedCompanyCustomFields}
+            />
+          </div>
         }
       />
       <LazyCompaniesTable

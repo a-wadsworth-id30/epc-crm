@@ -101,6 +101,15 @@ Core Prisma models are in `prisma/schema.prisma`.
   text search. Type-specific filters and custom table columns are exposed only
   while that Company Type is selected; the default all-companies view keeps a
   stable, compact column and filter set.
+- `/api/companies/export` reuses the Company list query, structured filter
+  parser, field-visibility rules and `companyWhereWithAccess`; CSV output is
+  capped, spreadsheet-safe, private/no-store and audited without copying
+  Company values into `AuditLog`. `src/lib/companies/import.ts` and
+  `src/lib/actions/company-import.ts` provide the admin-only inverse path.
+  Imports are previewed before mutation, resolve Company Types by stable slug,
+  reuse the typed Company-field validator, and create records only after the
+  final action reloads active definitions and repeats duplicate checks.
+  Existing Companies are never updated from CSV.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

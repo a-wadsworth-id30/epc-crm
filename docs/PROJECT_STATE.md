@@ -83,6 +83,15 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Company Type, preventing the all-companies view from becoming crowded as
   configuration grows. Search includes authorised fields marked searchable,
   and all filters remain server-side, URL-backed and pagination-safe.
+- Company CSV transfer now mirrors the People safety model. All authorised
+  users can export up to 5,000 Companies matching the current search, Company
+  Type, lifecycle, owner and structured-field filters. Admins can use a
+  preview-first importer for up to 500 rows/2 MB, with stable Company Type
+  slugs, `custom:field_key` columns, required typed-field validation and
+  create-only duplicate protection. Domain is the preferred identity; name is
+  used only when a row has no domain. Confirmed imports revalidate active
+  configuration and duplicates before writing, and audit metadata contains
+  counts/type IDs rather than CSV data.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.

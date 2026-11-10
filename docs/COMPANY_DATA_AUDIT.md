@@ -228,3 +228,18 @@ screen density as Craig adds more types and fields. Search includes authorised
 custom fields marked searchable, while every query remains combined with the
 existing Company access scope.
 
+## Task 9 Company import and export
+
+The Companies list now exports the same permission-scoped result represented
+by its search, Company Type, lifecycle, owner and structured-field URL filters.
+Exports include authorised typed fields, are capped at 5,000 records, neutralise
+spreadsheet formulas and record metadata-only audit evidence.
+
+Admins can import up to 500 Companies from a 2 MB CSV through a mandatory
+preview and confirmation workflow. Templates expose stable Company Type slugs
+and `custom:field_key` columns. Preview and final confirmation both validate
+active types, required/typed values and duplicate identity. A normalised domain
+is preferred for matching; exact normalised name is the fallback only when the
+row has no domain. Imports are intentionally create-only and never overwrite an
+existing Company.
+

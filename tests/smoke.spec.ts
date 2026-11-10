@@ -20,6 +20,7 @@ const criticalAdminRoutes = [
 const unauthenticatedApiRoutes = [
   "/api/contacts",
   "/api/contacts/export",
+  "/api/companies/export",
   "/api/search/records?q=jo",
   "/api/quick-create/options",
   "/api/quick-create/contacts?q=jo",
