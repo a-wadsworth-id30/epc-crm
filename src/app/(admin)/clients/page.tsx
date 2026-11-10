@@ -23,6 +23,12 @@ import {
   visibleCompanyFields,
 } from "@/lib/companies/field-access";
 import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
+import {
+  companyCustomFieldFiltersWhere,
+  parseCompanyCustomFieldFilters,
+} from "@/lib/companies/filters";
+import { companySearchWhere } from "@/lib/companies/query";
+import { searchParamsFromRecord } from "@/lib/contacts/filters";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { companyWhereWithAccess } from "@/lib/crm-resource-access";
 import { prisma } from "@/lib/prisma";
@@ -30,16 +36,21 @@ import { getCrmSettings } from "@/lib/settings";
 
 type ClientsPageProps = {
   searchParams?: Promise<{
+    [key: string]: string | string[] | undefined;
     direction?: string | string[];
+    owner?: string | string[];
     page?: string | string[];
     pageSize?: string | string[];
     q?: string | string[];
     sort?: string | string[];
+    status?: string | string[];
+    type?: string | string[];
   }>;
 };
 
 const companyPageSizes = [10, 25, 50, 100];
 const defaultCompanyPageSize = 25;
+const companyStatuses = ["Prospect", "Active", "Inactive"] as const;
 const companySortKeys = [
   "name",
   "domain",
@@ -178,31 +189,85 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     value: params.pageSize,
   });
   const query = (singleParam(params.q) ?? "").trim();
+  const requestedCompanyTypeSlug = singleParam(params.type) ?? "all";
+  const activeCompanyType = companyTypes.find(
+    (type) => type.slug === requestedCompanyTypeSlug,
+  );
+  const activeCompanyTypeSlug = activeCompanyType?.slug ?? "all";
+  const requestedStatus = singleParam(params.status);
+  const status = companyStatuses.includes(
+    requestedStatus as (typeof companyStatuses)[number],
+  )
+    ? requestedStatus ?? ""
+    : "";
+  const owner = (singleParam(params.owner) ?? "").trim();
   const sortKey = normalizeSortKey(params.sort);
   const sortDirection = normalizeSortDirection(params.direction);
-  const queryWhere: Prisma.CompanyWhereInput = query
-    ? {
-        OR: [
-          { name: { contains: query, mode: "insensitive" } },
-          { domain: { contains: query, mode: "insensitive" } },
-          { status: { contains: query, mode: "insensitive" } },
-          { owner: { contains: query, mode: "insensitive" } },
-          { addressLine1: { contains: query, mode: "insensitive" } },
-          { addressLine2: { contains: query, mode: "insensitive" } },
-          { city: { contains: query, mode: "insensitive" } },
-          { county: { contains: query, mode: "insensitive" } },
-          { postcode: { contains: query, mode: "insensitive" } },
-          { country: { contains: query, mode: "insensitive" } },
-        ],
-      }
-    : {};
-  const where = companyWhereWithAccess(user, queryWhere);
+  const filterFields = activeCompanyType
+    ? normalizedCompanyCustomFields.filter(
+        (field) => field.companyTypeId === activeCompanyType.id,
+      )
+    : [];
+  const customFieldFilterValues = parseCompanyCustomFieldFilters(
+    searchParamsFromRecord(params),
+    filterFields,
+  );
+  const customFieldFilterWhere = companyCustomFieldFiltersWhere(
+    customFieldFilterValues,
+    filterFields,
+  );
+  const searchWhere = companySearchWhere(
+    query,
+    normalizedCompanyCustomFields.map((field) => field.id),
+  );
+  const listFilters: Prisma.CompanyWhereInput[] = [
+    ...(activeCompanyType ? [{ companyTypeId: activeCompanyType.id }] : []),
+    ...(status ? [{ status }] : []),
+    ...(owner
+      ? [
+          owner === "__unassigned__"
+            ? { OR: [{ owner: null }, { owner: "" }] }
+            : { owner },
+        ]
+      : []),
+    ...(searchWhere ? [searchWhere] : []),
+    ...(customFieldFilterWhere ? [customFieldFilterWhere] : []),
+  ];
+  const where = companyWhereWithAccess(
+    user,
+    listFilters.length ? { AND: listFilters } : undefined,
+  );
   const allCompaniesWhere = companyWhereWithAccess(user);
-  const [totalCount, allCompanyCount, addressLookupEnabled] = await Promise.all([
+  const [
+    totalCount,
+    allCompanyCount,
+    companyTypeRows,
+    ownerRows,
+    addressLookupEnabled,
+  ] = await Promise.all([
     prisma.company.count({ where }),
     prisma.company.count({ where: allCompaniesWhere }),
+    prisma.company.groupBy({
+      by: ["companyTypeId"],
+      where: allCompaniesWhere,
+      _count: { _all: true },
+    }),
+    prisma.company.findMany({
+      where: companyWhereWithAccess(user, { owner: { not: null } }),
+      distinct: ["owner"],
+      orderBy: { owner: "asc" },
+      select: { owner: true },
+    }),
     isGeoapifyAddressLookupEnabled(),
   ]);
+  const companyTypeCounts = Object.fromEntries(
+    companyTypeRows.flatMap((row) =>
+      row.companyTypeId ? [[row.companyTypeId, row._count._all]] : [],
+    ),
+  );
+  const ownerOptions = ownerRows.flatMap((row) =>
+    row.owner?.trim() ? [row.owner.trim()] : [],
+  );
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(requestedPage, totalPages);
   const companies = await prisma.company.findMany({
@@ -257,14 +322,20 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
       <LazyCompaniesTable
         addressLookupEnabled={addressLookupEnabled}
         allCompanyCount={allCompanyCount}
+        activeCompanyTypeSlug={activeCompanyTypeSlug}
         companies={companyRows}
         companyTypes={companyTypes}
+        companyTypeCounts={companyTypeCounts}
+        customFieldFilterValues={customFieldFilterValues}
         customFields={normalizedCompanyCustomFields}
+        ownerFilter={owner}
+        ownerOptions={ownerOptions}
         page={currentPage}
         pageSize={pageSize}
         query={query}
         sortDirection={sortDirection}
         sortKey={sortKey}
+        statusFilter={status}
         totalCount={totalCount}
       />
     </>

@@ -217,3 +217,14 @@ upload requests, whose server action reloads the configured label and
 instructions. Existing document issue dates, expiry dates and renewal-task
 support remain the single implementation for both People and Companies.
 
+## Task 8 Company list filters
+
+The Companies list now has a compact count-bearing Company Type row plus
+server-side lifecycle and owner filters in the shared filter drawer. Selecting
+a Company Type exposes only that type's structured select, yes/no and date
+filters and any fields configured as table columns. The default all-companies
+view deliberately keeps those type-specific controls hidden to avoid increasing
+screen density as Craig adds more types and fields. Search includes authorised
+custom fields marked searchable, while every query remains combined with the
+existing Company access scope.
+

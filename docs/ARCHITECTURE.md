@@ -94,6 +94,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   R2 access, issue/expiry metadata, renewal tasks and customer upload links in
   one workflow; Company-specific labels and instructions are resolved again on
   the server when an upload request is created.
+- Company list filtering is server-side. The active Company Type, lifecycle
+  status, owner and structured custom-field values are represented in URL
+  parameters and combined with `companyWhereWithAccess`, so filtering cannot
+  bypass record access scope. Only authorised searchable fields participate in
+  text search. Type-specific filters and custom table columns are exposed only
+  while that Company Type is selected; the default all-companies view keeps a
+  stable, compact column and filter set.
 - `Contact`: customer/person record, including a configurable `ContactType`,
   one primary email, one
   primary phone and optional manual postal address fields for address line 1,

@@ -77,6 +77,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   carries the configured labels/instructions into secure customer upload
   requests. Existing issue/expiry dates and optional renewal-task creation are
   reused rather than introducing a second document workflow.
+- The Companies list uses one compact count-bearing Company Type filter row,
+  with lifecycle and owner controls in the existing filter drawer. Structured
+  filters and configurable table columns appear only after selecting their
+  Company Type, preventing the all-companies view from becoming crowded as
+  configuration grows. Search includes authorised fields marked searchable,
+  and all filters remain server-side, URL-backed and pagination-safe.
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.
