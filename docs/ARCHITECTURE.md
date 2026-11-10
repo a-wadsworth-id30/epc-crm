@@ -65,6 +65,9 @@ Core Prisma models are in `prisma/schema.prisma`.
   The legacy `ContactCategory` remains populated during the staged migration of
   filters, imports and forms. `ContactType.systemKey` provides a stable mapping
   for Consumer, Trade, Installer and Company while allowing future custom types.
+  Admin-only contact-type mutations preserve the stable slug/system key, enforce
+  one active default in a transaction, block unsafe archival and write AuditLog
+  events without storing contact data.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level

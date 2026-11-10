@@ -27,6 +27,7 @@ const items: {
   },
   { label: "Users & Permissions", href: "/settings/users", adminOnly: true },
   { label: "Dashboard", href: "/settings/dashboard", adminOnly: true },
+  { label: "Person Types", href: "/settings/contact-types", adminOnly: true },
   {
     label: "Sales Pipeline",
     href: "/settings/sales-pipeline",
