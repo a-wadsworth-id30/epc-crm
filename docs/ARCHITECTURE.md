@@ -90,6 +90,10 @@ Core Prisma models are in `prisma/schema.prisma`.
   preferences against the currently available person-type fields. Custom
   columns display typed values but remain non-sortable until a database-backed
   custom-field sort is explicitly implemented.
+  `src/lib/contacts/filters.ts` validates URL-backed structured field filters
+  against active definitions and select options before producing typed Prisma
+  predicates. The People page and CSV export share this parser and predicate
+  builder so counts, pagination and exports use identical custom-field scope.
   `src/lib/contacts/profile-completeness.ts` is the shared pure calculator used
   by both the People list and contact profile. It evaluates serialised typed
   values, treats boolean `false` and numeric zero as present, ignores optional

@@ -93,6 +93,8 @@ export type CrmDataTableProps<TData> = {
   searchPlaceholder?: string;
   getSearchValue?: (row: TData) => string;
   filters?: CrmDataTableFilter<TData>[];
+  filterValues?: Record<string, FilterValue>;
+  onFilterValuesChange?: (values: Record<string, FilterValue>) => void;
   filterPanelTitle?: string;
   filterPanelDescription?: string;
   enableColumnSelection?: boolean;
@@ -249,6 +251,8 @@ export default function CrmDataTable<TData>({
   searchPlaceholder = "Search...",
   getSearchValue,
   filters,
+  filterValues: controlledFilterValues,
+  onFilterValuesChange,
   filterPanelTitle = "Filters",
   filterPanelDescription = "Refine the table without crowding the page.",
   enableColumnSelection = false,
@@ -320,7 +324,8 @@ export default function CrmDataTable<TData>({
   const pageSize = controlledPageSize ?? localPageSize;
   const sort = controlledSort ?? localSort;
   const filterValues =
-    filterState.key === filterDefaultsKey ? filterState.values : filterDefaults;
+    controlledFilterValues ??
+    (filterState.key === filterDefaultsKey ? filterState.values : filterDefaults);
   const defaultColumnIds = useMemo(
     () => defaultVisibleColumnIds(columns),
     [columns],
@@ -490,6 +495,10 @@ export default function CrmDataTable<TData>({
   }
 
   function updateFilter(filterId: string, value: FilterValue) {
+    if (onFilterValuesChange) {
+      onFilterValuesChange({ ...filterValues, [filterId]: value });
+      return;
+    }
     setFilterState({
       key: filterDefaultsKey,
       values: { ...filterValues, [filterId]: value },
@@ -498,6 +507,10 @@ export default function CrmDataTable<TData>({
   }
 
   function resetFilters() {
+    if (onFilterValuesChange) {
+      onFilterValuesChange(filterDefaults);
+      return;
+    }
     setFilterState({ key: filterDefaultsKey, values: filterDefaults });
     if (!controlledPage) setLocalPage(1);
   }

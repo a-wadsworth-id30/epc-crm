@@ -12,6 +12,7 @@ import type {
   ContactCustomFieldDefinition,
   ContactCustomFieldFormValue,
 } from "@/lib/contacts/custom-fields";
+import type { ContactCustomFieldFilterValues } from "@/lib/contacts/filters";
 
 type CompanyOption = {
   id: string;
@@ -57,6 +58,7 @@ type ContactsTableProps = {
   contactTypeCounts: Record<string, number>;
   contactTypes: ContactTypeOption[];
   customFields: ContactCustomFieldDefinition[];
+  customFieldFilterValues: ContactCustomFieldFilterValues;
   companies: CompanyOption[];
   companiesEnabled: boolean;
   contacts: ContactRow[];

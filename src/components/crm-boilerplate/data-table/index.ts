@@ -6,4 +6,5 @@ export type {
   CrmDataTableFilterOption,
   CrmDataTableProps,
   CrmDataTableSortDirection,
+  FilterValue,
 } from "./CrmDataTable";
