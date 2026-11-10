@@ -1269,7 +1269,8 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       <RecordDocumentLibrary
         documentPortals={contactDocumentPortals}
         documentRequirements={documentRequirementStatuses.map(
-          ({ isRequired, label, satisfied, uploadType }) => ({
+          ({ description, isRequired, label, satisfied, uploadType }) => ({
+            description,
             isRequired,
             label,
             satisfied,

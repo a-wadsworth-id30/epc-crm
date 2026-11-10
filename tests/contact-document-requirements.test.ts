@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   contactDocumentRequirementStatuses,
   parseContactDocumentUploadType,
+  suggestedContactCustomerUploadTypes,
   type ContactDocumentRequirementDefinition,
 } from "../src/lib/contacts/document-requirements";
 
@@ -58,4 +59,17 @@ test("controlled contact document types include installer identity evidence", ()
   assert.equal(parseContactDocumentUploadType("driving_licence"), "driving_licence");
   assert.equal(parseContactDocumentUploadType("accreditation_certificate"), "accreditation_certificate");
   assert.equal(parseContactDocumentUploadType("arbitrary-upload"), null);
+});
+
+test("external upload suggestions include only missing required customer-safe types", () => {
+  assert.deepEqual(
+    suggestedContactCustomerUploadTypes([
+      { isRequired: true, satisfied: false, uploadType: "driving_licence" },
+      { isRequired: true, satisfied: true, uploadType: "identity_document" },
+      { isRequired: false, satisfied: false, uploadType: "insurance_certificate" },
+      { isRequired: true, satisfied: false, uploadType: "contract" },
+      { isRequired: true, satisfied: false, uploadType: "not-controlled" },
+    ]),
+    ["driving_licence"],
+  );
 });

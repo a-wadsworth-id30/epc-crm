@@ -73,6 +73,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   type, and authorised users can classify an older untyped file alongside its
   notes/tags. Type changes are validated against the controlled catalogue and
   audited without copying document contents, notes or tags into `AuditLog`.
+- Contact document requirements feed the existing secure customer-upload
+  request form. Only missing, required, customer-safe controlled types are
+  preselected; staff must review and explicitly create/send the expiring link.
+  The server rejects internal-only or arbitrary types and reloads current
+  person-type labels/instructions rather than trusting browser copy. Contacts
+  with no missing safe requirements start with nothing selected.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

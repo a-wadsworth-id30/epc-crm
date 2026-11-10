@@ -66,3 +66,20 @@ export function contactDocumentRequirementStatuses({
 export function parseContactDocumentUploadType(value: unknown) {
   return isDocumentUploadType(value) ? value : null;
 }
+
+export function suggestedContactCustomerUploadTypes(
+  requirements: Array<{
+    isRequired: boolean;
+    satisfied: boolean;
+    uploadType: string;
+  }>,
+) {
+  return requirements.flatMap((requirement) => {
+    if (!requirement.isRequired || requirement.satisfied) return [];
+    if (!isDocumentUploadType(requirement.uploadType)) return [];
+    if (!documentUploadTypeDefinition(requirement.uploadType)?.customerFacing) {
+      return [];
+    }
+    return [requirement.uploadType];
+  });
+}

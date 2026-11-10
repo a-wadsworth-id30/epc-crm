@@ -97,6 +97,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   or deliberately unclassify a file only with a controlled catalogue value;
   the change is audited with parent record IDs and before/after types, never
   with file contents, notes or tags.
+  Secure customer upload requests reuse the same contact requirement status.
+  The browser suggests only missing required types whose controlled catalogue
+  entry is `customerFacing`; creation remains an explicit staff action. The
+  server revalidates that allow-list and reloads active contact-type overrides
+  before snapshotting labels/instructions into `CustomerUploadRequestItem`.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level
