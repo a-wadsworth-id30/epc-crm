@@ -41,6 +41,7 @@ const auditedRoutes = [
   { label: "Security settings", path: "/settings/security" },
   { label: "System settings", path: "/settings/system" },
   { label: "Integration settings", path: "/settings/integrations" },
+  { label: "Person type settings", path: "/settings/contact-types" },
   { label: "Sales pipeline settings", path: "/settings/sales-pipeline" },
 ] as const;
 

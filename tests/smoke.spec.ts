@@ -7,8 +7,11 @@ const password =
 
 const criticalAdminRoutes = [
   { label: "Dashboard", path: "/" },
+  { label: "People", path: "/contacts" },
   { label: "Marketing", path: "/marketing" },
+  { label: "Reports", path: "/reports" },
   { label: "Sales", path: "/sales" },
+  { label: "Person types", path: "/settings/contact-types" },
   { label: "Settings system", path: "/settings/system" },
   { label: "Settings integrations", path: "/settings/integrations" },
   { label: "Telephony", path: "/telephony" },
@@ -16,6 +19,7 @@ const criticalAdminRoutes = [
 
 const unauthenticatedApiRoutes = [
   "/api/contacts",
+  "/api/contacts/export",
   "/api/search/records?q=jo",
   "/api/quick-create/options",
   "/api/quick-create/contacts?q=jo",
