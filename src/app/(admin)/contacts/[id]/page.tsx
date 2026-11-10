@@ -1268,6 +1268,14 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       <ContactDocumentRequirements requirements={documentRequirementStatuses} />
       <RecordDocumentLibrary
         documentPortals={contactDocumentPortals}
+        documentRequirements={documentRequirementStatuses.map(
+          ({ isRequired, label, satisfied, uploadType }) => ({
+            isRequired,
+            label,
+            satisfied,
+            uploadType,
+          }),
+        )}
         documentShares={contactDocumentShares}
         documents={recordDocuments}
         entityId={contact.id}

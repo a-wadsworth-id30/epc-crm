@@ -67,6 +67,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   satisfy compliance checks. Contact document panels show received/missing
   status and a required-document total. The catalogue includes identity,
   driving-licence, accreditation, insurance and company-registration evidence.
+- Internal record-document uploads are requirement-aware. A contact upload
+  defaults to the first missing required controlled type and marks configured
+  types as missing or received in the selector. File cards display their saved
+  type, and authorised users can classify an older untyped file alongside its
+  notes/tags. Type changes are validated against the controlled catalogue and
+  audited without copying document contents, notes or tags into `AuditLog`.
 - Settings > Company can store the organisation name and an uploaded company
   logo set in `CrmSettings.companyProfile`, including identity details,
   registered address details, document/report defaults, default/light/dark logo

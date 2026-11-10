@@ -91,6 +91,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   labels and filenames are not trusted as compliance evidence. Admin mutations
   are audited and the upload type is immutable after creation so historical
   matching semantics cannot change when a visible label is edited.
+  The shared `RecordDocumentLibrary` carries `documentUploadType` on every file
+  in Contact, Company and Sales views. Contact requirements can recommend the
+  first missing type to the internal upload form. Metadata edits may classify
+  or deliberately unclassify a file only with a controlled catalogue value;
+  the change is audited with parent record IDs and before/after types, never
+  with file contents, notes or tags.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level
