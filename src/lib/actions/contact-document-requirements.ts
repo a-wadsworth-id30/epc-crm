@@ -9,6 +9,7 @@ import {
   parseContactDocumentUploadType,
 } from "@/lib/contacts/document-requirements";
 import { prisma } from "@/lib/prisma";
+import { optionalFormIdSchema } from "@/lib/forms/optional-id";
 
 export type ContactDocumentRequirementActionState = {
   message: string;
@@ -20,7 +21,7 @@ const requirementSchema = z.object({
   contactTypeId: z.string().trim().min(1, "Choose a person type."),
   description: z.string().trim().max(500).optional().transform((value) => value || null),
   displayOrder: z.coerce.number().int().min(0).max(9999),
-  id: z.string().trim().optional(),
+  id: optionalFormIdSchema,
   isRequired: z.boolean(),
   label: z.string().trim().max(120).optional(),
   uploadType: z.string().trim().min(1, "Choose a document type."),

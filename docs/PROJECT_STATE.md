@@ -43,6 +43,9 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
 - Settings > Person Types lets admins create, rename, order, style, reactivate
   and archive person types, and choose the active default. Populated or default
   types cannot be archived accidentally, and changes are written to AuditLog.
+  Create forms normalise the absent update-only ID before validation; this same
+  rule is shared by person types, type-specific fields and document
+  requirements so new configuration rows are not rejected as null IDs.
 - People list tabs, counts, badges, filters and create/edit forms read active
   database-backed person types. New and edited contacts store both the selected
   `contactTypeId` and a compatible legacy category. Sales inline-create,

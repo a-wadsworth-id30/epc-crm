@@ -9,6 +9,7 @@ import {
   contactTypeSlugBase,
 } from "@/lib/contacts/contact-types";
 import { prisma } from "@/lib/prisma";
+import { optionalFormIdSchema } from "@/lib/forms/optional-id";
 
 export type ContactTypeActionState = {
   ok: boolean;
@@ -20,7 +21,7 @@ const colourKeys = ["gray", "success", "blue", "purple", "orange"] as const;
 const iconKeys = ["user", "briefcase", "wrench", "building"] as const;
 
 const contactTypeSchema = z.object({
-  id: z.string().trim().optional(),
+  id: optionalFormIdSchema,
   name: z.string().trim().min(2, "Enter a person type name.").max(80),
   pluralName: z.string().trim().min(2, "Enter the plural label.").max(80),
   description: z

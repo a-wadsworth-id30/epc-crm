@@ -15,6 +15,7 @@ import {
 } from "@/lib/contacts/custom-fields";
 import { prisma } from "@/lib/prisma";
 import { userRoleTemplateSchema } from "@/lib/users/role-templates";
+import { optionalFormIdSchema } from "@/lib/forms/optional-id";
 
 export type ContactTypeFieldActionState = {
   ok: boolean;
@@ -23,7 +24,7 @@ export type ContactTypeFieldActionState = {
 };
 
 const fieldSchema = z.object({
-  id: z.string().trim().optional(),
+  id: optionalFormIdSchema,
   contactTypeId: z.string().trim().min(1, "Choose a person type."),
   label: z.string().trim().min(2, "Enter a field label.").max(100),
   helpText: z.string().trim().max(240).optional().transform((value) => value || null),
