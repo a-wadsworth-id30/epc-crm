@@ -39,6 +39,11 @@ const items: {
     href: "/settings/sales-automation",
     adminOnly: true,
   },
+  {
+    label: "Relationship Health",
+    href: "/settings/relationship-health",
+    adminOnly: true,
+  },
   { label: "Integrations", href: "/settings/integrations", adminOnly: true },
   {
     label: "Desktop Softphone",

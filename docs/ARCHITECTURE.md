@@ -155,6 +155,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   ID-only `sale.relationship_repaired` audit events. Participants from other
   Companies are informational because installer and partner relationships can
   legitimately span organisations.
+- `src/lib/sales/relationship-health.ts` adapts Sale query records into that
+  same pure integrity evaluator, filters findings and derives dashboard totals.
+  The admin-only Settings > Relationship Health route scans a bounded recent
+  active/all-Sales scope and links each result to the existing Sale repair UI;
+  it does not introduce separate repair rules or automated mutations.
 - Company-originated Sale creation passes a fixed `saleCompanyId` plus an
   affiliated Person selected from the Company workspace. `createSaleAction`
   does not trust those values: it verifies Company access, Person access and an

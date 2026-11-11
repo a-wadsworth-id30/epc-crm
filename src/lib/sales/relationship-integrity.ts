@@ -14,14 +14,20 @@ export type SaleRelationshipRepair = {
   label: string;
 };
 
+export const saleRelationshipFindingCodes = [
+  "MISSING_PRIMARY_PERSON",
+  "PRIMARY_PARTICIPANT_MISMATCH",
+  "MISSING_SALE_COMPANY",
+  "PRIMARY_PERSON_COMPANY_MISMATCH",
+  "PRIMARY_PERSON_COMPANY_MISSING",
+  "MULTI_COMPANY_PARTICIPANTS",
+] as const;
+
+export type SaleRelationshipFindingCode =
+  (typeof saleRelationshipFindingCodes)[number];
+
 export type SaleRelationshipFinding = {
-  code:
-    | "MISSING_PRIMARY_PERSON"
-    | "PRIMARY_PARTICIPANT_MISMATCH"
-    | "MISSING_SALE_COMPANY"
-    | "PRIMARY_PERSON_COMPANY_MISMATCH"
-    | "PRIMARY_PERSON_COMPANY_MISSING"
-    | "MULTI_COMPANY_PARTICIPANTS";
+  code: SaleRelationshipFindingCode;
   detail: string;
   repairs: SaleRelationshipRepair[];
   severity: "warning" | "review";
