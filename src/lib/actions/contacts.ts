@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
+import { mergedCompanyContactResponsibilities } from "@/lib/companies/contact-responsibilities";
 import { uniqueCompanyMatchByName } from "@/lib/companies/integration-matching";
 import {
   mergeContactEmailMethods,
@@ -771,7 +772,12 @@ export async function updateContactAction(
   const contactId = parsed.data.id;
   const contact = await prisma.contact.findFirst({
     where: contactIdAccessWhere(contactId, user),
-    select: { companyId: true, contactTypeId: true, id: true },
+    select: {
+      companyContactResponsibilities: true,
+      companyId: true,
+      contactTypeId: true,
+      id: true,
+    },
   });
 
   if (!contact) {
@@ -846,6 +852,10 @@ export async function updateContactAction(
           country: parsed.data.country,
           companyId: companyData.companyId,
           companyName: companyData.companyName,
+          companyContactResponsibilities:
+            contact.companyId !== companyData.companyId
+              ? []
+              : contact.companyContactResponsibilities,
         },
       });
 
@@ -1155,6 +1165,7 @@ export async function mergeContactsAction(
         city: true,
         companyId: true,
         companyName: true,
+        companyContactResponsibilities: true,
         country: true,
         county: true,
         category: true,
@@ -1186,6 +1197,7 @@ export async function mergeContactsAction(
         city: true,
         companyId: true,
         companyName: true,
+        companyContactResponsibilities: true,
         country: true,
         county: true,
         category: true,
@@ -1312,6 +1324,17 @@ export async function mergeContactsAction(
           primaryContact.companyName,
           duplicateContact.companyName,
         ),
+        companyContactResponsibilities: mergedCompanyContactResponsibilities({
+          duplicateCompanyId: duplicateContact.companyId,
+          duplicateResponsibilities:
+            duplicateContact.companyContactResponsibilities,
+          primaryCompanyId: primaryContact.companyId,
+          primaryResponsibilities: primaryContact.companyContactResponsibilities,
+          resultingCompanyId: optionalMergeValue(
+            primaryContact.companyId,
+            duplicateContact.companyId,
+          ),
+        }),
         country: optionalMergeValue(
           primaryContact.country,
           duplicateContact.country,

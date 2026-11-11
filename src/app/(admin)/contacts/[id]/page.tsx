@@ -29,6 +29,7 @@ import { DeferredAddSaleModal } from "@/components/crm-boilerplate/SalesRouteLoa
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { ChevronLeftIcon } from "@/icons";
 import { getCurrentUser, requireUser } from "@/lib/auth";
+import { companyContactResponsibilityLabel } from "@/lib/companies/contact-responsibilities";
 import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
@@ -387,6 +388,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
         city: true,
         companyId: true,
         companyName: true,
+        companyContactResponsibilities: true,
         country: true,
         county: true,
         createdAt: true,
@@ -1184,6 +1186,20 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
                 {contact.role ? (
                   <span className="mt-1 block text-xs leading-5 font-normal text-gray-500 dark:text-gray-400">
                     {contact.role}
+                  </span>
+                ) : null}
+                {contact.companyContactResponsibilities.length ? (
+                  <span className="mt-2 flex flex-wrap gap-1.5">
+                    {contact.companyContactResponsibilities.map(
+                      (responsibility) => (
+                        <span
+                          key={responsibility}
+                          className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+                        >
+                          {companyContactResponsibilityLabel(responsibility)}
+                        </span>
+                      ),
+                    )}
                   </span>
                 ) : null}
                 {companyHeaderAddress ? (

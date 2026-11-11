@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 ## Current Product Shape
 
@@ -65,6 +65,10 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   audited without storing person data in audit metadata, and Person create/edit
   writes use the same audit events. The first release retains one optional
   primary Company per Person; many-to-many affiliations are not inferred.
+- Linked People can be assigned controlled Primary, Commercial, Technical,
+  Accounts and Compliance Company contact responsibilities independently of
+  their job title. Responsibilities are visible on both records, audited when
+  edited and cleared when the Person moves Company or is unlinked.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that

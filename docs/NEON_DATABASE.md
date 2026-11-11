@@ -196,6 +196,11 @@ Prospect status. It also changes the visible Company Person Type label to
 Company Contact while preserving its stable `COMPANY` key and `company` slug.
 Existing person/company links and cached company names are unchanged.
 
+The migration `20261111100000_company_contact_responsibilities` adds a
+controlled array of Company-specific contact responsibilities to People. It
+does not infer or backfill roles from free-text job titles; existing People
+start with no selected responsibilities.
+
 The migration `20261110233000_company_custom_fields` adds ordered field
 definitions for Company Types and typed values for Companies. It does not
 backfill or modify company data. Definitions and values remain empty until an

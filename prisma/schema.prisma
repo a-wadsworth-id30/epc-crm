@@ -601,6 +601,14 @@ model Company {
   @@index([createdByUserId, updatedAt])
 }
 
+enum CompanyContactResponsibility {
+  PRIMARY
+  COMMERCIAL
+  TECHNICAL
+  ACCOUNTS
+  COMPLIANCE
+}
+
 model CompanyType {
   id                   String                           @id @default(cuid())
   name                 String
@@ -687,47 +695,48 @@ model CompanyCustomFieldValue {
 }
 
 model Contact {
-  id                    String                       @id @default(cuid())
-  firstName             String
-  lastName              String
-  category              ContactCategory              @default(CONSUMER)
-  contactTypeId         String?
-  contactType           ContactType?                 @relation(fields: [contactTypeId], references: [id], onDelete: SetNull)
-  email                 String?
-  phone                 String?
-  phoneNormalized       String?
-  additionalEmails      ContactEmailAddress[]
-  additionalPhones      ContactPhoneNumber[]
-  leadSource            String?
-  role                  String?
-  addressLine1          String?
-  addressLine2          String?
-  city                  String?
-  county                String?
-  postcode              String?
-  country               String?
-  companyId             String?
-  companyName           String?
-  company               Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  notes                 Note[]
-  tasks                 Task[]
-  opportunities         SalesOpportunity[]
-  salesCommunications   SalesCommunication[]
-  emailMessages         EmailMessage[]
-  emailThreadLinks      EmailThreadLink[]
-  callLogs              CallLog[]
-  queueEntries          CallQueueEntry[]
-  relationshipProfile   CustomerRelationshipProfile?
-  tagAssignments        ContactTagAssignment[]
-  customFieldValues     ContactCustomFieldValue[]
-  attribution           Json?
-  aiGuidance            Json?
-  aiGuidanceFingerprint String?
-  aiGuidanceGeneratedAt DateTime?
-  createdByUserId       String?
-  createdByUser         User?                        @relation("ContactCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdAt             DateTime                     @default(now())
-  updatedAt             DateTime                     @updatedAt
+  id                             String                         @id @default(cuid())
+  firstName                      String
+  lastName                       String
+  category                       ContactCategory                @default(CONSUMER)
+  contactTypeId                  String?
+  contactType                    ContactType?                   @relation(fields: [contactTypeId], references: [id], onDelete: SetNull)
+  email                          String?
+  phone                          String?
+  phoneNormalized                String?
+  additionalEmails               ContactEmailAddress[]
+  additionalPhones               ContactPhoneNumber[]
+  leadSource                     String?
+  role                           String?
+  addressLine1                   String?
+  addressLine2                   String?
+  city                           String?
+  county                         String?
+  postcode                       String?
+  country                        String?
+  companyId                      String?
+  companyName                    String?
+  companyContactResponsibilities CompanyContactResponsibility[] @default([])
+  company                        Company?                       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  notes                          Note[]
+  tasks                          Task[]
+  opportunities                  SalesOpportunity[]
+  salesCommunications            SalesCommunication[]
+  emailMessages                  EmailMessage[]
+  emailThreadLinks               EmailThreadLink[]
+  callLogs                       CallLog[]
+  queueEntries                   CallQueueEntry[]
+  relationshipProfile            CustomerRelationshipProfile?
+  tagAssignments                 ContactTagAssignment[]
+  customFieldValues              ContactCustomFieldValue[]
+  attribution                    Json?
+  aiGuidance                     Json?
+  aiGuidanceFingerprint          String?
+  aiGuidanceGeneratedAt          DateTime?
+  createdByUserId                String?
+  createdByUser                  User?                          @relation("ContactCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt                      DateTime                       @default(now())
+  updatedAt                      DateTime                       @updatedAt
 
   @@index([updatedAt])
   @@index([createdAt])
