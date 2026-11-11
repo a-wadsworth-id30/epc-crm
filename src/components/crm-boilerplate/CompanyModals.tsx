@@ -12,6 +12,7 @@ import { EditIcon, PlusIcon, TrashBinIcon } from "@/icons";
 import { deleteCompanyAction } from "@/lib/actions/companies";
 import type { CompanyCustomFieldDefinition } from "@/lib/companies/custom-fields";
 import type { CompanyTypeOption } from "@/lib/companies/company-types";
+import type { CompanyOwnerOption } from "@/lib/companies/owner-assignment";
 
 export type CompanyCreateModalProps = {
   addressLookupEnabled?: boolean;
@@ -19,6 +20,7 @@ export type CompanyCreateModalProps = {
   companyTypes: CompanyTypeOption[];
   customFields: CompanyCustomFieldDefinition[];
   hideTrigger?: boolean;
+  ownerOptions: CompanyOwnerOption[];
 };
 
 export type CompanyEditModalProps = {
@@ -27,6 +29,7 @@ export type CompanyEditModalProps = {
   company: CompanyFormValues;
   companyTypes: CompanyTypeOption[];
   customFields: CompanyCustomFieldDefinition[];
+  ownerOptions: CompanyOwnerOption[];
 };
 
 export type CompanyDeleteModalProps = {
@@ -47,6 +50,7 @@ export function CompanyCreateModal({
   companyTypes,
   customFields,
   hideTrigger = false,
+  ownerOptions,
 }: CompanyCreateModalProps) {
   const modal = useModal();
   const { openModal } = modal;
@@ -67,19 +71,21 @@ export function CompanyCreateModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[820px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[820px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-1 font-semibold text-gray-800 dark:text-white/90">
             Add company
           </h2>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Create an account-level company for contacts, tasks and sales activity.
+            Create an account-level company for contacts, tasks and sales
+            activity.
           </p>
           <CompanyForm
             mode="create"
             companyTypes={companyTypes}
             customFields={customFields}
+            ownerOptions={ownerOptions}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
           />
@@ -95,6 +101,7 @@ export function CompanyEditModal({
   company,
   companyTypes,
   customFields,
+  ownerOptions,
 }: CompanyEditModalProps) {
   const modal = useModal();
   const { openModal } = modal;
@@ -118,20 +125,22 @@ export function CompanyEditModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[640px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[640px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-1 font-semibold text-gray-800 dark:text-white/90">
             Edit company
           </h2>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Update company profile details used across contacts and sales records.
+            Update company profile details used across contacts and sales
+            records.
           </p>
           <CompanyForm
             mode="edit"
             company={company}
             companyTypes={companyTypes}
             customFields={customFields}
+            ownerOptions={ownerOptions}
             addressLookupEnabled={addressLookupEnabled}
             onSuccess={modal.closeModal}
           />
@@ -171,7 +180,7 @@ export function CompanyDeleteModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[520px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[520px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div>
           <h2 className="text-title-xs mb-2 font-semibold text-gray-800 dark:text-white/90">
@@ -179,7 +188,8 @@ export function CompanyDeleteModal({
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Remove {companyName} from the CRM? Related contacts, tasks and sales
-            will be unlinked. Company notes will be deleted. This cannot be undone.
+            will be unlinked. Company notes will be deleted. This cannot be
+            undone.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-4 text-sm dark:bg-white/[0.03]">
             <CompanyImpact label="Contacts" value={relatedRecords.contacts} />
@@ -222,10 +232,12 @@ export function CompanyDeleteModal({
 function CompanyImpact({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+      <dt className="text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
         {label}
       </dt>
-      <dd className="mt-1 font-semibold text-gray-800 dark:text-white/90">{value}</dd>
+      <dd className="mt-1 font-semibold text-gray-800 dark:text-white/90">
+        {value}
+      </dd>
     </div>
   );
 }

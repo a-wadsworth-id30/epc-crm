@@ -70,6 +70,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   that primary compatibility state and the affiliation table synchronised for
   every writer, including website, telephony and provider imports. Server
   actions enforce record access and write privacy-safe AuditLog events.
+  `ownerUserId` is the assignable CRM ownership relation and grants standard
+  users access to their Companies alongside creator and accessible-sale rules.
+  The legacy `owner` text remains as an import compatibility value. Migration
+  backfill links only names that match exactly one active user; unmatched or
+  ambiguous text is preserved for explicit review.
 - `CompanyType`: data-backed organisation classification. Stable system keys
   cover Customer, Installer Company, Trade Partner, Supplier, Subcontractor and
   Other, while the visible name, description and presentation can evolve.

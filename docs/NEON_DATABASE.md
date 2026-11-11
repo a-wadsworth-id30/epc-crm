@@ -214,6 +214,12 @@ self-reference from a Company to its parent Company. Existing Companies remain
 independent and no hierarchy is inferred. Deleting a parent sets child links to
 null, preserving the child Company records and their People, sales and files.
 
+The migration `20261111131500_company_user_ownership` adds an optional indexed
+CRM user relation for Company ownership while retaining the legacy owner text.
+It backfills only owner names that match exactly one active user, leaving
+unmatched or ambiguous historical values unchanged. Deleting a user sets the
+relation to null without deleting the Company.
+
 The migration `20261110233000_company_custom_fields` adds ordered field
 definitions for Company Types and typed values for Companies. It does not
 backfill or modify company data. Definitions and values remain empty until an

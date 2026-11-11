@@ -1,10 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { requireApiUser } from "@/lib/api-auth";
-import {
-  contactEmailValues,
-  contactPhoneValues,
-} from "@/lib/contact-methods";
+import { contactEmailValues, contactPhoneValues } from "@/lib/contact-methods";
 import {
   companyWhereWithAccess,
   contactWhereWithAccess,
@@ -126,7 +123,12 @@ export async function GET(request: NextRequest) {
             },
             additionalPhones: {
               orderBy: { createdAt: "asc" },
-              select: { id: true, label: true, phone: true, phoneNormalized: true },
+              select: {
+                id: true,
+                label: true,
+                phone: true,
+                phoneNormalized: true,
+              },
             },
             email: true,
             firstName: true,
@@ -153,6 +155,7 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             owner: true,
+            ownerUser: { select: { name: true } },
             status: true,
           },
         })
@@ -195,7 +198,10 @@ export async function GET(request: NextRequest) {
         contact.postcode,
         contact.country,
       ];
-      const emailValues = contactEmailValues(contact.email, contact.additionalEmails);
+      const emailValues = contactEmailValues(
+        contact.email,
+        contact.additionalEmails,
+      );
       const phoneValues = contactPhoneValues(
         contact.phone,
         contact.phoneNormalized,
@@ -281,10 +287,15 @@ export async function GET(request: NextRequest) {
     }),
     ...companies.map((company) =>
       createRecord(query, {
-        description: [company.status, company.owner]
+        description: [company.status, company.ownerUser?.name ?? company.owner]
           .filter(Boolean)
           .join(" / "),
-        fields: [company.name, company.domain, company.status, company.owner],
+        fields: [
+          company.name,
+          company.domain,
+          company.status,
+          company.ownerUser?.name ?? company.owner,
+        ],
         href: "/clients",
         id: company.id,
         subtitle: company.domain,
@@ -350,11 +361,7 @@ function contains(value: string) {
   return { contains: value, mode: queryMode };
 }
 
-function candidateLimit(
-  limit: number,
-  multiplier = 8,
-  max = maxCandidateTake,
-) {
+function candidateLimit(limit: number, multiplier = 8, max = maxCandidateTake) {
   return Math.min(max, Math.max(minCandidateTake, limit * multiplier));
 }
 
@@ -440,15 +447,18 @@ function opportunitySearchWhere({
   return { OR };
 }
 
-function companySearchWhere(
-  textTerms: string[],
-): Prisma.CompanyWhereInput {
+function companySearchWhere(textTerms: string[]): Prisma.CompanyWhereInput {
   return {
     OR: textTerms.flatMap((term) => [
       { name: contains(term) },
       { domain: contains(term) },
       ...(term.length >= 3
-        ? [{ status: contains(term) }, { owner: contains(term) }]
+        ? [
+            { status: contains(term) },
+            { owner: contains(term) },
+            { ownerUser: { name: contains(term) } },
+            { ownerUser: { email: contains(term) } },
+          ]
         : []),
     ]),
   };
@@ -514,7 +524,9 @@ function contactTextClauses(term: string): Prisma.ContactWhereInput[] {
   return clauses;
 }
 
-function opportunityTextClauses(term: string): Prisma.SalesOpportunityWhereInput[] {
+function opportunityTextClauses(
+  term: string,
+): Prisma.SalesOpportunityWhereInput[] {
   const clauses: Prisma.SalesOpportunityWhereInput[] = [
     { title: contains(term) },
     { company: { name: contains(term) } },

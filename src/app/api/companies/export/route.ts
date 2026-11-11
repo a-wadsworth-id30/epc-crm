@@ -1,11 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { requireApiUser } from "@/lib/api-auth";
-import {
-  normalizeContactCustomFieldOptions,
-} from "@/lib/contacts/custom-fields";
-import {
-  serializeCompanyCustomFieldValue,
-} from "@/lib/companies/custom-fields";
+import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
+import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
 import { visibleCompanyFields } from "@/lib/companies/field-access";
 import {
   companyCustomFieldFiltersWhere,
@@ -39,7 +35,10 @@ export async function GET(request: Request) {
   const status = (url.searchParams.get("status") ?? "").trim();
   const owner = (url.searchParams.get("owner") ?? "").trim();
   if (status && !companyStatuses.includes(status)) {
-    return Response.json({ error: "That lifecycle status is not available." }, { status: 400 });
+    return Response.json(
+      { error: "That lifecycle status is not available." },
+      { status: 400 },
+    );
   }
 
   const selectedType = typeSlug
@@ -49,7 +48,10 @@ export async function GET(request: Request) {
       })
     : null;
   if (typeSlug && !selectedType) {
-    return Response.json({ error: "That Company Type is not available." }, { status: 400 });
+    return Response.json(
+      { error: "That Company Type is not available." },
+      { status: 400 },
+    );
   }
 
   const availableFields = await prisma.companyTypeField.findMany({
@@ -93,7 +95,11 @@ export async function GET(request: Request) {
     ...(selectedType ? [{ companyTypeId: selectedType.id }] : []),
     ...(status ? [{ status }] : []),
     ...(owner
-      ? [owner === "__unassigned__" ? { OR: [{ owner: null }, { owner: "" }] } : { owner }]
+      ? [
+          owner === "__unassigned__"
+            ? { ownerUserId: null }
+            : { ownerUserId: owner },
+        ]
       : []),
   ];
   const searchWhere = companySearchWhere(
@@ -133,6 +139,7 @@ export async function GET(request: Request) {
       domain: true,
       name: true,
       owner: true,
+      ownerUser: { select: { name: true } },
       postcode: true,
       status: true,
       updatedAt: true,
@@ -173,7 +180,7 @@ export async function GET(request: Request) {
         company.name,
         company.domain ?? "",
         company.status,
-        company.owner ?? "",
+        company.ownerUser?.name ?? company.owner ?? "",
         company.addressLine1 ?? "",
         company.addressLine2 ?? "",
         company.city ?? "",

@@ -77,6 +77,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   parent and child records, hierarchy changes are audited, and server-side
   validation prevents self-links and circular chains. Deleting a parent safely
   detaches its children rather than deleting them.
+- Company ownership is linked to an active CRM user rather than relying only on
+  free text. Admins can assign any active user; standard users can assign
+  themselves or leave a Company unassigned. Ownership participates in Company
+  access, filters, search and exports, and changes are privacy-safe audited.
+  The legacy text value remains for imports and unmatched historical data;
+  only unique active-user name matches are backfilled automatically.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that

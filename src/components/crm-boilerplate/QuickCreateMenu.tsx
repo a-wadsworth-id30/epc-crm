@@ -29,6 +29,7 @@ type QuickCreateOptions = {
   companiesEnabled: boolean;
   companyTypes: CompanyTypeOption[];
   companyCustomFields: CompanyCustomFieldDefinition[];
+  companyOwners: Array<{ id: string; name: string }>;
   contacts: Array<{
     companyId: string | null;
     companyName: string | null;
@@ -241,7 +242,9 @@ export default function QuickCreateMenu({
                       {item.label}
                     </span>
                     <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-                      {isLoading && !options ? "Loading setup..." : item.description}
+                      {isLoading && !options
+                        ? "Loading setup..."
+                        : item.description}
                     </span>
                   </span>
                 </button>
@@ -277,6 +280,7 @@ export default function QuickCreateMenu({
           autoOpen
           companyTypes={options.companyTypes}
           customFields={options.companyCustomFields}
+          ownerOptions={options.companyOwners}
           hideTrigger
         />
       ) : null}

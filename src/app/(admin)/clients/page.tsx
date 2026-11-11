@@ -29,6 +29,7 @@ import {
   parseCompanyCustomFieldFilters,
 } from "@/lib/companies/filters";
 import { companySearchWhere } from "@/lib/companies/query";
+import { companyOwnerOptionsForUser } from "@/lib/companies/owner-assignment";
 import { searchParamsFromRecord } from "@/lib/contacts/filters";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { companyWhereWithAccess } from "@/lib/crm-resource-access";
@@ -69,6 +70,8 @@ const companyListSelect = {
   domain: true,
   status: true,
   owner: true,
+  ownerUserId: true,
+  ownerUser: { select: { name: true } },
   addressLine1: true,
   addressLine2: true,
   city: true,
@@ -118,6 +121,10 @@ function companyOrderBy(
 ): Prisma.CompanyOrderByWithRelationInput {
   if (sortKey === "contacts") {
     return { contactAffiliations: { _count: sortDirection } };
+  }
+
+  if (sortKey === "owner") {
+    return { ownerUser: { name: sortDirection } };
   }
 
   return { [sortKey]: sortDirection };
@@ -199,7 +206,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const status = companyStatuses.includes(
     requestedStatus as (typeof companyStatuses)[number],
   )
-    ? requestedStatus ?? ""
+    ? (requestedStatus ?? "")
     : "";
   const owner = (singleParam(params.owner) ?? "").trim();
   const sortKey = normalizeSortKey(params.sort);
@@ -227,8 +234,8 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     ...(owner
       ? [
           owner === "__unassigned__"
-            ? { OR: [{ owner: null }, { owner: "" }] }
-            : { owner },
+            ? { ownerUserId: null }
+            : { ownerUserId: owner },
         ]
       : []),
     ...(searchWhere ? [searchWhere] : []),
@@ -243,7 +250,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     totalCount,
     allCompanyCount,
     companyTypeRows,
-    ownerRows,
+    activeOwnerUsers,
     addressLookupEnabled,
   ] = await Promise.all([
     prisma.company.count({ where }),
@@ -253,11 +260,10 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
       where: allCompaniesWhere,
       _count: { _all: true },
     }),
-    prisma.company.findMany({
-      where: companyWhereWithAccess(user, { owner: { not: null } }),
-      distinct: ["owner"],
-      orderBy: { owner: "asc" },
-      select: { owner: true },
+    prisma.user.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true },
     }),
     isGeoapifyAddressLookupEnabled(),
   ]);
@@ -266,9 +272,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
       row.companyTypeId ? [[row.companyTypeId, row._count._all]] : [],
     ),
   );
-  const ownerOptions = ownerRows.flatMap((row) =>
-    row.owner?.trim() ? [row.owner.trim()] : [],
-  );
+  const ownerOptions = companyOwnerOptionsForUser(activeOwnerUsers, user);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(requestedPage, totalPages);
   const companies = await prisma.company.findMany({
@@ -297,7 +301,8 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     },
     domain: company.domain,
     name: company.name,
-    owner: company.owner,
+    owner: company.ownerUser?.name ?? company.owner,
+    ownerUserId: company.ownerUserId,
     status: company.status,
     addressLine1: company.addressLine1,
     addressLine2: company.addressLine2,
@@ -331,6 +336,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
               addressLookupEnabled={addressLookupEnabled}
               companyTypes={companyTypes}
               customFields={normalizedCompanyCustomFields}
+              ownerOptions={ownerOptions}
             />
           </div>
         }

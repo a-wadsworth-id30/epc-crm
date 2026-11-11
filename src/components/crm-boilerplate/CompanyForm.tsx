@@ -21,6 +21,10 @@ import {
 } from "@/lib/actions/companies";
 import { leadSourceOptions } from "@/lib/sales/lead-sources";
 import type { CompanyTypeOption } from "@/lib/companies/company-types";
+import {
+  LEGACY_COMPANY_OWNER_VALUE,
+  type CompanyOwnerOption,
+} from "@/lib/companies/owner-assignment";
 import type {
   CompanyCustomFieldDefinition,
   CompanyCustomFieldFormValue,
@@ -34,6 +38,7 @@ export type CompanyFormValues = {
   domain?: string | null;
   status?: string | null;
   owner?: string | null;
+  ownerUserId?: string | null;
   addressLine1?: string | null;
   addressLine2?: string | null;
   city?: string | null;
@@ -53,6 +58,7 @@ export default function CompanyForm({
   company,
   companyTypes,
   customFields,
+  ownerOptions,
   mode,
   addressLookupEnabled = false,
   onSuccess,
@@ -60,6 +66,7 @@ export default function CompanyForm({
   company?: CompanyFormValues;
   companyTypes: CompanyTypeOption[];
   customFields: CompanyCustomFieldDefinition[];
+  ownerOptions: CompanyOwnerOption[];
   mode: "create" | "edit";
   addressLookupEnabled?: boolean;
   onSuccess?: () => void;
@@ -72,9 +79,8 @@ export default function CompanyForm({
     companyTypes.find((type) => type.isDefault && type.isActive)?.id ??
     companyTypes.find((type) => type.isActive)?.id ??
     "";
-  const [selectedCompanyTypeId, setSelectedCompanyTypeId] = useState(
-    defaultCompanyTypeId,
-  );
+  const [selectedCompanyTypeId, setSelectedCompanyTypeId] =
+    useState(defaultCompanyTypeId);
   const selectedCompanyType = companyTypes.find(
     (type) => type.id === selectedCompanyTypeId,
   );
@@ -144,11 +150,7 @@ export default function CompanyForm({
   }
 
   return (
-    <form
-      ref={formRef}
-      action={formAction}
-      onChangeCapture={handleFormChange}
-    >
+    <form ref={formRef} action={formAction} onChangeCapture={handleFormChange}>
       {company?.id ? (
         <input type="hidden" name="id" value={company.id} />
       ) : null}
@@ -177,12 +179,14 @@ export default function CompanyForm({
           >
             {companyTypes.map((type) => (
               <option key={type.id} value={type.id}>
-                {type.name}{type.isActive ? "" : " (archived)"}
+                {type.name}
+                {type.isActive ? "" : " (archived)"}
               </option>
             ))}
           </select>
           <p className="mt-1.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
-            {selectedCompanyType?.description ?? "Choose how this organisation should be classified."}
+            {selectedCompanyType?.description ??
+              "Choose how this organisation should be classified."}
           </p>
         </div>
         <div>
@@ -196,12 +200,33 @@ export default function CompanyForm({
         </div>
         <div>
           <Label htmlFor={`${mode}-company-owner`}>Owner</Label>
-          <Input
+          <select
             id={`${mode}-company-owner`}
-            name="owner"
-            defaultValue={company?.owner ?? ""}
-            placeholder="Optional"
-          />
+            name="ownerUserId"
+            defaultValue={
+              company?.ownerUserId ??
+              (company?.owner ? LEGACY_COMPANY_OWNER_VALUE : "")
+            }
+            className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="">Unassigned</option>
+            {company?.owner && !company.ownerUserId ? (
+              <option value={LEGACY_COMPANY_OWNER_VALUE}>
+                Legacy: {company.owner}
+              </option>
+            ) : null}
+            {ownerOptions.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name}
+              </option>
+            ))}
+          </select>
+          {company?.owner && !company.ownerUserId ? (
+            <p className="mt-1.5 text-xs leading-5 text-warning-600 dark:text-warning-400">
+              Choose a CRM user to make this legacy ownership assignable, or
+              choose Unassigned to clear it.
+            </p>
+          ) : null}
         </div>
         <div>
           <Label htmlFor={`${mode}-company-status`}>Status</Label>

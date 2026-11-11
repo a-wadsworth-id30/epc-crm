@@ -1,6 +1,6 @@
 # Company Data Audit
 
-Last reviewed: 2026-11-10
+Last reviewed: 2026-11-11
 
 ## Purpose
 
@@ -50,7 +50,7 @@ Company records currently contain:
 - name;
 - domain;
 - lifecycle status;
-- a free-text owner;
+- a CRM user-backed owner plus retained legacy owner text;
 - one postal address;
 - linked People, sales, tasks, notes and documents.
 
@@ -78,8 +78,8 @@ admin-configurable.
 2. The `Company` Person Type is misleading because Person Types classify
    individuals. It currently has zero assigned People in the live UI.
 3. The Company model is materially less configurable than the Person model.
-4. Free-text Company owner values cannot provide reliable permissions,
-   reassignment or reporting.
+4. Company ownership is now user-backed for permissions, reassignment and
+   reporting. Unmatched legacy free-text values remain visible until reviewed.
 5. Company documents are supported, but Company Type-specific checklists and
    compliance scoring are not.
 6. Name-only matching remains necessary for legacy data but creates duplicate
@@ -92,6 +92,15 @@ admin-configurable.
    model now supports this while preserving the existing primary Company link.
 
 ## Recommended delivery decisions
+
+### Company ownership
+
+Use `Company.ownerUserId` for assignment, filtering, search, export and access
+scope. Admins may assign any active CRM user; standard users may assign only
+themselves or leave a Company unassigned. Preserve the legacy `Company.owner`
+text for imports and historical review. Automatically link it only when its
+normalised value identifies exactly one active user, avoiding guesses where
+names are duplicated or no longer active.
 
 ### Company Types
 
@@ -281,4 +290,3 @@ records available through the current user's Company access policy. Updates
 validate the full ancestor chain, reject self-links and cycles, and store only
 record IDs in the audit event. Removing a parent or deleting it leaves the
 child Company, People, sales and documents intact.
-
