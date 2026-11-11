@@ -108,6 +108,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Company views, records a privacy-safe audit event and invalidates stale AI
   guidance. AI output is explicitly presented as a recommendation rather than a
   second next-action source.
+- A saved Sale next action can be deliberately converted into a linked Task.
+  The task uses the configured CRM assignee and due-date defaults, links back to
+  the Sale through privacy-safe metadata and records an audit event. The action
+  reloads the canonical `SalesOpportunity.nextStep`, rejects stale submissions
+  and reuses an existing open task with the same fingerprint rather than
+  creating duplicates. Editing the Task does not silently rewrite the Sale.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that

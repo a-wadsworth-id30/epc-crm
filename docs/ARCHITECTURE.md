@@ -147,6 +147,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   through a permission-scoped, audited server action and invalidates cached AI
   guidance. Sales AI output is labelled as a recommendation and remains advisory
   until a user deliberately updates the canonical action or creates a task.
+- `createSaleNextActionTaskAction` turns the current canonical next action into
+  an explicitly requested Task using CRM task defaults. It re-reads Sale access,
+  applies a stale-value check and stores only a SHA-256 next-action fingerprint
+  in task metadata for open-task deduplication. Task and Sale state remain
+  independently editable; the link is operational context, not two-way sync.
 - `src/lib/sales/epc-milestones.ts` presents the existing stage-requirement
   evidence rules as a read-only Sale summary. The Sale route supplies bounded
   linked file/task evidence plus its existing communication and `leadScope`

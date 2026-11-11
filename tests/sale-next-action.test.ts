@@ -57,3 +57,18 @@ test("distinguishes committed CRM state from AI recommendations", () => {
   assert.match(fullAi, /AI recommendation/);
   assert.doesNotMatch(fullAi, /sale\.nextStep\s*\|\|/);
 });
+
+test("creates an idempotent audited task from the canonical next action", () => {
+  const action = readFileSync("src/lib/actions/sale-next-action.ts", "utf8");
+  const editor = readFileSync(
+    "src/components/crm-boilerplate/SaleNextActionEditor.tsx",
+    "utf8",
+  );
+
+  assert.match(action, /sale\.next_action_task_created/);
+  assert.match(action, /nextActionFingerprint/);
+  assert.match(action, /source: "sale-next-action"/);
+  assert.match(action, /salesOpportunityIdAccessWhere/);
+  assert.match(action, /taskDefaultDueDate/);
+  assert.match(editor, /Create task/);
+});
