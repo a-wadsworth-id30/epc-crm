@@ -7,6 +7,7 @@ import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecord
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import SaleNextActionEditor from "@/components/crm-boilerplate/SaleNextActionEditor";
+import SaleEpcMilestoneSummary from "@/components/crm-boilerplate/SaleEpcMilestoneSummary";
 import SaleParticipantsPanel from "@/components/crm-boilerplate/SaleParticipantsPanel";
 import SaleRelationshipIntegrityPanel from "@/components/crm-boilerplate/SaleRelationshipIntegrityPanel";
 import {
@@ -77,6 +78,7 @@ import {
   serializeConversationCommunication,
 } from "@/lib/sales/conversation-history";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
+import { epcMilestones } from "@/lib/sales/epc-milestones";
 import { saleRelationshipFindings } from "@/lib/sales/relationship-integrity";
 import { getCrmSettings } from "@/lib/settings";
 import { listRecordSignatureRequests } from "@/lib/signature-request-list";
@@ -1632,6 +1634,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       currency: true,
       source: true,
       nextStep: true,
+      leadScope: true,
       expectedCloseDate: true,
       contactId: true,
       companyId: true,
@@ -1845,6 +1848,21 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           ],
         }
       : { id: "__none__" };
+  const milestoneDocumentWhere = {
+    OR: [
+      { entityType: "SalesOpportunity", entityId: id },
+      ...(sale.contactId
+        ? [{ entityType: "Contact", entityId: sale.contactId }]
+        : []),
+      ...(sale.companyId
+        ? [{ entityType: "Company", entityId: sale.companyId }]
+        : []),
+    ],
+  };
+  const milestoneTaskWhere = [
+    ...(sale.contactId ? [{ contactId: sale.contactId }] : []),
+    ...(sale.companyId ? [{ companyId: sale.companyId }] : []),
+  ];
   const [
     attributionRecords,
     saleCalls,
@@ -1864,6 +1882,8 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     spruceSaleLink,
     spruceIntegration,
     r2Integration,
+    milestoneFiles,
+    milestoneTasks,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
       where: attributionWhere,
@@ -2053,6 +2073,30 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       where: { provider: cloudflareR2Provider },
       select: { config: true },
     }),
+    prisma.fileAsset.findMany({
+      where: milestoneDocumentWhere,
+      orderBy: { createdAt: "desc" },
+      take: 80,
+      select: {
+        documentFolder: true,
+        documentUploadType: true,
+        notes: true,
+        originalName: true,
+        tags: true,
+      },
+    }),
+    milestoneTaskWhere.length
+      ? prisma.task.findMany({
+          where: { OR: milestoneTaskWhere },
+          orderBy: { updatedAt: "desc" },
+          take: 80,
+          select: {
+            description: true,
+            status: true,
+            title: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
   const hasSpruceDirectApi =
     hasStoredSpruceDirectApiCredentials(spruceIntegration?.config) ||
@@ -2545,6 +2589,17 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   );
   const leadDiscoveryPack =
     discoveryPacks.find((pack) => pack.scope === "LEAD") ?? null;
+  const milestoneSummary = epcMilestones({
+    communications: sale.communications.map((communication) => ({
+      body: communication.body,
+      direction: communication.direction,
+      subject: communication.subject,
+      summary: communication.summary,
+    })),
+    files: milestoneFiles,
+    leadScope: sale.leadScope,
+    tasks: milestoneTasks,
+  });
 
   return (
     <>
@@ -2705,6 +2760,8 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           name: sale.title,
         }}
       />
+
+      <SaleEpcMilestoneSummary milestones={milestoneSummary} />
 
       {pipedriveLeadLink ? (
         <PipedriveLeadFilesAutoSync saleId={sale.id} />

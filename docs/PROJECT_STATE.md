@@ -143,6 +143,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   modified form cannot attach unrelated records. The new Sale keeps the chosen
   Company even when the Person's primary Company is different, supporting valid
   multi-Company affiliations without guessing.
+- Sale detail includes a compact EPC delivery milestone summary for documents,
+  site survey, proposal, deposit and design approval. It reuses the existing
+  pipeline-stage evidence evaluator across linked files, completed tasks,
+  communications and Sale scope instead of adding another editable status.
+  Labels say whether evidence was found and explicitly do not claim contractual
+  completion or replace the configured pipeline stage.
 - Settings > Company Types also supports ordered required/optional document
   checklists backed by controlled document types. Company Documents shows live
   checklist compliance, defaults uploads towards missing required evidence and

@@ -147,6 +147,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   through a permission-scoped, audited server action and invalidates cached AI
   guidance. Sales AI output is labelled as a recommendation and remains advisory
   until a user deliberately updates the canonical action or creates a task.
+- `src/lib/sales/epc-milestones.ts` presents the existing stage-requirement
+  evidence rules as a read-only Sale summary. The Sale route supplies bounded
+  linked file/task evidence plus its existing communication and `leadScope`
+  data. Milestones therefore remain derived projections, not new workflow
+  state, and use evidence wording rather than asserting contractual completion.
 - Sale relationship integrity treats `SalesOpportunity.contactId` as the
   canonical reply/call Person and `SalesOpportunity.companyId` as the explicit
   Sale Company. A pure evaluator compares those fields with the Primary customer
