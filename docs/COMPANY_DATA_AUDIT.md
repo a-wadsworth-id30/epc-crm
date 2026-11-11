@@ -258,3 +258,13 @@ compatibility contract while stopping arbitrary `findFirst` links. People CSV
 preview explains whether a Company will be linked, and import audit metadata
 records aggregate linked/unlinked counts without storing customer values.
 
+## Company contact responsibilities
+
+The current primary Company relationship now carries controlled contact
+responsibilities on the Person: Primary, Commercial, Technical, Accounts and
+Compliance. The existing free-text `Contact.role` remains the Person's job
+title. Responsibility changes require access to both records, are written to
+the audit log without copying Person data and are cleared when the Person is
+moved or unlinked. A later many-to-many affiliation model must migrate these
+values onto the primary affiliation rather than treating them as global roles.
+

@@ -11,6 +11,7 @@ import CompanyDocumentRequirements from "@/components/crm-boilerplate/CompanyDoc
 import CompanyProfileCompleteness from "@/components/crm-boilerplate/CompanyProfileCompleteness";
 import {
   CompanyContactLinker,
+  CompanyContactResponsibilitiesEditor,
   CompanyContactUnlinkButton,
 } from "@/components/crm-boilerplate/CompanyContactRelationships";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
@@ -176,6 +177,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
             },
             email: true,
             firstName: true,
+            companyContactResponsibilities: true,
             id: true,
             lastName: true,
             leadSource: true,
@@ -593,6 +595,11 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {contact.role ?? "Role not set"}
                   </p>
+                  <CompanyContactResponsibilitiesEditor
+                    companyId={company.id}
+                    contactId={contact.id}
+                    responsibilities={contact.companyContactResponsibilities}
+                  />
                   <CompanyContactUnlinkButton
                     companyId={company.id}
                     contactId={contact.id}

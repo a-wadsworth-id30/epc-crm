@@ -7,8 +7,13 @@ import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import {
   linkContactToCompanyAction,
   unlinkContactFromCompanyAction,
+  updateCompanyContactResponsibilitiesAction,
   type CompanyActionState,
 } from "@/lib/actions/companies";
+import {
+  companyContactResponsibilityOptions,
+  type CompanyContactResponsibilityValue,
+} from "@/lib/companies/contact-responsibilities";
 
 type ContactSearchResult = {
   companyId: string | null;
@@ -133,6 +138,121 @@ export function CompanyContactUnlinkButton({ companyId, contactId, contactName }
         <button type="submit" disabled={isPending} className="h-8 rounded-lg bg-error-500 px-2 text-xs font-semibold text-white hover:bg-error-600 disabled:opacity-60">{isPending ? "Unlinking..." : "Confirm unlink"}</button>
         <button type="button" onClick={() => setConfirming(false)} className="h-8 rounded-lg border border-gray-300 px-2 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-300">Cancel</button>
       </div>
+    </form>
+  );
+}
+
+export function CompanyContactResponsibilitiesEditor({
+  companyId,
+  contactId,
+  responsibilities,
+}: {
+  companyId: string;
+  contactId: string;
+  responsibilities: CompanyContactResponsibilityValue[];
+}) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [state, action, isPending] = useActionState(
+    updateCompanyContactResponsibilitiesAction,
+    initialState,
+  );
+
+  useEffect(() => {
+    if (!state.message) return;
+    showToast(state.message, state.ok ? "success" : "error");
+    if (state.ok) {
+      router.refresh();
+    }
+  }, [router, showToast, state]);
+
+  const selected = new Set(responsibilities);
+  const labels = companyContactResponsibilityOptions
+    .filter((option) => selected.has(option.value))
+    .map((option) => option.label);
+
+  if (!isOpen) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {labels.length ? (
+          labels.map((label) => (
+            <span
+              key={label}
+              className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+            >
+              {label}
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            No Company contact roles
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="ml-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"
+        >
+          Manage roles
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      action={action}
+      className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.03]"
+    >
+      <input type="hidden" name="companyId" value={companyId} />
+      <input type="hidden" name="contactId" value={contactId} />
+      <fieldset>
+        <legend className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+          Company contact roles
+        </legend>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {companyContactResponsibilityOptions.map((option) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+            >
+              <input
+                type="checkbox"
+                name="responsibilities"
+                value={option.value}
+                defaultChecked={selected.has(option.value)}
+                className="mt-0.5 size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              />
+              <span>
+                <span className="block text-xs font-semibold text-gray-700 dark:text-gray-200">
+                  {option.label}
+                </span>
+                <span className="mt-0.5 block text-xs leading-4 text-gray-500 dark:text-gray-400">
+                  {option.description}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="h-8 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+        >
+          {isPending ? "Saving..." : "Save roles"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="h-8 rounded-lg border border-gray-300 px-3 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+      <ActionStateMessage state={state.message ? state : undefined} />
     </form>
   );
 }

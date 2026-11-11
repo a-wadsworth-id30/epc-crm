@@ -209,6 +209,12 @@ Core Prisma models are in `prisma/schema.prisma`.
   before snapshotting labels/instructions into `CustomerUploadRequestItem`.
   Contacts and companies store a nullable creator user link so non-admins can
   still view standalone records they created before an opportunity exists.
+- `Contact.companyContactResponsibilities` records the controlled Primary,
+  Commercial, Technical, Accounts and Compliance responsibilities held by a
+  Person for their current primary Company. These values do not replace the
+  Person's free-text job title. Moving or unlinking the Person clears the
+  responsibilities so Company-specific roles cannot leak to another
+  organisation; changes are permission-checked and audited.
 - `CustomerRelationshipProfile` / `CustomerTechnologyCoverage`: contact-level
   relationship context. A contact can have one profile with manual customer
   status, summary, next-review date and notes, plus technology rows that track

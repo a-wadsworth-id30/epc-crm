@@ -6,6 +6,10 @@ import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { companyContactLinkDecision } from "@/lib/companies/contact-relationships";
 import {
+  companyContactResponsibilityValues,
+  normalizeCompanyContactResponsibilities,
+} from "@/lib/companies/contact-responsibilities";
+import {
   parseCompanyCustomFieldSubmission,
   replaceCompanyCustomFieldValues,
   type CompanyCustomFieldDefinition,
@@ -42,6 +46,12 @@ const companyContactLinkSchema = z.object({
 const companyContactUnlinkSchema = z.object({
   companyId: z.string().trim().min(1),
   contactId: z.string().trim().min(1),
+});
+
+const companyContactResponsibilitiesSchema = z.object({
+  companyId: z.string().trim().min(1),
+  contactId: z.string().trim().min(1),
+  responsibilities: z.array(z.enum(companyContactResponsibilityValues)),
 });
 
 const companySchema = z.object({
@@ -348,7 +358,12 @@ export async function linkContactToCompanyAction(
   await prisma.$transaction([
     prisma.contact.update({
       where: { id: contact.id },
-      data: { companyId: company.id, companyName: company.name },
+      data: {
+        companyContactResponsibilities:
+          decision.action === "moved" ? [] : undefined,
+        companyId: company.id,
+        companyName: company.name,
+      },
     }),
     prisma.auditLog.create({
       data: {
@@ -411,7 +426,11 @@ export async function unlinkContactFromCompanyAction(
   await prisma.$transaction([
     prisma.contact.update({
       where: { id: contact.id },
-      data: { companyId: null, companyName: null },
+      data: {
+        companyContactResponsibilities: [],
+        companyId: null,
+        companyName: null,
+      },
     }),
     prisma.auditLog.create({
       data: {
@@ -425,6 +444,80 @@ export async function unlinkContactFromCompanyAction(
   ]);
   revalidateCompanyRelationshipPaths(contact.id, [company.id]);
   return { ok: true, message: "Person unlinked. Their CRM record was kept." };
+}
+
+export async function updateCompanyContactResponsibilitiesAction(
+  _: CompanyActionState,
+  formData: FormData,
+): Promise<CompanyActionState> {
+  const user = await requireUser();
+  const parsed = companyContactResponsibilitiesSchema.safeParse({
+    companyId: formData.get("companyId"),
+    contactId: formData.get("contactId"),
+    responsibilities: formData.getAll("responsibilities"),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: "Check the selected Company roles." };
+  }
+
+  const [company, contact] = await Promise.all([
+    prisma.company.findFirst({
+      where: companyIdAccessWhere(parsed.data.companyId, user),
+      select: { id: true },
+    }),
+    prisma.contact.findFirst({
+      where: contactIdAccessWhere(parsed.data.contactId, user),
+      select: {
+        companyContactResponsibilities: true,
+        companyId: true,
+        id: true,
+      },
+    }),
+  ]);
+
+  if (!company || !contact) {
+    return {
+      ok: false,
+      message: "The company or person is no longer available.",
+    };
+  }
+  if (contact.companyId !== company.id) {
+    return {
+      ok: false,
+      message: "This person is no longer linked to the company.",
+    };
+  }
+
+  const responsibilities = normalizeCompanyContactResponsibilities(
+    parsed.data.responsibilities,
+  );
+  const before = normalizeCompanyContactResponsibilities(
+    contact.companyContactResponsibilities,
+  );
+
+  await prisma.$transaction([
+    prisma.contact.update({
+      where: { id: contact.id },
+      data: { companyContactResponsibilities: responsibilities },
+    }),
+    prisma.auditLog.create({
+      data: {
+        action: "company_contact.responsibilities_updated",
+        actorId: user.id,
+        entity: "Contact",
+        entityId: contact.id,
+        metadata: {
+          companyId: company.id,
+          previousResponsibilities: before,
+          responsibilities,
+        },
+      },
+    }),
+  ]);
+
+  revalidateCompanyRelationshipPaths(contact.id, [company.id]);
+  return { ok: true, message: "Company contact roles updated." };
 }
 
 export async function createCompanyAction(
