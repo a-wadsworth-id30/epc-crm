@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -8,6 +9,9 @@ import {
 } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
+import CompanyActivityTimeline, {
+  type CompanyActivityItem,
+} from "@/components/crm-boilerplate/CompanyActivityTimeline";
 import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
 import CompanyDocumentRequirements from "@/components/crm-boilerplate/CompanyDocumentRequirements";
 import CompanyHierarchyEditor from "@/components/crm-boilerplate/CompanyHierarchyEditor";
@@ -381,7 +385,68 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     notFound();
   }
 
-  const [parentCompany, childCompanies] = await Promise.all([
+  const companyOpportunityRelationshipWhere = {
+    OR: [
+      { companyId: company.id },
+      {
+        contact: {
+          companyAffiliations: { some: { companyId: company.id } },
+        },
+      },
+      {
+        participants: {
+          some: {
+            contact: {
+              companyAffiliations: { some: { companyId: company.id } },
+            },
+          },
+        },
+      },
+    ],
+  } satisfies Prisma.SalesOpportunityWhereInput;
+  const companyNoteRelationshipWhere = {
+    OR: [
+      { companyId: company.id },
+      {
+        contact: {
+          companyAffiliations: { some: { companyId: company.id } },
+        },
+      },
+    ],
+  } satisfies Prisma.NoteWhereInput;
+  const companyTaskRelationshipWhere = {
+    OR: [
+      { companyId: company.id },
+      {
+        contact: {
+          companyAffiliations: { some: { companyId: company.id } },
+        },
+      },
+    ],
+  } satisfies Prisma.TaskWhereInput;
+  const companyTaskAccessWhere: Prisma.TaskWhereInput =
+    user.role === "ADMIN"
+      ? companyTaskRelationshipWhere
+      : {
+          AND: [
+            companyTaskRelationshipWhere,
+            {
+              OR: [
+                { assigneeId: user.id },
+                { creatorId: user.id },
+                { contact: contactAccessWhere(user) },
+              ],
+            },
+          ],
+        };
+
+  const [
+    parentCompany,
+    childCompanies,
+    activityCommunications,
+    activityNotes,
+    activityTasks,
+  ] = await Promise.all([
     company.parentCompanyId
       ? prisma.company.findFirst({
           where: companyIdAccessWhere(company.parentCompanyId, user),
@@ -394,7 +459,113 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       select: { id: true, name: true },
       take: 250,
     }),
+    prisma.salesCommunication.findMany({
+      where: {
+        opportunity: salesOpportunityWhereWithAccess(
+          user,
+          companyOpportunityRelationshipWhere,
+        ),
+      },
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+      take: 60,
+      select: {
+        channel: true,
+        contact: { select: { firstName: true, lastName: true } },
+        direction: true,
+        id: true,
+        occurredAt: true,
+        opportunity: { select: { id: true, title: true } },
+        subject: true,
+        summary: true,
+        user: { select: { email: true, name: true } },
+      },
+    }),
+    prisma.note.findMany({
+      where:
+        user.role === "ADMIN"
+          ? companyNoteRelationshipWhere
+          : { AND: [companyNoteRelationshipWhere, { userId: user.id }] },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 60,
+      select: {
+        body: true,
+        contact: { select: { firstName: true, id: true, lastName: true } },
+        createdAt: true,
+        id: true,
+        user: { select: { email: true, name: true } },
+      },
+    }),
+    prisma.task.findMany({
+      where: companyTaskAccessWhere,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 60,
+      select: {
+        assignee: { select: { email: true, name: true } },
+        contact: { select: { firstName: true, id: true, lastName: true } },
+        creator: { select: { email: true, name: true } },
+        description: true,
+        id: true,
+        status: true,
+        title: true,
+        updatedAt: true,
+      },
+    }),
   ]);
+
+  const activityItems: CompanyActivityItem[] = [
+    ...activityCommunications.map((communication) => ({
+      actor:
+        communication.direction === "INBOUND"
+          ? communication.contact
+            ? contactName(communication.contact)
+            : communication.user?.name ||
+              communication.user?.email ||
+              "External contact"
+          : communication.user?.name ||
+            communication.user?.email ||
+            (communication.contact
+              ? contactName(communication.contact)
+              : "CRM user"),
+      date: communication.occurredAt.toISOString(),
+      detail: communication.opportunity.title,
+      href: `/sales/${communication.opportunity.id}`,
+      id: communication.id,
+      kind: "Communication" as const,
+      status: `${communication.direction === "INBOUND" ? "Received" : "Sent"} | ${communication.channel}`,
+      summary: communication.summary,
+      title: communication.subject || `${communication.channel} communication`,
+    })),
+    ...activityNotes.map((note) => ({
+      actor: note.user.name || note.user.email,
+      date: note.createdAt.toISOString(),
+      detail: note.contact ? contactName(note.contact) : "Company note",
+      href: note.contact ? `/contacts/${note.contact.id}` : null,
+      id: note.id,
+      kind: "Note" as const,
+      status: null,
+      summary: note.body,
+      title: note.contact
+        ? `Note about ${contactName(note.contact)}`
+        : "Company note",
+    })),
+    ...activityTasks.map((task) => ({
+      actor:
+        task.assignee?.name ||
+        task.assignee?.email ||
+        task.creator.name ||
+        task.creator.email,
+      date: task.updatedAt.toISOString(),
+      detail: task.contact ? contactName(task.contact) : "Company task",
+      href: task.contact ? `/contacts/${task.contact.id}` : null,
+      id: task.id,
+      kind: "Task" as const,
+      status: task.status.replaceAll("_", " "),
+      summary: task.description || task.title,
+      title: task.title,
+    })),
+  ]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .slice(0, 100);
 
   const normalizedCompanyCustomFields = visibleCompanyFields(
     companyCustomFields,
@@ -408,7 +579,9 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   const ownerLabel = company.ownerUser?.name ?? company.owner;
   const connectedPerson =
     company.contactAffiliations.find((affiliation) => affiliation.isPrimary)
-      ?.contact ?? company.contactAffiliations[0]?.contact ?? null;
+      ?.contact ??
+    company.contactAffiliations[0]?.contact ??
+    null;
   const connectedSale =
     company.opportunities.find(
       (opportunity) =>
@@ -820,6 +993,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       />
     </div>
   );
+  const activityPanel = <CompanyActivityTimeline items={activityItems} />;
 
   return (
     <>
@@ -916,6 +1090,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       />
 
       <CompanyDetailWorkspace
+        activityPanel={activityPanel}
         contactsCount={scopedCounts.contacts}
         contactsPanel={contactsPanel}
         detailPanel={companyDetailPanel}

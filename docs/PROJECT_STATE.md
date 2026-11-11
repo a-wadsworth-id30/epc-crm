@@ -114,6 +114,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   type's required and completeness fields. Optional fields do not lower the
   score, unconfigured types do not misleadingly show 0%, and role-restricted
   definitions and values remain absent from the rendered page.
+- Company detail includes one permission-scoped Activity workspace that combines
+  recent Sales communications, notes and tasks from the Company, its affiliated
+  People and linked Sales. It links each row back to its source record and uses
+  `SalesCommunication` as the canonical call/email source so the same provider
+  event is not repeated from `CallLog`.
 - Settings > Company Types also supports ordered required/optional document
   checklists backed by controlled document types. Company Documents shows live
   checklist compliance, defaults uploads towards missing required evidence and
