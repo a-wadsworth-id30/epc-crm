@@ -130,6 +130,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   to synchronise the primary participant, use the Person's primary Company or
   add the Sale Company as a Person affiliation. Multi-company installers and
   partners remain review information rather than being changed automatically.
+- Company detail can create a Sale directly in fixed Company context. The user
+  must choose an affiliated Person as the primary customer; the server reloads
+  Company access and the Person's affiliation before creating the Sale, so a
+  modified form cannot attach unrelated records. The new Sale keeps the chosen
+  Company even when the Person's primary Company is different, supporting valid
+  multi-Company affiliations without guessing.
 - Settings > Company Types also supports ordered required/optional document
   checklists backed by controlled document types. Company Documents shows live
   checklist compliance, defaults uploads towards missing required evidence and

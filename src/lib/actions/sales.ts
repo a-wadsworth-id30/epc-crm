@@ -154,6 +154,11 @@ const saleSchema = z.object({
     .trim()
     .optional()
     .transform((value) => (value ? value : null)),
+  saleCompanyId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value ? value : null)),
   nextStep: z
     .string()
     .trim()
@@ -306,8 +311,7 @@ const aiFeedbackSchema = z.object({
 function optionalFormValue<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess(
     (value) =>
-      value === null ||
-      (typeof value === "string" && value.trim() === "")
+      value === null || (typeof value === "string" && value.trim() === "")
         ? undefined
         : value,
     schema.optional(),
@@ -473,7 +477,11 @@ async function assertNoInlineContactDuplicate({
   if (email) {
     duplicateFilters.push(
       { email: { equals: email, mode: "insensitive" } },
-      { additionalEmails: { some: { email: { equals: email, mode: "insensitive" } } } },
+      {
+        additionalEmails: {
+          some: { email: { equals: email, mode: "insensitive" } },
+        },
+      },
     );
   }
 
@@ -583,7 +591,11 @@ function discoveryAnswerValue({
   if (!value) return null;
 
   if (answerType === "BOOLEAN") return value === "true";
-  if (answerType === "NUMBER" || answerType === "CURRENCY" || answerType === "SLIDER") {
+  if (
+    answerType === "NUMBER" ||
+    answerType === "CURRENCY" ||
+    answerType === "SLIDER"
+  ) {
     const numericValue = Number(value.replace(/,/g, ""));
     return Number.isFinite(numericValue) ? numericValue : value;
   }
@@ -632,6 +644,7 @@ export async function createSaleAction(
     valuePounds: formValue(formData, "valuePounds"),
     source: formValue(formData, "source"),
     contactId: formValue(formData, "contactId"),
+    saleCompanyId: formValue(formData, "saleCompanyId"),
     nextStep: formValue(formData, "nextStep"),
     ownerId: submittedOwnerId,
     expectedCloseDate: formValue(formData, "expectedCloseDate"),
@@ -676,10 +689,16 @@ export async function createSaleAction(
 
   if (inlineContact.contactMode === "new") {
     if (!inlineContact.newContactFirstName) {
-      return { ok: false, message: "First name is required for the new contact." };
+      return {
+        ok: false,
+        message: "First name is required for the new contact.",
+      };
     }
     if (!inlineContact.newContactLastName) {
-      return { ok: false, message: "Last name is required for the new contact." };
+      return {
+        ok: false,
+        message: "Last name is required for the new contact.",
+      };
     }
   }
 
@@ -697,12 +716,37 @@ export async function createSaleAction(
   const linkedContact = contactId
     ? await prisma.contact.findFirst({
         where: contactIdAccessWhere(contactId, user),
-        select: { companyId: true, id: true },
+        select: {
+          companyAffiliations: { select: { companyId: true } },
+          companyId: true,
+          id: true,
+        },
       })
     : null;
 
   if (contactId && !linkedContact) {
     return { ok: false, message: "The selected contact was not found." };
+  }
+  const selectedSaleCompany = parsed.data.saleCompanyId
+    ? await prisma.company.findFirst({
+        where: companyIdAccessWhere(parsed.data.saleCompanyId, user),
+        select: { id: true },
+      })
+    : null;
+  if (parsed.data.saleCompanyId && !selectedSaleCompany) {
+    return { ok: false, message: "The selected Company was not found." };
+  }
+  if (
+    selectedSaleCompany &&
+    (!linkedContact ||
+      !linkedContact.companyAffiliations.some(
+        (affiliation) => affiliation.companyId === selectedSaleCompany.id,
+      ))
+  ) {
+    return {
+      ok: false,
+      message: "Choose a Person affiliated with this Company.",
+    };
   }
 
   const occurredAt = new Date();
@@ -728,13 +772,16 @@ export async function createSaleAction(
   }
 
   let createdContactId: string | null = null;
-  let linkedCompanyIdForRevalidation = linkedContact?.companyId ?? null;
+  let linkedCompanyIdForRevalidation =
+    selectedSaleCompany?.id ?? linkedContact?.companyId ?? null;
   let sale: { id: string };
 
   try {
     sale = await prisma.$transaction(async (tx) => {
-      let contactForSale = linkedContact;
-      let linkedCompanyId = linkedContact?.companyId ?? null;
+      let contactForSale: { companyId: string | null; id: string } | null =
+        linkedContact;
+      let linkedCompanyId =
+        selectedSaleCompany?.id ?? linkedContact?.companyId ?? null;
 
       if (!contactForSale && inlineContact.contactMode === "new") {
         const phoneNormalized = normalizedContactPhone(
@@ -888,7 +935,8 @@ export async function bulkUpdateSalesAction(
     if (opportunities.length !== uniqueIds.length) {
       return {
         ok: false,
-        message: "Some selected sales were not found or are not available to you.",
+        message:
+          "Some selected sales were not found or are not available to you.",
       };
     }
 
@@ -989,7 +1037,9 @@ export async function bulkUpdateSalesAction(
       });
 
       return tx.salesOpportunity.deleteMany({
-        where: salesOpportunityWhereWithAccess(user, { id: { in: opportunityIds } }),
+        where: salesOpportunityWhereWithAccess(user, {
+          id: { in: opportunityIds },
+        }),
       });
     });
 
@@ -1046,7 +1096,8 @@ export async function bulkUpdateSalesAction(
     if (opportunities.length !== uniqueIds.length) {
       return {
         ok: false,
-        message: "Some selected sales were not found or are not available to you.",
+        message:
+          "Some selected sales were not found or are not available to you.",
       };
     }
 
@@ -1157,7 +1208,8 @@ export async function bulkUpdateSalesAction(
 
   if (bulkAction === "owner") {
     const ownerId = String(formData.get("ownerId") ?? "");
-    const requestedOwnerId = ownerId && ownerId !== "unassigned" ? ownerId : null;
+    const requestedOwnerId =
+      ownerId && ownerId !== "unassigned" ? ownerId : null;
     const ownerAssignment = validateSaleOwnerAssignment({
       activeOwnerIds: await activeOwnerIdSet(requestedOwnerId),
       currentUser: user,
@@ -1175,7 +1227,8 @@ export async function bulkUpdateSalesAction(
     if (accessibleSelectionCount !== uniqueIds.length) {
       return {
         ok: false,
-        message: "Some selected sales were not found or are not available to you.",
+        message:
+          "Some selected sales were not found or are not available to you.",
       };
     }
 
@@ -1194,9 +1247,7 @@ export async function bulkUpdateSalesAction(
   return { ok: false, message: "Choose a bulk action." };
 }
 
-type SaleStageMoveSource =
-  | "sale-detail-stage-control"
-  | "sales-kanban-drag";
+type SaleStageMoveSource = "sale-detail-stage-control" | "sales-kanban-drag";
 
 async function moveSaleToPipelineStage({
   saleId,
@@ -1325,8 +1376,8 @@ async function moveSaleToPipelineStage({
     message: !moved
       ? "Stage already matched."
       : gateWarningCount
-      ? `Stage updated with ${gateWarningCount} required-data warning${gateWarningCount === 1 ? "" : "s"}.`
-      : "Stage updated.",
+        ? `Stage updated with ${gateWarningCount} required-data warning${gateWarningCount === 1 ? "" : "s"}.`
+        : "Stage updated.",
   };
 }
 
@@ -1968,7 +2019,9 @@ export async function sendSaleToSpruceAction(
   if (result.ok) {
     await bumpRealtimeTopics([
       realtimeTopics.saleConversation(sale.id),
-      sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+      sale.contactId
+        ? realtimeTopics.contactConversation(sale.contactId)
+        : null,
     ]);
     revalidatePath(`/sales/${sale.id}`);
     revalidatePath("/sales");
@@ -2277,9 +2330,7 @@ export async function syncPipedriveLeadNotesOnSaleViewAction(
 
   const now = new Date();
   const metadata = jsonObject(leadLink.metadata);
-  const lastAutoSyncAt = stringValue(
-    metadata.lastSaleViewPipedriveNoteSyncAt,
-  );
+  const lastAutoSyncAt = stringValue(metadata.lastSaleViewPipedriveNoteSyncAt);
 
   if (
     isRecentTimestamp(lastAutoSyncAt, now, pipedriveSaleViewNoteSyncThrottleMs)
@@ -2320,7 +2371,9 @@ export async function syncPipedriveLeadNotesOnSaleViewAction(
   if (refreshed) {
     await bumpRealtimeTopics([
       realtimeTopics.saleConversation(sale.id),
-      sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+      sale.contactId
+        ? realtimeTopics.contactConversation(sale.contactId)
+        : null,
     ]);
     revalidatePath(`/sales/${sale.id}`);
     revalidatePath("/notes");
@@ -2377,9 +2430,7 @@ export async function syncPipedriveLeadEmailsOnSaleViewAction(
 
   const now = new Date();
   const metadata = jsonObject(leadLink.metadata);
-  const lastAutoSyncAt = stringValue(
-    metadata.lastSaleViewPipedriveEmailSyncAt,
-  );
+  const lastAutoSyncAt = stringValue(metadata.lastSaleViewPipedriveEmailSyncAt);
 
   if (
     isRecentTimestamp(lastAutoSyncAt, now, pipedriveSaleViewEmailSyncThrottleMs)
@@ -2424,7 +2475,9 @@ export async function syncPipedriveLeadEmailsOnSaleViewAction(
   if (refreshed) {
     await bumpRealtimeTopics([
       realtimeTopics.saleConversation(sale.id),
-      sale.contactId ? realtimeTopics.contactConversation(sale.contactId) : null,
+      sale.contactId
+        ? realtimeTopics.contactConversation(sale.contactId)
+        : null,
       realtimeTopics.inbox,
     ]);
     revalidatePath(`/sales/${sale.id}`);
@@ -2642,11 +2695,19 @@ export async function updateSaleDiscoveryAnswersAction(
         continue;
       }
 
-      if (question.answerType === "PRODUCT_SELECT" && typeof answerValue === "string") {
+      if (
+        question.answerType === "PRODUCT_SELECT" &&
+        typeof answerValue === "string"
+      ) {
         productIdsToAttach.add(answerValue);
       }
-      if (question.answerType === "PRODUCT_MULTI_SELECT" && Array.isArray(answerValue)) {
-        answerValue.forEach((productId) => productIdsToAttach.add(String(productId)));
+      if (
+        question.answerType === "PRODUCT_MULTI_SELECT" &&
+        Array.isArray(answerValue)
+      ) {
+        answerValue.forEach((productId) =>
+          productIdsToAttach.add(String(productId)),
+        );
       }
 
       const existing = await tx.opportunityDiscoveryAnswer.findFirst({

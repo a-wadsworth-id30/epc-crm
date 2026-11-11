@@ -23,6 +23,7 @@ import {
   CompanyContactUnlinkButton,
 } from "@/components/crm-boilerplate/CompanyContactRelationships";
 import PageHeader from "@/components/crm-boilerplate/PageHeader";
+import { DeferredAddSaleModal } from "@/components/crm-boilerplate/SalesRouteLoaders";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import StatusBadge from "@/components/crm-boilerplate/StatusBadge";
 import { ChevronLeftIcon } from "@/icons";
@@ -57,6 +58,11 @@ import { listRecordCustomerUploadRequests } from "@/lib/customer-upload-request-
 import { parseDocumentLibrarySettings } from "@/lib/document-library";
 import { isGeoapifyAddressLookupEnabled } from "@/lib/integrations/geoapify";
 import { prisma } from "@/lib/prisma";
+import {
+  parseSalesDefaults,
+  resolveSalesDefaultOwnerId,
+} from "@/lib/sales/defaults";
+import { saleOwnerOptionsForUser } from "@/lib/sales/owner-assignment";
 import { getCrmSettings } from "@/lib/settings";
 import { listRecordSignatureRequests } from "@/lib/signature-request-list";
 import { mediaAssetUrl } from "@/lib/storage/media";
@@ -151,6 +157,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     hierarchyCompanyOptions,
     activeOwnerUsers,
     mergeCompanyCandidates,
+    pipelineStages,
   ] = await Promise.all([
     prisma.company.findFirst({
       where: companyIdAccessWhere(id, user),
@@ -359,6 +366,11 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           take: 1_000,
         })
       : Promise.resolve([]),
+    prisma.salesPipelineStage.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { bucket: true, id: true, name: true },
+    }),
   ]);
 
   if (!company) {
@@ -596,6 +608,18 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     options: normalizeContactCustomFieldOptions(field.options),
   }));
   const ownerOptions = companyOwnerOptionsForUser(activeOwnerUsers, user);
+  const salesDefaults = parseSalesDefaults(settings.salesDefaults);
+  const saleOwnerOptions = saleOwnerOptionsForUser(activeOwnerUsers, user).map(
+    (activeUser) => ({
+      label: activeUser.name,
+      value: activeUser.id,
+    }),
+  );
+  const activePipelineStageOptions = pipelineStages.map((stage) => ({
+    bucket: stage.bucket,
+    label: stage.name,
+    value: stage.id,
+  }));
   const ownerLabel = company.ownerUser?.name ?? company.owner;
   const connectedPerson =
     company.contactAffiliations.find((affiliation) => affiliation.isPrimary)
@@ -1046,6 +1070,26 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         description={company.domain ?? "Company record"}
         actions={
           <div className="flex flex-wrap items-center gap-3">
+            <DeferredAddSaleModal
+              contacts={company.contactAffiliations.map(({ contact }) => ({
+                companyId: company.id,
+                companyName: company.name,
+                email: contact.email,
+                id: contact.id,
+                leadSource: contact.leadSource,
+                name: contactName(contact),
+                phone: contact.phone,
+              }))}
+              defaultOwnerId={resolveSalesDefaultOwnerId({
+                fallbackUserId: user.id,
+                salesDefaults,
+              })}
+              defaultStageId={salesDefaults.defaultSalesPipelineStageId}
+              linkedCompany={{ id: company.id, name: company.name }}
+              owners={saleOwnerOptions}
+              stages={activePipelineStageOptions}
+              triggerLabel="Create lead"
+            />
             <DeferredCompanyEditModal
               addressLookupEnabled={addressLookupEnabled}
               company={editableCompany}
