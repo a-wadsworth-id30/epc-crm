@@ -6,6 +6,7 @@ import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSal
 import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
+import SaleNextActionEditor from "@/components/crm-boilerplate/SaleNextActionEditor";
 import SaleParticipantsPanel from "@/components/crm-boilerplate/SaleParticipantsPanel";
 import {
   PipedriveLeadContextPanel,
@@ -2825,14 +2826,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                   </p>
                 </div>
               </div>
-              {sale.nextStep ? (
-                <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-600 ring-1 ring-gray-100 dark:bg-white/[0.03] dark:text-gray-300 dark:ring-gray-800">
-                  <span className="font-semibold text-gray-800 dark:text-white">
-                    Next step:
-                  </span>{" "}
-                  {sale.nextStep}
-                </div>
-              ) : null}
+              <SaleNextActionEditor
+                initialNextAction={sale.nextStep}
+                saleId={sale.id}
+              />
             </section>
             {pipedriveLeadLink ? (
               <PipedriveLeadContextPanel saleId={sale.id} />
