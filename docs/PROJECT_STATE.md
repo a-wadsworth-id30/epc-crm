@@ -124,6 +124,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   whether each Sale is direct or linked through People, while its count,
   connected context and communication activity use the same permission-scoped
   relationship rule.
+- Sale detail evaluates the canonical Person, Primary customer participant and
+  Company links together. It shows a healthy state when they agree, highlights
+  missing or conflicting links and offers deliberate permission-scoped repairs
+  to synchronise the primary participant, use the Person's primary Company or
+  add the Sale Company as a Person affiliation. Multi-company installers and
+  partners remain review information rather than being changed automatically.
 - Settings > Company Types also supports ordered required/optional document
   checklists backed by controlled document types. Company Documents shows live
   checklist compliance, defaults uploads towards missing required evidence and

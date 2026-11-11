@@ -147,6 +147,14 @@ Core Prisma models are in `prisma/schema.prisma`.
   through a permission-scoped, audited server action and invalidates cached AI
   guidance. Sales AI output is labelled as a recommendation and remains advisory
   until a user deliberately updates the canonical action or creates a task.
+- Sale relationship integrity treats `SalesOpportunity.contactId` as the
+  canonical reply/call Person and `SalesOpportunity.companyId` as the explicit
+  Sale Company. A pure evaluator compares those fields with the Primary customer
+  participant and Person affiliations. Repairs re-read permission-scoped
+  records, require an explicit user choice, apply stale-write checks and write
+  ID-only `sale.relationship_repaired` audit events. Participants from other
+  Companies are informational because installer and partner relationships can
+  legitimately span organisations.
 - `src/lib/companies/integration-matching.ts` owns normalised name fallback for
   cross-module Company matching. A provider external record link or explicit
   Company ID remains authoritative. Name-only matching returns a Company only
