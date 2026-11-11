@@ -346,7 +346,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   sending. Reply recipients are read-only by default in Inbox and Sales >
   Conversation. Users must explicitly choose **Change recipient** to edit the
   address; replacements outside the original reply address and linked contact
-  email show a warning, and successful recipient overrides are audited.
+  email show a warning and cannot be sent until the user explicitly confirms
+  the changed address. The server independently enforces that confirmation and
+  successful overrides are audited without copying either email address into
+  audit metadata. New outbound Sale email and SMS also reject recipients that
+  are not saved against the canonical primary Person, including for admins;
+  only the confirmed reply workflow can deliberately use an unlinked address.
   The From control remains visible in Inbox, Sales and Contact conversation
   reply forms even when no authorised connected Gmail sender is available; in
   that state it shows that the configured CRM/MailerSend sender will be used.

@@ -21,12 +21,7 @@ import RichEmailComposer from "@/components/crm-boilerplate/RichEmailComposer";
 import useEmailReplyDraft from "@/components/crm-boilerplate/useEmailReplyDraft";
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import { Modal } from "@/components/ui/modal";
-import {
-  InboxAltIcon,
-  MoreDotIcon,
-  SearchIcon,
-  StarLine,
-} from "@/icons";
+import { InboxAltIcon, MoreDotIcon, SearchIcon, StarLine } from "@/icons";
 import {
   assignInboxThreadToSale,
   archiveInboxMessage,
@@ -39,6 +34,7 @@ import {
 } from "@/lib/actions/inbox";
 import type { InboxSaleOption } from "@/lib/actions/inbox";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
+import { isUntrustedReplyRecipient } from "@/lib/inbox/recipient-safety";
 import type {
   InboxMessageDetail,
   InboxMessageSummary,
@@ -91,7 +87,9 @@ const teamStatusOptions = [
 ] as const;
 
 function teamStatusLabel(status: string) {
-  return teamStatusOptions.find((option) => option.value === status)?.label ?? status;
+  return (
+    teamStatusOptions.find((option) => option.value === status)?.label ?? status
+  );
 }
 
 function inboxHref({
@@ -240,6 +238,8 @@ export default function InboxClient({
   const [replyHtml, setReplyHtml] = useState("");
   const [replyMailboxId, setReplyMailboxId] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
+  const [replyRecipientOverrideConfirmed, setReplyRecipientOverrideConfirmed] =
+    useState(false);
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [showFullEmail, setShowFullEmail] = useState(false);
@@ -265,13 +265,17 @@ export default function InboxClient({
         contactAddress: selectedMessage.contact?.email,
       })
     : null;
+  const replyRecipientIsUntrusted = isUntrustedReplyRecipient(replyRecipient, [
+    resolvedReplyRecipient,
+    selectedMessage?.contact?.email,
+  ]);
   const latestEmailBody = selectedDetail
     ? selectedDetail.latestTextBody
     : (selectedMessage?.summary ?? "");
   const canShowFullEmail = Boolean(
     selectedDetail &&
-      (selectedDetail.quotedHistoryHtmlBody ||
-        selectedDetail.quotedHistoryTextBody),
+    (selectedDetail.quotedHistoryHtmlBody ||
+      selectedDetail.quotedHistoryTextBody),
   );
   const hasMessages = counts.all > 0 || messages.length > 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -355,6 +359,7 @@ export default function InboxClient({
     setReplyHtml("");
     setReplyMailboxId("");
     setReplyRecipient("");
+    setReplyRecipientOverrideConfirmed(false);
     setReplySubject("");
     setReplyError(null);
     setIsDraftingAI(false);
@@ -372,13 +377,12 @@ export default function InboxClient({
     setReplyBody("");
     setReplyHtml("");
     setReplyMailboxId(
-      sendMailboxes.some(
-        (mailbox) => mailbox.id === selectedMessage.mailboxId,
-      )
+      sendMailboxes.some((mailbox) => mailbox.id === selectedMessage.mailboxId)
         ? (selectedMessage.mailboxId ?? "")
         : (sendMailboxes[0]?.id ?? ""),
     );
     setReplyRecipient(resolvedReplyRecipient ?? "");
+    setReplyRecipientOverrideConfirmed(false);
     setReplySubject(inboxReplySubject(selectedMessage.subject));
     setReplyOpen(true);
   }
@@ -405,9 +409,10 @@ export default function InboxClient({
             selectedMessage.salesCommunicationId ?? undefined,
         }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { drafts?: { email?: { body?: string } }; error?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        drafts?: { email?: { body?: string } };
+        error?: string;
+      } | null;
 
       if (!response.ok || !payload?.drafts?.email?.body) {
         throw new Error(payload?.error || "AI could not draft this reply.");
@@ -439,6 +444,7 @@ export default function InboxClient({
           replySubject,
           replyMailboxId || undefined,
           replyHtml || undefined,
+          replyRecipientOverrideConfirmed,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -843,7 +849,9 @@ export default function InboxClient({
                             "CRM inbox"}
                         </p>
                         {selectedDetail?.ccAddresses.length ? (
-                          <p className="break-all">Cc {selectedDetail.ccAddresses.join(", ")}</p>
+                          <p className="break-all">
+                            Cc {selectedDetail.ccAddresses.join(", ")}
+                          </p>
                         ) : null}
                       </div>
                       {selectedMessage.providerLabels.length ? (
@@ -1032,7 +1040,9 @@ export default function InboxClient({
                           aria-expanded={showFullEmail}
                           className={conversationEmailActionButtonClass}
                           type="button"
-                          onClick={() => setShowFullEmail((current) => !current)}
+                          onClick={() =>
+                            setShowFullEmail((current) => !current)
+                          }
                         >
                           <Mail className="h-4 w-4" />
                           {showFullEmail ? "Show less" : "Show all"}
@@ -1061,9 +1071,7 @@ export default function InboxClient({
                           type="button"
                           onClick={() => void draftReplyWithAI()}
                         >
-                          <span
-                            className={conversationEmailAIButtonInnerClass}
-                          >
+                          <span className={conversationEmailAIButtonInnerClass}>
                             <AISparkIcon />
                             {isDraftingAI
                               ? "Drafting reply..."
@@ -1124,9 +1132,13 @@ export default function InboxClient({
                               selectedMessage.contact?.email,
                             ]}
                             onChange={(value) => {
-                                setReplyRecipient(value);
-                                setReplyError(null);
-                              }}
+                              setReplyRecipient(value);
+                              setReplyError(null);
+                            }}
+                            onOverrideConfirmationChange={
+                              setReplyRecipientOverrideConfirmed
+                            }
+                            overrideConfirmed={replyRecipientOverrideConfirmed}
                             value={replyRecipient}
                           />
                           <div className="min-w-0">
@@ -1137,7 +1149,7 @@ export default function InboxClient({
                               Subject
                             </label>
                             <input
-                              className="mt-1 h-10 min-w-0 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
+                              className="mt-1 h-10 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-950 dark:text-white/90"
                               disabled={isReplying}
                               id={`inbox-reply-subject-${selectedMessage.id}`}
                               maxLength={200}
@@ -1177,7 +1189,10 @@ export default function InboxClient({
                           </p>
                         ) : null}
                         <div className="mt-4 flex flex-wrap items-center gap-2">
-                          <span className="mr-auto text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+                          <span
+                            className="mr-auto text-xs text-gray-500 dark:text-gray-400"
+                            aria-live="polite"
+                          >
                             {replyDraft.status === "restored"
                               ? "Draft restored"
                               : replyDraft.status === "saving"
@@ -1219,7 +1234,9 @@ export default function InboxClient({
                               isReplying ||
                               !replyBody.trim() ||
                               !replyRecipient.trim() ||
-                              !replySubject.trim()
+                              !replySubject.trim() ||
+                              (replyRecipientIsUntrusted &&
+                                !replyRecipientOverrideConfirmed)
                             }
                             type="submit"
                           >

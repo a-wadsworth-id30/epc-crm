@@ -41,6 +41,7 @@ import { visibleEmailAttachments } from "@/lib/email/attachment-display";
 import { deduplicateConversationEmailItems } from "@/lib/email/deduplication";
 import { toEmailPlainText } from "@/lib/email/plain-text";
 import type { EmailMailboxOption } from "@/lib/inbox/types";
+import { isUntrustedReplyRecipient } from "@/lib/inbox/recipient-safety";
 import {
   emailDisplayDirection,
   emailOriginLabel,
@@ -279,8 +280,7 @@ function emailAttachments(metadata: unknown) {
 
     return [
       {
-        mimeType:
-          typeof record.mimeType === "string" ? record.mimeType : null,
+        mimeType: typeof record.mimeType === "string" ? record.mimeType : null,
         name,
         sizeBytes:
           typeof record.sizeBytes === "number" ? record.sizeBytes : null,
@@ -363,8 +363,7 @@ function directionLabel(direction: string, channel: string) {
 
 function isPipedriveFileActivity(communication: SaleConversationItem) {
   return (
-    metadataValue(communication.metadata, "source") ===
-    "pipedrive-file-import"
+    metadataValue(communication.metadata, "source") === "pipedrive-file-import"
   );
 }
 
@@ -477,10 +476,7 @@ function canReplyToCommunication(communication: SaleConversationItem) {
 
 function replyChannel(communication: SaleConversationItem) {
   if (communication.channel === "PHONE") return "phone" as const;
-  if (
-    communication.channel === "SMS" ||
-    communication.channel === "WHATSAPP"
-  ) {
+  if (communication.channel === "SMS" || communication.channel === "WHATSAPP") {
     return "sms" as const;
   }
   return "email" as const;
@@ -515,8 +511,9 @@ export default function SaleConversationThread({
     undefined,
   );
   const [page, setPage] = useState(1);
-  const [remotePage, setRemotePage] =
-    useState<SaleConversationPage | null>(null);
+  const [remotePage, setRemotePage] = useState<SaleConversationPage | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
@@ -525,6 +522,8 @@ export default function SaleConversationThread({
   const [replyHtml, setReplyHtml] = useState("");
   const [replyMailboxId, setReplyMailboxId] = useState("");
   const [replyRecipient, setReplyRecipient] = useState("");
+  const [replyRecipientOverrideConfirmed, setReplyRecipientOverrideConfirmed] =
+    useState(false);
   const [replySubject, setReplySubject] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
@@ -567,6 +566,7 @@ export default function SaleConversationThread({
         : (sendMailboxes[0]?.id ?? ""),
     );
     setReplyRecipient(communication.emailReply?.recipient ?? "");
+    setReplyRecipientOverrideConfirmed(false);
     setReplySubject(communication.emailReply?.subject ?? "");
     setReplyError(null);
     setReplySuccess(null);
@@ -577,8 +577,7 @@ export default function SaleConversationThread({
     if (!replySaleId || !communication.emailReply) return;
 
     const focusCommunicationId =
-      communication.focusCommunicationId ??
-      (saleId ? communication.id : null);
+      communication.focusCommunicationId ?? (saleId ? communication.id : null);
 
     openEmailReply(communication);
     setReplyBody("");
@@ -597,9 +596,10 @@ export default function SaleConversationThread({
           ...(focusCommunicationId ? { focusCommunicationId } : {}),
         }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { drafts?: { email?: { body?: string } }; error?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        drafts?: { email?: { body?: string } };
+        error?: string;
+      } | null;
 
       if (!response.ok || !payload?.drafts?.email?.body) {
         throw new Error(payload?.error || "AI could not draft this reply.");
@@ -627,6 +627,15 @@ export default function SaleConversationThread({
     )
       return;
 
+    const recipientIsUntrusted = isUntrustedReplyRecipient(replyRecipient, [
+      communication.emailReply.recipient,
+      communication.contactEmail,
+    ]);
+    if (recipientIsUntrusted && !replyRecipientOverrideConfirmed) {
+      setReplyError("Confirm the changed recipient before sending this reply.");
+      return;
+    }
+
     setReplyError(null);
     setReplySuccess(null);
     startGmailReplyTransition(async () => {
@@ -638,6 +647,7 @@ export default function SaleConversationThread({
           replySubject,
           replyMailboxId || undefined,
           replyHtml || undefined,
+          replyRecipientOverrideConfirmed,
         );
         if (!result.ok) {
           setReplyError(result.message);
@@ -648,6 +658,7 @@ export default function SaleConversationThread({
         setReplyHtml("");
         setReplyMailboxId("");
         setReplyRecipient("");
+        setReplyRecipientOverrideConfirmed(false);
         setReplySubject("");
         setReplyMessageId(null);
         setReplyingToId(null);
@@ -757,7 +768,9 @@ export default function SaleConversationThread({
     ? remotePage.totalPages
     : Math.max(
         1,
-        Math.ceil(initialFilteredCommunications.length / saleConversationPageSize),
+        Math.ceil(
+          initialFilteredCommunications.length / saleConversationPageSize,
+        ),
       );
   const currentPage = saleId ? page : Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * saleConversationPageSize;
@@ -825,7 +838,8 @@ export default function SaleConversationThread({
             </p>
             {hasPartialHistory && !activeQuery ? (
               <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                Showing the latest {loadedCount} loaded items from {allItemsCount} total.
+                Showing the latest {loadedCount} loaded items from{" "}
+                {allItemsCount} total.
               </p>
             ) : null}
             {saleId ? (
@@ -846,7 +860,7 @@ export default function SaleConversationThread({
               </label>
               <Search
                 aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400"
               />
               <input
                 id="conversation-search"
@@ -855,14 +869,14 @@ export default function SaleConversationThread({
                 maxLength={200}
                 onChange={(event) => setSearchText(event.target.value)}
                 placeholder="Search conversation"
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-800 shadow-theme-xs outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                className="h-9 w-full rounded-lg border border-gray-200 bg-white py-2 pr-9 pl-9 text-sm text-gray-800 shadow-theme-xs transition outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
               />
               {searchText ? (
                 <button
                   type="button"
                   aria-label="Clear conversation search"
                   onClick={() => setSearchText("")}
-                  className="absolute right-2 top-1/2 inline-grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+                  className="absolute top-1/2 right-2 inline-grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -935,9 +949,8 @@ export default function SaleConversationThread({
                   communication.channel === "EMAIL"
                     ? (communication.emailAttachments ?? [])
                     : [];
-                const visibleStoredAttachments = visibleEmailAttachments(
-                  storedAttachments,
-                );
+                const visibleStoredAttachments =
+                  visibleEmailAttachments(storedAttachments);
                 const attachmentCount = Math.max(
                   visibleStoredAttachments.length,
                   attachments.length,
@@ -974,12 +987,11 @@ export default function SaleConversationThread({
                 const plainBody = normalizedBody;
                 const canShowFullEmail = Boolean(
                   communication.channel === "EMAIL" &&
-                    (communication.quotedEmailBody ||
-                      communication.quotedEmailHtmlBody),
+                  (communication.quotedEmailBody ||
+                    communication.quotedEmailHtmlBody),
                 );
                 const isShowingFullEmail =
-                  canShowFullEmail &&
-                  showingFullEmailId === communication.id;
+                  canShowFullEmail && showingFullEmailId === communication.id;
                 const plainSummary = toEmailPlainText(communication.summary);
                 const hasTranscript =
                   Boolean(transcript) ||
@@ -1012,12 +1024,11 @@ export default function SaleConversationThread({
                     ? "Activity"
                     : emailDelivery?.state === "failed"
                       ? "Outbound"
-                    : directionLabel(
-                        emailDisplayDirection(communication),
-                        communication.channel,
-                      );
-                const displayDirection =
-                  emailDisplayDirection(communication);
+                      : directionLabel(
+                          emailDisplayDirection(communication),
+                          communication.channel,
+                        );
+                const displayDirection = emailDisplayDirection(communication);
                 const emailAvatarName =
                   displayDirection === "OUTBOUND"
                     ? communication.fromName ||
@@ -1044,8 +1055,7 @@ export default function SaleConversationThread({
                   renderedChannel,
                   Boolean(recordingUrl),
                 );
-                const externalHref =
-                  recordingUrl || pageHref || filePreviewUrl;
+                const externalHref = recordingUrl || pageHref || filePreviewUrl;
                 const showEmailReplyAction =
                   Boolean(communication.emailReply) &&
                   displayDirection === "INBOUND";
@@ -1287,7 +1297,7 @@ export default function SaleConversationThread({
                                   >
                                     <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                                     <div className="min-w-0">
-                                      <p className="break-all font-medium">
+                                      <p className="font-medium break-all">
                                         {attachment.name}
                                       </p>
                                       {attachment.mimeType ||
@@ -1308,12 +1318,14 @@ export default function SaleConversationThread({
                                 ))}
                                 {!attachments.length ? (
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Pipedrive reported an attachment, but did not return its file details.
+                                    Pipedrive reported an attachment, but did
+                                    not return its file details.
                                   </p>
                                 ) : null}
                               </div>
                               <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                                Pipedrive reference only — copy the file into CRM storage before final cutover.
+                                Pipedrive reference only — copy the file into
+                                CRM storage before final cutover.
                               </p>
                             </div>
                           ) : null}
@@ -1460,10 +1472,16 @@ export default function SaleConversationThread({
                                   communication.contactEmail,
                                 ]}
                                 onChange={(value) => {
-                                    setReplyRecipient(value);
-                                    setReplyError(null);
-                                    setReplySuccess(null);
-                                  }}
+                                  setReplyRecipient(value);
+                                  setReplyError(null);
+                                  setReplySuccess(null);
+                                }}
+                                onOverrideConfirmationChange={
+                                  setReplyRecipientOverrideConfirmed
+                                }
+                                overrideConfirmed={
+                                  replyRecipientOverrideConfirmed
+                                }
                                 value={replyRecipient}
                               />
                               <div className="min-w-0">
@@ -1474,7 +1492,7 @@ export default function SaleConversationThread({
                                   Subject
                                 </label>
                                 <input
-                                  className="mt-1 h-10 min-w-0 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
                                   disabled={isGmailReplying}
                                   id={`sale-email-subject-${communication.id}`}
                                   maxLength={200}
@@ -1521,7 +1539,10 @@ export default function SaleConversationThread({
                               </p>
                             ) : null}
                             <div className="mt-4 flex flex-wrap items-center gap-2">
-                              <span className="mr-auto text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+                              <span
+                                className="mr-auto text-xs text-gray-500 dark:text-gray-400"
+                                aria-live="polite"
+                              >
                                 {replyDraft.status === "restored"
                                   ? "Draft restored"
                                   : replyDraft.status === "saving"
@@ -1565,7 +1586,12 @@ export default function SaleConversationThread({
                                   isGmailReplying ||
                                   !replyBody.trim() ||
                                   !replyRecipient.trim() ||
-                                  !replySubject.trim()
+                                  !replySubject.trim() ||
+                                  (isUntrustedReplyRecipient(replyRecipient, [
+                                    communication.emailReply.recipient,
+                                    communication.contactEmail,
+                                  ]) &&
+                                    !replyRecipientOverrideConfirmed)
                                 }
                                 type="submit"
                               >
@@ -1588,8 +1614,8 @@ export default function SaleConversationThread({
             {activeQuery
               ? `No conversation items match “${activeQuery}”.`
               : orderedCommunications.length
-              ? "No conversation items match this filter."
-              : emptyLabel}
+                ? "No conversation items match this filter."
+                : emptyLabel}
           </div>
         )}
       </div>
