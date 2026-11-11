@@ -157,6 +157,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   linked file/task evidence plus its existing communication and `leadScope`
   data. Milestones therefore remain derived projections, not new workflow
   state, and use evidence wording rather than asserting contractual completion.
+- `src/lib/sales/installer-suitability.ts` composes the existing Person Type
+  profile-completeness and controlled-document requirement rules for Sale
+  participants with the Installer role. The Sale route fetches only role-visible
+  custom fields/values plus bounded contact document metadata, and the pure
+  evaluator distinguishes ready, attention and unconfigured evidence states.
+  It does not infer qualifications from filenames or create a separate
+  certification model.
 - Sale relationship integrity treats `SalesOpportunity.contactId` as the
   canonical reply/call Person and `SalesOpportunity.companyId` as the explicit
   Sale Company. A pure evaluator compares those fields with the Primary customer

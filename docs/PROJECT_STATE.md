@@ -155,6 +155,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   communications and Sale scope instead of adding another editable status.
   Labels say whether evidence was found and explicitly do not claim contractual
   completion or replace the configured pipeline stage.
+- Sale detail checks every participant assigned the Installer role against the
+  configurable Installer Person Type workflow. It reports Person Type alignment,
+  visible profile-completeness fields and required contact documents, treating
+  expired evidence as attention required. When no fields or documents are
+  configured it says checks are not configured rather than claiming readiness;
+  the result is evidence readiness, not a legal or competency guarantee.
 - Settings > Company Types also supports ordered required/optional document
   checklists backed by controlled document types. Company Documents shows live
   checklist compliance, defaults uploads towards missing required evidence and
