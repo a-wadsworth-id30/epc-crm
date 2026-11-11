@@ -363,9 +363,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   Their editable subject is validated server-side and defaults to the original
   subject with normalized `Re:` prefixes. Recipient fields are locked by
   default; explicit changes outside the resolved reply address or linked
-  contact email surface a warning. Successful overrides create a compact
-  `email.reply.recipient_overridden` audit event without storing message body
-  content.
+  contact email require an explicit UI acknowledgement that is revalidated by
+  the server before delivery. Successful overrides create a compact
+  `email.reply.recipient_overridden` audit event containing trust/confirmation
+  flags but no message body or email addresses. General Sale email/SMS sends
+  accept only primary-Person contact methods, regardless of admin role; the
+  reply action passes a narrow override only after the original reply address
+  is trusted or the user confirms the changed recipient.
 - Reply composers list only connected, send-enabled `EmailMailbox` rows the
   current user can send from. The source mailbox is selected by default so an
   exact Gmail thread is reused only inside the mailbox that owns it. Choosing a

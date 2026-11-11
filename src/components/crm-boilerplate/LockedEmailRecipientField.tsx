@@ -8,6 +8,8 @@ export type LockedEmailRecipientFieldProps = {
   id: string;
   linkedAddresses?: Array<string | null | undefined>;
   onChange: (value: string) => void;
+  onOverrideConfirmationChange?: (confirmed: boolean) => void;
+  overrideConfirmed?: boolean;
   value: string;
 };
 
@@ -16,6 +18,8 @@ export default function LockedEmailRecipientField({
   id,
   linkedAddresses = [],
   onChange,
+  onOverrideConfirmationChange,
+  overrideConfirmed = false,
   value,
 }: LockedEmailRecipientFieldProps) {
   const [isEditing, setIsEditing] = useState(!value.trim());
@@ -43,14 +47,17 @@ export default function LockedEmailRecipientField({
       <input
         aria-describedby={untrustedRecipient ? warningId : undefined}
         aria-readonly={!isEditing}
-        className={`mt-1 h-10 min-w-0 w-full rounded-lg border px-3 text-sm outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:text-white/90 ${
+        className={`mt-1 h-10 w-full min-w-0 rounded-lg border px-3 text-sm outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 disabled:opacity-60 dark:text-white/90 ${
           isEditing
             ? "border-gray-300 bg-white text-gray-800 dark:border-gray-700 dark:bg-gray-950"
             : "cursor-default border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-white/[0.03]"
         }`}
         disabled={disabled}
         id={id}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          onOverrideConfirmationChange?.(false);
+        }}
         placeholder="customer@example.com"
         readOnly={!isEditing}
         required
@@ -58,13 +65,27 @@ export default function LockedEmailRecipientField({
         value={value}
       />
       {untrustedRecipient ? (
-        <p
-          className="mt-1.5 text-xs font-medium text-warning-700 dark:text-warning-300"
+        <div
+          className="mt-1.5 rounded-lg border border-warning-200 bg-warning-50 px-2.5 py-2 text-xs text-warning-800 dark:border-warning-500/20 dark:bg-warning-500/10 dark:text-warning-200"
           id={warningId}
         >
-          This address is not the original reply address or the linked
-          contact&apos;s saved email. Check it carefully before sending.
-        </p>
+          <p className="font-medium">
+            This address is not the original reply address or the linked
+            contact&apos;s saved email.
+          </p>
+          <label className="mt-2 flex cursor-pointer items-start gap-2 font-semibold">
+            <input
+              type="checkbox"
+              checked={overrideConfirmed}
+              disabled={disabled}
+              onChange={(event) =>
+                onOverrideConfirmationChange?.(event.target.checked)
+              }
+              className="mt-0.5 h-4 w-4 rounded border-warning-300 text-brand-500 focus:ring-brand-500"
+            />
+            I have checked this recipient and intend to send to this address.
+          </label>
+        </div>
       ) : !isEditing ? (
         <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
           Recipient locked to prevent accidental changes.

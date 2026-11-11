@@ -20,9 +20,7 @@ import {
 } from "@/lib/integrations/twilio-server";
 import { prisma } from "@/lib/prisma";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
-import {
-  salesOpportunityIdAccessWhere,
-} from "@/lib/crm-resource-access";
+import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
 import { runSalesAutomationTrigger } from "@/lib/sales/automation";
 import { markOpportunityFirstContacted } from "@/lib/sales/lifecycle";
 import { personaliseOutboundMessage } from "@/lib/sales/message-personalisation";
@@ -31,6 +29,7 @@ import type { CurrentUser } from "@/lib/auth";
 type OutboundMessageUser = Pick<CurrentUser, "id" | "role">;
 
 type SendSalesLeadEmailInput = {
+  allowUnlinkedRecipient?: boolean;
   body: string;
   htmlBody?: string | null;
   contactId?: string | null;
@@ -303,19 +302,20 @@ function contactEmailRecipients(contact: OpportunityContact | null) {
 }
 
 function assertAllowedEmailRecipient({
+  allowUnlinkedRecipient,
   contact,
   recipient,
-  user,
 }: {
+  allowUnlinkedRecipient?: boolean;
   contact: OpportunityContact | null;
   recipient: string;
-  user: OutboundMessageUser;
 }) {
-  if (user.role === "ADMIN") return;
-
   const allowed = contactEmailRecipients(contact);
 
-  if (!allowed.has(normalizedEmail(recipient) ?? "")) {
+  if (
+    !allowed.has(normalizedEmail(recipient) ?? "") &&
+    !allowUnlinkedRecipient
+  ) {
     throw new OutboundMessageAccessError(
       "Choose an email address linked to this lead contact.",
     );
@@ -338,14 +338,10 @@ function contactSmsRecipients(contact: OpportunityContact | null) {
 function assertAllowedSmsRecipient({
   contact,
   recipient,
-  user,
 }: {
   contact: OpportunityContact | null;
   recipient: string;
-  user: OutboundMessageUser;
 }) {
-  if (user.role === "ADMIN") return;
-
   if (!contactSmsRecipients(contact).has(recipient)) {
     throw new OutboundMessageAccessError(
       "Choose a phone number linked to this lead contact.",
@@ -388,9 +384,9 @@ export async function sendSalesLeadEmail(input: SendSalesLeadEmailInput) {
   }
 
   assertAllowedEmailRecipient({
+    allowUnlinkedRecipient: input.allowUnlinkedRecipient,
     contact: opportunity.contact,
     recipient,
-    user: input.user,
   });
 
   const messageContext = await messageContextForOpportunity({
@@ -717,7 +713,6 @@ export async function sendSalesLeadSms(input: SendSalesLeadSmsInput) {
   assertAllowedSmsRecipient({
     contact: opportunity.contact,
     recipient,
-    user: input.user,
   });
 
   const messageContext = await messageContextForOpportunity({

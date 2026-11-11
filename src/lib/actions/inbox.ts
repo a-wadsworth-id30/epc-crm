@@ -12,7 +12,10 @@ import { prisma } from "@/lib/prisma";
 import { revalidateHeaderNotifications } from "@/lib/notifications";
 import { bumpRealtimeTopics, realtimeTopics } from "@/lib/realtime/topics";
 import { inboxReplyRecipient, inboxReplySubject } from "@/lib/inbox/reply";
-import { isReplyRecipientOverride } from "@/lib/inbox/recipient-safety";
+import {
+  isReplyRecipientOverride,
+  isUntrustedReplyRecipient,
+} from "@/lib/inbox/recipient-safety";
 import {
   canPreserveGmailThread,
   isReplySenderOverride,
@@ -67,11 +70,8 @@ const inboxReplySchema = z.object({
   htmlBody: z.string().trim().max(100_000).optional(),
   messageId: z.string().trim().min(1),
   mailboxId: z.string().trim().min(1).optional(),
-  recipient: z
-    .string()
-    .trim()
-    .email("Enter a valid reply address.")
-    .optional(),
+  recipient: z.string().trim().email("Enter a valid reply address.").optional(),
+  recipientOverrideConfirmed: z.boolean().default(false),
   subject: z
     .string()
     .trim()
@@ -306,7 +306,8 @@ export async function assignInboxThreadToSale(
           data: {
             ...communicationData,
             externalId:
-              item.providerMessageId ?? gmailProviderMessageId(mailboxId, item.id),
+              item.providerMessageId ??
+              gmailProviderMessageId(mailboxId, item.id),
           },
           select: { id: true },
         });
@@ -414,6 +415,7 @@ export async function replyToInboxMessage(
   subject?: string,
   mailboxId?: string,
   htmlBody?: string,
+  recipientOverrideConfirmed = false,
 ): Promise<InboxReplyResult> {
   const parsed = inboxReplySchema.safeParse({
     body,
@@ -421,6 +423,7 @@ export async function replyToInboxMessage(
     messageId,
     mailboxId,
     recipient,
+    recipientOverrideConfirmed,
     subject,
   });
   if (!parsed.success) {
@@ -477,10 +480,18 @@ export async function replyToInboxMessage(
   if (!replyRecipient) {
     return { ok: false, message: "Enter a valid reply address." };
   }
+  const recipientIsUntrusted = isUntrustedReplyRecipient(replyRecipient, [
+    resolvedRecipient,
+    message.contact?.email,
+  ]);
+  if (recipientIsUntrusted && !parsed.data.recipientOverrideConfirmed) {
+    return {
+      ok: false,
+      message: "Confirm the changed recipient before sending this email reply.",
+    };
+  }
   const defaultMailboxId =
-    message.mailboxId ??
-    (await findGmailMailboxForSend({ user }))?.id ??
-    null;
+    message.mailboxId ?? (await findGmailMailboxForSend({ user }))?.id ?? null;
   const selectedMailboxId = parsed.data.mailboxId ?? defaultMailboxId;
   const isThreadedGmail = canPreserveGmailThread({
     messageMailboxId: message.mailboxId,
@@ -501,6 +512,8 @@ export async function replyToInboxMessage(
       subject: parsed.data.subject ?? inboxReplySubject(message.subject),
       to: replyRecipient,
       user,
+      allowUnlinkedRecipient:
+        !recipientIsUntrusted || parsed.data.recipientOverrideConfirmed,
     });
 
     if (isReplyRecipientOverride(replyRecipient, resolvedRecipient)) {
@@ -514,8 +527,9 @@ export async function replyToInboxMessage(
             metadata: {
               opportunityId: message.opportunityId,
               provider: message.provider,
-              resolvedRecipient,
-              selectedRecipient: replyRecipient,
+              overrideConfirmed: parsed.data.recipientOverrideConfirmed,
+              recipientTrusted: !recipientIsUntrusted,
+              resolvedRecipientPresent: Boolean(resolvedRecipient),
             },
           },
         })
@@ -577,9 +591,7 @@ export async function replyToInboxMessage(
   await prisma.emailMessage.updateMany({
     where: replyWorkflowWhere,
     data: {
-      assignedAt: message.assignedUserId
-        ? message.assignedAt
-        : new Date(),
+      assignedAt: message.assignedUserId ? message.assignedAt : new Date(),
       assignedUserId: message.assignedUserId ?? user.id,
       teamStatus: "WAITING",
     },
@@ -640,7 +652,10 @@ export async function markInboxMessageRead(messageId: string) {
   });
 
   revalidateHeaderNotifications();
-  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+  await bumpRealtimeTopics([
+    realtimeTopics.inbox,
+    realtimeTopics.notifications,
+  ]);
 
   revalidatePath("/inbox");
 }
@@ -667,7 +682,10 @@ export async function markInboxMessageUnread(messageId: string) {
   });
 
   revalidateHeaderNotifications();
-  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+  await bumpRealtimeTopics([
+    realtimeTopics.inbox,
+    realtimeTopics.notifications,
+  ]);
 
   revalidatePath("/inbox");
 }
@@ -723,7 +741,8 @@ export async function updateInboxTeamWorkflow(
     if (!accessibleMessage) {
       return {
         ok: false,
-        message: "That user does not have access to this mailbox or linked lead.",
+        message:
+          "That user does not have access to this mailbox or linked lead.",
       };
     }
   }
@@ -775,7 +794,10 @@ export async function updateInboxTeamWorkflow(
     return updated;
   });
 
-  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+  await bumpRealtimeTopics([
+    realtimeTopics.inbox,
+    realtimeTopics.notifications,
+  ]);
   revalidatePath("/inbox");
 
   return {
@@ -793,7 +815,10 @@ export async function archiveInboxMessage(messageId: string) {
   });
 
   revalidateHeaderNotifications();
-  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+  await bumpRealtimeTopics([
+    realtimeTopics.inbox,
+    realtimeTopics.notifications,
+  ]);
 
   revalidatePath("/inbox");
 }
@@ -807,7 +832,10 @@ export async function restoreInboxMessage(messageId: string) {
   });
 
   revalidateHeaderNotifications();
-  await bumpRealtimeTopics([realtimeTopics.inbox, realtimeTopics.notifications]);
+  await bumpRealtimeTopics([
+    realtimeTopics.inbox,
+    realtimeTopics.notifications,
+  ]);
 
   revalidatePath("/inbox");
 }
