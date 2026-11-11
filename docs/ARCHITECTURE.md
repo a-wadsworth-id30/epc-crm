@@ -125,6 +125,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   direct and polymorphic CRM records before deleting the duplicate. Provider
   links are repointed and the audit log stores record IDs and aggregate counts,
   not copied customer data.
+- `ConnectedRecordContext` is the shared relationship strip on Person, Company
+  and Sale detail pages. Each route resolves the same existing primary Company,
+  primary Person and most recently active accessible Sale into links and summary
+  metadata. The strip reads `SalesOpportunity.nextStep`; it does not introduce a
+  second next-action store or broaden record access.
 - `src/lib/companies/integration-matching.ts` owns normalised name fallback for
   cross-module Company matching. A provider external record link or explicit
   Company ID remains authoritative. Name-only matching returns a Company only

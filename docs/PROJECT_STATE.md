@@ -91,6 +91,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   transactionally. Conflicting custom values remain with the retained Company,
   hierarchy links are repaired, the removed ID is recorded in a privacy-safe
   audit event and the duplicate is deleted only after all moves succeed.
+- Person, Company and Sale detail pages share a compact connected-customer
+  context strip. It identifies the current record, links the primary Company,
+  Person and active Sale, shows the relevant lifecycle/stage and owners, and
+  surfaces the Sale's existing next action without creating another competing
+  source of workflow state.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that
