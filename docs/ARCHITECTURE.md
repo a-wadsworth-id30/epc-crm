@@ -137,6 +137,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   links back to the source. `CallLog` is intentionally excluded because its
   customer-visible call events are already represented by
   `SalesCommunication`; including both would duplicate timeline entries.
+- `companyRelatedSalesWhere` defines the shared Company-to-Sale relationship
+  scope: a Sale relates through its direct Company, primary Person or any Sale
+  participant affiliated with the Company. Company Sales lists, counts,
+  connected-record context and communication activity use this same scope so
+  they cannot disagree about whether a Sale belongs to an organisation.
 - `SalesOpportunity.nextStep` is the canonical committed next action across the
   Sale, connected Person and Company. `SaleNextActionEditor` writes that field
   through a permission-scoped, audited server action and invalidates cached AI
