@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AttributionSourceIconSlot } from "@/components/crm-boilerplate/AttributionSourceIcon";
 import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSalesCategoryBadge";
+import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import {
@@ -1642,12 +1643,15 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
         select: {
           id: true,
           name: true,
+          owner: true,
+          ownerUser: { select: { name: true } },
           addressLine1: true,
           addressLine2: true,
           city: true,
           county: true,
           postcode: true,
           country: true,
+          status: true,
         },
       },
       contact: {
@@ -2596,6 +2600,45 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           </div>
         </div>
       </section>
+
+      <ConnectedRecordContext
+        company={
+          sale.company
+            ? {
+                detail: sale.company.ownerUser?.name
+                  ? `Owner: ${sale.company.ownerUser.name}`
+                  : sale.company.owner
+                    ? `Owner: ${sale.company.owner}`
+                    : "Owner: Unassigned",
+                href: `/clients/${sale.company.id}`,
+                label: "Company",
+                meta: sale.company.status,
+                name: sale.company.name,
+              }
+            : null
+        }
+        currentRecord="sale"
+        nextAction={sale.nextStep}
+        person={
+          sale.contact
+            ? {
+                href: `/contacts/${sale.contact.id}`,
+                label: "Primary person",
+                name: customerName || "Unnamed person",
+              }
+            : null
+        }
+        sale={{
+          detail: sale.owner?.name
+            ? `Owner: ${sale.owner.name}`
+            : sale.owner?.email
+              ? `Owner: ${sale.owner.email}`
+              : "Owner: Unassigned",
+          label: "Active sale",
+          meta: saleStageName,
+          name: sale.title,
+        }}
+      />
 
       {pipedriveLeadLink ? (
         <PipedriveLeadFilesAutoSync saleId={sale.id} />

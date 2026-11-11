@@ -8,6 +8,7 @@ import {
 } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
+import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
 import CompanyDocumentRequirements from "@/components/crm-boilerplate/CompanyDocumentRequirements";
 import CompanyHierarchyEditor from "@/components/crm-boilerplate/CompanyHierarchyEditor";
 import CompanyProfileCompleteness from "@/components/crm-boilerplate/CompanyProfileCompleteness";
@@ -213,8 +214,10 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         opportunities: {
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
           select: {
+            closedAt: true,
             currency: true,
             id: true,
+            nextStep: true,
             source: true,
             stage: true,
             title: true,
@@ -403,6 +406,18 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   }));
   const ownerOptions = companyOwnerOptionsForUser(activeOwnerUsers, user);
   const ownerLabel = company.ownerUser?.name ?? company.owner;
+  const connectedPerson =
+    company.contactAffiliations.find((affiliation) => affiliation.isPrimary)
+      ?.contact ?? company.contactAffiliations[0]?.contact ?? null;
+  const connectedSale =
+    company.opportunities.find(
+      (opportunity) =>
+        !opportunity.closedAt &&
+        opportunity.stage !== "WON" &&
+        opportunity.stage !== "LOST",
+    ) ??
+    company.opportunities[0] ??
+    null;
   const visibleCompanyCustomFieldIds = new Set(
     normalizedCompanyCustomFields.map((field) => field.id),
   );
@@ -862,6 +877,41 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
               Companies
             </Link>
           </div>
+        }
+      />
+
+      <ConnectedRecordContext
+        company={{
+          detail: ownerLabel ? `Owner: ${ownerLabel}` : "Owner: Unassigned",
+          label: "Company",
+          meta: company.status,
+          name: company.name,
+        }}
+        currentRecord="company"
+        nextAction={connectedSale?.nextStep}
+        person={
+          connectedPerson
+            ? {
+                detail: connectedPerson.role || "Role not captured",
+                href: `/contacts/${connectedPerson.id}`,
+                label: "Primary person",
+                name: contactName(connectedPerson),
+              }
+            : null
+        }
+        sale={
+          connectedSale
+            ? {
+                detail: connectedSale.owner?.name
+                  ? `Owner: ${connectedSale.owner.name}`
+                  : "Owner: Unassigned",
+                href: `/sales/${connectedSale.id}`,
+                label: "Active sale",
+                meta:
+                  connectedSale.salesPipelineStage?.name ?? connectedSale.stage,
+                name: connectedSale.title,
+              }
+            : null
         }
       />
 

@@ -17,6 +17,7 @@ import {
 } from "@/components/crm-boilerplate/ContactModalLoaders";
 import type { ContactFormValues } from "@/components/crm-boilerplate/ContactForm";
 import ContactProfileCompleteness from "@/components/crm-boilerplate/ContactProfileCompleteness";
+import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
 import ContactDocumentRequirements from "@/components/crm-boilerplate/ContactDocumentRequirements";
 import CustomerRelationshipSection from "@/components/crm-boilerplate/CustomerRelationshipSection";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
@@ -444,8 +445,12 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             city: true,
             country: true,
             county: true,
+            id: true,
             name: true,
+            owner: true,
+            ownerUser: { select: { name: true } },
             postcode: true,
+            status: true,
           },
         },
         companyAffiliations: {
@@ -474,6 +479,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             createdAt: true,
             currency: true,
             id: true,
+            nextStep: true,
             source: true,
             stage: true,
             title: true,
@@ -1478,6 +1484,46 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
               Contacts
             </Link>
           </div>
+        }
+      />
+
+      <ConnectedRecordContext
+        company={
+          contact.company
+            ? {
+                detail: contact.company.ownerUser?.name
+                  ? `Owner: ${contact.company.ownerUser.name}`
+                  : contact.company.owner
+                    ? `Owner: ${contact.company.owner}`
+                    : "Owner: Unassigned",
+                href: `/clients/${contact.company.id}`,
+                label: "Primary company",
+                meta: contact.company.status,
+                name: contact.company.name,
+              }
+            : null
+        }
+        currentRecord="person"
+        nextAction={replyTarget?.nextStep}
+        person={{
+          detail: contact.role || "Role not captured",
+          label: "Person",
+          meta: contactTypeLabel,
+          name,
+        }}
+        sale={
+          replyTarget
+            ? {
+                detail: replyTarget.owner?.name
+                  ? `Owner: ${replyTarget.owner.name}`
+                  : "Owner: Unassigned",
+                href: `/sales/${replyTarget.id}`,
+                label: "Active sale",
+                meta:
+                  replyTarget.salesPipelineStage?.name ?? replyTarget.stage,
+                name: replyTarget.title,
+              }
+            : null
         }
       />
 
