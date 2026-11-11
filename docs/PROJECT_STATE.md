@@ -103,6 +103,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   Person and active Sale, shows the relevant lifecycle/stage and owners, and
   surfaces the Sale's existing next action without creating another competing
   source of workflow state.
+- A Sale's next action is now editable after creation and remains stored only in
+  `SalesOpportunity.nextStep`. Saving it refreshes the Sale, connected Person and
+  Company views, records a privacy-safe audit event and invalidates stale AI
+  guidance. AI output is explicitly presented as a recommendation rather than a
+  second next-action source.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that

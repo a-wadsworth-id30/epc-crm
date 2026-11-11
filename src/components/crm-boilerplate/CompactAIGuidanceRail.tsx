@@ -155,7 +155,7 @@ export default function CompactAIGuidanceRail({
         <div className="rounded-xl border border-gray-200 bg-white p-2.5 dark:border-gray-800 dark:bg-gray-950">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Next action
+              AI recommendation
             </p>
             <span
               className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-bold capitalize leading-none ${urgencyClasses(

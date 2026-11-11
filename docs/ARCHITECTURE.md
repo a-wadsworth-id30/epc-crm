@@ -130,6 +130,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   primary Person and most recently active accessible Sale into links and summary
   metadata. The strip reads `SalesOpportunity.nextStep`; it does not introduce a
   second next-action store or broaden record access.
+- `SalesOpportunity.nextStep` is the canonical committed next action across the
+  Sale, connected Person and Company. `SaleNextActionEditor` writes that field
+  through a permission-scoped, audited server action and invalidates cached AI
+  guidance. Sales AI output is labelled as a recommendation and remains advisory
+  until a user deliberately updates the canonical action or creates a task.
 - `src/lib/companies/integration-matching.ts` owns normalised name fallback for
   cross-module Company matching. A provider external record link or explicit
   Company ID remains authoritative. Name-only matching returns a Company only

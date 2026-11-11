@@ -166,7 +166,7 @@ export default function SalesLeadAIAssistant({
               fallbackText({ title: sale.title, communicationsCount })}
         </AIInsightCard>
 
-        <AIInsightCard title="Recommended next step">
+        <AIInsightCard title="AI recommendation">
           {result ? (
             <div className="space-y-2">
               <p className="font-semibold text-gray-800 dark:text-white/90">
@@ -183,8 +183,7 @@ export default function SalesLeadAIAssistant({
               </div>
             </div>
           ) : (
-            sale.nextStep ||
-            "Review the lead and choose the next follow-up action."
+            "Generate Sales AI guidance to review a suggested follow-up."
           )}
         </AIInsightCard>
       </div>
