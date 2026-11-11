@@ -87,10 +87,9 @@ admin-configurable.
    signals.
 7. The cached `Contact.companyName` must remain during the compatibility period
    because several integrations still read or write it.
-8. A many-to-many person/company relationship is not required for the first
-   release. The current optional primary Company link satisfies the confirmed
-   requirement and avoids unnecessary migration risk. Additional affiliations
-   can be introduced later without forcing them into the first schema change.
+8. The later confirmed installer/subcontractor use case requires one Person to
+   hold active relationships with multiple Companies. The additive affiliation
+   model now supports this while preserving the existing primary Company link.
 
 ## Recommended delivery decisions
 
@@ -114,15 +113,12 @@ organisation.
 
 ### Relationship scope
 
-Keep `Contact.companyId` optional and treat it as the primary Company link for
-the first release. Improve linking and unlinking from both the Person and
-Company screens. Do not overwrite a person's home address with a Company
-address.
-
-Before adding multi-company affiliations, confirm a real use case requiring one
-person to hold active roles at multiple organisations. If confirmed, introduce
-a relationship table in a separate migration while retaining `companyId` as
-the primary compatibility link during transition.
+Keep `Contact.companyId` optional and treat it as the primary compatibility
+link. Store the complete set of Person/Company links in
+`CompanyContactAffiliation`, including Company-specific responsibilities. Do not
+overwrite a Person's home address with a Company address. Changes made by
+integration writers through `Contact.companyId` must stay synchronised with the
+affiliation table.
 
 ## Reusable aggregate audit
 
@@ -166,20 +162,21 @@ The additive Company Type foundation is implemented through
 
 ## Task 4 relationship controls
 
-The confirmed first-release relationship remains one optional primary Company
-per Person. The Company detail screen now supports:
+The original relationship controls established one optional primary Company
+per Person. The later multi-company delivery extends the Company detail screen
+to support:
 
 - searching accessible People by name, email or telephone;
-- linking an unassigned Person;
-- explicitly moving a Person from another Company;
+- linking an unassigned Person as primary;
+- adding a second or later Company without replacing the primary link;
+- promoting an additional relationship to primary;
 - unlinking a Person without deleting their CRM record;
 - concurrency checks that stop a stale screen overwriting a newer assignment;
 - privacy-safe AuditLog events containing record IDs rather than person data.
 
 The Person create/edit flow writes the same relationship audit events. The
 legacy `Contact.companyId` and `companyName` fields remain the compatibility
-contract for integrations; a many-to-many relationship table is deliberately
-deferred until a real multi-company affiliation requirement is confirmed.
+contract for integrations.
 
 ## Task 5 configurable forms
 
@@ -258,13 +255,19 @@ compatibility contract while stopping arbitrary `findFirst` links. People CSV
 preview explains whether a Company will be linked, and import audit metadata
 records aggregate linked/unlinked counts without storing customer values.
 
-## Company contact responsibilities
+## Company contact responsibilities and affiliations
 
-The current primary Company relationship now carries controlled contact
-responsibilities on the Person: Primary, Commercial, Technical, Accounts and
-Compliance. The existing free-text `Contact.role` remains the Person's job
-title. Responsibility changes require access to both records, are written to
-the audit log without copying Person data and are cleared when the Person is
-moved or unlinked. A later many-to-many affiliation model must migrate these
-values onto the primary affiliation rather than treating them as global roles.
+Every Company affiliation carries controlled contact responsibilities: Primary,
+Commercial, Technical, Accounts and Compliance. The existing free-text
+`Contact.role` remains the Person's job title. Responsibility changes require
+access to both records and are written to the audit log without copying Person
+data. Existing values are migrated onto the primary affiliation; the legacy
+array mirrors only that primary link during the compatibility period.
+
+The additive `20261111113000_company_contact_affiliations` migration backfills
+one primary affiliation from every existing `Contact.companyId`. A partial
+unique index permits at most one primary Company per Person. Database triggers
+keep direct Contact writes compatible: changing the primary retains the old
+Company as an additional affiliation, clearing the primary removes that link,
+and Company-specific responsibilities are never copied to a different Company.
 

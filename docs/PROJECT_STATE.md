@@ -59,16 +59,18 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   definitions, enforce role-template edit access and validate/save typed values
   transactionally. Hidden restricted values are never sent to the browser, and
   changing type preserves values belonging to the previous type.
-- A Company can now link an existing accessible Person, explicitly move a
-  Person from another Company, or unlink them without deleting the Person.
-  Stale assignments cannot be overwritten, all relationship changes are
-  audited without storing person data in audit metadata, and Person create/edit
-  writes use the same audit events. The first release retains one optional
-  primary Company per Person; many-to-many affiliations are not inferred.
-- Linked People can be assigned controlled Primary, Commercial, Technical,
-  Accounts and Compliance Company contact responsibilities independently of
-  their job title. Responsibilities are visible on both records, audited when
-  edited and cleared when the Person moves Company or is unlinked.
+- People can be linked to multiple Companies while retaining one optional
+  primary Company for existing CRM and integration workflows. Company and
+  Person profiles distinguish primary and additional relationships; authorised
+  users can add an affiliation, make it primary or unlink it without deleting
+  the Person. The primary relationship cannot be removed while additional links
+  remain until another Company is selected as primary. Relationship changes are
+  privacy-safe audited.
+- Each Company affiliation can carry controlled Primary, Commercial,
+  Technical, Accounts and Compliance contact responsibilities independently of
+  the Person's job title or their responsibilities at another Company. The
+  legacy Contact primary-Company fields remain synchronised by the database for
+  website, telephony and provider integrations during the compatibility period.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that

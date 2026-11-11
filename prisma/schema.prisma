@@ -590,6 +590,7 @@ model Company {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
   contacts          Contact[]
+  contactAffiliations CompanyContactAffiliation[]
   notes             Note[]
   tasks             Task[]
   opportunities     SalesOpportunity[]
@@ -607,6 +608,22 @@ enum CompanyContactResponsibility {
   TECHNICAL
   ACCOUNTS
   COMPLIANCE
+}
+
+model CompanyContactAffiliation {
+  id               String                         @id @default(cuid())
+  companyId        String
+  company          Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId        String
+  contact          Contact                        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  isPrimary        Boolean                        @default(false)
+  responsibilities CompanyContactResponsibility[] @default([])
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+
+  @@unique([companyId, contactId])
+  @@index([companyId, updatedAt])
+  @@index([contactId, isPrimary])
 }
 
 model CompanyType {
@@ -718,6 +735,7 @@ model Contact {
   companyName                    String?
   companyContactResponsibilities CompanyContactResponsibility[] @default([])
   company                        Company?                       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyAffiliations            CompanyContactAffiliation[]
   notes                          Note[]
   tasks                          Task[]
   opportunities                  SalesOpportunity[]

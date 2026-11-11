@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { companyContactLinkDecision } from "@/lib/companies/contact-relationships";
+import {
+  companyAffiliationLinkDecision,
+  companyAffiliationUnlinkDecision,
+} from "@/lib/companies/contact-relationships";
 import {
   companyContactResponsibilityValues,
   normalizeCompanyContactResponsibilities,
@@ -33,14 +36,6 @@ export type CompanyActionState = {
 const companyContactLinkSchema = z.object({
   companyId: z.string().trim().min(1),
   contactId: z.string().trim().min(1),
-  expectedCurrentCompanyId: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => value || null),
-  allowMove: z
-    .enum(["true", "false"])
-    .transform((value) => value === "true"),
 });
 
 const companyContactUnlinkSchema = z.object({
@@ -52,6 +47,11 @@ const companyContactResponsibilitiesSchema = z.object({
   companyId: z.string().trim().min(1),
   contactId: z.string().trim().min(1),
   responsibilities: z.array(z.enum(companyContactResponsibilityValues)),
+});
+
+const companyContactPrimarySchema = z.object({
+  companyId: z.string().trim().min(1),
+  contactId: z.string().trim().min(1),
 });
 
 const companySchema = z.object({
@@ -316,10 +316,8 @@ export async function linkContactToCompanyAction(
 ): Promise<CompanyActionState> {
   const user = await requireUser();
   const parsed = companyContactLinkSchema.safeParse({
-    allowMove: formData.get("allowMove"),
     companyId: formData.get("companyId"),
     contactId: formData.get("contactId"),
-    expectedCurrentCompanyId: formData.get("expectedCurrentCompanyId"),
   });
   if (!parsed.success) {
     return { ok: false, message: "Choose a person to link." };
@@ -332,7 +330,11 @@ export async function linkContactToCompanyAction(
     }),
     prisma.contact.findFirst({
       where: contactIdAccessWhere(parsed.data.contactId, user),
-      select: { companyId: true, id: true },
+      select: {
+        companyAffiliations: { select: { companyId: true } },
+        companyId: true,
+        id: true,
+      },
     }),
   ]);
   if (!company || !contact) {
@@ -341,10 +343,11 @@ export async function linkContactToCompanyAction(
       message: "The company or person is no longer available.",
     };
   }
-  const decision = companyContactLinkDecision({
-    allowMove: parsed.data.allowMove,
-    currentCompanyId: contact.companyId,
-    expectedCurrentCompanyId: parsed.data.expectedCurrentCompanyId,
+  const decision = companyAffiliationLinkDecision({
+    currentPrimaryCompanyId: contact.companyId,
+    existingCompanyIds: contact.companyAffiliations.map(
+      (affiliation) => affiliation.companyId,
+    ),
     targetCompanyId: company.id,
   });
   if (!decision.ok) {
@@ -354,37 +357,132 @@ export async function linkContactToCompanyAction(
     return { ok: true, message: "This person is already linked to the company." };
   }
 
+  await prisma.$transaction(async (tx) => {
+    if (decision.action === "linked_primary") {
+      await tx.contact.update({
+        where: { id: contact.id },
+        data: {
+          companyContactResponsibilities: [],
+          companyId: company.id,
+          companyName: company.name,
+        },
+      });
+    } else {
+      await tx.companyContactAffiliation.upsert({
+        where: {
+          companyId_contactId: {
+            companyId: company.id,
+            contactId: contact.id,
+          },
+        },
+        create: {
+          companyId: company.id,
+          contactId: contact.id,
+          isPrimary: false,
+        },
+        update: {},
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        action:
+          decision.action === "linked_primary"
+            ? "company_contact.linked"
+            : "company_contact.affiliation_linked",
+        actorId: user.id,
+        entity: "Contact",
+        entityId: contact.id,
+        metadata: {
+          companyId: company.id,
+          primaryCompanyId: contact.companyId,
+        },
+      },
+    });
+  });
+  revalidateCompanyRelationshipPaths(contact.id, [contact.companyId, company.id]);
+  return {
+    ok: true,
+    message:
+      decision.action === "linked_primary"
+        ? "Person linked and set as their primary Company."
+        : "Additional Company relationship added.",
+  };
+}
+
+export async function makeCompanyContactPrimaryAction(
+  _: CompanyActionState,
+  formData: FormData,
+): Promise<CompanyActionState> {
+  const user = await requireUser();
+  const parsed = companyContactPrimarySchema.safeParse({
+    companyId: formData.get("companyId"),
+    contactId: formData.get("contactId"),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a linked Company relationship." };
+  }
+
+  const [company, contact] = await Promise.all([
+    prisma.company.findFirst({
+      where: companyIdAccessWhere(parsed.data.companyId, user),
+      select: { id: true, name: true },
+    }),
+    prisma.contact.findFirst({
+      where: contactIdAccessWhere(parsed.data.contactId, user),
+      select: {
+        companyId: true,
+        id: true,
+        companyAffiliations: {
+          where: { companyId: parsed.data.companyId },
+          select: { id: true, responsibilities: true },
+          take: 1,
+        },
+      },
+    }),
+  ]);
+  const affiliation = contact?.companyAffiliations[0];
+  if (!company || !contact || !affiliation) {
+    return {
+      ok: false,
+      message: "The Company relationship is no longer available.",
+    };
+  }
+  if (contact.companyId === company.id) {
+    return { ok: true, message: "This is already the primary Company." };
+  }
+
   const previousCompanyId = contact.companyId;
-  await prisma.$transaction([
-    prisma.contact.update({
+  await prisma.$transaction(async (tx) => {
+    await tx.companyContactAffiliation.updateMany({
+      where: { contactId: contact.id, isPrimary: true },
+      data: { isPrimary: false },
+    });
+    await tx.companyContactAffiliation.update({
+      where: { id: affiliation.id },
+      data: { isPrimary: true },
+    });
+    await tx.contact.update({
       where: { id: contact.id },
       data: {
-        companyContactResponsibilities:
-          decision.action === "moved" ? [] : undefined,
+        companyContactResponsibilities: affiliation.responsibilities,
         companyId: company.id,
         companyName: company.name,
       },
-    }),
-    prisma.auditLog.create({
+    });
+    await tx.auditLog.create({
       data: {
-        action: `company_contact.${decision.action}`,
+        action: "company_contact.primary_changed",
         actorId: user.id,
         entity: "Contact",
         entityId: contact.id,
         metadata: { companyId: company.id, previousCompanyId },
       },
-    }),
-  ]);
-  revalidateCompanyRelationshipPaths(contact.id, [
-    previousCompanyId,
-    company.id,
-  ]);
-  return {
-    ok: true,
-    message: previousCompanyId
-      ? "Person moved to this company."
-      : "Person linked to this company.",
-  };
+    });
+  });
+
+  revalidateCompanyRelationshipPaths(contact.id, [previousCompanyId, company.id]);
+  return { ok: true, message: "Primary Company updated." };
 }
 
 export async function unlinkContactFromCompanyAction(
@@ -407,7 +505,13 @@ export async function unlinkContactFromCompanyAction(
     }),
     prisma.contact.findFirst({
       where: contactIdAccessWhere(parsed.data.contactId, user),
-      select: { companyId: true, id: true },
+      select: {
+        companyAffiliations: {
+          select: { companyId: true, id: true, isPrimary: true },
+        },
+        companyId: true,
+        id: true,
+      },
     }),
   ]);
   if (!company || !contact) {
@@ -416,32 +520,53 @@ export async function unlinkContactFromCompanyAction(
       message: "The company or person is no longer available.",
     };
   }
-  if (contact.companyId !== company.id) {
+  const affiliation = contact.companyAffiliations.find(
+    (candidate) => candidate.companyId === company.id,
+  );
+  if (!affiliation) {
     return {
       ok: false,
       message: "This person is no longer linked to the company.",
     };
   }
 
-  await prisma.$transaction([
-    prisma.contact.update({
-      where: { id: contact.id },
+  const decision = companyAffiliationUnlinkDecision({
+    affiliationIsPrimary: affiliation.isPrimary,
+    additionalAffiliationCount: contact.companyAffiliations.length - 1,
+  });
+  if (!decision.ok) return { ok: false, message: decision.message };
+
+  await prisma.$transaction(async (tx) => {
+    if (affiliation.isPrimary) {
+      await tx.contact.update({
+        where: { id: contact.id },
+        data: {
+          companyContactResponsibilities: [],
+          companyId: null,
+          companyName: null,
+        },
+      });
+      await tx.companyContactAffiliation.deleteMany({
+        where: { id: affiliation.id },
+      });
+    } else {
+      await tx.companyContactAffiliation.delete({
+        where: { id: affiliation.id },
+      });
+    }
+    await tx.auditLog.create({
       data: {
-        companyContactResponsibilities: [],
-        companyId: null,
-        companyName: null,
-      },
-    }),
-    prisma.auditLog.create({
-      data: {
-        action: "company_contact.unlinked",
+        action:
+          decision.action === "unlinked_primary"
+            ? "company_contact.unlinked"
+            : "company_contact.affiliation_unlinked",
         actorId: user.id,
         entity: "Contact",
         entityId: contact.id,
         metadata: { companyId: company.id },
       },
-    }),
-  ]);
+    });
+  });
   revalidateCompanyRelationshipPaths(contact.id, [company.id]);
   return { ok: true, message: "Person unlinked. Their CRM record was kept." };
 }
@@ -469,7 +594,11 @@ export async function updateCompanyContactResponsibilitiesAction(
     prisma.contact.findFirst({
       where: contactIdAccessWhere(parsed.data.contactId, user),
       select: {
-        companyContactResponsibilities: true,
+        companyAffiliations: {
+          where: { companyId: parsed.data.companyId },
+          select: { id: true, isPrimary: true, responsibilities: true },
+          take: 1,
+        },
         companyId: true,
         id: true,
       },
@@ -482,7 +611,8 @@ export async function updateCompanyContactResponsibilitiesAction(
       message: "The company or person is no longer available.",
     };
   }
-  if (contact.companyId !== company.id) {
+  const affiliation = contact.companyAffiliations[0];
+  if (!affiliation) {
     return {
       ok: false,
       message: "This person is no longer linked to the company.",
@@ -493,15 +623,21 @@ export async function updateCompanyContactResponsibilitiesAction(
     parsed.data.responsibilities,
   );
   const before = normalizeCompanyContactResponsibilities(
-    contact.companyContactResponsibilities,
+    affiliation.responsibilities,
   );
 
-  await prisma.$transaction([
-    prisma.contact.update({
-      where: { id: contact.id },
-      data: { companyContactResponsibilities: responsibilities },
-    }),
-    prisma.auditLog.create({
+  await prisma.$transaction(async (tx) => {
+    await tx.companyContactAffiliation.update({
+      where: { id: affiliation.id },
+      data: { responsibilities },
+    });
+    if (affiliation.isPrimary) {
+      await tx.contact.update({
+        where: { id: contact.id },
+        data: { companyContactResponsibilities: responsibilities },
+      });
+    }
+    await tx.auditLog.create({
       data: {
         action: "company_contact.responsibilities_updated",
         actorId: user.id,
@@ -513,8 +649,8 @@ export async function updateCompanyContactResponsibilitiesAction(
           responsibilities,
         },
       },
-    }),
-  ]);
+    });
+  });
 
   revalidateCompanyRelationshipPaths(contact.id, [company.id]);
   return { ok: true, message: "Company contact roles updated." };

@@ -201,6 +201,14 @@ controlled array of Company-specific contact responsibilities to People. It
 does not infer or backfill roles from free-text job titles; existing People
 start with no selected responsibilities.
 
+The migration `20261111113000_company_contact_affiliations` adds the
+many-to-many Person/Company relationship table, backfills every existing
+primary `Contact.companyId` link and migrates its controlled responsibilities.
+A partial unique index enforces at most one primary Company per Person. Database
+triggers keep legacy primary Company fields and affiliations synchronised for
+all integration writers during the compatibility period; no additional Company
+relationships are inferred by the migration.
+
 The migration `20261110233000_company_custom_fields` adds ordered field
 definitions for Company Types and typed values for Companies. It does not
 backfill or modify company data. Definitions and values remain empty until an
