@@ -155,6 +155,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   ID-only `sale.relationship_repaired` audit events. Participants from other
   Companies are informational because installer and partner relationships can
   legitimately span organisations.
+- Company-originated Sale creation passes a fixed `saleCompanyId` plus an
+  affiliated Person selected from the Company workspace. `createSaleAction`
+  does not trust those values: it verifies Company access, Person access and an
+  existing `CompanyContactAffiliation`, then writes that Company explicitly
+  while retaining the selected Person as the canonical primary customer and
+  participant. This supports additional Company affiliations without silently
+  substituting the Person's primary Company.
 - `src/lib/companies/integration-matching.ts` owns normalised name fallback for
   cross-module Company matching. A provider external record link or explicit
   Company ID remains authoritative. Name-only matching returns a Company only

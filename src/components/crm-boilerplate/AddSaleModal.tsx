@@ -51,6 +51,10 @@ export type AddSaleModalProps = {
     leadSource?: string | null;
     name: string;
   };
+  linkedCompany?: {
+    id: string;
+    name: string;
+  };
   owners: OwnerOption[];
   defaultOwnerId?: string | null;
   defaultStageId?: string | null;
@@ -88,12 +92,7 @@ function splitContactName(value: string) {
 }
 
 function contactSearchText(contact: ContactOption) {
-  return [
-    contact.name,
-    contact.companyName,
-    contact.email,
-    contact.phone,
-  ]
+  return [contact.name, contact.companyName, contact.email, contact.phone]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -144,7 +143,9 @@ function SaleContactPicker({
   const remoteSearchMatchesQuery =
     shouldSearchContacts && remoteSearch.query === trimmedQuery;
   const remoteContacts =
-    remoteSearchMatchesQuery && !remoteSearch.error ? remoteSearch.contacts : null;
+    remoteSearchMatchesQuery && !remoteSearch.error
+      ? remoteSearch.contacts
+      : null;
   const isSearchingContacts =
     remoteSearchMatchesQuery && remoteSearch.isLoading;
   const contactSearchError = remoteSearchMatchesQuery
@@ -167,9 +168,12 @@ function SaleContactPicker({
         isLoading: true,
         query: trimmedQuery,
       });
-      fetch(`/api/quick-create/contacts?q=${encodeURIComponent(trimmedQuery)}`, {
-        signal: controller.signal,
-      })
+      fetch(
+        `/api/quick-create/contacts?q=${encodeURIComponent(trimmedQuery)}`,
+        {
+          signal: controller.signal,
+        },
+      )
         .then(async (response) => {
           if (!response.ok) {
             throw new Error("Contact search failed");
@@ -231,7 +235,7 @@ function SaleContactPicker({
   }
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.03] md:col-span-2">
+    <section className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2 dark:border-gray-800 dark:bg-white/[0.03]">
       <input
         type="hidden"
         name="requireLinkedContact"
@@ -247,7 +251,11 @@ function SaleContactPicker({
           </h3>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
             {selectedContact
-              ? [selectedContact.email, selectedContact.phone, selectedContact.companyName]
+              ? [
+                  selectedContact.email,
+                  selectedContact.phone,
+                  selectedContact.companyName,
+                ]
                   .filter(Boolean)
                   .join(" · ") || "Selected contact"
               : "Search or create a linked person."}
@@ -303,28 +311,30 @@ function SaleContactPicker({
                   Searching contacts...
                 </div>
               ) : null}
-              {!isSearchingContacts ? filteredContacts.map((contact) => (
-                <button
-                  key={contact.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedContact(contact);
-                    setQuery(contact.name);
-                    setIsOpen(false);
-                    onContactSelected(contact);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-white/5"
-                >
-                  <span className="block font-semibold text-gray-800 dark:text-white/90">
-                    {contact.name}
-                  </span>
-                  <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
-                    {[contact.companyName, contact.email, contact.phone]
-                      .filter(Boolean)
-                      .join(" · ") || "No contact details"}
-                  </span>
-                </button>
-              )) : null}
+              {!isSearchingContacts
+                ? filteredContacts.map((contact) => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedContact(contact);
+                        setQuery(contact.name);
+                        setIsOpen(false);
+                        onContactSelected(contact);
+                      }}
+                      className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-white/5"
+                    >
+                      <span className="block font-semibold text-gray-800 dark:text-white/90">
+                        {contact.name}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {[contact.companyName, contact.email, contact.phone]
+                          .filter(Boolean)
+                          .join(" · ") || "No contact details"}
+                      </span>
+                    </button>
+                  ))
+                : null}
               {!isSearchingContacts && query.trim() ? (
                 <button
                   type="button"
@@ -334,7 +344,9 @@ function SaleContactPicker({
                   Create <span className="font-semibold">{query.trim()}</span>
                 </button>
               ) : null}
-              {!isSearchingContacts && !filteredContacts.length && !query.trim() ? (
+              {!isSearchingContacts &&
+              !filteredContacts.length &&
+              !query.trim() ? (
                 <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                   No contacts found
                 </div>
@@ -424,6 +436,7 @@ export default function AddSaleModal({
   defaultOwnerId,
   defaultStageId,
   linkedContact,
+  linkedCompany,
   modalDescription,
   modalTitle,
   requireLinkedContact = false,
@@ -437,21 +450,27 @@ export default function AddSaleModal({
   const defaultPipelineStageId =
     defaultStageId && stages.some((stage) => stage.value === defaultStageId)
       ? defaultStageId
-      : stages[0]?.value ?? "";
-  const defaultTitle = linkedContact ? `${linkedContact.name} enquiry` : "";
+      : (stages[0]?.value ?? "");
+  const defaultTitle = linkedContact
+    ? `${linkedContact.name} enquiry`
+    : linkedCompany
+      ? `${linkedCompany.name} enquiry`
+      : "";
   const defaultLeadSource = linkedContact?.leadSource ?? "";
   const [leadSourceValue, setLeadSourceValue] = useState(defaultLeadSource);
   const [titleValue, setTitleValue] = useState(defaultTitle);
-  const resolvedModalTitle = linkedContact
-    ? "Create lead"
-    : (modalTitle ?? "Add sale");
+  const resolvedModalTitle =
+    linkedContact || linkedCompany ? "Create lead" : (modalTitle ?? "Add sale");
   const resolvedModalDescription = linkedContact
     ? "Create a pipeline record linked to this contact."
-    : (modalDescription ??
-      "Create a manual pipeline record for a lead or opportunity.");
-  const resolvedSubmitLabel = linkedContact
-    ? "Create lead"
-    : (submitLabel ?? "Add sale");
+    : linkedCompany
+      ? "Create a pipeline record for this Company and choose its primary customer."
+      : (modalDescription ??
+        "Create a manual pipeline record for a lead or opportunity.");
+  const resolvedSubmitLabel =
+    linkedContact || linkedCompany
+      ? "Create lead"
+      : (submitLabel ?? "Add sale");
   const [state, formAction, isPending] = useActionState(createSaleAction, {
     ok: false,
     message: "",
@@ -489,10 +508,10 @@ export default function AddSaleModal({
       <Modal
         isOpen={modal.isOpen}
         onClose={modal.closeModal}
-        className="relative m-5 w-full max-w-[860px] rounded-3xl bg-white p-6 dark:bg-gray-900 sm:m-0 lg:p-8"
+        className="relative m-5 w-full max-w-[860px] rounded-3xl bg-white p-6 sm:m-0 lg:p-8 dark:bg-gray-900"
       >
         <div className="pr-10">
-          <h2 className="mb-1 text-title-xs font-semibold text-gray-800 dark:text-white/90">
+          <h2 className="text-title-xs mb-1 font-semibold text-gray-800 dark:text-white/90">
             {resolvedModalTitle}
           </h2>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
@@ -516,8 +535,53 @@ export default function AddSaleModal({
               </div>
             </>
           ) : null}
+          {linkedCompany ? (
+            <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+              <input
+                type="hidden"
+                name="saleCompanyId"
+                value={linkedCompany.id}
+              />
+              <input type="hidden" name="contactMode" value="existing" />
+              <input type="hidden" name="requireLinkedContact" value="on" />
+              <p className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                Company
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-800 dark:text-white/90">
+                {linkedCompany.name}
+              </p>
+              <label className="mt-4 block">
+                <span className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Primary customer
+                </span>
+                <select
+                  name="contactId"
+                  required
+                  defaultValue=""
+                  className={inputClassName}
+                >
+                  <option value="" disabled>
+                    Choose an affiliated Person
+                  </option>
+                  {contacts.map((contact) => (
+                    <option key={contact.id} value={contact.id}>
+                      {contact.name}
+                      {contact.email ? ` — ${contact.email}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!contacts.length ? (
+                <p className="mt-2 text-xs leading-5 text-warning-700 dark:text-warning-300">
+                  Link a Person to this Company before creating its lead.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
-            {!linkedContact && (contacts.length || requireLinkedContact) ? (
+            {!linkedContact &&
+            !linkedCompany &&
+            (contacts.length || requireLinkedContact) ? (
               <SaleContactPicker
                 companies={companies}
                 companiesEnabled={companiesEnabled}
@@ -593,7 +657,11 @@ export default function AddSaleModal({
               <span className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
                 Expected close
               </span>
-              <input name="expectedCloseDate" type="date" className={inputClassName} />
+              <input
+                name="expectedCloseDate"
+                type="date"
+                className={inputClassName}
+              />
             </label>
 
             <label className="block md:col-span-2">
@@ -626,9 +694,11 @@ export default function AddSaleModal({
             </label>
           </div>
 
-          <ActionStateMessage state={state.message && !state.ok ? state : undefined} />
+          <ActionStateMessage
+            state={state.message && !state.ok ? state : undefined}
+          />
 
-          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 dark:border-gray-800 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end dark:border-gray-800">
             <button
               type="button"
               onClick={modal.closeModal}
@@ -638,7 +708,7 @@ export default function AddSaleModal({
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || Boolean(linkedCompany && !contacts.length)}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? "Adding..." : resolvedSubmitLabel}
