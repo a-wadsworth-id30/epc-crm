@@ -122,6 +122,15 @@ enum CustomerSalesCategory {
   PROJECT
 }
 
+enum SalesParticipantRole {
+  PRIMARY_CUSTOMER
+  JOINT_APPLICANT
+  DECISION_MAKER
+  BILLING_CONTACT
+  INSTALLER
+  TECHNICAL_CONTACT
+}
+
 enum SalesLifecycleEventType {
   CREATED
   STAGE_CHANGED
@@ -747,6 +756,7 @@ model Contact {
   notes                          Note[]
   tasks                          Task[]
   opportunities                  SalesOpportunity[]
+  salesParticipations            SalesOpportunityParticipant[]
   salesCommunications            SalesCommunication[]
   emailMessages                  EmailMessage[]
   emailThreadLinks               EmailThreadLink[]
@@ -981,6 +991,7 @@ model SalesOpportunity {
   company               Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contactId             String?
   contact               Contact?                     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  participants          SalesOpportunityParticipant[]
   communications        SalesCommunication[]
   emailMessages         EmailMessage[]
   emailThreadLinks      EmailThreadLink[]
@@ -1023,6 +1034,21 @@ model SalesOpportunity {
   @@index([companyId, createdAt])
   @@index([contactId, createdAt])
   @@index([customerSalesCategory, updatedAt])
+}
+
+model SalesOpportunityParticipant {
+  id            String               @id @default(cuid())
+  opportunityId String
+  opportunity   SalesOpportunity     @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  role          SalesParticipantRole @default(JOINT_APPLICANT)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@unique([opportunityId, contactId])
+  @@index([opportunityId, role])
+  @@index([contactId, updatedAt])
 }
 
 model ProductCategory {

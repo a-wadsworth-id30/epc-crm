@@ -256,6 +256,14 @@ Core Prisma models are in `prisma/schema.prisma`.
   sales category, lead score and score timestamp. Opportunity records can be
   referenced by contact relationship technology rows without making those rows
   part of the sales stage model.
+- `SalesOpportunityParticipant`: many-to-many Person membership for a Sale with
+  one controlled operational role per Person. A partial unique database index
+  permits only one `PRIMARY_CUSTOMER` per Sale. The existing
+  `SalesOpportunity.contactId` remains the compatibility and communications
+  primary link; participant actions update both in one transaction, protect the
+  current primary from removal/demotion and record aggregate audit metadata.
+  Contact access and Person conversation/lead aggregation include accessible
+  Sales linked through participant membership.
 - `SalesPipelineStage`: configurable sales stage mapped to the stable
   `SalesStage` reporting/conversion bucket and a customer sales category, with
   stage goal, AI context, movement policy, required-data gate mode and

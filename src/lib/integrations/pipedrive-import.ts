@@ -2449,6 +2449,11 @@ export async function importPipedriveDealRecord({
         expectedCloseDate: mapping.opportunity.expectedCloseDate,
         nextStep: mapping.opportunity.nextStep,
         ownerId: resolveSalesDefaultOwnerId({ salesDefaults }),
+        participants: contact.id
+          ? {
+              create: { contactId: contact.id, role: "PRIMARY_CUSTOMER" },
+            }
+          : undefined,
         source: mapping.opportunity.source,
         valueCents: mapping.opportunity.valueCents,
       },
@@ -2653,6 +2658,11 @@ export async function importPipedriveLeadRecord({
         expectedCloseDate: mapping.opportunity.expectedCloseDate,
         nextStep: mapping.opportunity.nextStep,
         ownerId: resolveSalesDefaultOwnerId({ salesDefaults }),
+        participants: contact.id
+          ? {
+              create: { contactId: contact.id, role: "PRIMARY_CUSTOMER" },
+            }
+          : undefined,
         source: mapping.opportunity.source,
         valueCents: mapping.opportunity.valueCents,
       },

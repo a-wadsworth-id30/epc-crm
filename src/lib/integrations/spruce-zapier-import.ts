@@ -180,6 +180,12 @@ export async function importSpruceJobCreatedPayload({
         leadScope: mapping.leadScope,
         nextStep: mapping.opportunity.nextStep,
         ownerId: resolveSalesDefaultOwnerId({ salesDefaults }),
+        participants: {
+          create: {
+            contactId: contactResult.contact.id,
+            role: "PRIMARY_CUSTOMER",
+          },
+        },
         source: mapping.opportunity.source,
         valueCents: 0,
       },

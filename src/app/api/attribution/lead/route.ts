@@ -382,6 +382,9 @@ export async function POST(request: Request) {
         contactId: contact.id,
         companyId: contact.companyId,
         attribution: { ...attributionMetadata, ...sourceMetadata },
+        participants: {
+          create: { contactId: contact.id, role: "PRIMARY_CUSTOMER" },
+        },
       },
     });
 

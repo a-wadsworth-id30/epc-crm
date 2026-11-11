@@ -802,6 +802,14 @@ export async function createSaleAction(
           ownerId: ownerAssignment.ownerId,
           contactId: contactForSale?.id,
           companyId: linkedCompanyId,
+          participants: contactForSale
+            ? {
+                create: {
+                  contactId: contactForSale.id,
+                  role: "PRIMARY_CUSTOMER",
+                },
+              }
+            : undefined,
         },
         select: { id: true },
       });

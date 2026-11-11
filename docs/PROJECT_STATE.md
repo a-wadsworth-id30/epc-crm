@@ -66,6 +66,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   the Person. The primary relationship cannot be removed while additional links
   remain until another Company is selected as primary. Relationship changes are
   privacy-safe audited.
+- Sales can link multiple People with explicit Primary customer, Joint
+  applicant, Decision-maker, Billing contact, Installer and Technical contact
+  roles. `SalesOpportunity.contactId` remains the canonical primary recipient
+  for email, calls and provider compatibility; changing the Primary customer
+  role updates that link transactionally. Existing Sales are backfilled, new
+  manual and integration-created Sales create their primary participant, and a
+  Person profile includes Sales where that Person is any participant.
 - Each Company affiliation can carry controlled Primary, Commercial,
   Technical, Accounts and Compliance contact responsibilities independently of
   the Person's job title or their responsibilities at another Company. The

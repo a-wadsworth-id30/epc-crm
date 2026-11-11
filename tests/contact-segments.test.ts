@@ -101,6 +101,15 @@ describe("contact segment access filters", () => {
             some: { OR: [{ ownerId: user.id }, { ownerId: null }] },
           },
         },
+        {
+          salesParticipations: {
+            some: {
+              opportunity: {
+                OR: [{ ownerId: user.id }, { ownerId: null }],
+              },
+            },
+          },
+        },
       ],
     });
 

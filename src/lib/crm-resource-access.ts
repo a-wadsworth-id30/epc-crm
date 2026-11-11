@@ -53,6 +53,11 @@ export function contactAccessWhere(
           some: salesOpportunityAccessWhere(user),
         },
       },
+      {
+        salesParticipations: {
+          some: { opportunity: salesOpportunityAccessWhere(user) },
+        },
+      },
     ],
   };
 }
