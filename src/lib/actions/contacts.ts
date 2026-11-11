@@ -6,7 +6,10 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { defaultCompanyTypeAssignment } from "@/lib/companies/company-types";
-import { mergedCompanyContactResponsibilities } from "@/lib/companies/contact-responsibilities";
+import {
+  mergedCompanyContactResponsibilities,
+  normalizeCompanyContactResponsibilities,
+} from "@/lib/companies/contact-responsibilities";
 import { uniqueCompanyMatchByName } from "@/lib/companies/integration-matching";
 import {
   mergeContactEmailMethods,
@@ -773,6 +776,7 @@ export async function updateContactAction(
   const contact = await prisma.contact.findFirst({
     where: contactIdAccessWhere(contactId, user),
     select: {
+      companyAffiliations: { select: { companyId: true } },
       companyContactResponsibilities: true,
       companyId: true,
       contactTypeId: true,
@@ -830,6 +834,17 @@ export async function updateContactAction(
         user,
         tx,
       );
+      if (
+        !companyData.companyId &&
+        contact.companyId &&
+        contact.companyAffiliations.some(
+          (affiliation) => affiliation.companyId !== contact.companyId,
+        )
+      ) {
+        throw new ContactActionError(
+          "Make another Company primary before clearing this Person's primary Company.",
+        );
+      }
       linkedCompanyId = companyData.companyId;
 
       await tx.contact.update({
@@ -864,7 +879,7 @@ export async function updateContactAction(
           data: {
             action: companyData.companyId
               ? contact.companyId
-                ? "company_contact.moved"
+                ? "company_contact.primary_changed"
                 : "company_contact.linked"
               : "company_contact.unlinked",
             actorId: user.id,
@@ -1166,6 +1181,9 @@ export async function mergeContactsAction(
         companyId: true,
         companyName: true,
         companyContactResponsibilities: true,
+        companyAffiliations: {
+          select: { companyId: true, responsibilities: true },
+        },
         country: true,
         county: true,
         category: true,
@@ -1198,6 +1216,9 @@ export async function mergeContactsAction(
         companyId: true,
         companyName: true,
         companyContactResponsibilities: true,
+        companyAffiliations: {
+          select: { companyId: true, responsibilities: true },
+        },
         country: true,
         county: true,
         category: true,
@@ -1296,6 +1317,35 @@ export async function mergeContactsAction(
         data: { entityId: primaryContactId },
       }),
     ]);
+
+    const primaryAffiliations = new Map(
+      primaryContact.companyAffiliations.map((affiliation) => [
+        affiliation.companyId,
+        affiliation.responsibilities,
+      ]),
+    );
+    for (const affiliation of duplicateContact.companyAffiliations) {
+      const responsibilities = normalizeCompanyContactResponsibilities([
+        ...(primaryAffiliations.get(affiliation.companyId) ?? []),
+        ...affiliation.responsibilities,
+      ]);
+      await tx.companyContactAffiliation.upsert({
+        where: {
+          companyId_contactId: {
+            companyId: affiliation.companyId,
+            contactId: primaryContactId,
+          },
+        },
+        create: {
+          companyId: affiliation.companyId,
+          contactId: primaryContactId,
+          isPrimary: false,
+          responsibilities,
+        },
+        update: { responsibilities },
+      });
+      primaryAffiliations.set(affiliation.companyId, responsibilities);
+    }
 
     await tx.contact.update({
       where: { id: primaryContactId },

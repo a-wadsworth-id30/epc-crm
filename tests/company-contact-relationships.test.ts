@@ -1,64 +1,94 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { companyContactLinkDecision } from "../src/lib/companies/contact-relationships";
+import {
+  companyAffiliationLinkDecision,
+  companyAffiliationUnlinkDecision,
+} from "../src/lib/companies/contact-relationships";
 import {
   mergedCompanyContactResponsibilities,
   normalizeCompanyContactResponsibilities,
 } from "../src/lib/companies/contact-responsibilities";
 
-test("an unlinked person can be linked to a company", () => {
+const affiliationMigration = readFileSync(
+  "prisma/migrations/20261111113000_company_contact_affiliations/migration.sql",
+  "utf8",
+);
+const schema = readFileSync("prisma/schema.prisma", "utf8");
+
+test("a Person with a primary Company gains an additional affiliation", () => {
   assert.deepEqual(
-    companyContactLinkDecision({
-      allowMove: false,
-      currentCompanyId: null,
-      expectedCurrentCompanyId: null,
+    companyAffiliationLinkDecision({
+      currentPrimaryCompanyId: "company-a",
+      existingCompanyIds: ["company-a"],
       targetCompanyId: "company-b",
     }),
-    { ok: true, action: "linked" },
+    { ok: true, action: "linked_additional" },
   );
 });
 
-test("moving a person between companies requires explicit confirmation", () => {
-  assert.equal(
-    companyContactLinkDecision({
-      allowMove: false,
-      currentCompanyId: "company-a",
-      expectedCurrentCompanyId: "company-a",
-      targetCompanyId: "company-b",
-    }).ok,
-    false,
-  );
+test("the first Company affiliation becomes primary", () => {
   assert.deepEqual(
-    companyContactLinkDecision({
-      allowMove: true,
-      currentCompanyId: "company-a",
-      expectedCurrentCompanyId: "company-a",
-      targetCompanyId: "company-b",
-    }),
-    { ok: true, action: "moved" },
-  );
-});
-
-test("stale company assignments cannot be overwritten", () => {
-  const decision = companyContactLinkDecision({
-    allowMove: true,
-    currentCompanyId: "company-c",
-    expectedCurrentCompanyId: "company-a",
-    targetCompanyId: "company-b",
-  });
-  assert.equal(decision.ok, false);
-  if (!decision.ok) assert.match(decision.message, /changed/);
-});
-
-test("linking to the current company is idempotent", () => {
-  assert.deepEqual(
-    companyContactLinkDecision({
-      allowMove: false,
-      currentCompanyId: "company-a",
-      expectedCurrentCompanyId: "company-a",
+    companyAffiliationLinkDecision({
+      currentPrimaryCompanyId: null,
+      existingCompanyIds: [],
       targetCompanyId: "company-a",
     }),
+    { ok: true, action: "linked_primary" },
+  );
+});
+
+test("an existing Company affiliation is idempotent", () => {
+  assert.deepEqual(
+    companyAffiliationLinkDecision({
+      currentPrimaryCompanyId: "company-a",
+      existingCompanyIds: ["company-a", "company-b"],
+      targetCompanyId: "company-b",
+    }),
     { ok: true, action: "unchanged" },
+  );
+});
+
+test("a primary affiliation cannot be removed while additional links exist", () => {
+  const decision = companyAffiliationUnlinkDecision({
+    affiliationIsPrimary: true,
+    additionalAffiliationCount: 1,
+  });
+  assert.equal(decision.ok, false);
+  if (!decision.ok) assert.match(decision.message, /another Company primary/);
+});
+
+test("additional and sole-primary affiliations can be removed", () => {
+  assert.deepEqual(
+    companyAffiliationUnlinkDecision({
+      affiliationIsPrimary: false,
+      additionalAffiliationCount: 1,
+    }),
+    { ok: true, action: "unlinked_additional" },
+  );
+  assert.deepEqual(
+    companyAffiliationUnlinkDecision({
+      affiliationIsPrimary: true,
+      additionalAffiliationCount: 0,
+    }),
+    { ok: true, action: "unlinked_primary" },
+  );
+});
+
+test("the affiliation schema retains the primary compatibility link", () => {
+  assert.match(schema, /model CompanyContactAffiliation/);
+  assert.match(schema, /companyAffiliations\s+CompanyContactAffiliation\[\]/);
+  assert.match(schema, /companyId\s+String\?/);
+});
+
+test("the affiliation migration backfills safely and enforces one primary", () => {
+  assert.match(affiliationMigration, /WHERE "companyId" IS NOT NULL/);
+  assert.match(affiliationMigration, /one_primary_per_contact/);
+  assert.match(affiliationMigration, /WHERE "isPrimary" = true/);
+  assert.match(affiliationMigration, /sync_contact_primary_affiliation_after/);
+  assert.doesNotMatch(
+    affiliationMigration,
+    /DROP TABLE|TRUNCATE|DELETE FROM "Contact"/,
   );
 });
 

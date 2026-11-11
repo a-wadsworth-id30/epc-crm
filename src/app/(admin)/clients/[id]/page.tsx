@@ -11,6 +11,7 @@ import CompanyDocumentRequirements from "@/components/crm-boilerplate/CompanyDoc
 import CompanyProfileCompleteness from "@/components/crm-boilerplate/CompanyProfileCompleteness";
 import {
   CompanyContactLinker,
+  CompanyContactPrimaryButton,
   CompanyContactResponsibilitiesEditor,
   CompanyContactUnlinkButton,
 } from "@/components/crm-boilerplate/CompanyContactRelationships";
@@ -157,32 +158,43 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
             textValue: true,
           },
         },
-        contacts: {
-          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        contactAffiliations: {
+          orderBy: [
+            { isPrimary: "desc" },
+            { contact: { lastName: "asc" } },
+            { contact: { firstName: "asc" } },
+          ],
           where:
-            user.role === "ADMIN" ? undefined : contactWhereWithAccess(user),
+            user.role === "ADMIN"
+              ? undefined
+              : { contact: contactWhereWithAccess(user) },
           select: {
-            additionalEmails: {
-              orderBy: { createdAt: "asc" },
-              select: { email: true, id: true, label: true },
-            },
-            additionalPhones: {
-              orderBy: { createdAt: "asc" },
+            isPrimary: true,
+            responsibilities: true,
+            contact: {
               select: {
+                additionalEmails: {
+                  orderBy: { createdAt: "asc" },
+                  select: { email: true, id: true, label: true },
+                },
+                additionalPhones: {
+                  orderBy: { createdAt: "asc" },
+                  select: {
+                    id: true,
+                    label: true,
+                    phone: true,
+                    phoneNormalized: true,
+                  },
+                },
+                email: true,
+                firstName: true,
                 id: true,
-                label: true,
+                lastName: true,
+                leadSource: true,
                 phone: true,
-                phoneNormalized: true,
+                role: true,
               },
             },
-            email: true,
-            firstName: true,
-            companyContactResponsibilities: true,
-            id: true,
-            lastName: true,
-            leadSource: true,
-            phone: true,
-            role: true,
           },
           take: 100,
         },
@@ -213,7 +225,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         updatedAt: true,
         _count: {
           select: {
-            contacts: true,
+            contactAffiliations: true,
             notes: true,
             opportunities: true,
             tasks: true,
@@ -367,10 +379,18 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
 
   const scopedCounts =
     user.role === "ADMIN"
-      ? company._count
+      ? {
+          contacts: company._count.contactAffiliations,
+          notes: company._count.notes,
+          opportunities: company._count.opportunities,
+          tasks: company._count.tasks,
+        }
       : {
-          contacts: await prisma.contact.count({
-            where: contactWhereWithAccess(user, { companyId: company.id }),
+          contacts: await prisma.companyContactAffiliation.count({
+            where: {
+              companyId: company.id,
+              contact: contactWhereWithAccess(user),
+            },
           }),
           notes: await prisma.note.count({
             where: { companyId: company.id, userId: user.id },
@@ -560,13 +580,14 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         <div className="flex items-center gap-2">
           <CompanyContactLinker companyId={company.id} />
           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
-            {company.contacts.length}
+            {scopedCounts.contacts}
           </span>
         </div>
       </div>
       <div className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
-        {company.contacts.length ? (
-          company.contacts.map((contact) => {
+        {company.contactAffiliations.length ? (
+          company.contactAffiliations.map((affiliation) => {
+            const contact = affiliation.contact;
             const additionalEmails = normalizeContactEmailMethods(
               contact.additionalEmails,
               contact.email,
@@ -595,10 +616,27 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {contact.role ?? "Role not set"}
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className={
+                        affiliation.isPrimary
+                          ? "rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-300"
+                          : "rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300"
+                      }
+                    >
+                      {affiliation.isPrimary ? "Primary Company" : "Additional Company"}
+                    </span>
+                    {!affiliation.isPrimary ? (
+                      <CompanyContactPrimaryButton
+                        companyId={company.id}
+                        contactId={contact.id}
+                      />
+                    ) : null}
+                  </div>
                   <CompanyContactResponsibilitiesEditor
                     companyId={company.id}
                     contactId={contact.id}
-                    responsibilities={contact.companyContactResponsibilities}
+                    responsibilities={affiliation.responsibilities}
                   />
                   <CompanyContactUnlinkButton
                     companyId={company.id}

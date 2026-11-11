@@ -64,6 +64,9 @@ export async function GET(request: NextRequest) {
           name: true,
         },
       },
+      companyAffiliations: {
+        select: { companyId: true },
+      },
       tagAssignments: {
         include: {
           tag: {
@@ -96,6 +99,9 @@ export async function GET(request: NextRequest) {
       ),
       role: contact.role,
       companyId: contact.company?.id ?? null,
+      companyIds: contact.companyAffiliations.map(
+        (affiliation) => affiliation.companyId,
+      ),
       companyName: contact.company?.name ?? contact.companyName,
       tags: contact.tagAssignments.map((assignment) => assignment.tag),
     })),

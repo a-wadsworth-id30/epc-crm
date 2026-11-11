@@ -88,7 +88,7 @@ const companyListSelect = {
   },
   _count: {
     select: {
-      contacts: true,
+      contactAffiliations: true,
       notes: true,
       opportunities: true,
       tasks: true,
@@ -117,7 +117,7 @@ function companyOrderBy(
   sortDirection: CompanySortDirection,
 ): Prisma.CompanyOrderByWithRelationInput {
   if (sortKey === "contacts") {
-    return { contacts: { _count: sortDirection } };
+    return { contactAffiliations: { _count: sortDirection } };
   }
 
   return { [sortKey]: sortDirection };
@@ -290,7 +290,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
         ]),
     ),
     counts: {
-      contacts: company._count.contacts,
+      contacts: company._count.contactAffiliations,
       notes: company._count.notes,
       opportunities: company._count.opportunities,
       tasks: company._count.tasks,

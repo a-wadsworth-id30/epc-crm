@@ -1,34 +1,47 @@
-export type CompanyContactLinkDecision =
-  | { ok: true; action: "linked" | "moved" | "unchanged" }
+export type CompanyAffiliationLinkDecision =
+  | { ok: true; action: "linked_primary" | "linked_additional" | "unchanged" }
   | { ok: false; message: string };
 
-export function companyContactLinkDecision({
-  allowMove,
-  currentCompanyId,
-  expectedCurrentCompanyId,
+export function companyAffiliationLinkDecision({
+  currentPrimaryCompanyId,
+  existingCompanyIds,
   targetCompanyId,
 }: {
-  allowMove: boolean;
-  currentCompanyId: string | null;
-  expectedCurrentCompanyId: string | null;
+  currentPrimaryCompanyId: string | null;
+  existingCompanyIds: Iterable<string>;
   targetCompanyId: string;
-}): CompanyContactLinkDecision {
-  if (currentCompanyId === targetCompanyId) {
+}): CompanyAffiliationLinkDecision {
+  if (new Set(existingCompanyIds).has(targetCompanyId)) {
     return { ok: true, action: "unchanged" };
   }
-  if (currentCompanyId !== expectedCurrentCompanyId) {
+
+  return {
+    ok: true,
+    action: currentPrimaryCompanyId ? "linked_additional" : "linked_primary",
+  };
+}
+
+export type CompanyAffiliationUnlinkDecision =
+  | { ok: true; action: "unlinked_primary" | "unlinked_additional" }
+  | { ok: false; message: string };
+
+export function companyAffiliationUnlinkDecision({
+  affiliationIsPrimary,
+  additionalAffiliationCount,
+}: {
+  affiliationIsPrimary: boolean;
+  additionalAffiliationCount: number;
+}): CompanyAffiliationUnlinkDecision {
+  if (affiliationIsPrimary && additionalAffiliationCount > 0) {
     return {
       ok: false,
       message:
-        "The person's company changed. Refresh and review before moving them.",
+        "Make another Company primary before unlinking this primary relationship.",
     };
   }
-  if (currentCompanyId && !allowMove) {
-    return {
-      ok: false,
-      message:
-        "This person already belongs to another company. Use Move to confirm the reassignment.",
-    };
-  }
-  return { ok: true, action: currentCompanyId ? "moved" : "linked" };
+
+  return {
+    ok: true,
+    action: affiliationIsPrimary ? "unlinked_primary" : "unlinked_additional",
+  };
 }

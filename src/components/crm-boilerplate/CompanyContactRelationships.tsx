@@ -6,6 +6,7 @@ import ActionStateMessage from "@/components/crm-boilerplate/ActionStateMessage"
 import { useToast } from "@/components/crm-boilerplate/ToastProvider";
 import {
   linkContactToCompanyAction,
+  makeCompanyContactPrimaryAction,
   unlinkContactFromCompanyAction,
   updateCompanyContactResponsibilitiesAction,
   type CompanyActionState,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/companies/contact-responsibilities";
 
 type ContactSearchResult = {
+  companyIds: string[];
   companyId: string | null;
   companyName: string | null;
   displayName: string;
@@ -59,7 +61,11 @@ export function CompanyContactLinker({ companyId }: { companyId: string }) {
       const response = await fetch(`/api/contacts?query=${encodeURIComponent(query)}&limit=20`);
       if (!response.ok) throw new Error("search-failed");
       const data = (await response.json()) as { contacts?: ContactSearchResult[] };
-      setResults((data.contacts ?? []).filter((contact) => contact.companyId !== companyId));
+      setResults(
+        (data.contacts ?? []).filter(
+          (contact) => !contact.companyIds.includes(companyId),
+        ),
+      );
     } catch {
       setSearchError("People could not be searched. Try again.");
       setResults([]);
@@ -86,20 +92,24 @@ export function CompanyContactLinker({ companyId }: { companyId: string }) {
       {results.length ? (
         <div className="mt-3 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
           {results.map((contact) => {
-            const moving = Boolean(contact.companyId);
+            const hasPrimaryCompany = Boolean(contact.companyId);
             return (
               <div key={contact.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-800 dark:text-white/90">{contact.displayName || "Unnamed person"}</p>
                   <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{[contact.role, contact.email, contact.phone].filter(Boolean).join(" · ") || "No contact details"}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{moving ? `Currently linked to ${contact.companyName ?? "another company"}` : "Not linked to a company"}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {hasPrimaryCompany
+                      ? `Primary Company: ${contact.companyName ?? "another company"}`
+                      : "No primary Company"}
+                  </p>
                 </div>
                 <form action={action}>
                   <input type="hidden" name="companyId" value={companyId} />
                   <input type="hidden" name="contactId" value={contact.id} />
-                  <input type="hidden" name="expectedCurrentCompanyId" value={contact.companyId ?? ""} />
-                  <input type="hidden" name="allowMove" value={moving ? "true" : "false"} />
-                  <button type="submit" disabled={isPending} className={moving ? secondaryButton : "inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"}>{moving ? "Move to this company" : "Link person"}</button>
+                  <button type="submit" disabled={isPending} className={hasPrimaryCompany ? secondaryButton : "inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"}>
+                    {hasPrimaryCompany ? "Link as additional" : "Link person"}
+                  </button>
                 </form>
               </div>
             );
@@ -108,6 +118,41 @@ export function CompanyContactLinker({ companyId }: { companyId: string }) {
       ) : null}
       <div className="mt-2"><ActionStateMessage state={state.message ? state : undefined} /></div>
     </div>
+  );
+}
+
+export function CompanyContactPrimaryButton({
+  companyId,
+  contactId,
+}: {
+  companyId: string;
+  contactId: string;
+}) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [state, action, isPending] = useActionState(
+    makeCompanyContactPrimaryAction,
+    initialState,
+  );
+
+  useEffect(() => {
+    if (!state.message) return;
+    showToast(state.message, state.ok ? "success" : "error");
+    if (state.ok) router.refresh();
+  }, [router, showToast, state]);
+
+  return (
+    <form action={action}>
+      <input type="hidden" name="companyId" value={companyId} />
+      <input type="hidden" name="contactId" value={contactId} />
+      <button
+        type="submit"
+        disabled={isPending}
+        className="text-xs font-semibold text-brand-600 hover:text-brand-700 disabled:opacity-60 dark:text-brand-400"
+      >
+        {isPending ? "Updating..." : "Make primary"}
+      </button>
+    </form>
   );
 }
 

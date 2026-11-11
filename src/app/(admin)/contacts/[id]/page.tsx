@@ -448,6 +448,15 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             postcode: true,
           },
         },
+        companyAffiliations: {
+          orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+          select: {
+            company: { select: { id: true, name: true } },
+            companyId: true,
+            isPrimary: true,
+            responsibilities: true,
+          },
+        },
         tagAssignments: {
           orderBy: { tag: { name: "asc" } },
           select: {
@@ -794,6 +803,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     url: mediaAssetUrl(document.id),
   }));
   const companyName = contact.company?.name ?? contact.companyName ?? null;
+  const companyAffiliations = contact.companyAffiliations;
   const saleOwnerOptions = activeUsers.map((activeUser) => ({
     label: activeUser.name,
     value: activeUser.id,
@@ -1167,11 +1177,41 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
           </dd>
         </div>
         <div>
-          <dt className="text-gray-500 dark:text-gray-400">Company / role</dt>
+          <dt className="text-gray-500 dark:text-gray-400">Companies / role</dt>
           <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
-            {companyName || contact.role ? (
+            {companyAffiliations.length || companyName || contact.role ? (
               <span className="block min-w-0">
-                {companyName ? (
+                {companyAffiliations.length ? (
+                  <span className="block space-y-2">
+                    {companyAffiliations.map((affiliation) => (
+                      <span key={affiliation.companyId} className="block">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/clients/${affiliation.companyId}`}
+                            className="text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                          >
+                            {affiliation.company.name}
+                          </Link>
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
+                            {affiliation.isPrimary ? "Primary" : "Additional"}
+                          </span>
+                        </span>
+                        {affiliation.responsibilities.length ? (
+                          <span className="mt-1 flex flex-wrap gap-1.5">
+                            {affiliation.responsibilities.map((responsibility) => (
+                              <span
+                                key={responsibility}
+                                className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+                              >
+                                {companyContactResponsibilityLabel(responsibility)}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </span>
+                    ))}
+                  </span>
+                ) : companyName ? (
                   settings.companiesEnabled && contact.companyId ? (
                     <Link
                       href={`/clients/${contact.companyId}`}
@@ -1188,7 +1228,8 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
                     {contact.role}
                   </span>
                 ) : null}
-                {contact.companyContactResponsibilities.length ? (
+                {!companyAffiliations.length &&
+                contact.companyContactResponsibilities.length ? (
                   <span className="mt-2 flex flex-wrap gap-1.5">
                     {contact.companyContactResponsibilities.map(
                       (responsibility) => (
@@ -1346,12 +1387,19 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             {companyName ? (
               <ContactHeaderDetailRow Icon={Building2}>
                 {settings.companiesEnabled && contact.companyId ? (
-                  <Link
-                    href={`/clients/${contact.companyId}`}
-                    className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                  >
-                    {companyName}
-                  </Link>
+                  <span>
+                    <Link
+                      href={`/clients/${contact.companyId}`}
+                      className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    >
+                      {companyName}
+                    </Link>
+                    {companyAffiliations.length > 1 ? (
+                      <span className="ml-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        +{companyAffiliations.length - 1} additional
+                      </span>
+                    ) : null}
+                  </span>
                 ) : (
                   <span className="font-medium text-gray-700 dark:text-gray-300">
                     {companyName}
