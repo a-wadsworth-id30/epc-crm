@@ -83,6 +83,14 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   access, filters, search and exports, and changes are privacy-safe audited.
   The legacy text value remains for imports and unmatched historical data;
   only unique active-user name matches are backfilled automatically.
+- Admins can merge a duplicate Company into the Company they are viewing. The
+  retained record keeps its populated profile values and fills only blank
+  profile fields, while People affiliations and responsibilities, primary
+  Company links, sales, tasks, notes, documents, customer document workflows,
+  signature requests, provider links, custom values and child Companies move
+  transactionally. Conflicting custom values remain with the retained Company,
+  hierarchy links are repaired, the removed ID is recorded in a privacy-safe
+  audit event and the duplicate is deleted only after all moves succeed.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that

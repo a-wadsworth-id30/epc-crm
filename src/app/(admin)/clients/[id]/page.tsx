@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
   DeferredCompanyDeleteModal,
   DeferredCompanyEditModal,
+  DeferredCompanyMergeModal,
 } from "@/components/crm-boilerplate/CompanyModalLoaders";
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
@@ -145,6 +146,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     addressLookupEnabled,
     hierarchyCompanyOptions,
     activeOwnerUsers,
+    mergeCompanyCandidates,
   ] = await Promise.all([
     prisma.company.findFirst({
       where: companyIdAccessWhere(id, user),
@@ -348,6 +350,28 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       orderBy: [{ name: "asc" }, { id: "asc" }],
       select: { id: true, name: true },
     }),
+    user.role === "ADMIN"
+      ? prisma.company.findMany({
+          where: { id: { not: id } },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+          select: {
+            companyType: { select: { name: true } },
+            domain: true,
+            id: true,
+            name: true,
+            status: true,
+            _count: {
+              select: {
+                contactAffiliations: true,
+                notes: true,
+                opportunities: true,
+                tasks: true,
+              },
+            },
+          },
+          take: 1_000,
+        })
+      : Promise.resolve([]),
   ]);
 
   if (!company) {
@@ -806,11 +830,29 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
               }
             />
             {user.role === "ADMIN" ? (
-              <DeferredCompanyDeleteModal
-                companyId={company.id}
-                companyName={company.name}
-                relatedRecords={scopedCounts}
-              />
+              <>
+                <DeferredCompanyMergeModal
+                  candidates={mergeCompanyCandidates.map((candidate) => ({
+                    companyType: candidate.companyType?.name ?? "Other",
+                    domain: candidate.domain,
+                    id: candidate.id,
+                    name: candidate.name,
+                    relatedCount:
+                      candidate._count.contactAffiliations +
+                      candidate._count.notes +
+                      candidate._count.opportunities +
+                      candidate._count.tasks,
+                    status: candidate.status,
+                  }))}
+                  companyId={company.id}
+                  companyName={company.name}
+                />
+                <DeferredCompanyDeleteModal
+                  companyId={company.id}
+                  companyName={company.name}
+                  relatedRecords={scopedCounts}
+                />
+              </>
             ) : null}
             <Link
               href="/clients"

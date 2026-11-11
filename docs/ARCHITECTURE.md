@@ -118,6 +118,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   reuse the typed Company-field validator, and create records only after the
   final action reloads active definitions and repeats duplicate checks.
   Existing Companies are never updated from CSV.
+- Company duplicate merging is an admin-only transactional operation that keeps
+  the Company being viewed. It consolidates affiliation responsibilities before
+  moving primary Contact compatibility links, preserves retained Company values
+  on field conflicts, reparents children without creating a self-link and moves
+  direct and polymorphic CRM records before deleting the duplicate. Provider
+  links are repointed and the audit log stores record IDs and aggregate counts,
+  not copied customer data.
 - `src/lib/companies/integration-matching.ts` owns normalised name fallback for
   cross-module Company matching. A provider external record link or explicit
   Company ID remains authoritative. Name-only matching returns a Company only

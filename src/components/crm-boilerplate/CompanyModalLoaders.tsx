@@ -9,6 +9,7 @@ import type {
   CompanyCreateModalProps,
   CompanyDeleteModalProps,
   CompanyEditModalProps,
+  CompanyMergeModalProps,
 } from "@/components/crm-boilerplate/CompanyModals";
 
 const LoadedCompanyCreateModal = dynamic<CompanyCreateModalProps>(
@@ -65,17 +66,33 @@ const LoadedCompanyDeleteModal = dynamic<CompanyDeleteModalProps>(
   },
 );
 
+const LoadedCompanyMergeModal = dynamic<CompanyMergeModalProps>(
+  () =>
+    import("@/components/crm-boilerplate/CompanyModals").then(
+      (module) => module.CompanyMergeModal,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <CompanyTextTrigger
+        disabled
+        label="Loading..."
+        onOpen={() => undefined}
+      />
+    ),
+  },
+);
+
 export function DeferredCompanyCreateModal(props: CompanyCreateModalProps) {
   return (
     <DeferredActionLoader
       renderTrigger={(open) => (
-        <CompanyPrimaryTrigger
-          label="Add company"
-          onOpen={open}
-        />
+        <CompanyPrimaryTrigger label="Add company" onOpen={open} />
       )}
     >
-      {(autoOpen) => <LoadedCompanyCreateModal {...props} autoOpen={autoOpen} />}
+      {(autoOpen) => (
+        <LoadedCompanyCreateModal {...props} autoOpen={autoOpen} />
+      )}
     </DeferredActionLoader>
   );
 }
@@ -108,8 +125,43 @@ export function DeferredCompanyDeleteModal(props: CompanyDeleteModalProps) {
         />
       )}
     >
-      {(autoOpen) => <LoadedCompanyDeleteModal {...props} autoOpen={autoOpen} />}
+      {(autoOpen) => (
+        <LoadedCompanyDeleteModal {...props} autoOpen={autoOpen} />
+      )}
     </DeferredActionLoader>
+  );
+}
+
+export function DeferredCompanyMergeModal(props: CompanyMergeModalProps) {
+  return (
+    <DeferredActionLoader
+      renderTrigger={(open) => (
+        <CompanyTextTrigger label="Merge" onOpen={open} />
+      )}
+    >
+      {(autoOpen) => <LoadedCompanyMergeModal {...props} autoOpen={autoOpen} />}
+    </DeferredActionLoader>
+  );
+}
+
+function CompanyTextTrigger({
+  disabled = false,
+  label,
+  onOpen,
+}: {
+  disabled?: boolean;
+  label: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onOpen}
+      className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+    >
+      {label}
+    </button>
   );
 }
 
