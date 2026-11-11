@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AttributionSourceIconSlot } from "@/components/crm-boilerplate/AttributionSourceIcon";
 import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSalesCategoryBadge";
 import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
+import InstallerSuitabilityPanel from "@/components/crm-boilerplate/InstallerSuitabilityPanel";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import SaleNextActionEditor from "@/components/crm-boilerplate/SaleNextActionEditor";
@@ -48,6 +49,12 @@ import {
   normalizeContactEmailMethods,
   normalizeContactPhoneMethods,
 } from "@/lib/contact-methods";
+import {
+  normalizeContactCustomFieldOptions,
+  serializeContactCustomFieldValue,
+} from "@/lib/contacts/custom-fields";
+import { parseContactDocumentUploadType } from "@/lib/contacts/document-requirements";
+import { resolvedContactFieldRoleTemplate } from "@/lib/contacts/field-access";
 import { salesOpportunityIdAccessWhere } from "@/lib/crm-resource-access";
 import { listRecordCustomerDocumentShares } from "@/lib/customer-document-share-list";
 import { listRecordCustomerDocumentPortals } from "@/lib/customer-document-portal-list";
@@ -79,6 +86,7 @@ import {
 } from "@/lib/sales/conversation-history";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
 import { epcMilestones } from "@/lib/sales/epc-milestones";
+import { installerSuitability } from "@/lib/sales/installer-suitability";
 import { saleRelationshipFindings } from "@/lib/sales/relationship-integrity";
 import { getCrmSettings } from "@/lib/settings";
 import { listRecordSignatureRequests } from "@/lib/signature-request-list";
@@ -1716,6 +1724,35 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                 select: { companyId: true },
               },
               companyName: true,
+              contactTypeId: true,
+              contactType: {
+                select: { id: true, name: true, systemKey: true },
+              },
+              customFieldValues: {
+                where:
+                  user.role === "ADMIN"
+                    ? undefined
+                    : {
+                        field: {
+                          OR: [
+                            { viewRoleTemplates: { isEmpty: true } },
+                            {
+                              viewRoleTemplates: {
+                                has: resolvedContactFieldRoleTemplate(user),
+                              },
+                            },
+                          ],
+                        },
+                      },
+                select: {
+                  booleanValue: true,
+                  dateValue: true,
+                  fieldId: true,
+                  jsonValue: true,
+                  numberValue: true,
+                  textValue: true,
+                },
+              },
             },
           },
         },
@@ -1824,6 +1861,19 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       ? { id: sale.company.id, name: sale.company.name }
       : null,
   });
+  const installerParticipants = sale.participants.filter(
+    (participant) => participant.role === "INSTALLER",
+  );
+  const installerContactIds = installerParticipants.map(
+    (participant) => participant.contact.id,
+  );
+  const installerContactTypeIds = Array.from(
+    new Set(
+      installerParticipants
+        .map((participant) => participant.contact.contactTypeId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
 
   const attributionWhere = sale.contactId
     ? { OR: [{ opportunityId: id }, { contactId: sale.contactId }] }
@@ -1884,6 +1934,9 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     r2Integration,
     milestoneFiles,
     milestoneTasks,
+    installerFieldDefinitions,
+    installerDocumentRequirements,
+    installerDocuments,
   ] = await Promise.all([
     prisma.attributionRecord.findMany({
       where: attributionWhere,
@@ -2094,6 +2147,80 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
             description: true,
             status: true,
             title: true,
+          },
+        })
+      : Promise.resolve([]),
+    installerContactTypeIds.length
+      ? prisma.contactTypeField.findMany({
+          where: {
+            contactTypeId: { in: installerContactTypeIds },
+            isActive: true,
+            ...(user.role === "ADMIN"
+              ? {}
+              : {
+                  OR: [
+                    { viewRoleTemplates: { isEmpty: true } },
+                    {
+                      viewRoleTemplates: {
+                        has: resolvedContactFieldRoleTemplate(user),
+                      },
+                    },
+                  ],
+                }),
+          },
+          orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+          select: {
+            contactTypeId: true,
+            displayOrder: true,
+            editRoleTemplates: true,
+            externalEditable: true,
+            fieldType: true,
+            helpText: true,
+            id: true,
+            isActive: true,
+            isSearchable: true,
+            key: true,
+            label: true,
+            options: true,
+            placeholder: true,
+            requirementMode: true,
+            showInTable: true,
+            viewRoleTemplates: true,
+          },
+        })
+      : Promise.resolve([]),
+    installerContactTypeIds.length
+      ? prisma.contactTypeDocumentRequirement.findMany({
+          where: {
+            contactTypeId: { in: installerContactTypeIds },
+            isActive: true,
+          },
+          orderBy: [{ displayOrder: "asc" }, { label: "asc" }],
+          select: {
+            contactTypeId: true,
+            description: true,
+            displayOrder: true,
+            id: true,
+            isActive: true,
+            isRequired: true,
+            label: true,
+            uploadType: true,
+          },
+        })
+      : Promise.resolve([]),
+    installerContactIds.length
+      ? prisma.fileAsset.findMany({
+          where: {
+            entityId: { in: installerContactIds },
+            entityType: "Contact",
+          },
+          orderBy: { createdAt: "desc" },
+          take: 300,
+          select: {
+            documentExpiresAt: true,
+            documentUploadType: true,
+            entityId: true,
+            id: true,
           },
         })
       : Promise.resolve([]),
@@ -2600,6 +2727,45 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
     leadScope: sale.leadScope,
     tasks: milestoneTasks,
   });
+  const visibleInstallerDefinitions = installerFieldDefinitions.map(
+    (field) => ({
+      ...field,
+      options: normalizeContactCustomFieldOptions(field.options),
+    }),
+  );
+  const validInstallerRequirements = installerDocumentRequirements.flatMap(
+    (requirement) => {
+      const uploadType = parseContactDocumentUploadType(requirement.uploadType);
+      return uploadType ? [{ ...requirement, uploadType }] : [];
+    },
+  );
+  const installerSuitabilityRows = installerParticipants.map((participant) => {
+    const contact = participant.contact;
+    const values = Object.fromEntries(
+      contact.customFieldValues.map((value) => [
+        value.fieldId,
+        serializeContactCustomFieldValue(value),
+      ]),
+    );
+    return {
+      id: contact.id,
+      name: `${contact.firstName} ${contact.lastName}`.trim(),
+      suitability: installerSuitability({
+        contactTypeId: contact.contactTypeId,
+        contactTypeSystemKey: contact.contactType?.systemKey ?? null,
+        definitions: visibleInstallerDefinitions,
+        documents: installerDocuments
+          .filter((document) => document.entityId === contact.id)
+          .map((document) => ({
+            documentExpiresAt: document.documentExpiresAt,
+            documentUploadType: document.documentUploadType,
+            id: document.id,
+          })),
+        requirements: validInstallerRequirements,
+        values,
+      }),
+    };
+  });
 
   return (
     <>
@@ -3076,6 +3242,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                       role: participant.role,
                     }))}
                   saleId={sale.id}
+                />
+
+                <InstallerSuitabilityPanel
+                  installers={installerSuitabilityRows}
                 />
 
                 <SaleRelationshipIntegrityPanel
