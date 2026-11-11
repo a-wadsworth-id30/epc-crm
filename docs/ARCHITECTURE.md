@@ -130,6 +130,13 @@ Core Prisma models are in `prisma/schema.prisma`.
   primary Person and most recently active accessible Sale into links and summary
   metadata. The strip reads `SalesOpportunity.nextStep`; it does not introduce a
   second next-action store or broaden record access.
+- Company Activity is a read-only composition of existing records rather than a
+  new activity model. The Company route selects permission-scoped
+  `SalesCommunication`, `Note` and `Task` rows connected directly or through
+  affiliated People and accessible Sales, combines them chronologically and
+  links back to the source. `CallLog` is intentionally excluded because its
+  customer-visible call events are already represented by
+  `SalesCommunication`; including both would duplicate timeline entries.
 - `SalesOpportunity.nextStep` is the canonical committed next action across the
   Sale, connected Person and Company. `SaleNextActionEditor` writes that field
   through a permission-scoped, audited server action and invalidates cached AI

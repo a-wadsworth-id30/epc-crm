@@ -7,13 +7,19 @@ import {
   FolderOpen,
   Globe2,
   GripVertical,
+  History,
   UserRound,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-type CompanyWorkspaceTabKey = "overview" | "contacts" | "leads" | "documents";
+type CompanyWorkspaceTabKey =
+  | "overview"
+  | "activity"
+  | "contacts"
+  | "leads"
+  | "documents";
 
 type CompanyWorkspaceTab = {
   key: CompanyWorkspaceTabKey;
@@ -23,6 +29,7 @@ type CompanyWorkspaceTab = {
 };
 
 type CompanyDetailWorkspaceProps = {
+  activityPanel: ReactNode;
   contactsCount: number;
   detailPanel: ReactNode;
   documentsCount: number;
@@ -47,6 +54,12 @@ const workspaceTabs: CompanyWorkspaceTab[] = [
     label: "Overview",
     description: "Company profile, status, owner and address",
     Icon: Building2,
+  },
+  {
+    key: "activity",
+    label: "Activity",
+    description: "Communications, notes and tasks across connected records",
+    Icon: History,
   },
   {
     key: "contacts",
@@ -229,6 +242,7 @@ function CompanyWorkspaceSummary({
 }
 
 export default function CompanyDetailWorkspace({
+  activityPanel,
   contactsCount,
   contactsPanel,
   detailPanel,
@@ -328,6 +342,7 @@ export default function CompanyDetailWorkspace({
 
               <div className="min-w-0 bg-white dark:bg-white/[0.03]">
                 {activeTab === "overview" ? detailPanel : null}
+                {activeTab === "activity" ? activityPanel : null}
                 {activeTab === "contacts" ? contactsPanel : null}
                 {activeTab === "leads" ? leadsPanel : null}
                 {activeTab === "documents" ? documentsPanel : null}
