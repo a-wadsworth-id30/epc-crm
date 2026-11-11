@@ -8,6 +8,7 @@ import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
 import SaleNextActionEditor from "@/components/crm-boilerplate/SaleNextActionEditor";
 import SaleParticipantsPanel from "@/components/crm-boilerplate/SaleParticipantsPanel";
+import SaleRelationshipIntegrityPanel from "@/components/crm-boilerplate/SaleRelationshipIntegrityPanel";
 import {
   PipedriveLeadContextPanel,
   PipedriveLeadEmailsAutoSync,
@@ -76,6 +77,7 @@ import {
   serializeConversationCommunication,
 } from "@/lib/sales/conversation-history";
 import { evaluateStageGate } from "@/lib/sales/stage-gates";
+import { saleRelationshipFindings } from "@/lib/sales/relationship-integrity";
 import { getCrmSettings } from "@/lib/settings";
 import { listRecordSignatureRequests } from "@/lib/signature-request-list";
 import { mediaAssetUrl } from "@/lib/storage/media";
@@ -1674,6 +1676,15 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           id: true,
           firstName: true,
           lastName: true,
+          companyId: true,
+          company: { select: { id: true, name: true } },
+          companyAffiliations: {
+            select: {
+              companyId: true,
+              isPrimary: true,
+              company: { select: { id: true, name: true } },
+            },
+          },
           email: true,
           phone: true,
           addressLine1: true,
@@ -1696,7 +1707,11 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
               firstName: true,
               lastName: true,
               role: true,
-              company: { select: { name: true } },
+              companyId: true,
+              company: { select: { id: true, name: true } },
+              companyAffiliations: {
+                select: { companyId: true },
+              },
               companyName: true,
             },
           },
@@ -1778,6 +1793,34 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
   if (!sale) {
     notFound();
   }
+
+  const relationshipFindings = saleRelationshipFindings({
+    participants: sale.participants.map((participant) => ({
+      companyIds: participant.contact.companyAffiliations.map(
+        (affiliation) => affiliation.companyId,
+      ),
+      personId: participant.contact.id,
+      role: participant.role,
+    })),
+    primaryPerson: sale.contact
+      ? {
+          companyIds: sale.contact.companyAffiliations.map(
+            (affiliation) => affiliation.companyId,
+          ),
+          id: sale.contact.id,
+          name: contactName(sale.contact) || "Primary Person",
+          primaryCompany: sale.contact.company
+            ? {
+                id: sale.contact.company.id,
+                name: sale.contact.company.name,
+              }
+            : null,
+        }
+      : null,
+    saleCompany: sale.company
+      ? { id: sale.company.id, name: sale.company.name }
+      : null,
+  });
 
   const attributionWhere = sale.contactId
     ? { OR: [{ opportunityId: id }, { contactId: sale.contactId }] }
@@ -2275,7 +2318,10 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
       stringValue(metadata.pipedriveFileName) ??
       `Pipedrive file ${link.externalId}`;
     const activityAt =
-      pipedriveAddedAt ?? pipedriveUpdatedAt ?? link.lastSeenAt ?? link.updatedAt;
+      pipedriveAddedAt ??
+      pipedriveUpdatedAt ??
+      link.lastSeenAt ??
+      link.updatedAt;
     const updatedAt =
       formatDateTime(
         pipedriveUpdatedAt ?? link.lastSeenAt ?? link.updatedAt,
@@ -2521,7 +2567,7 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           <div className="min-w-0 lg:max-w-[460px] xl:max-w-[560px]">
             <div className="flex min-w-0 items-start gap-2">
               <h1
-                className="min-w-0 break-words text-xl leading-7 font-semibold text-gray-900 dark:text-white"
+                className="min-w-0 text-xl leading-7 font-semibold break-words text-gray-900 dark:text-white"
                 title={sale.title}
               >
                 {sale.title}
@@ -2968,11 +3014,15 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                       contactRole: participant.contact.role,
                       email: participant.contact.email,
                       id: participant.id,
-                      name:
-                        `${participant.contact.firstName} ${participant.contact.lastName}`.trim(),
+                      name: `${participant.contact.firstName} ${participant.contact.lastName}`.trim(),
                       personId: participant.contact.id,
                       role: participant.role,
                     }))}
+                  saleId={sale.id}
+                />
+
+                <SaleRelationshipIntegrityPanel
+                  findings={relationshipFindings}
                   saleId={sale.id}
                 />
 
