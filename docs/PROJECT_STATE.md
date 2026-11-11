@@ -119,6 +119,11 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   People and linked Sales. It links each row back to its source record and uses
   `SalesCommunication` as the canonical call/email source so the same provider
   event is not repeated from `CallLog`.
+- Company Sales roll up direct Company links plus Sales connected through an
+  affiliated primary Person or participant. The Leads & Deals tab identifies
+  whether each Sale is direct or linked through People, while its count,
+  connected context and communication activity use the same permission-scoped
+  relationship rule.
 - Settings > Company Types also supports ordered required/optional document
   checklists backed by controlled document types. Company Documents shows live
   checklist compliance, defaults uploads towards missing required evidence and

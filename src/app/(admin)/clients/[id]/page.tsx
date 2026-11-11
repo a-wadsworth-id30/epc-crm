@@ -33,6 +33,7 @@ import {
 } from "@/lib/companies/field-access";
 import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
 import { companyProfileCompleteness } from "@/lib/companies/profile-completeness";
+import { companyRelatedSalesWhere } from "@/lib/companies/related-sales";
 import { companyOwnerOptionsForUser } from "@/lib/companies/owner-assignment";
 import {
   companyDocumentRequirementStatuses,
@@ -48,7 +49,6 @@ import {
   companyWhereWithAccess,
   contactAccessWhere,
   contactWhereWithAccess,
-  salesOpportunityAccessWhere,
   salesOpportunityWhereWithAccess,
 } from "@/lib/crm-resource-access";
 import { listRecordCustomerDocumentShares } from "@/lib/customer-document-share-list";
@@ -135,7 +135,6 @@ export async function generateMetadata({
 export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   const { id } = await params;
   const user = await requireUser();
-  const opportunityAccessWhere = salesOpportunityAccessWhere(user);
   const [
     company,
     companyTypes,
@@ -215,24 +214,6 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         domain: true,
         id: true,
         name: true,
-        opportunities: {
-          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-          select: {
-            closedAt: true,
-            currency: true,
-            id: true,
-            nextStep: true,
-            source: true,
-            stage: true,
-            title: true,
-            updatedAt: true,
-            valueCents: true,
-            owner: { select: { name: true } },
-            salesPipelineStage: { select: { name: true } },
-          },
-          take: 50,
-          where: user.role === "ADMIN" ? undefined : opportunityAccessWhere,
-        },
         owner: true,
         ownerUserId: true,
         ownerUser: { select: { id: true, name: true, status: true } },
@@ -244,7 +225,6 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           select: {
             contactAffiliations: true,
             notes: true,
-            opportunities: true,
             tasks: true,
           },
         },
@@ -385,25 +365,9 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     notFound();
   }
 
-  const companyOpportunityRelationshipWhere = {
-    OR: [
-      { companyId: company.id },
-      {
-        contact: {
-          companyAffiliations: { some: { companyId: company.id } },
-        },
-      },
-      {
-        participants: {
-          some: {
-            contact: {
-              companyAffiliations: { some: { companyId: company.id } },
-            },
-          },
-        },
-      },
-    ],
-  } satisfies Prisma.SalesOpportunityWhereInput;
+  const companyOpportunityRelationshipWhere = companyRelatedSalesWhere(
+    company.id,
+  );
   const companyNoteRelationshipWhere = {
     OR: [
       { companyId: company.id },
@@ -446,6 +410,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     activityCommunications,
     activityNotes,
     activityTasks,
+    relatedCompanySales,
+    relatedCompanySalesCount,
   ] = await Promise.all([
     company.parentCompanyId
       ? prisma.company.findFirst({
@@ -509,6 +475,60 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         title: true,
         updatedAt: true,
       },
+    }),
+    prisma.salesOpportunity.findMany({
+      where: salesOpportunityWhereWithAccess(
+        user,
+        companyOpportunityRelationshipWhere,
+      ),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 100,
+      select: {
+        closedAt: true,
+        companyId: true,
+        currency: true,
+        id: true,
+        nextStep: true,
+        source: true,
+        stage: true,
+        title: true,
+        updatedAt: true,
+        valueCents: true,
+        contact: {
+          select: {
+            firstName: true,
+            id: true,
+            lastName: true,
+            companyAffiliations: {
+              where: { companyId: company.id },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+        owner: { select: { name: true } },
+        participants: {
+          where: {
+            contact: {
+              companyAffiliations: { some: { companyId: company.id } },
+            },
+          },
+          select: {
+            role: true,
+            contact: {
+              select: { firstName: true, id: true, lastName: true },
+            },
+          },
+          take: 5,
+        },
+        salesPipelineStage: { select: { name: true } },
+      },
+    }),
+    prisma.salesOpportunity.count({
+      where: salesOpportunityWhereWithAccess(
+        user,
+        companyOpportunityRelationshipWhere,
+      ),
     }),
   ]);
 
@@ -583,13 +603,13 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     company.contactAffiliations[0]?.contact ??
     null;
   const connectedSale =
-    company.opportunities.find(
+    relatedCompanySales.find(
       (opportunity) =>
         !opportunity.closedAt &&
         opportunity.stage !== "WON" &&
         opportunity.stage !== "LOST",
     ) ??
-    company.opportunities[0] ??
+    relatedCompanySales[0] ??
     null;
   const visibleCompanyCustomFieldIds = new Set(
     normalizedCompanyCustomFields.map((field) => field.id),
@@ -630,7 +650,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       ? {
           contacts: company._count.contactAffiliations,
           notes: company._count.notes,
-          opportunities: company._count.opportunities,
+          opportunities: relatedCompanySalesCount,
           tasks: company._count.tasks,
         }
       : {
@@ -643,11 +663,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           notes: await prisma.note.count({
             where: { companyId: company.id, userId: user.id },
           }),
-          opportunities: await prisma.salesOpportunity.count({
-            where: salesOpportunityWhereWithAccess(user, {
-              companyId: company.id,
-            }),
-          }),
+          opportunities: relatedCompanySalesCount,
           tasks: await prisma.task.count({
             where: {
               companyId: company.id,
@@ -924,41 +940,69 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           Leads
         </h2>
         <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
-          {company.opportunities.length}
+          {relatedCompanySalesCount}
         </span>
       </div>
       <div className="mt-4 space-y-3">
-        {company.opportunities.length ? (
-          company.opportunities.map((sale) => (
-            <Link
-              key={sale.id}
-              href={`/sales/${sale.id}`}
-              className="block rounded-xl border border-gray-200 p-3 text-sm transition hover:border-brand-200 hover:bg-brand-50/50 dark:border-gray-800 dark:hover:border-brand-900/40 dark:hover:bg-brand-900/10"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate font-semibold text-gray-800 dark:text-white/90">
-                    {sale.title}
+        {relatedCompanySales.length ? (
+          relatedCompanySales.map((sale) => {
+            const linkedPeople = [
+              ...(sale.contact?.companyAffiliations.length
+                ? [sale.contact]
+                : []),
+              ...sale.participants.map((participant) => participant.contact),
+            ];
+            const uniqueLinkedPeople = [
+              ...new Map(
+                linkedPeople.map((person) => [person.id, person]),
+              ).values(),
+            ];
+            const relationshipLabel =
+              sale.companyId === company.id
+                ? "Direct company"
+                : uniqueLinkedPeople.length
+                  ? `Via ${contactName(uniqueLinkedPeople[0])}${
+                      uniqueLinkedPeople.length > 1
+                        ? ` +${uniqueLinkedPeople.length - 1}`
+                        : ""
+                    }`
+                  : "Related company";
+
+            return (
+              <Link
+                key={sale.id}
+                href={`/sales/${sale.id}`}
+                className="block rounded-xl border border-gray-200 p-3 text-sm transition hover:border-brand-200 hover:bg-brand-50/50 dark:border-gray-800 dark:hover:border-brand-900/40 dark:hover:bg-brand-900/10"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-gray-800 dark:text-white/90">
+                      {sale.title}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {[
+                        relationshipLabel,
+                        sale.source,
+                        sale.owner?.name ?? "Unassigned",
+                      ]
+                        .filter(Boolean)
+                        .join(" | ")}
+                      {" | Updated "}
+                      {formatDate(sale.updatedAt)}
+                    </p>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {[sale.source, sale.owner?.name ?? "Unassigned"]
-                      .filter(Boolean)
-                      .join(" | ")}
-                    {" | Updated "}
-                    {formatDate(sale.updatedAt)}
-                  </p>
+                  <span className="shrink-0 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                    {formatMoney(sale.valueCents, sale.currency)}
+                  </span>
                 </div>
-                <span className="shrink-0 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                  {formatMoney(sale.valueCents, sale.currency)}
-                </span>
-              </div>
-              <div className="mt-3">
-                <StatusBadge>
-                  {sale.salesPipelineStage?.name ?? sale.stage}
-                </StatusBadge>
-              </div>
-            </Link>
-          ))
+                <div className="mt-3">
+                  <StatusBadge>
+                    {sale.salesPipelineStage?.name ?? sale.stage}
+                  </StatusBadge>
+                </div>
+              </Link>
+            );
+          })
         ) : (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             No leads linked to this company.
