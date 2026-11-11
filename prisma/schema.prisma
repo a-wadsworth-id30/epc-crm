@@ -574,6 +574,9 @@ model PasswordResetToken {
 model Company {
   id                String                    @id @default(cuid())
   name              String
+  parentCompanyId   String?
+  parentCompany     Company?                  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
+  childCompanies    Company[]                 @relation("CompanyHierarchy")
   companyTypeId     String?
   companyType       CompanyType?              @relation(fields: [companyTypeId], references: [id], onDelete: SetNull)
   domain            String?
@@ -598,6 +601,7 @@ model Company {
 
   @@index([updatedAt])
   @@index([name])
+  @@index([parentCompanyId, name])
   @@index([companyTypeId, updatedAt])
   @@index([createdByUserId, updatedAt])
 }

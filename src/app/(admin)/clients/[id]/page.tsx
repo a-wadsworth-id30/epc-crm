@@ -8,6 +8,7 @@ import {
 import type { CompanyFormValues } from "@/components/crm-boilerplate/CompanyForm";
 import CompanyDetailWorkspace from "@/components/crm-boilerplate/CompanyDetailWorkspace";
 import CompanyDocumentRequirements from "@/components/crm-boilerplate/CompanyDocumentRequirements";
+import CompanyHierarchyEditor from "@/components/crm-boilerplate/CompanyHierarchyEditor";
 import CompanyProfileCompleteness from "@/components/crm-boilerplate/CompanyProfileCompleteness";
 import {
   CompanyContactLinker,
@@ -37,6 +38,7 @@ import {
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import {
   companyIdAccessWhere,
+  companyWhereWithAccess,
   contactAccessWhere,
   contactWhereWithAccess,
   salesOpportunityAccessWhere,
@@ -140,6 +142,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     companySignatureRequests,
     r2Integration,
     addressLookupEnabled,
+    hierarchyCompanyOptions,
   ] = await Promise.all([
     prisma.company.findFirst({
       where: companyIdAccessWhere(id, user),
@@ -220,6 +223,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           where: user.role === "ADMIN" ? undefined : opportunityAccessWhere,
         },
         owner: true,
+        parentCompanyId: true,
         postcode: true,
         status: true,
         updatedAt: true,
@@ -329,11 +333,32 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       select: { config: true },
     }),
     isGeoapifyAddressLookupEnabled(),
+    prisma.company.findMany({
+      where: companyWhereWithAccess(user, { id: { not: id } }),
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true },
+      take: 1_000,
+    }),
   ]);
 
   if (!company) {
     notFound();
   }
+
+  const [parentCompany, childCompanies] = await Promise.all([
+    company.parentCompanyId
+      ? prisma.company.findFirst({
+          where: companyIdAccessWhere(company.parentCompanyId, user),
+          select: { id: true, name: true },
+        })
+      : Promise.resolve(null),
+    prisma.company.findMany({
+      where: companyWhereWithAccess(user, { parentCompanyId: company.id }),
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true },
+      take: 250,
+    }),
+  ]);
 
   const normalizedCompanyCustomFields = visibleCompanyFields(
     companyCustomFields,
@@ -556,6 +581,15 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           </div>
         ) : null}
       </dl>
+      <CompanyHierarchyEditor
+        childCompanies={childCompanies}
+        companyId={company.id}
+        companyOptions={hierarchyCompanyOptions}
+        hasRestrictedParent={Boolean(
+          company.parentCompanyId && !parentCompany,
+        )}
+        parentCompany={parentCompany}
+      />
     </div>
   );
   const linkedRecordsPanel = (

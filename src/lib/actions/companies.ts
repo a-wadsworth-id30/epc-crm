@@ -18,10 +18,12 @@ import {
   type CompanyCustomFieldDefinition,
 } from "@/lib/companies/custom-fields";
 import { editableCompanyFields } from "@/lib/companies/field-access";
+import { companyHierarchyDecision } from "@/lib/companies/hierarchy";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
   companyIdAccessWhere,
+  companyWhereWithAccess,
   contactIdAccessWhere,
 } from "@/lib/crm-resource-access";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
@@ -52,6 +54,15 @@ const companyContactResponsibilitiesSchema = z.object({
 const companyContactPrimarySchema = z.object({
   companyId: z.string().trim().min(1),
   contactId: z.string().trim().min(1),
+});
+
+const companyParentSchema = z.object({
+  companyId: z.string().trim().min(1),
+  parentCompanyId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || null),
 });
 
 const companySchema = z.object({
@@ -307,6 +318,125 @@ function revalidateCompanyRelationshipPaths(
     companyIds.filter((value): value is string => Boolean(value)),
   )) {
     revalidatePath(`/clients/${companyId}`);
+  }
+}
+
+export async function updateCompanyParentAction(
+  _: CompanyActionState,
+  formData: FormData,
+): Promise<CompanyActionState> {
+  const user = await requireUser();
+  const parsed = companyParentSchema.safeParse({
+    companyId: formData.get("companyId"),
+    parentCompanyId: formData.get("parentCompanyId"),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a valid parent Company." };
+  }
+
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const company = await tx.company.findFirst({
+          where: companyIdAccessWhere(parsed.data.companyId, user),
+          select: { id: true, parentCompanyId: true },
+        });
+        if (!company) throw new CompanyActionError("Company not found.");
+
+        if (parsed.data.parentCompanyId) {
+          const parent = await tx.company.findFirst({
+            where: companyWhereWithAccess(user, {
+              id: parsed.data.parentCompanyId,
+            }),
+            select: { id: true },
+          });
+          if (!parent) {
+            throw new CompanyActionError("Parent Company not found.");
+          }
+        }
+
+        const ancestorIds: string[] = [];
+        const visited = new Set<string>();
+        let ancestorId = parsed.data.parentCompanyId;
+
+        while (ancestorId) {
+          if (visited.has(ancestorId)) {
+            throw new CompanyActionError(
+              "The existing Company hierarchy contains a circular link.",
+            );
+          }
+          visited.add(ancestorId);
+          ancestorIds.push(ancestorId);
+
+          const ancestor = await tx.company.findUnique({
+            where: { id: ancestorId },
+            select: { parentCompanyId: true },
+          });
+          ancestorId = ancestor?.parentCompanyId ?? null;
+        }
+
+        const decision = companyHierarchyDecision({
+          ancestorIds,
+          companyId: company.id,
+          parentCompanyId: parsed.data.parentCompanyId,
+        });
+        if (!decision.ok) throw new CompanyActionError(decision.message);
+
+        if (company.parentCompanyId === parsed.data.parentCompanyId) {
+          return {
+            changed: false,
+            previousParentCompanyId: company.parentCompanyId,
+          };
+        }
+
+        await tx.company.update({
+          where: { id: company.id },
+          data: { parentCompanyId: parsed.data.parentCompanyId },
+        });
+        await tx.auditLog.create({
+          data: {
+            action: "company.parent_updated",
+            actorId: user.id,
+            entity: "Company",
+            entityId: company.id,
+            metadata: {
+              parentCompanyId: parsed.data.parentCompanyId,
+              previousParentCompanyId: company.parentCompanyId,
+            },
+          },
+        });
+
+        return {
+          changed: true,
+          previousParentCompanyId: company.parentCompanyId,
+        };
+      },
+      { isolationLevel: "Serializable" },
+    );
+
+    revalidateCompanyPaths();
+    revalidatePath(`/clients/${parsed.data.companyId}`);
+    if (result.previousParentCompanyId) {
+      revalidatePath(`/clients/${result.previousParentCompanyId}`);
+    }
+    if (parsed.data.parentCompanyId) {
+      revalidatePath(`/clients/${parsed.data.parentCompanyId}`);
+    }
+
+    return {
+      ok: true,
+      message: result.changed
+        ? parsed.data.parentCompanyId
+          ? "Parent Company updated."
+          : "Parent Company removed."
+        : "Company hierarchy is already up to date.",
+    };
+  } catch (error) {
+    if (error instanceof CompanyActionError) {
+      return { ok: false, message: error.message };
+    }
+    throw error;
   }
 }
 
