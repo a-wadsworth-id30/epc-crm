@@ -209,6 +209,11 @@ triggers keep legacy primary Company fields and affiliations synchronised for
 all integration writers during the compatibility period; no additional Company
 relationships are inferred by the migration.
 
+The migration `20261111121500_company_hierarchy` adds an optional indexed
+self-reference from a Company to its parent Company. Existing Companies remain
+independent and no hierarchy is inferred. Deleting a parent sets child links to
+null, preserving the child Company records and their People, sales and files.
+
 The migration `20261110233000_company_custom_fields` adds ordered field
 definitions for Company Types and typed values for Companies. It does not
 backfill or modify company data. Definitions and values remain empty until an

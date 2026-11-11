@@ -271,3 +271,14 @@ keep direct Contact writes compatible: changing the primary retains the old
 Company as an additional affiliation, clearing the primary removes that link,
 and Company-specific responsibilities are never copied to a different Company.
 
+## Company hierarchy
+
+Companies can optionally reference a parent Company for head-office, regional
+branch or subsidiary structures. The additive
+`20261111121500_company_hierarchy` migration does not infer links from names,
+domains or addresses. The Company Overview exposes only parent and child
+records available through the current user's Company access policy. Updates
+validate the full ancestor chain, reject self-links and cycles, and store only
+record IDs in the audit event. Removing a parent or deleting it leaves the
+child Company, People, sales and documents intact.
+

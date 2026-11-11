@@ -71,6 +71,12 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   the Person's job title or their responsibilities at another Company. The
   legacy Contact primary-Company fields remain synchronised by the database for
   website, telephony and provider integrations during the compatibility period.
+- Companies can optionally form a parent/child organisation hierarchy for head
+  offices, regional branches and subsidiaries. Existing Companies remain
+  independent until explicitly linked. The Company Overview links accessible
+  parent and child records, hierarchy changes are audited, and server-side
+  validation prevents self-links and circular chains. Deleting a parent safely
+  detaches its children rather than deleting them.
 - Company detail uses the configured Company Type as first-class workspace
   context rather than a generic record badge. Its Overview shows authorised
   type-specific values and a profile-completeness indicator derived from that
