@@ -137,6 +137,11 @@ Core Prisma models are in `prisma/schema.prisma`.
   links back to the source. `CallLog` is intentionally excluded because its
   customer-visible call events are already represented by
   `SalesCommunication`; including both would duplicate timeline entries.
+- The Company operational overview is also a derived read-only projection. It
+  uses permission-scoped counts for active Sales, missing canonical next actions
+  and open or overdue tasks, then combines those with the existing Company Type
+  profile and document requirement evaluators. Its review actions open the
+  existing workspace tabs; it does not store another health or workflow state.
 - `companyRelatedSalesWhere` defines the shared Company-to-Sale relationship
   scope: a Sale relates through its direct Company, primary Person or any Sale
   participant affiliated with the Company. Company Sales lists, counts,
