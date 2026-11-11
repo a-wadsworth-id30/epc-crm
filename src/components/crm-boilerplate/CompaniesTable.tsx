@@ -22,6 +22,7 @@ import type {
   CompanyCustomFieldFormValue,
 } from "@/lib/companies/custom-fields";
 import type { CompanyTypeOption } from "@/lib/companies/company-types";
+import type { CompanyOwnerOption } from "@/lib/companies/owner-assignment";
 import {
   isStructuredCompanyFilterField,
   writeCompanyCustomFieldFilterParams,
@@ -53,6 +54,7 @@ export type CompanyRow = {
   domain: string | null;
   status: string;
   owner: string | null;
+  ownerUserId: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
   city: string | null;
@@ -80,7 +82,7 @@ export type CompaniesTableProps = {
   customFieldFilterValues: CompanyCustomFieldFilterValues;
   customFields: CompanyCustomFieldDefinition[];
   ownerFilter: string;
-  ownerOptions: string[];
+  ownerOptions: CompanyOwnerOption[];
   page: number;
   pageSize: number;
   query: string;
@@ -192,11 +194,14 @@ export default function CompaniesTable({
       label: "Owner",
       type: "select",
       options: [
-        { label: "Unassigned", value: "__unassigned__" },
-        ...ownerOptions.map((value) => ({ label: value, value })),
+        { label: "No CRM owner", value: "__unassigned__" },
+        ...ownerOptions.map((owner) => ({
+          label: owner.name,
+          value: owner.id,
+        })),
       ],
       defaultValue: ownerFilter,
-      getValue: (company) => company.owner ?? "__unassigned__",
+      getValue: (company) => company.ownerUserId ?? "__unassigned__",
     },
     ...filterableCustomFields.map((field): CrmDataTableFilter<CompanyRow> => {
       const common = {
@@ -211,8 +216,7 @@ export default function CompaniesTable({
         return {
           ...common,
           type: "boolean",
-          defaultValue:
-            value === "true" || value === "false" ? value : "all",
+          defaultValue: value === "true" || value === "false" ? value : "all",
           getValue: (company) => {
             const fieldValue = company.customFieldValues[field.id];
             return typeof fieldValue === "boolean" ? fieldValue : null;
@@ -333,8 +337,8 @@ export default function CompaniesTable({
       header: "Type",
       cell: (company) => (
         <StatusBadge>
-          {companyTypes.find((type) => type.id === company.companyTypeId)?.name ??
-            "Other"}
+          {companyTypes.find((type) => type.id === company.companyTypeId)
+            ?.name ?? "Other"}
         </StatusBadge>
       ),
     },
@@ -504,6 +508,16 @@ export default function CompaniesTable({
               company={company}
               companyTypes={companyTypes}
               customFields={customFields}
+              ownerOptions={
+                company.ownerUserId &&
+                company.owner &&
+                !ownerOptions.some((owner) => owner.id === company.ownerUserId)
+                  ? [
+                      ...ownerOptions,
+                      { id: company.ownerUserId, name: company.owner },
+                    ]
+                  : ownerOptions
+              }
             />
             <DeferredCompanyDeleteModal
               companyId={company.id}
@@ -559,7 +573,7 @@ function CompanyTypeOverview({
 
   return (
     <section aria-label="Filter companies by type">
-      <div className="max-w-full overflow-x-auto pb-1 overscroll-x-contain">
+      <div className="max-w-full overflow-x-auto overscroll-x-contain pb-1">
         <div className="flex min-w-max items-center gap-2">
           {tabs.map((tab) => {
             const selected = activeCompanyTypeSlug === tab.value;

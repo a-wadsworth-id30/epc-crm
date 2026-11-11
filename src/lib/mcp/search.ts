@@ -1,10 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
-import {
-  contactEmailValues,
-  contactPhoneValues,
-} from "@/lib/contact-methods";
+import { contactEmailValues, contactPhoneValues } from "@/lib/contact-methods";
 import { normalizedContactPhone } from "@/lib/phone-normalization";
 import { prisma } from "@/lib/prisma";
 import {
@@ -20,11 +17,22 @@ const maxLimit = 25;
 const minCandidateTake = 24;
 const maxCandidateTake = 80;
 const queryMode = "insensitive" as const;
-const allowedAreas = ["contacts", "companies", "sales", "products", "reports"] as const;
+const allowedAreas = [
+  "contacts",
+  "companies",
+  "sales",
+  "products",
+  "reports",
+] as const;
 const defaultAreas = ["contacts", "sales", "companies"] as const;
 
 type McpSearchArea = (typeof allowedAreas)[number];
-type McpSearchRecordType = "company" | "contact" | "product" | "report" | "sale";
+type McpSearchRecordType =
+  | "company"
+  | "contact"
+  | "product"
+  | "report"
+  | "sale";
 
 type SearchCandidateTerms = {
   digitTerms: string[];
@@ -141,7 +149,9 @@ function contactTextClauses(term: string): Prisma.ContactWhereInput[] {
   return clauses;
 }
 
-function opportunityTextClauses(term: string): Prisma.SalesOpportunityWhereInput[] {
+function opportunityTextClauses(
+  term: string,
+): Prisma.SalesOpportunityWhereInput[] {
   const clauses: Prisma.SalesOpportunityWhereInput[] = [
     { title: contains(term) },
     { company: { name: contains(term) } },
@@ -237,7 +247,12 @@ function companySearchWhere(textTerms: string[]): Prisma.CompanyWhereInput {
       { name: contains(term) },
       { domain: contains(term) },
       ...(term.length >= 3
-        ? [{ status: contains(term) }, { owner: contains(term) }]
+        ? [
+            { status: contains(term) },
+            { owner: contains(term) },
+            { ownerUser: { name: contains(term) } },
+            { ownerUser: { email: contains(term) } },
+          ]
         : []),
     ]),
   };
@@ -255,7 +270,9 @@ function productSearchWhere(textTerms: string[]): Prisma.ProductWhereInput {
   };
 }
 
-function reportSearchWhere(textTerms: string[]): Prisma.ReportDefinitionWhereInput {
+function reportSearchWhere(
+  textTerms: string[],
+): Prisma.ReportDefinitionWhereInput {
   return {
     OR: textTerms.flatMap((term) => [
       { title: contains(term) },
@@ -330,136 +347,152 @@ export async function searchMcpCrm(args: unknown) {
   const includeContacts = areas.includes("contacts");
   const includeSales = areas.includes("sales");
   const includeCompanies =
-    settings.companiesEnabled && areas.includes("companies") && terms.textTerms.length > 0;
-  const includeProducts = areas.includes("products") && terms.textTerms.length > 0;
-  const includeReports = areas.includes("reports") && terms.textTerms.length > 0;
+    settings.companiesEnabled &&
+    areas.includes("companies") &&
+    terms.textTerms.length > 0;
+  const includeProducts =
+    areas.includes("products") && terms.textTerms.length > 0;
+  const includeReports =
+    areas.includes("reports") && terms.textTerms.length > 0;
 
-  const [contacts, opportunities, companies, products, reports] = await Promise.all([
-    includeContacts
-      ? prisma.contact.findMany({
-          where: contactSearchWhere(terms),
-          orderBy: [
-            { updatedAt: "desc" },
-            { lastName: "asc" },
-            { firstName: "asc" },
-          ],
-          take: candidateTake,
-          select: {
-            additionalEmails: {
-              orderBy: { createdAt: "asc" },
-              select: { email: true, id: true, label: true },
-            },
-            additionalPhones: {
-              orderBy: { createdAt: "asc" },
-              select: { id: true, label: true, phone: true, phoneNormalized: true },
-            },
-            company: { select: { name: true } },
-            companyName: true,
-            email: true,
-            firstName: true,
-            id: true,
-            lastName: true,
-            phone: true,
-            phoneNormalized: true,
-            role: true,
-            tagAssignments: {
-              orderBy: { tag: { name: "asc" } },
-              select: { tag: { select: { name: true } } },
-            },
-          },
-        })
-      : Promise.resolve([]),
-    includeSales
-      ? prisma.salesOpportunity.findMany({
-          where: opportunitySearchWhere(terms),
-          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-          take: candidateTake,
-          select: {
-            company: { select: { name: true } },
-            contact: {
-              select: {
-                additionalEmails: {
-                  orderBy: { createdAt: "asc" },
-                  select: { email: true, id: true, label: true },
+  const [contacts, opportunities, companies, products, reports] =
+    await Promise.all([
+      includeContacts
+        ? prisma.contact.findMany({
+            where: contactSearchWhere(terms),
+            orderBy: [
+              { updatedAt: "desc" },
+              { lastName: "asc" },
+              { firstName: "asc" },
+            ],
+            take: candidateTake,
+            select: {
+              additionalEmails: {
+                orderBy: { createdAt: "asc" },
+                select: { email: true, id: true, label: true },
+              },
+              additionalPhones: {
+                orderBy: { createdAt: "asc" },
+                select: {
+                  id: true,
+                  label: true,
+                  phone: true,
+                  phoneNormalized: true,
                 },
-                additionalPhones: {
-                  orderBy: { createdAt: "asc" },
-                  select: {
-                    id: true,
-                    label: true,
-                    phone: true,
-                    phoneNormalized: true,
-                  },
-                },
-                email: true,
-                firstName: true,
-                lastName: true,
-                phone: true,
-                phoneNormalized: true,
+              },
+              company: { select: { name: true } },
+              companyName: true,
+              email: true,
+              firstName: true,
+              id: true,
+              lastName: true,
+              phone: true,
+              phoneNormalized: true,
+              role: true,
+              tagAssignments: {
+                orderBy: { tag: { name: "asc" } },
+                select: { tag: { select: { name: true } } },
               },
             },
-            id: true,
-            nextStep: true,
-            owner: { select: { name: true } },
-            salesPipelineStage: { select: { name: true } },
-            source: true,
-            title: true,
-          },
-        })
-      : Promise.resolve([]),
-    includeCompanies
-      ? prisma.company.findMany({
-          where: companySearchWhere(terms.textTerms),
-          orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
-          take: secondaryCandidateTake,
-          select: {
-            domain: true,
-            id: true,
-            name: true,
-            owner: true,
-            status: true,
-          },
-        })
-      : Promise.resolve([]),
-    includeProducts
-      ? prisma.product.findMany({
-          where: productSearchWhere(terms.textTerms),
-          orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
-          take: secondaryCandidateTake,
-          select: {
-            category: { select: { name: true } },
-            description: true,
-            id: true,
-            isActive: true,
-            name: true,
-            sku: true,
-            tags: true,
-            type: true,
-          },
-        })
-      : Promise.resolve([]),
-    includeReports
-      ? prisma.reportDefinition.findMany({
-          where: reportSearchWhere(terms.textTerms),
-          orderBy: [{ updatedAt: "desc" }, { title: "asc" }],
-          take: secondaryCandidateTake,
-          select: {
-            description: true,
-            id: true,
-            source: true,
-            title: true,
-            visibility: true,
-          },
-        })
-      : Promise.resolve([]),
-  ]);
+          })
+        : Promise.resolve([]),
+      includeSales
+        ? prisma.salesOpportunity.findMany({
+            where: opportunitySearchWhere(terms),
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            take: candidateTake,
+            select: {
+              company: { select: { name: true } },
+              contact: {
+                select: {
+                  additionalEmails: {
+                    orderBy: { createdAt: "asc" },
+                    select: { email: true, id: true, label: true },
+                  },
+                  additionalPhones: {
+                    orderBy: { createdAt: "asc" },
+                    select: {
+                      id: true,
+                      label: true,
+                      phone: true,
+                      phoneNormalized: true,
+                    },
+                  },
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  phone: true,
+                  phoneNormalized: true,
+                },
+              },
+              id: true,
+              nextStep: true,
+              owner: { select: { name: true } },
+              salesPipelineStage: { select: { name: true } },
+              source: true,
+              title: true,
+            },
+          })
+        : Promise.resolve([]),
+      includeCompanies
+        ? prisma.company.findMany({
+            where: companySearchWhere(terms.textTerms),
+            orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+            take: secondaryCandidateTake,
+            select: {
+              domain: true,
+              id: true,
+              name: true,
+              owner: true,
+              ownerUser: { select: { name: true } },
+              status: true,
+            },
+          })
+        : Promise.resolve([]),
+      includeProducts
+        ? prisma.product.findMany({
+            where: productSearchWhere(terms.textTerms),
+            orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+            take: secondaryCandidateTake,
+            select: {
+              category: { select: { name: true } },
+              description: true,
+              id: true,
+              isActive: true,
+              name: true,
+              sku: true,
+              tags: true,
+              type: true,
+            },
+          })
+        : Promise.resolve([]),
+      includeReports
+        ? prisma.reportDefinition.findMany({
+            where: reportSearchWhere(terms.textTerms),
+            orderBy: [{ updatedAt: "desc" }, { title: "asc" }],
+            take: secondaryCandidateTake,
+            select: {
+              description: true,
+              id: true,
+              source: true,
+              title: true,
+              visibility: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
   const results = [
     ...contacts.map((contact) => {
       const companyName = contact.company?.name ?? contact.companyName;
       const fullName = `${contact.firstName} ${contact.lastName}`.trim();
-      const tagNames = contact.tagAssignments.map((assignment) => assignment.tag.name);
-      const emailValues = contactEmailValues(contact.email, contact.additionalEmails);
+      const tagNames = contact.tagAssignments.map(
+        (assignment) => assignment.tag.name,
+      );
+      const emailValues = contactEmailValues(
+        contact.email,
+        contact.additionalEmails,
+      );
       const phoneValues = contactPhoneValues(
         contact.phone,
         contact.phoneNormalized,
@@ -467,7 +500,9 @@ export async function searchMcpCrm(args: unknown) {
       );
 
       return createRecord(query, {
-        description: [companyName, contact.role, ...tagNames].filter(Boolean).join(" / "),
+        description: [companyName, contact.role, ...tagNames]
+          .filter(Boolean)
+          .join(" / "),
         fields: [
           contact.firstName,
           contact.lastName,
@@ -542,8 +577,15 @@ export async function searchMcpCrm(args: unknown) {
     }),
     ...companies.map((company) =>
       createRecord(query, {
-        description: [company.status, company.owner].filter(Boolean).join(" / "),
-        fields: [company.name, company.domain, company.status, company.owner],
+        description: [company.status, company.ownerUser?.name ?? company.owner]
+          .filter(Boolean)
+          .join(" / "),
+        fields: [
+          company.name,
+          company.domain,
+          company.status,
+          company.ownerUser?.name ?? company.owner,
+        ],
         href: "/clients",
         id: company.id,
         subtitle: company.domain,
@@ -571,7 +613,9 @@ export async function searchMcpCrm(args: unknown) {
         ],
         href: "/products",
         id: product.id,
-        subtitle: [product.sku, product.category?.name].filter(Boolean).join(" / "),
+        subtitle: [product.sku, product.category?.name]
+          .filter(Boolean)
+          .join(" / "),
         title: product.name,
         type: "product",
       }),
@@ -581,7 +625,12 @@ export async function searchMcpCrm(args: unknown) {
         description: [report.description, report.source, report.visibility]
           .filter(Boolean)
           .join(" / "),
-        fields: [report.title, report.description, report.source, report.visibility],
+        fields: [
+          report.title,
+          report.description,
+          report.source,
+          report.visibility,
+        ],
         href: "/reports",
         id: report.id,
         subtitle: report.visibility,

@@ -472,6 +472,7 @@ model User {
   createdSidekickWritePlans  SidekickWritePlan[]          @relation("SidekickWritePlanCreator")
   approvedSidekickWritePlans SidekickWritePlan[]          @relation("SidekickWritePlanApprover")
   createdCompanies           Company[]                    @relation("CompanyCreator")
+  ownedCompanies             Company[]                    @relation("CompanyOwner")
   createdContacts            Contact[]                    @relation("ContactCreator")
   createdContactSegments     ContactSegment[]             @relation("ContactSegmentCreator")
   createdUploadRequests      CustomerUploadRequest[]      @relation("CustomerUploadRequestCreator")
@@ -582,6 +583,8 @@ model Company {
   domain            String?
   status            String                    @default("Prospect")
   owner             String?
+  ownerUserId       String?
+  ownerUser         User?                     @relation("CompanyOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   addressLine1      String?
   addressLine2      String?
   city              String?
@@ -603,6 +606,7 @@ model Company {
   @@index([name])
   @@index([parentCompanyId, name])
   @@index([companyTypeId, updatedAt])
+  @@index([ownerUserId, updatedAt])
   @@index([createdByUserId, updatedAt])
 }
 

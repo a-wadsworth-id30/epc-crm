@@ -27,6 +27,7 @@ import {
 } from "@/lib/companies/field-access";
 import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields";
 import { companyProfileCompleteness } from "@/lib/companies/profile-completeness";
+import { companyOwnerOptionsForUser } from "@/lib/companies/owner-assignment";
 import {
   companyDocumentRequirementStatuses,
   parseCompanyDocumentUploadType,
@@ -143,6 +144,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     r2Integration,
     addressLookupEnabled,
     hierarchyCompanyOptions,
+    activeOwnerUsers,
   ] = await Promise.all([
     prisma.company.findFirst({
       where: companyIdAccessWhere(id, user),
@@ -223,6 +225,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           where: user.role === "ADMIN" ? undefined : opportunityAccessWhere,
         },
         owner: true,
+        ownerUserId: true,
+        ownerUser: { select: { id: true, name: true, status: true } },
         parentCompanyId: true,
         postcode: true,
         status: true,
@@ -339,6 +343,11 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       select: { id: true, name: true },
       take: 1_000,
     }),
+    prisma.user.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true },
+    }),
   ]);
 
   if (!company) {
@@ -368,6 +377,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     isReadOnly: !canEditCompanyField(field, user),
     options: normalizeContactCustomFieldOptions(field.options),
   }));
+  const ownerOptions = companyOwnerOptionsForUser(activeOwnerUsers, user);
+  const ownerLabel = company.ownerUser?.name ?? company.owner;
   const visibleCompanyCustomFieldIds = new Set(
     normalizedCompanyCustomFields.map((field) => field.id),
   );
@@ -459,7 +470,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         ]),
     ),
     name: company.name,
-    owner: company.owner,
+    owner: ownerLabel,
+    ownerUserId: company.ownerUserId,
     postcode: company.postcode,
     status: company.status,
   };
@@ -476,20 +488,17 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     definitions: normalizedCompanyCustomFields,
     values: serializedCompanyCustomFieldValues,
   });
-  const companyDocumentStatuses =
-    companyDocumentRequirementStatuses({
-      companyTypeId: company.companyTypeId,
-      documents: companyDocuments.map((document) => ({
-        documentUploadType: document.documentUploadType,
-        id: document.id,
-      })),
-      requirements: companyTypeDocumentRequirements.flatMap((requirement) => {
-        const uploadType = parseCompanyDocumentUploadType(
-          requirement.uploadType,
-        );
-        return uploadType ? [{ ...requirement, uploadType }] : [];
-      }),
-    });
+  const companyDocumentStatuses = companyDocumentRequirementStatuses({
+    companyTypeId: company.companyTypeId,
+    documents: companyDocuments.map((document) => ({
+      documentUploadType: document.documentUploadType,
+      id: document.id,
+    })),
+    requirements: companyTypeDocumentRequirements.flatMap((requirement) => {
+      const uploadType = parseCompanyDocumentUploadType(requirement.uploadType);
+      return uploadType ? [{ ...requirement, uploadType }] : [];
+    }),
+  });
   const companyDetailPanel = (
     <div className="p-5">
       <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
@@ -534,7 +543,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         <div>
           <dt className="text-gray-500 dark:text-gray-400">Owner</dt>
           <dd className="mt-1 font-medium text-gray-800 dark:text-white/90">
-            {company.owner ?? "Unassigned"}
+            {ownerLabel ?? "Unassigned"}
           </dd>
         </div>
         <div>
@@ -570,7 +579,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
                   <dt className="text-gray-500 dark:text-gray-400">
                     {field.label}
                   </dt>
-                  <dd className="mt-1 whitespace-pre-wrap font-medium break-words text-gray-800 dark:text-white/90">
+                  <dd className="mt-1 font-medium break-words whitespace-pre-wrap text-gray-800 dark:text-white/90">
                     {formatCustomFieldValue(
                       serializedCompanyCustomFieldValues[field.id] ?? null,
                     )}
@@ -585,9 +594,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         childCompanies={childCompanies}
         companyId={company.id}
         companyOptions={hierarchyCompanyOptions}
-        hasRestrictedParent={Boolean(
-          company.parentCompanyId && !parentCompany,
-        )}
+        hasRestrictedParent={Boolean(company.parentCompanyId && !parentCompany)}
         parentCompany={parentCompany}
       />
     </div>
@@ -658,7 +665,9 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
                           : "rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-white/[0.06] dark:text-gray-300"
                       }
                     >
-                      {affiliation.isPrimary ? "Primary Company" : "Additional Company"}
+                      {affiliation.isPrimary
+                        ? "Primary Company"
+                        : "Additional Company"}
                     </span>
                     {!affiliation.isPrimary ? (
                       <CompanyContactPrimaryButton
@@ -748,9 +757,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   );
   const documentsPanel = (
     <div className="p-4 sm:p-5">
-      <CompanyDocumentRequirements
-        requirements={companyDocumentStatuses}
-      />
+      <CompanyDocumentRequirements requirements={companyDocumentStatuses} />
       <RecordDocumentLibrary
         documentPortals={companyDocumentPortals}
         documentRequirements={companyDocumentStatuses.map(
@@ -787,6 +794,16 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
               company={editableCompany}
               companyTypes={companyTypes}
               customFields={normalizedCompanyCustomFields}
+              ownerOptions={
+                company.ownerUserId &&
+                ownerLabel &&
+                !ownerOptions.some((owner) => owner.id === company.ownerUserId)
+                  ? [
+                      ...ownerOptions,
+                      { id: company.ownerUserId, name: ownerLabel },
+                    ]
+                  : ownerOptions
+              }
             />
             {user.role === "ADMIN" ? (
               <DeferredCompanyDeleteModal
@@ -820,7 +837,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
           companyName: company.name,
           companyTypeLabel,
           domain: company.domain,
-          owner: company.owner,
+          owner: ownerLabel,
           status: company.status,
         }}
       />

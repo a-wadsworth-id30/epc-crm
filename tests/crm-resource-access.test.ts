@@ -39,7 +39,7 @@ before(async () => {
 });
 
 describe("CRM resource access", () => {
-  it("lets normal users see contacts and companies they created", () => {
+  it("lets normal users see contacts they created or linked through accessible sales", () => {
     const user = { id: "user-1", role: "USER" } satisfies User;
     const expected = {
       OR: [
@@ -53,7 +53,22 @@ describe("CRM resource access", () => {
     };
 
     assert.deepEqual(contactAccessWhere(user), expected);
-    assert.deepEqual(companyAccessWhere(user), expected);
+  });
+
+  it("lets normal users see companies they own, created or linked through accessible sales", () => {
+    const user = { id: "user-1", role: "USER" } satisfies User;
+
+    assert.deepEqual(companyAccessWhere(user), {
+      OR: [
+        { ownerUserId: user.id },
+        { createdByUserId: user.id },
+        {
+          opportunities: {
+            some: { OR: [{ ownerId: user.id }, { ownerId: null }] },
+          },
+        },
+      ],
+    });
   });
 
   it("keeps admin contact and company access unscoped", () => {

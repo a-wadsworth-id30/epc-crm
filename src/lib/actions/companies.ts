@@ -19,6 +19,10 @@ import {
 } from "@/lib/companies/custom-fields";
 import { editableCompanyFields } from "@/lib/companies/field-access";
 import { companyHierarchyDecision } from "@/lib/companies/hierarchy";
+import {
+  LEGACY_COMPANY_OWNER_VALUE,
+  validateCompanyOwnerAssignment,
+} from "@/lib/companies/owner-assignment";
 import { normalizeContactCustomFieldOptions } from "@/lib/contacts/custom-fields";
 import { systemContactTypeAssignment } from "@/lib/contacts/contact-type-assignment";
 import {
@@ -83,7 +87,7 @@ const companySchema = z.object({
     .trim()
     .optional()
     .transform((value) => value || "Prospect"),
-  owner: z
+  ownerUserId: z
     .string()
     .trim()
     .optional()
@@ -173,13 +177,39 @@ function parseCompany(formData: FormData) {
     domain: value("domain"),
     id: value("id"),
     name: value("name"),
-    owner: value("owner"),
+    ownerUserId: value("ownerUserId"),
     postcode: value("postcode"),
     status: value("status"),
   });
 }
 
 class CompanyActionError extends Error {}
+
+async function resolveCompanyOwner(
+  tx: Prisma.TransactionClient,
+  ownerUserId: string | null,
+  user: Awaited<ReturnType<typeof requireUser>>,
+) {
+  if (!ownerUserId) return null;
+  if (ownerUserId === LEGACY_COMPANY_OWNER_VALUE) {
+    throw new CompanyActionError(
+      "Choose a valid CRM user for the company owner.",
+    );
+  }
+
+  const owner = await tx.user.findFirst({
+    where: { id: ownerUserId, status: "ACTIVE" },
+    select: { id: true, name: true },
+  });
+  const decision = validateCompanyOwnerAssignment({
+    activeOwnerIds: new Set(owner ? [owner.id] : []),
+    currentUser: user,
+    ownerUserId,
+  });
+  if (!decision.ok) throw new CompanyActionError(decision.message);
+
+  return owner;
+}
 
 async function resolveSubmittedCompanyType(
   tx: Prisma.TransactionClient,
@@ -225,7 +255,8 @@ async function resolveSubmittedCompanyType(
       },
     },
   });
-  if (!companyType) throw new CompanyActionError("Choose an active company type.");
+  if (!companyType)
+    throw new CompanyActionError("Choose an active company type.");
   const customFields: CompanyCustomFieldDefinition[] = editableCompanyFields(
     companyType.fields,
     user,
@@ -242,7 +273,9 @@ function stringArray(formData: FormData, key: string) {
     .map((entry) => (typeof entry === "string" ? entry : ""));
 }
 
-function parseCompanyCreateContacts(formData: FormData):
+function parseCompanyCreateContacts(
+  formData: FormData,
+):
   | { ok: true; contacts: CompanyCreateContact[] }
   | { ok: false; message: string } {
   const firstNames = stringArray(formData, "contactFirstName");
@@ -484,7 +517,10 @@ export async function linkContactToCompanyAction(
     return { ok: false, message: decision.message };
   }
   if (decision.action === "unchanged") {
-    return { ok: true, message: "This person is already linked to the company." };
+    return {
+      ok: true,
+      message: "This person is already linked to the company.",
+    };
   }
 
   await prisma.$transaction(async (tx) => {
@@ -530,7 +566,10 @@ export async function linkContactToCompanyAction(
       },
     });
   });
-  revalidateCompanyRelationshipPaths(contact.id, [contact.companyId, company.id]);
+  revalidateCompanyRelationshipPaths(contact.id, [
+    contact.companyId,
+    company.id,
+  ]);
   return {
     ok: true,
     message:
@@ -611,7 +650,10 @@ export async function makeCompanyContactPrimaryAction(
     });
   });
 
-  revalidateCompanyRelationshipPaths(contact.id, [previousCompanyId, company.id]);
+  revalidateCompanyRelationshipPaths(contact.id, [
+    previousCompanyId,
+    company.id,
+  ]);
   return { ok: true, message: "Primary Company updated." };
 }
 
@@ -817,6 +859,11 @@ export async function createCompanyAction(
         formData,
       );
       if (!customFields.ok) throw new CompanyActionError(customFields.message);
+      const owner = await resolveCompanyOwner(
+        tx,
+        parsed.data.ownerUserId,
+        user,
+      );
 
       const company = await tx.company.create({
         data: {
@@ -829,12 +876,27 @@ export async function createCompanyAction(
           createdByUserId: user.id,
           domain: parsed.data.domain,
           name: parsed.data.name,
-          owner: parsed.data.owner,
+          owner: owner?.name ?? null,
+          ownerUserId: owner?.id ?? null,
           postcode: parsed.data.postcode,
           status: parsed.data.status,
         },
         select: { id: true, name: true },
       });
+      if (owner) {
+        await tx.auditLog.create({
+          data: {
+            action: "company.owner_updated",
+            actorId: user.id,
+            entity: "Company",
+            entityId: company.id,
+            metadata: {
+              ownerUserId: owner.id,
+              previousOwnerUserId: null,
+            },
+          },
+        });
+      }
       await replaceCompanyCustomFieldValues(
         tx,
         company.id,
@@ -908,7 +970,13 @@ export async function updateCompanyAction(
 
   const company = await prisma.company.findFirst({
     where: companyIdAccessWhere(parsed.data.id, user),
-    select: { companyTypeId: true, id: true },
+    select: {
+      companyTypeId: true,
+      id: true,
+      owner: true,
+      ownerUserId: true,
+      ownerUser: { select: { id: true, name: true } },
+    },
   });
 
   if (!company) {
@@ -928,6 +996,27 @@ export async function updateCompanyAction(
         formData,
       );
       if (!customFields.ok) throw new CompanyActionError(customFields.message);
+      const preserveLegacyOwner =
+        parsed.data.ownerUserId === LEGACY_COMPANY_OWNER_VALUE &&
+        !company.ownerUserId;
+      if (
+        parsed.data.ownerUserId === LEGACY_COMPANY_OWNER_VALUE &&
+        !preserveLegacyOwner
+      ) {
+        throw new CompanyActionError(
+          "Choose a valid CRM user for the company owner.",
+        );
+      }
+      const owner =
+        parsed.data.ownerUserId === company.ownerUserId
+          ? company.ownerUser
+          : preserveLegacyOwner
+            ? null
+            : await resolveCompanyOwner(tx, parsed.data.ownerUserId, user);
+      const nextOwnerUserId = preserveLegacyOwner ? null : (owner?.id ?? null);
+      const nextOwnerName = preserveLegacyOwner
+        ? company.owner
+        : (owner?.name ?? null);
 
       await tx.company.update({
         where: { id: company.id },
@@ -940,7 +1029,8 @@ export async function updateCompanyAction(
           country: parsed.data.country,
           domain: parsed.data.domain,
           name: parsed.data.name,
-          owner: parsed.data.owner,
+          owner: nextOwnerName,
+          ownerUserId: nextOwnerUserId,
           postcode: parsed.data.postcode,
           status: parsed.data.status,
         },
@@ -954,6 +1044,20 @@ export async function updateCompanyAction(
         company.id,
         customFields.values,
       );
+      if (company.ownerUserId !== nextOwnerUserId) {
+        await tx.auditLog.create({
+          data: {
+            action: "company.owner_updated",
+            actorId: user.id,
+            entity: "Company",
+            entityId: company.id,
+            metadata: {
+              ownerUserId: nextOwnerUserId,
+              previousOwnerUserId: company.ownerUserId,
+            },
+          },
+        });
+      }
     });
   } catch (error) {
     if (error instanceof CompanyActionError) {

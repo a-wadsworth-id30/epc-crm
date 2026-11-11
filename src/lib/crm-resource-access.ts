@@ -83,6 +83,7 @@ export function companyAccessWhere(
 
   return {
     OR: [
+      { ownerUserId: user.id },
       { createdByUserId: user.id },
       {
         opportunities: {

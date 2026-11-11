@@ -38,7 +38,10 @@ export function companySearchWhere(
   query: string,
   allowedCustomFieldIds: string[],
 ): Prisma.CompanyWhereInput | undefined {
-  const terms = query.split(/\s+/).map((term) => term.trim()).filter(Boolean);
+  const terms = query
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
   if (!terms.length) return undefined;
 
   return {
@@ -48,6 +51,8 @@ export function companySearchWhere(
         { domain: contains(term) },
         { status: contains(term) },
         { owner: contains(term) },
+        { ownerUser: { name: contains(term) } },
+        { ownerUser: { email: contains(term) } },
         { addressLine1: contains(term) },
         { addressLine2: contains(term) },
         { city: contains(term) },
