@@ -19,6 +19,7 @@ import {
 } from "@/lib/companies/custom-fields";
 import { editableCompanyFields } from "@/lib/companies/field-access";
 import { companyHierarchyDecision } from "@/lib/companies/hierarchy";
+import { mergedCompanyProfile } from "@/lib/companies/merge";
 import {
   LEGACY_COMPANY_OWNER_VALUE,
   validateCompanyOwnerAssignment,
@@ -37,6 +38,10 @@ import { isLeadSourceValue } from "@/lib/sales/lead-sources";
 export type CompanyActionState = {
   ok: boolean;
   message: string;
+};
+
+export type CompanyMergeActionState = CompanyActionState & {
+  primaryCompanyId?: string;
 };
 
 const companyContactLinkSchema = z.object({
@@ -67,6 +72,11 @@ const companyParentSchema = z.object({
     .trim()
     .optional()
     .transform((value) => value || null),
+});
+
+const companyMergeSchema = z.object({
+  duplicateCompanyId: z.string().trim().min(1, "Choose a company to merge."),
+  primaryCompanyId: z.string().trim().min(1, "Company ID is missing."),
 });
 
 const companySchema = z.object({
@@ -1068,6 +1078,204 @@ export async function updateCompanyAction(
 
   revalidateCompanyPaths();
   return { ok: true, message: "Company updated." };
+}
+
+export async function mergeCompaniesAction(
+  _: CompanyMergeActionState,
+  formData: FormData,
+): Promise<CompanyMergeActionState> {
+  const user = await requireAdmin();
+  const parsed = companyMergeSchema.safeParse({
+    duplicateCompanyId: formData.get("duplicateCompanyId"),
+    primaryCompanyId: formData.get("primaryCompanyId"),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Choose companies to merge.",
+    };
+  }
+
+  const { duplicateCompanyId, primaryCompanyId } = parsed.data;
+  if (duplicateCompanyId === primaryCompanyId) {
+    return { ok: false, message: "Choose a different company to merge." };
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const companies = await tx.company.findMany({
+        where: { id: { in: [primaryCompanyId, duplicateCompanyId] } },
+        select: {
+          addressLine1: true,
+          addressLine2: true,
+          city: true,
+          companyTypeId: true,
+          contactAffiliations: {
+            select: {
+              contactId: true,
+              id: true,
+              isPrimary: true,
+              responsibilities: true,
+            },
+          },
+          country: true,
+          county: true,
+          domain: true,
+          id: true,
+          name: true,
+          owner: true,
+          ownerUserId: true,
+          parentCompanyId: true,
+          postcode: true,
+        },
+      });
+      const primary = companies.find(
+        (company) => company.id === primaryCompanyId,
+      );
+      const duplicate = companies.find(
+        (company) => company.id === duplicateCompanyId,
+      );
+      if (!primary || !duplicate) {
+        throw new CompanyActionError(
+          "One of the selected companies could not be found.",
+        );
+      }
+
+      const profile = mergedCompanyProfile({ primary, duplicate });
+      const primaryAffiliations = new Map(
+        primary.contactAffiliations.map((affiliation) => [
+          affiliation.contactId,
+          affiliation,
+        ]),
+      );
+
+      for (const affiliation of duplicate.contactAffiliations) {
+        const existing = primaryAffiliations.get(affiliation.contactId);
+        if (existing) {
+          const responsibilities = normalizeCompanyContactResponsibilities([
+            ...existing.responsibilities,
+            ...affiliation.responsibilities,
+          ]);
+          await tx.companyContactAffiliation.update({
+            where: { id: existing.id },
+            data: { responsibilities },
+          });
+          await tx.companyContactAffiliation.delete({
+            where: { id: affiliation.id },
+          });
+        } else {
+          await tx.companyContactAffiliation.update({
+            where: { id: affiliation.id },
+            data: { companyId: primary.id },
+          });
+        }
+      }
+
+      const movedPrimaryContacts = await tx.contact.updateMany({
+        where: { companyId: duplicate.id },
+        data: { companyId: primary.id, companyName: primary.name },
+      });
+
+      const primaryFieldValues = await tx.companyCustomFieldValue.findMany({
+        where: { companyId: primary.id },
+        select: { fieldId: true },
+      });
+      const retainedFieldIds = primaryFieldValues.map((value) => value.fieldId);
+      if (retainedFieldIds.length) {
+        await tx.companyCustomFieldValue.deleteMany({
+          where: {
+            companyId: duplicate.id,
+            fieldId: { in: retainedFieldIds },
+          },
+        });
+      }
+      await tx.companyCustomFieldValue.updateMany({
+        where: { companyId: duplicate.id },
+        data: { companyId: primary.id },
+      });
+
+      const [opportunities, notes, tasks, documents] = await Promise.all([
+        tx.salesOpportunity.updateMany({
+          where: { companyId: duplicate.id },
+          data: { companyId: primary.id },
+        }),
+        tx.note.updateMany({
+          where: { companyId: duplicate.id },
+          data: { companyId: primary.id },
+        }),
+        tx.task.updateMany({
+          where: { companyId: duplicate.id },
+          data: { companyId: primary.id },
+        }),
+        tx.fileAsset.updateMany({
+          where: { entityId: duplicate.id, entityType: "Company" },
+          data: { entityId: primary.id },
+        }),
+        tx.customerUploadRequest.updateMany({
+          where: { entityId: duplicate.id, entityType: "Company" },
+          data: { entityId: primary.id },
+        }),
+        tx.customerDocumentShare.updateMany({
+          where: { entityId: duplicate.id, entityType: "Company" },
+          data: { entityId: primary.id },
+        }),
+        tx.customerDocumentPortal.updateMany({
+          where: { entityId: duplicate.id, entityType: "Company" },
+          data: { entityId: primary.id },
+        }),
+        tx.signatureRequest.updateMany({
+          where: { entityId: duplicate.id, entityType: "Company" },
+          data: { entityId: primary.id },
+        }),
+        tx.externalRecordLink.updateMany({
+          where: { internalId: duplicate.id, internalType: "company" },
+          data: { internalId: primary.id },
+        }),
+      ]);
+
+      await tx.company.updateMany({
+        where: { parentCompanyId: duplicate.id, id: { not: primary.id } },
+        data: { parentCompanyId: primary.id },
+      });
+      await tx.company.update({
+        where: { id: primary.id },
+        data: profile,
+      });
+      await tx.company.delete({ where: { id: duplicate.id } });
+      await tx.auditLog.create({
+        data: {
+          action: "company.merged",
+          actorId: user.id,
+          entity: "Company",
+          entityId: primary.id,
+          metadata: {
+            documents: documents.count,
+            duplicateCompanyId: duplicate.id,
+            movedPrimaryContacts: movedPrimaryContacts.count,
+            notes: notes.count,
+            opportunities: opportunities.count,
+            tasks: tasks.count,
+          },
+        },
+      });
+
+      return { duplicateName: duplicate.name, primaryName: primary.name };
+    });
+
+    revalidateCompanyPaths();
+    revalidatePath(`/clients/${primaryCompanyId}`);
+    return {
+      ok: true,
+      message: `${result.duplicateName} merged into ${result.primaryName}.`,
+      primaryCompanyId,
+    };
+  } catch (error) {
+    if (error instanceof CompanyActionError) {
+      return { ok: false, message: error.message };
+    }
+    throw error;
+  }
 }
 
 export async function deleteCompanyAction(formData: FormData) {

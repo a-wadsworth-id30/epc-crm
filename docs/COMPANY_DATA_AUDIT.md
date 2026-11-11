@@ -290,3 +290,15 @@ records available through the current user's Company access policy. Updates
 validate the full ancestor chain, reject self-links and cycles, and store only
 record IDs in the audit event. Removing a parent or deleting it leaves the
 child Company, People, sales and documents intact.
+
+## Duplicate Company merge
+
+Admins can merge an existing duplicate into the Company they are viewing. The
+operation deliberately keeps the retained Company's populated profile and
+fills only missing profile values from the duplicate. It unions controlled
+contact responsibilities, preserves one primary Company per Person, moves
+sales, tasks, notes, files, secure document workflows, signature requests,
+custom field values and provider links, and repairs parent/child relationships.
+Conflicting custom field values remain on the retained Company. The transaction
+deletes the duplicate only after all moves succeed and writes an ID-only,
+aggregate-count audit event so customer data is not copied into AuditLog.
