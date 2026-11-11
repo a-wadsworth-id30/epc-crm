@@ -1262,6 +1262,7 @@ export async function mergeContactsAction(
     mergedPrimaryPhone: mergedPhone,
     primaryMethods: primaryContact.additionalPhones,
   });
+  const affectedSaleIds = new Set<string>();
 
   await prisma.$transaction(async (tx) => {
     const duplicateTags = await tx.contactTagAssignment.findMany({
@@ -1278,6 +1279,52 @@ export async function mergeContactsAction(
         skipDuplicates: true,
       });
     }
+
+    const duplicateParticipations =
+      await tx.salesOpportunityParticipant.findMany({
+        where: { contactId: duplicateContactId },
+        select: { id: true, opportunityId: true, role: true },
+      });
+    for (const participation of duplicateParticipations) {
+      affectedSaleIds.add(participation.opportunityId);
+      const retainedParticipation =
+        await tx.salesOpportunityParticipant.findUnique({
+          where: {
+            opportunityId_contactId: {
+              contactId: primaryContactId,
+              opportunityId: participation.opportunityId,
+            },
+          },
+          select: { id: true, role: true },
+        });
+
+      if (!retainedParticipation) {
+        await tx.salesOpportunityParticipant.update({
+          where: { id: participation.id },
+          data: { contactId: primaryContactId },
+        });
+        continue;
+      }
+
+      await tx.salesOpportunityParticipant.delete({
+        where: { id: participation.id },
+      });
+      if (
+        participation.role === "PRIMARY_CUSTOMER" &&
+        retainedParticipation.role !== "PRIMARY_CUSTOMER"
+      ) {
+        await tx.salesOpportunityParticipant.update({
+          where: { id: retainedParticipation.id },
+          data: { role: "PRIMARY_CUSTOMER" },
+        });
+      }
+    }
+
+    const primarySales = await tx.salesOpportunity.findMany({
+      where: { contactId: duplicateContactId },
+      select: { id: true },
+    });
+    primarySales.forEach((sale) => affectedSaleIds.add(sale.id));
 
     await Promise.all([
       tx.salesOpportunity.updateMany({
@@ -1489,6 +1536,7 @@ export async function mergeContactsAction(
   revalidatePath("/contacts");
   revalidatePath("/clients");
   revalidatePath(`/contacts/${primaryContactId}`);
+  affectedSaleIds.forEach((saleId) => revalidatePath(`/sales/${saleId}`));
   [primaryContact.companyId, duplicateContact.companyId]
     .filter((companyId): companyId is string => Boolean(companyId))
     .forEach((companyId) => revalidatePath(`/clients/${companyId}`));

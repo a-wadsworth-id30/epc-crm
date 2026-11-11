@@ -6,6 +6,7 @@ import CustomerSalesCategoryBadge from "@/components/crm-boilerplate/CustomerSal
 import ConnectedRecordContext from "@/components/crm-boilerplate/ConnectedRecordContext";
 import LazyHelpTooltip from "@/components/crm-boilerplate/LazyHelpTooltip";
 import RecordDocumentLibrary from "@/components/crm-boilerplate/RecordDocumentLibrary";
+import SaleParticipantsPanel from "@/components/crm-boilerplate/SaleParticipantsPanel";
 import {
   PipedriveLeadContextPanel,
   PipedriveLeadEmailsAutoSync,
@@ -1682,6 +1683,24 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
           country: true,
         },
       },
+      participants: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          role: true,
+          contact: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              company: { select: { name: true } },
+              companyName: true,
+            },
+          },
+        },
+      },
       owner: { select: { email: true, name: true } },
       salesPipelineStage: {
         select: {
@@ -2937,6 +2956,28 @@ export default async function SaleDetailPage({ params }: SalePageProps) {
                     </div>
                   </dl>
                 </div>
+
+                <SaleParticipantsPanel
+                  participants={[...sale.participants]
+                    .sort((left, right) => {
+                      if (left.role === "PRIMARY_CUSTOMER") return -1;
+                      if (right.role === "PRIMARY_CUSTOMER") return 1;
+                      return 0;
+                    })
+                    .map((participant) => ({
+                      companyName:
+                        participant.contact.company?.name ??
+                        participant.contact.companyName,
+                      contactRole: participant.contact.role,
+                      email: participant.contact.email,
+                      id: participant.id,
+                      name:
+                        `${participant.contact.firstName} ${participant.contact.lastName}`.trim(),
+                      personId: participant.contact.id,
+                      role: participant.role,
+                    }))}
+                  saleId={sale.id}
+                />
 
                 <details className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3">

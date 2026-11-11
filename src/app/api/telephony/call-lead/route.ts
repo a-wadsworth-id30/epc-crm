@@ -175,6 +175,9 @@ export async function POST(request: Request) {
         contactId: leadContact.id,
         companyId: leadContact.companyId,
         attribution: callLog?.attribution ?? undefined,
+        participants: {
+          create: { contactId: leadContact.id, role: "PRIMARY_CUSTOMER" },
+        },
       },
       select: { id: true },
     });

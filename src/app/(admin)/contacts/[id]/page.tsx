@@ -489,6 +489,29 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             salesPipelineStage: { select: { name: true, color: true } },
           },
         },
+        salesParticipations: {
+          where: { opportunity: opportunityAccessWhere },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            opportunity: {
+              select: {
+                attribution: true,
+                closedAt: true,
+                createdAt: true,
+                currency: true,
+                id: true,
+                nextStep: true,
+                source: true,
+                stage: true,
+                title: true,
+                updatedAt: true,
+                valueCents: true,
+                owner: { select: { name: true } },
+                salesPipelineStage: { select: { name: true, color: true } },
+              },
+            },
+          },
+        },
         relationshipProfile: {
           select: {
             nextReviewAt: true,
@@ -689,7 +712,17 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     notFound();
   }
 
-  const opportunityIds = contact.opportunities.map(
+  const contactOpportunities = [
+    ...new Map(
+      [
+        ...contact.opportunities,
+        ...contact.salesParticipations.map(
+          (participation) => participation.opportunity,
+        ),
+      ].map((opportunity) => [opportunity.id, opportunity]),
+    ).values(),
+  ].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+  const opportunityIds = contactOpportunities.map(
     (opportunity) => opportunity.id,
   );
   const linkedOpportunityWhere = opportunityIds.length
@@ -929,7 +962,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     };
   });
   const websiteAttributionItems: SaleConversationItem[] = [
-    ...contact.opportunities.flatMap((opportunity) =>
+    ...contactOpportunities.flatMap((opportunity) =>
       attributionTouchpoints(opportunity.attribution).map((touch, index) => ({
         id: `opportunity-attribution-${opportunity.id}-${index}`,
         channel: "WEBSITE",
@@ -1025,7 +1058,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
             visitorId: record.visitorId,
             opportunityId: record.opportunityId,
             opportunityTitle:
-              contact.opportunities.find(
+              contactOpportunities.find(
                 (opportunity) => opportunity.id === record.opportunityId,
               )?.title ?? null,
           },
@@ -1062,11 +1095,11 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
     )
     .slice(0, 160);
 
-  const openOpportunities = contact.opportunities.filter(
+  const openOpportunities = contactOpportunities.filter(
     (opportunity) =>
       !opportunityIsClosed(opportunity.stage, opportunity.closedAt),
   );
-  const closedOpportunities = contact.opportunities.filter((opportunity) =>
+  const closedOpportunities = contactOpportunities.filter((opportunity) =>
     opportunityIsClosed(opportunity.stage, opportunity.closedAt),
   );
   const addressLines = formatAddress(contact);
@@ -1107,7 +1140,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       return uploadType ? [{ ...requirement, uploadType }] : [];
     }),
   });
-  const replyTarget = openOpportunities[0] ?? contact.opportunities[0] ?? null;
+  const replyTarget = openOpportunities[0] ?? contactOpportunities[0] ?? null;
   const relationshipStatus = (contact.relationshipProfile?.status ??
     defaultCustomerRelationshipStatus) as CustomerRelationshipStatusValue;
   const relationshipStatusLabel =
@@ -1121,7 +1154,7 @@ export default async function ContactDetailPage({ params }: ContactPageProps) {
       opportunityId: technology.opportunityId,
       technologyName: technology.technologyName,
     })) ?? [];
-  const relationshipOpportunityOptions = contact.opportunities.map(
+  const relationshipOpportunityOptions = contactOpportunities.map(
     (opportunity) => ({
       id: opportunity.id,
       stageLabel:
