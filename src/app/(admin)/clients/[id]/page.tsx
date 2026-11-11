@@ -36,6 +36,7 @@ import { serializeCompanyCustomFieldValue } from "@/lib/companies/custom-fields"
 import { companyProfileCompleteness } from "@/lib/companies/profile-completeness";
 import { companyRelatedSalesWhere } from "@/lib/companies/related-sales";
 import { companyOwnerOptionsForUser } from "@/lib/companies/owner-assignment";
+import { companyOperationalOverview } from "@/lib/companies/operational-overview";
 import {
   companyDocumentRequirementStatuses,
   parseCompanyDocumentUploadType,
@@ -415,6 +416,8 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
             },
           ],
         };
+  const operationalToday = new Date();
+  operationalToday.setUTCHours(0, 0, 0, 0);
 
   const [
     parentCompany,
@@ -424,6 +427,10 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
     activityTasks,
     relatedCompanySales,
     relatedCompanySalesCount,
+    activeCompanySalesCount,
+    activeCompanySalesMissingNextStepCount,
+    openCompanyTaskCount,
+    overdueCompanyTaskCount,
   ] = await Promise.all([
     company.parentCompanyId
       ? prisma.company.findFirst({
@@ -541,6 +548,42 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         user,
         companyOpportunityRelationshipWhere,
       ),
+    }),
+    prisma.salesOpportunity.count({
+      where: salesOpportunityWhereWithAccess(user, {
+        AND: [
+          companyOpportunityRelationshipWhere,
+          { closedAt: null, stage: { notIn: ["WON", "LOST"] } },
+        ],
+      }),
+    }),
+    prisma.salesOpportunity.count({
+      where: salesOpportunityWhereWithAccess(user, {
+        AND: [
+          companyOpportunityRelationshipWhere,
+          { closedAt: null, stage: { notIn: ["WON", "LOST"] } },
+          { OR: [{ nextStep: null }, { nextStep: "" }] },
+        ],
+      }),
+    }),
+    prisma.task.count({
+      where: {
+        AND: [
+          companyTaskAccessWhere,
+          { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+        ],
+      },
+    }),
+    prisma.task.count({
+      where: {
+        AND: [
+          companyTaskAccessWhere,
+          {
+            dueDate: { lt: operationalToday },
+            status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+          },
+        ],
+      },
     }),
   ]);
 
@@ -750,6 +793,25 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       const uploadType = parseCompanyDocumentUploadType(requirement.uploadType);
       return uploadType ? [{ ...requirement, uploadType }] : [];
     }),
+  });
+  const operationalOverview = companyOperationalOverview({
+    activeSalesCount: activeCompanySalesCount,
+    activeSalesMissingNextStepCount:
+      activeCompanySalesMissingNextStepCount,
+    hasOwner: Boolean(ownerLabel),
+    hasPrimaryContact:
+      company.contactAffiliations.some(
+        (affiliation) => affiliation.isPrimary,
+      ) || scopedCounts.contacts < company._count.contactAffiliations,
+    latestActivityAt: activityItems[0]?.date ?? null,
+    linkedContactsCount: scopedCounts.contacts,
+    missingProfileFieldCount: companyProfile.missing.length,
+    missingRequiredDocumentCount: companyDocumentStatuses.filter(
+      (requirement) => requirement.isRequired && !requirement.satisfied,
+    ).length,
+    openTaskCount: openCompanyTaskCount,
+    overdueTaskCount: overdueCompanyTaskCount,
+    profileIsConfigured: companyProfile.isConfigured,
   });
   const companyDetailPanel = (
     <div className="p-5">
@@ -1187,6 +1249,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
         leadsCount={scopedCounts.opportunities}
         leadsPanel={leadsPanel}
         linkedRecordsPanel={linkedRecordsPanel}
+        operationalOverview={operationalOverview}
         summary={{
           addressLabel,
           companyName: company.name,

@@ -8,11 +8,13 @@ import {
   Globe2,
   GripVertical,
   History,
+  ListChecks,
   UserRound,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import type { CompanyOperationalOverview } from "@/lib/companies/operational-overview";
 
 type CompanyWorkspaceTabKey =
   | "overview"
@@ -37,6 +39,7 @@ type CompanyDetailWorkspaceProps = {
   leadsCount: number;
   leadsPanel: ReactNode;
   linkedRecordsPanel: ReactNode;
+  operationalOverview: CompanyOperationalOverview;
   contactsPanel: ReactNode;
   summary: {
     addressLabel: string;
@@ -47,6 +50,96 @@ type CompanyDetailWorkspaceProps = {
     status: string;
   };
 };
+
+function formatLatestActivity(value: string | null) {
+  if (!value) return "No activity recorded";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function CompanyOperationalOverviewPanel({
+  onSelectTab,
+  overview,
+}: {
+  onSelectTab: (tab: CompanyWorkspaceTabKey) => void;
+  overview: CompanyOperationalOverview;
+}) {
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="flex items-start gap-3">
+        <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-brand-100 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-900/40">
+          <ListChecks className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">
+            Operational overview
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+            Existing CRM records that may need attention.
+          </p>
+        </div>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+          <dt className="text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
+            Active Sales
+          </dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-800 dark:text-white/90">
+            {overview.activeSalesCount}
+          </dd>
+        </div>
+        <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+          <dt className="text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
+            Open tasks
+          </dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-800 dark:text-white/90">
+            {overview.openTaskCount}
+          </dd>
+        </div>
+      </dl>
+
+      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+        Latest activity: {formatLatestActivity(overview.latestActivityAt)}
+      </p>
+
+      <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+          Needs attention
+        </h3>
+        {overview.attention.length ? (
+          <ul className="mt-2 space-y-2">
+            {overview.attention.map((item) => (
+              <li
+                className="flex items-center justify-between gap-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 dark:border-warning-500/20 dark:bg-warning-500/10"
+                key={item.key}
+              >
+                <span className="text-xs font-medium text-warning-800 dark:text-warning-200">
+                  {item.label}
+                </span>
+                <button
+                  className="shrink-0 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400"
+                  onClick={() => onSelectTab(item.tab)}
+                  type="button"
+                >
+                  Review
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 rounded-lg bg-success-50 px-3 py-2 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-300">
+            No immediate configured workflow gaps detected.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
 
 const workspaceTabs: CompanyWorkspaceTab[] = [
   {
@@ -251,6 +344,7 @@ export default function CompanyDetailWorkspace({
   leadsCount,
   leadsPanel,
   linkedRecordsPanel,
+  operationalOverview,
   summary,
 }: CompanyDetailWorkspaceProps) {
   const [activeTab, setActiveTab] =
@@ -352,6 +446,10 @@ export default function CompanyDetailWorkspace({
         </main>
 
         <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2 2xl:grid-cols-1">
+          <CompanyOperationalOverviewPanel
+            onSelectTab={setActiveTab}
+            overview={operationalOverview}
+          />
           {linkedRecordsPanel}
         </aside>
       </div>

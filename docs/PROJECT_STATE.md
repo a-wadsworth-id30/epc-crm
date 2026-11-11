@@ -125,6 +125,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   People and linked Sales. It links each row back to its source record and uses
   `SalesCommunication` as the canonical call/email source so the same provider
   event is not repeated from `CallLog`.
+- Company detail includes a compact operational overview derived from existing
+  permission-scoped records. It reports active Sales, open tasks and latest
+  activity, then highlights overdue tasks, active Sales without their canonical
+  next action, missing configured Company documents, incomplete configured
+  profile fields and missing ownership/contact responsibility. Each review
+  action opens the existing Company workspace tab; no duplicate status model is
+  introduced.
 - Company Sales roll up direct Company links plus Sales connected through an
   affiliated primary Person or participant. The Leads & Deals tab identifies
   whether each Sale is direct or linked through People, while its count,
