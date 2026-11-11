@@ -130,6 +130,13 @@ Code changes should use branch-per-task and PRs rather than direct pushes to
   to synchronise the primary participant, use the Person's primary Company or
   add the Sale Company as a Person affiliation. Multi-company installers and
   partners remain review information rather than being changed automatically.
+- Settings > Relationship Health gives admins an operational view of the same
+  Sale relationship findings across active or historical Sales. It summarises
+  warnings and legitimate multi-Company review items, supports issue/severity
+  filters and links to the existing Sale-level repair panel; it never performs
+  ambiguous bulk repairs. The page evaluates up to the 5,000 most recently
+  updated Sales in the chosen scope and visibly reports when that safety limit
+  is reached.
 - Company detail can create a Sale directly in fixed Company context. The user
   must choose an affiliated Person as the primary customer; the server reloads
   Company access and the Person's affiliation before creating the Sale, so a
